@@ -18,7 +18,7 @@ struct EchoScalar;
 impl VScalar for EchoScalar {
     type State = ();
 
-    unsafe fn invoke(
+    fn invoke(
         _state: &Self::State,
         input: &mut DataChunkHandle,
         output: &mut dyn WritableVector,
