@@ -1162,6 +1162,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mutants"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "add0ac067452ff1aca8c5002111bd6b1c895baee6e45fcbc44e0193aea17be56"
+
+[[package]]
 name = "num"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1346,6 +1352,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "quack-rs"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72a540873815f6072ac20b6b07591370ff5f3ecfa2f76c5ee14900b2aeb694be"
+dependencies = [
+ "cc",
+ "libduckdb-sys",
+ "mutants",
 ]
 
 [[package]]
@@ -1708,6 +1725,7 @@ name = "rusty_quack"
 version = "0.1.0"
 dependencies = [
  "duckdb",
+ "quack-rs",
 ]
 
 [[package]]
