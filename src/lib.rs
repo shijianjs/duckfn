@@ -8,10 +8,6 @@ use quack_rs::scalar::ScalarFunctionBuilder;
 use quack_rs::types::TypeId;
 use quack_rs::vector::{VectorReader, VectorWriter};
 
-fn double_it(value: i64) -> i64 {
-    value * 2
-}
-
 trait ScalarFunctionAdapter<K> {
     fn run(_info: duckdb_function_info, input: duckdb_data_chunk, output: duckdb_vector) {
         // SAFETY: input is a valid data chunk provided by DuckDB.
