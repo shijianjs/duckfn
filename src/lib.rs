@@ -91,7 +91,7 @@ trait OneArgScalarFunctionAdapter {
         v.map(|v| Self::apply(v))
     }
 }
-struct OneArg {}
+struct OneArg;
 impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
     const COLUMN_COUNT: usize = 1;
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
@@ -106,7 +106,7 @@ impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
             .function(scalar_function_wrapper::<T, OneArg>)
     }
 }
-struct TwoArg {}
+struct TwoArg;
 trait TwoArgScalarFunctionAdapter {
     const NAME: &'static str;
     type Arg1Type: DuckValueType;
