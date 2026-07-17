@@ -4,19 +4,22 @@ use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, 
 use quack_rs::connection::Connection;
 use quack_rs::entry_point_v2;
 use quack_rs::error::ExtensionError;
-use quack_rs::scalar::ScalarFunctionBuilder;
+use quack_rs::prelude::DataChunk;
+use quack_rs::scalar::{ScalarFunctionBuilder, ScalarFunctionInfo};
 use quack_rs::types::TypeId;
 use quack_rs::vector::{VectorReader, VectorWriter};
 
 trait ScalarFunctionAdapter<K> {
     fn run(_info: duckdb_function_info, input: duckdb_data_chunk, output: duckdb_vector) {
+        let info = unsafe { ScalarFunctionInfo::new(_info) };
         // SAFETY: input is a valid data chunk provided by DuckDB.
         // let reader = unsafe { VectorReader::new(input, 0) };
-        let readers = (0..Self::COLUMN_COUNT)
-            .map(|i| unsafe { VectorReader::new(input, i) })
+        let chunk = unsafe{ DataChunk::from_raw(input) };
+        let readers = (0..chunk.column_count())
+            .map(|i| unsafe { chunk.reader(i) })
             .collect::<Vec<_>>();
         let mut writer = unsafe { VectorWriter::new(output) };
-        let row_count = readers[0].row_count();
+        let row_count = chunk.size();
 
         for row in 0..row_count {
             Self::handle_row(row, &readers, &mut writer);
@@ -36,7 +39,7 @@ trait DuckValueType: Sized {
     fn type_id() -> TypeId;
     fn read(reader: &VectorReader, row: usize) -> Option<Self> {
         if unsafe { reader.is_valid(row) } {
-            unsafe { Some(Self::read_valid(reader, row)) }
+            Some(Self::read_valid(reader, row))
         } else {
             None
         }
@@ -46,10 +49,10 @@ trait DuckValueType: Sized {
     fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
         match vo {
             None => unsafe { writer.set_null(row) },
-            Some(v) => Self::write_not_null(writer, row, v),
+            Some(v) => Self::write_valid(writer, row, v),
         }
     }
-    fn write_not_null(writer: &mut VectorWriter, row: usize, v: Self);
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self);
 }
 impl DuckValueType for i64 {
     fn type_id() -> TypeId {
@@ -58,7 +61,7 @@ impl DuckValueType for i64 {
     fn read_valid(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i64(row) }
     }
-    fn write_not_null(writer: &mut VectorWriter, row: usize, v: Self) {
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
         unsafe { writer.write_i64(row, v) }
     }
 }
@@ -70,7 +73,7 @@ impl DuckValueType for String {
     fn read_valid(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_str(row).to_string() }
     }
-    fn write_not_null(writer: &mut VectorWriter, row: usize, v: Self) {
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
         unsafe { writer.write_str(row, v.as_str()) }
     }
 }
@@ -84,7 +87,7 @@ trait OneArgScalarFunctionAdapter {
         todo!("需要实现")
     }
     /// 需要处理空值的话，需要实现这个方法，apply方法不用管
-    fn applyHandleNull(v: Option<Self::Arg1Type>) -> Option<Self::ResultType> {
+    fn apply_option(v: Option<Self::Arg1Type>) -> Option<Self::ResultType> {
         v.map(|v| Self::apply(v))
     }
 }
@@ -93,7 +96,7 @@ impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
     const COLUMN_COUNT: usize = 1;
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
         let value = <Self as OneArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
-        let f = Self::applyHandleNull(value);
+        let f = Self::apply_option(value);
         <Self as OneArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
     }
     fn register_builder() -> ScalarFunctionBuilder {
@@ -114,7 +117,7 @@ trait TwoArgScalarFunctionAdapter {
         todo!("需要实现")
     }
     /// 需要处理空值的话，需要实现这个方法，apply方法不用管
-    fn applyHandleNull(
+    fn apply_option(
         v: Option<Self::Arg1Type>,
         v2: Option<Self::Arg2Type>,
     ) -> Option<Self::ResultType> {
@@ -128,7 +131,7 @@ impl<T: TwoArgScalarFunctionAdapter> ScalarFunctionAdapter<TwoArg> for T {
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
         let value = <Self as TwoArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
         let value2 = <Self as TwoArgScalarFunctionAdapter>::Arg2Type::read(&readers[1], row);
-        let f = Self::applyHandleNull(value, value2);
+        let f = Self::apply_option(value, value2);
         <Self as TwoArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
     }
     fn register_builder() -> ScalarFunctionBuilder {
