@@ -77,10 +77,6 @@ where
     T: OneArgScalarFunctionAdapter,
 {
     fn handle_row(row: usize, reader: &VectorReader, writer: &mut VectorWriter) {
-        // if unsafe { !reader.is_valid(row) } {
-        //     unsafe { writer.set_null(row) };
-        //     continue;
-        // }
         let value = <Self as OneArgScalarFunctionAdapter>::Arg1Type::read(reader, row);
         let f = Self::applyHandleNull(value);
         <Self as OneArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
