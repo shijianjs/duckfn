@@ -1,14 +1,12 @@
 // src/lib.rs
 
-use duckdb::arrow::compute::unary;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::connection::Connection;
+use quack_rs::entry_point_v2;
 use quack_rs::error::ExtensionError;
-use quack_rs::scalar::builder::ScalarFn;
 use quack_rs::scalar::ScalarFunctionBuilder;
 use quack_rs::types::TypeId;
 use quack_rs::vector::{VectorReader, VectorWriter};
-use quack_rs::{entry_point, entry_point_v2};
 
 fn double_it(value: i64) -> i64 {
     value * 2
@@ -32,6 +30,10 @@ trait ScalarFunctionAdapter<K> {
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter);
 
     fn register_builder() -> ScalarFunctionBuilder;
+
+    unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {
+        Self::register_builder().register(con)
+    }
 }
 
 trait DuckValueType: Sized {
@@ -162,6 +164,16 @@ impl TwoArgScalarFunctionAdapter for AddIt {
         v + v2
     }
 }
+struct FirstWord;
+
+impl OneArgScalarFunctionAdapter for FirstWord {
+    const NAME: &'static str = "first_word5";
+    type Arg1Type = String;
+    type ResultType = String;
+    fn apply(v: String) -> String {
+        v.split_whitespace().next().unwrap_or("").to_string()
+    }
+}
 
 unsafe extern "C" fn scalar_function_wrapper<T: ScalarFunctionAdapter<K>, K>(
     _info: duckdb_function_info,
@@ -174,8 +186,9 @@ unsafe extern "C" fn scalar_function_wrapper<T: ScalarFunctionAdapter<K>, K>(
 fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let con: duckdb_connection = connection.as_raw_connection();
     unsafe {
-        DoubleIt::register_builder().register(con)?;
-        AddIt::register_builder().register(con)?;
+        DoubleIt::register(con)?;
+        AddIt::register(con)?;
+        FirstWord::register(con)?;
     }
     Ok(())
 }
