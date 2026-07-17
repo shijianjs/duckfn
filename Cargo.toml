@@ -9,6 +9,9 @@ crate-type = ["cdylib"]
 [profile.release]
 lto = true
 strip = true
+panic = "abort"             # required — panics across FFI are undefined behavior
+opt-level = 3
+codegen-units = 1
 
 [[example]]
 # crate-type can't be (at the moment) be overriden for specific targets
@@ -22,3 +25,5 @@ crate-type = ["staticlib"]
 [dependencies]
 duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
 quack-rs = "0.14.0"
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
+

@@ -1725,6 +1725,7 @@ name = "rusty_quack"
 version = "0.1.0"
 dependencies = [
  "duckdb",
+ "libduckdb-sys",
  "quack-rs",
 ]
 
