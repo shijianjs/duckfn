@@ -14,21 +14,22 @@ fn double_it(value: i64) -> i64 {
     value * 2
 }
 
-trait ScalarFunctionAdapter {
+trait ScalarFunctionAdapter<K> {
     unsafe fn run(_info: duckdb_function_info, input: duckdb_data_chunk, output: duckdb_vector) {
         // SAFETY: input is a valid data chunk provided by DuckDB.
-        let reader = unsafe { VectorReader::new(input, 0) };
+        // let reader = unsafe { VectorReader::new(input, 0) };
+        let readers = (0..Self::COLUMN_COUNT)
+            .map(|i| unsafe { VectorReader::new(input, i) })
+            .collect::<Vec<_>>();
         let mut writer = unsafe { VectorWriter::new(output) };
-        let row_count = reader.row_count();
+        let row_count = readers[0].row_count();
 
         for row in 0..row_count {
-            // let value = unsafe { reader.read_i64(row) };
-            // unsafe { writer.write_i64(row, Self::apply(value)) };
-            Self::handle_row(row, &reader, &mut writer);
+            Self::handle_row(row, &readers, &mut writer);
         }
     }
-    fn handle_row(row: usize, reader: &VectorReader, writer: &mut VectorWriter);
-    // fn apply(v: i64) -> i64;
+    const COLUMN_COUNT: usize;
+    fn handle_row(row: usize, readers: &Vec<VectorReader>, writer: &mut VectorWriter);
 
     fn register_builder() -> ScalarFunctionBuilder;
 }
@@ -64,20 +65,20 @@ trait OneArgScalarFunctionAdapter {
     const NAME: &'static str;
     type Arg1Type: DuckValueType;
     type ResultType: DuckValueType;
+    /// 默认实现这个方法，空值已经映射为空值
     fn apply(v: Self::Arg1Type) -> Self::ResultType {
         todo!("需要实现")
     }
+    /// 需要处理空值的话，需要实现这个方法，apply方法不用管
     fn applyHandleNull(v: Option<Self::Arg1Type>) -> Option<Self::ResultType> {
         v.map(|v| Self::apply(v))
     }
 }
-
-impl<T> ScalarFunctionAdapter for T
-where
-    T: OneArgScalarFunctionAdapter,
-{
-    fn handle_row(row: usize, reader: &VectorReader, writer: &mut VectorWriter) {
-        let value = <Self as OneArgScalarFunctionAdapter>::Arg1Type::read(reader, row);
+struct OneArg{}
+impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
+    const COLUMN_COUNT: usize = 1;
+    fn handle_row(row: usize, readers: &Vec<VectorReader>, writer: &mut VectorWriter) {
+        let value = <Self as OneArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
         let f = Self::applyHandleNull(value);
         <Self as OneArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
     }
@@ -85,7 +86,40 @@ where
         ScalarFunctionBuilder::new(Self::NAME)
             .param(<Self as OneArgScalarFunctionAdapter>::Arg1Type::type_id())
             .returns(<Self as OneArgScalarFunctionAdapter>::ResultType::type_id())
-            .function(scalar_function_wrapper::<T>)
+            .function(scalar_function_wrapper::<T, OneArg>)
+    }
+}
+struct TwoArg{}
+trait TwoArgScalarFunctionAdapter {
+    const NAME: &'static str;
+    type Arg1Type: DuckValueType;
+    type Arg2Type: DuckValueType;
+    type ResultType: DuckValueType;
+    /// 默认实现这个方法，空值已经映射为空值
+    fn apply(v: Self::Arg1Type, v2: Self::Arg2Type) -> Self::ResultType {
+        todo!("需要实现")
+    }
+    /// 需要处理空值的话，需要实现这个方法，apply方法不用管
+    fn applyHandleNull(v: Option<Self::Arg1Type>, v2: Option<Self::Arg2Type>) -> Option<Self::ResultType> {
+        v.zip(v2).map(|(v, v2)| Self::apply(v, v2))
+    }
+}
+
+impl<T: TwoArgScalarFunctionAdapter> ScalarFunctionAdapter<TwoArg> for T {
+    const COLUMN_COUNT: usize = 2;
+
+    fn handle_row(row: usize, readers: &Vec<VectorReader>, writer: &mut VectorWriter) {
+        let value = <Self as TwoArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
+        let value2 = <Self as TwoArgScalarFunctionAdapter>::Arg2Type::read(&readers[1], row);
+        let f = Self::applyHandleNull(value, value2);
+        <Self as TwoArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
+    }
+    fn register_builder() -> ScalarFunctionBuilder {
+        ScalarFunctionBuilder::new(Self::NAME)
+            .param(<Self as TwoArgScalarFunctionAdapter>::Arg1Type::type_id())
+            .param(<Self as TwoArgScalarFunctionAdapter>::Arg2Type::type_id())
+            .returns(<Self as TwoArgScalarFunctionAdapter>::ResultType::type_id())
+            .function(scalar_function_wrapper::<T, TwoArg>)
     }
 }
 
@@ -99,8 +133,18 @@ impl OneArgScalarFunctionAdapter for DoubleIt {
         v * 2
     }
 }
+struct AddIt;
+impl TwoArgScalarFunctionAdapter for AddIt {
+    const NAME: &'static str = "add_it5";
+    type Arg1Type = i64;
+    type Arg2Type = i64;
+    type ResultType = i64;
+    fn apply(v: i64, v2: i64) -> i64 {
+        v + v2
+    }
+}
 
-unsafe extern "C" fn scalar_function_wrapper<T: ScalarFunctionAdapter>(
+unsafe extern "C" fn scalar_function_wrapper<T: ScalarFunctionAdapter<K>, K>(
     _info: duckdb_function_info,
     input: duckdb_data_chunk,
     output: duckdb_vector,
@@ -112,6 +156,7 @@ fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let con: duckdb_connection = connection.as_raw_connection();
     unsafe {
         DoubleIt::register_builder().register(con)?;
+        AddIt::register_builder().register(con)?;
     }
     Ok(())
 }
