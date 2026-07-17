@@ -36,25 +36,32 @@ trait ScalarFunctionAdapter<K> {
 
 trait DuckValueType: Sized {
     fn type_id() -> TypeId;
-    fn read(reader: &VectorReader, row: usize) -> Option<Self>;
-    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>);
+    fn read(reader: &VectorReader, row: usize) -> Option<Self> {
+        if unsafe { reader.is_valid(row) } {
+            unsafe { Some(Self::read_valid(reader, row)) }
+        } else {
+            None
+        }
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self;
+
+    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
+        match vo {
+            None => unsafe { writer.set_null(row) },
+            Some(v) => Self::write_not_null(writer, row, v),
+        }
+    }
+    fn write_not_null(writer: &mut VectorWriter, row: usize, v: Self);
 }
 impl DuckValueType for i64 {
     fn type_id() -> TypeId {
         TypeId::BigInt
     }
-    fn read(reader: &VectorReader, row: usize) -> Option<Self> {
-        if unsafe { reader.is_valid(row) } {
-            unsafe { Some(reader.read_i64(row)) }
-        } else {
-            None
-        }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i64(row) }
     }
-    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
-        match vo {
-            None => unsafe { writer.set_null(row) },
-            Some(v) => unsafe { writer.write_i64(row, v) },
-        }
+    fn write_not_null(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_i64(row, v) }
     }
 }
 
@@ -62,20 +69,11 @@ impl DuckValueType for String {
     fn type_id() -> TypeId {
         TypeId::Varchar
     }
-
-    fn read(reader: &VectorReader, row: usize) -> Option<Self> {
-        if unsafe { reader.is_valid(row) } {
-            unsafe { Some(reader.read_str(row).to_string()) }
-        } else {
-            None
-        }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_str(row).to_string() }
     }
-
-    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
-        match vo {
-            None => unsafe { writer.set_null(row) },
-            Some(v) => unsafe { writer.write_str(row, v.as_str()) },
-        }
+    fn write_not_null(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_str(row, v.as_str()) }
     }
 }
 
