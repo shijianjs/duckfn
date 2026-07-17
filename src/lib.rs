@@ -34,14 +34,10 @@ trait ScalarFunctionAdapter<K> {
     fn register_builder() -> ScalarFunctionBuilder;
 }
 
-trait DuckValueType {
+trait DuckValueType: Sized {
     fn type_id() -> TypeId;
-    fn read(reader: &VectorReader, row: usize) -> Option<Self>
-    where
-        Self: Sized;
-    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>)
-    where
-        Self: Sized;
+    fn read(reader: &VectorReader, row: usize) -> Option<Self>;
+    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>);
 }
 impl DuckValueType for i64 {
     fn type_id() -> TypeId {
@@ -61,6 +57,28 @@ impl DuckValueType for i64 {
         }
     }
 }
+
+impl DuckValueType for String {
+    fn type_id() -> TypeId {
+        TypeId::Varchar
+    }
+
+    fn read(reader: &VectorReader, row: usize) -> Option<Self> {
+        if unsafe { reader.is_valid(row) } {
+            unsafe { Some(reader.read_str(row).to_string()) }
+        } else {
+            None
+        }
+    }
+
+    fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
+        match vo {
+            None => unsafe { writer.set_null(row) },
+            Some(v) => unsafe { writer.write_str(row, v.as_str()) },
+        }
+    }
+}
+
 trait OneArgScalarFunctionAdapter {
     const NAME: &'static str;
     type Arg1Type: DuckValueType;
@@ -74,7 +92,7 @@ trait OneArgScalarFunctionAdapter {
         v.map(|v| Self::apply(v))
     }
 }
-struct OneArg{}
+struct OneArg {}
 impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
     const COLUMN_COUNT: usize = 1;
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
@@ -89,7 +107,7 @@ impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
             .function(scalar_function_wrapper::<T, OneArg>)
     }
 }
-struct TwoArg{}
+struct TwoArg {}
 trait TwoArgScalarFunctionAdapter {
     const NAME: &'static str;
     type Arg1Type: DuckValueType;
@@ -100,7 +118,10 @@ trait TwoArgScalarFunctionAdapter {
         todo!("需要实现")
     }
     /// 需要处理空值的话，需要实现这个方法，apply方法不用管
-    fn applyHandleNull(v: Option<Self::Arg1Type>, v2: Option<Self::Arg2Type>) -> Option<Self::ResultType> {
+    fn applyHandleNull(
+        v: Option<Self::Arg1Type>,
+        v2: Option<Self::Arg2Type>,
+    ) -> Option<Self::ResultType> {
         v.zip(v2).map(|(v, v2)| Self::apply(v, v2))
     }
 }
