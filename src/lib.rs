@@ -2,6 +2,7 @@
 pub mod scalar_function_wrapper;
 pub mod value_type_convertor;
 pub mod scalar_function_demo;
+pub mod aggregate_function_demo;
 
 use crate::scalar_function_wrapper::{OneArgScalarFunctionAdapter, ScalarFunctionAdapter, TwoArgScalarFunctionAdapter};
 use libduckdb_sys::duckdb_connection;
@@ -16,6 +17,7 @@ fn register(connection: &Connection) -> Result<(), ExtensionError> {
         DoubleIt::register(con)?;
         AddIt::register(con)?;
         FirstWord::register(con)?;
+        aggregate_function_demo::register_aggregate_demo(con)?;
     }
     Ok(())
 }
