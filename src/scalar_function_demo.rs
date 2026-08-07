@@ -1,4 +1,6 @@
-use crate::scalar_function_wrapper::{OneArgScalarFunctionAdapter, TwoArgScalarFunctionAdapter};
+use crate::scalar_function_wrapper::{
+    OneArgScalarFunctionAdapter, ScalarFunction, TwoArgScalarFunctionAdapter,
+};
 
 pub struct DoubleIt;
 
@@ -31,5 +33,33 @@ impl OneArgScalarFunctionAdapter for FirstWord {
     type ResultType = String;
     fn apply(v: String) -> String {
         v.split_whitespace().next().unwrap_or("").to_string()
+    }
+}
+pub struct FirstWordTuple;
+
+impl ScalarFunction for FirstWordTuple {
+    const NAME: &'static str = "first_word_tuple";
+    type Args = (Option<String>,);
+    type Result = String;
+
+    fn apply(args: Self::Args) -> Option<Self::Result> {
+        args.0.map(|v| {
+            v.as_str()
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_string()
+        })
+    }
+}
+
+pub struct AddItTuple;
+
+impl ScalarFunction for AddItTuple {
+    const NAME: &'static str = "add_it_tuple";
+    type Args = (Option<i64>, Option<i64>);
+    type Result = i64;
+    fn apply(args: Self::Args) -> Option<Self::Result> {
+        args.0.zip(args.1).map(|(v, v2)| v + v2)
     }
 }

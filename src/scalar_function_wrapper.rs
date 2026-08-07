@@ -2,7 +2,9 @@ use crate::value_type_convertor::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, VectorReader, VectorWriter};
+use quack_rs::prelude::{
+    ScalarFunctionBuilder, ScalarFunctionInfo, TypeId, VectorReader, VectorWriter,
+};
 
 pub unsafe extern "C" fn scalar_function_wrapper<T: ScalarFunctionAdapter<K>, K>(
     _info: duckdb_function_info,
@@ -29,7 +31,6 @@ pub trait ScalarFunctionAdapter<K> {
             Self::handle_row(row, &readers, &mut writer);
         }
     }
-    const COLUMN_COUNT: usize;
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter);
 
     fn register_builder() -> ScalarFunctionBuilder;
@@ -40,7 +41,6 @@ pub trait ScalarFunctionAdapter<K> {
 }
 
 impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
-    const COLUMN_COUNT: usize = 1;
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
         let value = <Self as OneArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
         let f = Self::apply_option(value);
@@ -55,7 +55,6 @@ impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
 }
 
 impl<T: TwoArgScalarFunctionAdapter> ScalarFunctionAdapter<TwoArg> for T {
-    const COLUMN_COUNT: usize = 2;
 
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
         let value = <Self as TwoArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
@@ -105,5 +104,61 @@ pub trait TwoArgScalarFunctionAdapter {
         v2: Option<Self::Arg2Type>,
     ) -> Option<Self::ResultType> {
         v.zip(v2).map(|(v, v2)| Self::apply(v, v2))
+    }
+}
+
+pub trait DuckArgs : Sized{
+    const COUNT: usize;
+
+    fn read(readers: &[VectorReader], row: usize) -> Self;
+
+    fn params() -> Vec<TypeId>;
+}
+impl<A: DuckValueType> DuckArgs for (Option<A>,) {
+    const COUNT: usize = 1;
+
+    fn read(readers: &[VectorReader], row: usize) -> Self {
+        (A::read(&readers[0], row),)
+    }
+
+    fn params() -> Vec<TypeId> {
+        vec![A::type_id()]
+    }
+}
+impl<A: DuckValueType, B: DuckValueType> DuckArgs for (Option<A>, Option<B>) {
+    const COUNT: usize = 2;
+
+    fn read(readers: &[VectorReader], row: usize) -> Self {
+        (A::read(&readers[0], row), B::read(&readers[1], row))
+    }
+
+    fn params() -> Vec<TypeId> {
+        vec![A::type_id(), B::type_id()]
+    }
+}
+pub trait ScalarFunction {
+    const NAME: &'static str;
+    type Args: DuckArgs;
+    type Result: DuckValueType;
+
+    fn apply(args: Self::Args) -> Option<Self::Result>;
+}
+pub struct TupleArg;
+
+impl<T: ScalarFunction> ScalarFunctionAdapter<TupleArg> for T {
+
+    fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
+        let args = T::Args::read(readers, row);
+        let result = T::apply(args);
+        <Self as ScalarFunction>::Result::write(writer, row, result);
+    }
+    fn register_builder() -> ScalarFunctionBuilder {
+        let mut builder = ScalarFunctionBuilder::new(Self::NAME)
+            .returns(<Self as ScalarFunction>::Result::type_id())
+            .function(scalar_function_wrapper::<T, TupleArg>);
+        for x in T::Args::params() {
+            builder = builder.param(x);
+        }
+        builder
     }
 }
