@@ -12,7 +12,7 @@ LOAD './target/debug/rusty_quack.duckdb_extension';
 SELECT double_it5(21);
 ";
 
-duckdb -unsigned -c "
+cargo duckdb-ext build; duckdb -unsigned -c "
 LOAD './target/debug/rusty_quack.duckdb_extension';
 SELECT first_word5(sentence) FROM (
     VALUES ('hello world'), ('  padded  '), (''), (NULL)

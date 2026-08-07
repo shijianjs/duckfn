@@ -24,6 +24,6 @@ crate-type = ["staticlib"]
 
 [dependencies]
 duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
-quack-rs = "0.14.0"
+quack-rs = "0.15.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 
