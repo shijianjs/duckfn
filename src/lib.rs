@@ -1,8 +1,9 @@
 // src/lib.rs
 pub mod scalar_function_wrapper;
-pub mod value_type_convertor;
+pub mod duck_value_type_convertor;
 pub mod scalar_function_demo;
 pub mod aggregate_function_demo;
+mod duck_args_type;
 
 use crate::scalar_function_wrapper::{OneArgScalarFunctionAdapter, ScalarFunctionAdapter, TwoArgScalarFunctionAdapter};
 use libduckdb_sys::duckdb_connection;
