@@ -110,6 +110,8 @@ pub trait TwoArgScalarFunctionAdapter {
 
 pub trait ScalarFunction {
     const NAME: &'static str;
+    /// cargo add tuple-transpose
+    /// 使用这个工具包可以快速处理多个Option参数
     type Args: DuckArgs;
     type Result: DuckValueType;
 

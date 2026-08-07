@@ -26,4 +26,5 @@ crate-type = ["staticlib"]
 duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
 quack-rs = "0.15.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
+tuple-transpose = "0.1.0"
 

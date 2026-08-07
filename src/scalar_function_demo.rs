@@ -1,3 +1,4 @@
+use tuple_transpose::TupleTranspose;
 use crate::scalar_function_wrapper::{
     OneArgScalarFunctionAdapter, ScalarFunction, TwoArgScalarFunctionAdapter,
 };
@@ -43,7 +44,7 @@ impl ScalarFunction for FirstWordTuple {
     type Result = String;
 
     fn apply(args: Self::Args) -> Option<Self::Result> {
-        args.0.map(|v| {
+        args.transpose().map(|(v,)| {
             v.as_str()
                 .split_whitespace()
                 .next()
@@ -60,6 +61,6 @@ impl ScalarFunction for AddItTuple {
     type Args = (Option<i64>, Option<i64>);
     type Result = i64;
     fn apply(args: Self::Args) -> Option<Self::Result> {
-        args.0.zip(args.1).map(|(v, v2)| v + v2)
+        args.transpose().map(|(v, v2)| v + v2)
     }
 }
