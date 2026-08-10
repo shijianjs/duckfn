@@ -6,24 +6,29 @@ SELECT double_it3(21);
 ";
 
 # cargo-duckdb-ext-tools 构建方式，任意命令环境都行
-cargo duckdb-ext build;
-duckdb -unsigned -c "
-LOAD './target/debug/rusty_quack.duckdb_extension';
-SELECT double_it5(21);
-";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT double_it5(21);
+  ";
 
 cargo duckdb-ext build; duckdb -unsigned -c "
-LOAD './target/debug/rusty_quack.duckdb_extension';
-SELECT first_word5(sentence) FROM (
-    VALUES ('hello world'), ('  padded  '), (''), (NULL)
-) t(sentence);
-";
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT first_word5(sentence) FROM (
+      VALUES ('hello world'), ('  padded  '), (''), (NULL)
+  ) t(sentence);
+  ";
 cargo duckdb-ext build; duckdb -unsigned -c "
-LOAD './target/debug/rusty_quack.duckdb_extension';
-SELECT word_count(sentence) FROM (
-    VALUES ('hello world'), ('  padded  '), (''), (NULL)
-) t(sentence);
-";
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT word_count(sentence) FROM (
+      VALUES ('hello world'), ('  padded  '), (''), (NULL)
+  ) t(sentence);
+  ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT word_count_w(sentence) FROM (
+      VALUES ('hello world'), ('  padded  '), (''), (NULL)
+  ) t(sentence);
+  ";
 
 
 cargo duckdb-ext build; duckdb -unsigned -c "

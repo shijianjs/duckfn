@@ -23,13 +23,10 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         let row_count = chunk.size();
 
         for row in 0..row_count {
-            Self::handle_row(row, &readers, &mut writer);
+            let args = Self::Args::read(&readers, row);
+            let result = Self::apply(args);
+            Self::Output::write(&mut writer, row, result);
         }
-    }
-    fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
-        let args = Self::Args::read(readers, row);
-        let result = Self::apply(args);
-        Self::Output::write(writer, row, result);
     }
     fn register_builder() -> ScalarFunctionBuilder {
         let mut builder = ScalarFunctionBuilder::new(Self::NAME)
