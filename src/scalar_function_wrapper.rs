@@ -5,16 +5,12 @@ use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
 use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, VectorReader, VectorWriter};
 
-pub unsafe extern "C" fn scalar_function_wrapper<K: ScalarFunctionAdapter>(
-    _info: duckdb_function_info,
-    input: duckdb_data_chunk,
-    output: duckdb_vector,
-) {
-    K::run(_info, input, output);
-}
-
-pub trait ScalarFunctionAdapter: Sized {
-    fn run(_info: duckdb_function_info, input: duckdb_data_chunk, output: duckdb_vector) {
+pub trait ScalarFunctionAdapter: Sized + 'static {
+    unsafe extern "C" fn scalar_function_wrapper(
+        _info: duckdb_function_info,
+        input: duckdb_data_chunk,
+        output: duckdb_vector,
+    ) {
         let info = unsafe { ScalarFunctionInfo::new(_info) };
 
         // SAFETY: input is a valid data chunk provided by DuckDB.
@@ -38,7 +34,7 @@ pub trait ScalarFunctionAdapter: Sized {
     fn register_builder() -> ScalarFunctionBuilder {
         let mut builder = ScalarFunctionBuilder::new(Self::NAME)
             .returns(Self::Output::type_id())
-            .function(scalar_function_wrapper::<Self>);
+            .function(Self::scalar_function_wrapper);
         for x in Self::Args::params() {
             builder = builder.param(x);
         }
