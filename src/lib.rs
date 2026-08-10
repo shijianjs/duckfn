@@ -7,7 +7,7 @@ pub mod scalar_function_wrapper;
 
 use crate::scalar_function_demo::{AddItTuple, FirstWordTuple};
 use crate::scalar_function_wrapper::{
-    ScalarFunctionAdapter, TwoArgScalarFunctionAdapter,
+    ScalarFunctionAdapter,
 };
 use libduckdb_sys::duckdb_connection;
 use quack_rs::connection::Connection;

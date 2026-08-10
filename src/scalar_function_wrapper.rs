@@ -3,19 +3,17 @@ use crate::duck_value_type_convertor::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{
-    ScalarFunctionBuilder, ScalarFunctionInfo, VectorReader, VectorWriter,
-};
+use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, VectorReader, VectorWriter};
 
-pub unsafe extern "C" fn scalar_function_wrapper<T: ScalarFunctionAdapter<K>, K>(
+pub unsafe extern "C" fn scalar_function_wrapper<K: ScalarFunctionAdapter>(
     _info: duckdb_function_info,
     input: duckdb_data_chunk,
     output: duckdb_vector,
 ) {
-    T::run(_info, input, output);
+    K::run(_info, input, output);
 }
 
-pub trait ScalarFunctionAdapter<K> {
+pub trait ScalarFunctionAdapter: Sized {
     fn run(_info: duckdb_function_info, input: duckdb_data_chunk, output: duckdb_vector) {
         let info = unsafe { ScalarFunctionInfo::new(_info) };
 
@@ -32,107 +30,30 @@ pub trait ScalarFunctionAdapter<K> {
             Self::handle_row(row, &readers, &mut writer);
         }
     }
-    fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter);
-
-    fn register_builder() -> ScalarFunctionBuilder;
-
-    unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {
-        Self::register_builder().register(con)
-    }
-}
-
-impl<T: OneArgScalarFunctionAdapter> ScalarFunctionAdapter<OneArg> for T {
     fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
-        let value = <Self as OneArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
-        let f = Self::apply_option(value);
-        <Self as OneArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
-    }
-    fn register_builder() -> ScalarFunctionBuilder {
-        ScalarFunctionBuilder::new(Self::NAME)
-            .param(<Self as OneArgScalarFunctionAdapter>::Arg1Type::type_id())
-            .returns(<Self as OneArgScalarFunctionAdapter>::ResultType::type_id())
-            .function(scalar_function_wrapper::<T, OneArg>)
-    }
-}
-
-impl<T: TwoArgScalarFunctionAdapter> ScalarFunctionAdapter<TwoArg> for T {
-
-    fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
-        let value = <Self as TwoArgScalarFunctionAdapter>::Arg1Type::read(&readers[0], row);
-        let value2 = <Self as TwoArgScalarFunctionAdapter>::Arg2Type::read(&readers[1], row);
-        let f = Self::apply_option(value, value2);
-        <Self as TwoArgScalarFunctionAdapter>::ResultType::write(writer, row, f);
-    }
-    fn register_builder() -> ScalarFunctionBuilder {
-        ScalarFunctionBuilder::new(Self::NAME)
-            .param(<Self as TwoArgScalarFunctionAdapter>::Arg1Type::type_id())
-            .param(<Self as TwoArgScalarFunctionAdapter>::Arg2Type::type_id())
-            .returns(<Self as TwoArgScalarFunctionAdapter>::ResultType::type_id())
-            .function(scalar_function_wrapper::<T, TwoArg>)
-    }
-}
-
-pub trait OneArgScalarFunctionAdapter {
-    const NAME: &'static str;
-    type Arg1Type: DuckValueType;
-    type ResultType: DuckValueType;
-    /// 默认实现这个方法，空值已经映射为空值
-    fn apply(v: Self::Arg1Type) -> Self::ResultType {
-        todo!("需要实现")
-    }
-    /// 需要处理空值的话，需要实现这个方法，apply方法不用管
-    fn apply_option(v: Option<Self::Arg1Type>) -> Option<Self::ResultType> {
-        v.map(|v| Self::apply(v))
-    }
-}
-
-pub struct OneArg;
-
-pub struct TwoArg;
-
-pub trait TwoArgScalarFunctionAdapter {
-    const NAME: &'static str;
-    type Arg1Type: DuckValueType;
-    type Arg2Type: DuckValueType;
-    type ResultType: DuckValueType;
-    /// 默认实现这个方法，空值已经映射为空值
-    fn apply(v: Self::Arg1Type, v2: Self::Arg2Type) -> Self::ResultType {
-        todo!("需要实现")
-    }
-    /// 需要处理空值的话，需要实现这个方法，apply方法不用管
-    fn apply_option(
-        v: Option<Self::Arg1Type>,
-        v2: Option<Self::Arg2Type>,
-    ) -> Option<Self::ResultType> {
-        v.zip(v2).map(|(v, v2)| Self::apply(v, v2))
-    }
-}
-
-pub trait ScalarFunction {
-    const NAME: &'static str;
-    /// cargo add tuple-transpose
-    /// 使用这个工具包可以快速处理多个Option参数
-    type Args: DuckArgs;
-    type Result: DuckValueType;
-
-    fn apply(args: Self::Args) -> Option<Self::Result>;
-}
-pub struct TupleArg;
-
-impl<T: ScalarFunction> ScalarFunctionAdapter<TupleArg> for T {
-
-    fn handle_row(row: usize, readers: &[VectorReader], writer: &mut VectorWriter) {
-        let args = T::Args::read(readers, row);
-        let result = T::apply(args);
-        <Self as ScalarFunction>::Result::write(writer, row, result);
+        let args = Self::Args::read(readers, row);
+        let result = Self::apply(args);
+        Self::Output::write(writer, row, result);
     }
     fn register_builder() -> ScalarFunctionBuilder {
         let mut builder = ScalarFunctionBuilder::new(Self::NAME)
-            .returns(<Self as ScalarFunction>::Result::type_id())
-            .function(scalar_function_wrapper::<T, TupleArg>);
-        for x in T::Args::params() {
+            .returns(Self::Output::type_id())
+            .function(scalar_function_wrapper::<Self>);
+        for x in Self::Args::params() {
             builder = builder.param(x);
         }
         builder
     }
+
+    unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {
+        Self::register_builder().register(con)
+    }
+
+    const NAME: &'static str;
+    /// cargo add tuple-transpose
+    /// 使用这个工具包可以快速处理多个Option参数
+    type Args: DuckArgs;
+    type Output: DuckValueType;
+
+    fn apply(args: Self::Args) -> Option<Self::Output>;
 }
