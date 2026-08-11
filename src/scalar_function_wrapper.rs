@@ -3,7 +3,7 @@ use crate::duck_value_type_convertor::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, VectorReader, VectorWriter};
+use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder, VectorReader, VectorWriter};
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
     unsafe extern "C" fn scalar_function_wrapper(
@@ -30,6 +30,15 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     }
     fn register_builder() -> ScalarFunctionBuilder {
         let mut builder = ScalarFunctionBuilder::new(Self::NAME)
+            .returns(Self::Output::type_id())
+            .function(Self::scalar_function_wrapper);
+        for x in Self::Args::params() {
+            builder = builder.param(x);
+        }
+        builder
+    }
+    fn register_overload_builder() -> ScalarOverloadBuilder {
+        let mut builder = ScalarOverloadBuilder::new()
             .returns(Self::Output::type_id())
             .function(Self::scalar_function_wrapper);
         for x in Self::Args::params() {
