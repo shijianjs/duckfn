@@ -1,5 +1,9 @@
-use quack_rs::prelude::{TypeId, VectorReader, VectorWriter};
+use quack_rs::prelude::{DuckInterval, TypeId, VectorReader, VectorWriter};
 
+
+/// 映射规则：
+/// - 如果 Rust 基础类型已经完整表达了业务语义，可以直接映射；
+/// - 如果多个逻辑类型共享同一个物理表示，就应该 newtype 包装。
 pub trait DuckValueType: Sized {
     fn type_id() -> TypeId;
     fn read(reader: &VectorReader, row: usize) -> Option<Self> {
@@ -20,6 +24,21 @@ pub trait DuckValueType: Sized {
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self);
 }
 
+/// TypeId::Boolean
+
+impl DuckValueType for bool {
+    fn type_id() -> TypeId {
+        TypeId::Boolean
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_bool(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_bool(row, v) }
+    }
+}
+
+/// TypeId::BigInt      // i64
 impl DuckValueType for i64 {
     fn type_id() -> TypeId {
         TypeId::BigInt
@@ -31,7 +50,209 @@ impl DuckValueType for i64 {
         unsafe { writer.write_i64(row, v) }
     }
 }
+/// TypeId::TinyInt     // i8
+impl DuckValueType for i8 {
+    fn type_id() -> TypeId {
+        TypeId::TinyInt
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i8(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_i8(row, v) }
+    }
+}
+/// TypeId::SmallInt    // i16
+impl DuckValueType for i16 {
+    fn type_id() -> TypeId {
+        TypeId::SmallInt
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i16(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_i16(row, v) }
+    }
+}
 
+/// TypeId::Integer     // i32
+impl DuckValueType for i32 {
+    fn type_id() -> TypeId {
+        TypeId::Integer
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i32(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_i32(row, v) }
+    }
+}
+
+/// TypeId::UTinyInt    // u8
+impl DuckValueType for u8 {
+    fn type_id() -> TypeId {
+        TypeId::UTinyInt
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_u8(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_u8(row, v) }
+    }
+}
+
+/// TypeId::USmallInt   // u16
+impl DuckValueType for u16 {
+    fn type_id() -> TypeId {
+        TypeId::USmallInt
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_u16(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_u16(row, v) }
+    }
+}
+/// TypeId::UInteger    // u32
+
+/// TypeId::UBigInt     // u64
+impl DuckValueType for u64 {
+    fn type_id() -> TypeId {
+        TypeId::UBigInt
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_u64(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_u64(row, v) }
+    }
+}
+
+/// TypeId::HugeInt     // i128
+impl DuckValueType for i128 {
+    fn type_id() -> TypeId {
+        TypeId::HugeInt
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i128(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_i128(row, v) }
+    }
+}
+
+/// TypeId::UHugeInt    // u128 不考虑，没read_u128这个方法
+// impl DuckValueType for u128 {
+//     fn type_id() -> TypeId {
+//         TypeId::UHugeInt
+//     }
+//     fn read_valid(reader: &VectorReader, row: usize) -> Self {
+//         unsafe { reader.read_u128(row) }
+//     }
+//     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+//         unsafe { writer.write_u128(row, v) }
+//     }
+// }
+
+/// TypeId::Float       // f32
+impl DuckValueType for f32 {
+    fn type_id() -> TypeId {
+        TypeId::Float
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_f32(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_f32(row, v) }
+    }
+}
+
+/// TypeId::Double      // f64
+impl DuckValueType for f64 {
+    fn type_id() -> TypeId {
+        TypeId::Double
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_f64(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_f64(row, v) }
+    }
+}
+///TypeId::Timestamp
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimestamp {
+    pub micros_since_epoch: i64,
+}
+
+impl DuckValueType for DuckTimestamp {
+    fn type_id() -> TypeId {
+        TypeId::Timestamp
+    }
+
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        Self { micros_since_epoch: unsafe { reader.read_timestamp(row) } }
+    }
+
+    fn write_valid(
+        writer: &mut VectorWriter,
+        row: usize,
+        v: Self,
+    ) {
+        unsafe {
+            writer.write_timestamp(row, v.micros_since_epoch)
+        }
+    }
+}
+// pub const unsafe fn write_date(&mut self, idx: usize, days_since_epoch: i32) {
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckDate {
+    pub days_since_epoch: i32,
+}
+
+impl DuckValueType for DuckDate {
+    fn type_id() -> TypeId {
+        TypeId::Date
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        Self { days_since_epoch: unsafe { reader.read_date(row) } }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_date(row, v.days_since_epoch) }
+    }
+}
+// pub const unsafe fn write_time(&mut self, idx: usize, micros_since_midnight: i64) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTime {
+    pub micros_since_midnight: i64,
+}
+
+impl DuckValueType for DuckTime {
+    fn type_id() -> TypeId {
+        TypeId::Time
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        Self { micros_since_midnight: unsafe { reader.read_time(row) } }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_time(row, v.micros_since_midnight) }
+    }
+}
+///TypeId::Interval
+impl DuckValueType for DuckInterval{
+    fn type_id() -> TypeId {
+        TypeId::Interval
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_interval(row) }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_interval(row, v) }
+    }
+}
+
+/// TypeId::Varchar
 impl DuckValueType for String {
     fn type_id() -> TypeId {
         TypeId::Varchar
@@ -43,3 +264,81 @@ impl DuckValueType for String {
         unsafe { writer.write_str(row, v.as_str()) }
     }
 }
+// pub unsafe fn read_blob(&self, idx: usize) -> &[u8] {
+// pub unsafe fn write_blob(&mut self, idx: usize, value: &[u8]) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DuckBlob {
+    pub value: Vec<u8>
+}
+impl DuckValueType for DuckBlob {
+    fn type_id() -> TypeId {
+        TypeId::Blob
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        Self { value: unsafe { reader.read_blob(row).to_vec() } }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_blob(row, v.value.as_slice()) }
+    }
+}
+
+// pub const unsafe fn write_uuid(&mut self, idx: usize, value: i128) {
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckUuid {
+    pub value: i128,
+}
+
+impl DuckValueType for DuckUuid {
+    fn type_id() -> TypeId {
+        TypeId::Uuid
+    }
+    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+        Self { value: unsafe { reader.read_uuid(row) } }
+    }
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_uuid(row, v.value) }
+    }
+}
+
+
+
+
+
+
+// ===================================================
+// 这几个类型quack-rs没做read、write方法
+//
+// TypeId::TimestampTz
+// TypeId::TimestampS
+// TypeId::TimestampMs
+// TypeId::TimestampNs
+// TypeId::UHugeInt
+// TypeId::TimeTz
+// TypeId::Decimal
+// TypeId::Enum
+// TypeId::Union
+// TypeId::Bit
+// TypeId::TimeNs      // duckdb-1-5
+// TypeId::Any              // duckdb-1-5
+// TypeId::Varint           // duckdb-1-5
+// TypeId::SqlNull          // duckdb-1-5
+// TypeId::IntegerLiteral   // duckdb-1-5
+// TypeId::StringLiteral    // duckdb-1-5
+// TypeId::Geometry         // duckdb-1-5-3
+// TypeId::Variant          // duckdb-1-5-3
+//
+//
+//
+//
+// 这几个包装类型后面再说
+// TypeId::List
+// TypeId::Struct
+// TypeId::Map
+// TypeId::Array
+//
+//
+//
+//
+//
+// ===================================================
