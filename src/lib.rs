@@ -19,12 +19,14 @@ use scalar_function_demo::DoubleIt;
 fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let con: duckdb_connection = connection.as_raw_connection();
     unsafe {
-        DoubleIt::register(con)?;
-        FirstWordTuple::register(con)?;
-        AddItTuple::register(con)?;
+        scalar_function_demo::register(connection)?;
+        // DoubleIt::register(con)?;
+        // FirstWordTuple::register(con)?;
+        // AddItTuple::register(con)?;
         aggregate_function_demo::register_aggregate_demo(con)?;
     }
     Ok(())
 }
 
+/// 符号名称必须为 {extension_name}_init_c_api ，全部小写，仅包含下划线。如果符号缺失或名称错误，DuckDB 将无法加载扩展。
 entry_point_v2!(rusty_quack_init_c_api, register);

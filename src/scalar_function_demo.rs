@@ -1,4 +1,9 @@
+use libduckdb_sys::duckdb_connection;
+use quack_rs::connection::Connection;
+use quack_rs::error::ExtensionError;
+use quack_rs::prelude::Registrar;
 use tuple_transpose::TupleTranspose;
+use crate::aggregate_function_demo;
 use crate::scalar_function_wrapper::{
     ScalarFunctionAdapter,
 };
@@ -52,4 +57,20 @@ impl ScalarFunctionAdapter for AddItTuple {
     fn apply(args: Self::Args) -> Option<Self::Output> {
         args.transpose().map(|(v, v2)| v + v2)
     }
+}
+
+
+pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
+    unsafe {
+        let builders = vec![
+            DoubleIt::register_builder(),
+            FirstWordTuple::register_builder(),
+            AddItTuple::register_builder(),
+        ];
+
+        for builder in builders {
+            connection.register_scalar(builder)?;
+        }
+    }
+    Ok(())
 }
