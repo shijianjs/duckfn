@@ -1,8 +1,6 @@
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{
-    AggregateFunctionBuilder, DuckInterval, LogicalType, ScalarFunctionBuilder,
-    ScalarOverloadBuilder, TypeId, VectorReader, VectorWriter,
+use quack_rs::prelude::{DuckInterval, LogicalType, TypeId, VectorReader, VectorWriter,
 };
 
 #[derive(Default)]
@@ -25,87 +23,6 @@ impl DuckTypeInfo {
             type_id: None,
             logical_type: Some(logical_type),
         }
-    }
-}
-pub trait RegisterBuilder: Sized {
-    fn param(self, type_id: TypeId) -> Self;
-    fn param_logical(self, logical_type: LogicalType) -> Self;
-    fn returns(self, type_id: TypeId) -> Self;
-    fn returns_logical(self, logical_type: LogicalType) -> Self;
-    //             let return_info = Self::Output::type_info();
-    //         if let Some(t) = return_info.type_id {
-    //             builder = builder.returns(t);
-    //         } else if let Some(t) = return_info.logical_type {
-    //             builder = builder.returns_logical(t);
-    //         }
-    //         for x in Self::Args::params() {
-    //             if let Some(t) = x.type_id {
-    //                 builder = builder.param(t);
-    //             } else if let Some(t) = x.logical_type {
-    //                 builder = builder.param_logical(t);
-    //             }
-    //         }
-    fn with_return_type(self, return_info: DuckTypeInfo) -> Self {
-        if let Some(t) = return_info.type_id {
-            self.returns(t)
-        } else if let Some(t) = return_info.logical_type {
-            self.returns_logical(t)
-        } else {
-            self
-        }
-    }
-    fn with_params(self, params: Vec<DuckTypeInfo>) -> Self {
-        let mut builder = self;
-        for param in params {
-            if let Some(t) = param.type_id {
-                builder = builder.param(t)
-            } else if let Some(t) = param.logical_type {
-                builder = builder.param_logical(t)
-            }
-        }
-        builder
-    }
-}
-impl RegisterBuilder for ScalarFunctionBuilder {
-    fn param(self, type_id: TypeId) -> Self {
-        self.param(type_id)
-    }
-    fn param_logical(self, logical_type: LogicalType) -> Self {
-        self.param_logical(logical_type)
-    }
-    fn returns(self, type_id: TypeId) -> Self {
-        self.returns(type_id)
-    }
-    fn returns_logical(self, logical_type: LogicalType) -> Self {
-        self.returns_logical(logical_type)
-    }
-}
-impl RegisterBuilder for ScalarOverloadBuilder {
-    fn param(self, type_id: TypeId) -> Self {
-        self.param(type_id)
-    }
-    fn param_logical(self, logical_type: LogicalType) -> Self {
-        self.param_logical(logical_type)
-    }
-    fn returns(self, type_id: TypeId) -> Self {
-        self.returns(type_id)
-    }
-    fn returns_logical(self, logical_type: LogicalType) -> Self {
-        self.returns_logical(logical_type)
-    }
-}
-impl RegisterBuilder for AggregateFunctionBuilder {
-    fn param(self, type_id: TypeId) -> Self {
-        self.param(type_id)
-    }
-    fn param_logical(self, logical_type: LogicalType) -> Self {
-        self.param_logical(logical_type)
-    }
-    fn returns(self, type_id: TypeId) -> Self {
-        self.returns(type_id)
-    }
-    fn returns_logical(self, logical_type: LogicalType) -> Self {
-        self.returns_logical(logical_type)
     }
 }
 
