@@ -1,5 +1,5 @@
 use crate::duck_args_type::DuckArgs;
-use crate::duck_value_type_convertor::DuckValueType;
+use crate::duck_value_type_convertor::{DuckValueType, RegisterBuilder};
 use libduckdb_sys::{duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t};
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::data_chunk::DataChunk;
@@ -80,19 +80,17 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     }
 
     fn register_builder() -> AggregateFunctionBuilder {
-        let mut builder = AggregateFunctionBuilder::new(Self::NAME)
-            .returns(Self::Output::type_id())
+        AggregateFunctionBuilder::new(Self::NAME)
             .state_size(Self::c_state_size)
             .init(Self::c_state_init)
             .update(Self::c_update)
             .combine(Self::c_combine)
             .finalize(Self::c_finalize)
-            .destructor(Self::c_state_destroy);
-        for x in Self::Args::params() {
-            builder = builder.param(x);
-        }
-        builder
+            .destructor(Self::c_state_destroy)
+            .with_return_type(Self::Output::type_info())
+            .with_params(Self::Args::params())
     }
+
     unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {
         Self::register_builder().register(con)
     }

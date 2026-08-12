@@ -1,9 +1,11 @@
 use crate::duck_args_type::DuckArgs;
-use crate::duck_value_type_convertor::DuckValueType;
+use crate::duck_value_type_convertor::{DuckValueType, RegisterBuilder};
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder, VectorReader, VectorWriter};
+use quack_rs::prelude::{
+    ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder, VectorReader, VectorWriter,
+};
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
     unsafe extern "C" fn scalar_function_wrapper(
@@ -15,7 +17,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
 
         // SAFETY: input is a valid data chunk provided by DuckDB.
         // let reader = unsafe { VectorReader::new(input, 0) };
-        let chunk = unsafe { DataChunk::from_raw(input) };
+        let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
         let readers = (0..chunk.column_count())
             .map(|i| unsafe { chunk.reader(i) })
             .collect::<Vec<_>>();
@@ -29,22 +31,17 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         }
     }
     fn register_builder() -> ScalarFunctionBuilder {
-        let mut builder = ScalarFunctionBuilder::new(Self::NAME)
-            .returns(Self::Output::type_id())
-            .function(Self::scalar_function_wrapper);
-        for x in Self::Args::params() {
-            builder = builder.param(x);
-        }
-        builder
+        ScalarFunctionBuilder::new(Self::NAME)
+            .function(Self::scalar_function_wrapper)
+            .with_return_type(Self::Output::type_info())
+            .with_params(Self::Args::params())
     }
     fn register_overload_builder() -> ScalarOverloadBuilder {
-        let mut builder = ScalarOverloadBuilder::new()
-            .returns(Self::Output::type_id())
-            .function(Self::scalar_function_wrapper);
-        for x in Self::Args::params() {
-            builder = builder.param(x);
-        }
-        builder
+        ScalarOverloadBuilder::new()
+            // .returns(Self::Output::type_id())
+            .function(Self::scalar_function_wrapper)
+            .with_return_type(Self::Output::type_info())
+            .with_params(Self::Args::params())
     }
 
     unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {

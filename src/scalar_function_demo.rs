@@ -1,13 +1,15 @@
-use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector};
+use crate::aggregate_function_demo;
+use crate::scalar_function_wrapper::ScalarFunctionAdapter;
+use libduckdb_sys::{
+    duckdb_connection, duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info,
+    duckdb_vector,
+};
 use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{ListVector, LogicalType, Registrar, ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter};
-use tuple_transpose::TupleTranspose;
-use crate::aggregate_function_demo;
-use crate::scalar_function_wrapper::{
-    ScalarFunctionAdapter,
+use quack_rs::prelude::{
+    ListVector, LogicalType, Registrar, ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
 };
-
+use tuple_transpose::TupleTranspose;
 
 ///
 ///
@@ -28,7 +30,6 @@ impl ScalarFunctionAdapter for DoubleIt {
         args.transpose().map(|(v,)| v * 2)
     }
 }
-
 
 pub struct FirstWordTuple;
 
@@ -71,7 +72,7 @@ unsafe extern "C" fn sum_list_scalar(
     let reader = unsafe { VectorReader::new(input, 0) };
     let mut writer = unsafe { VectorWriter::new(output) };
     let row_count = reader.row_count();
-    let list_vec = unsafe { duckdb_data_chunk_get_vector(input, 0) };
+    let list_vec: duckdb_vector = unsafe { duckdb_data_chunk_get_vector(input, 0) };
 
     for row in 0..row_count {
         if !unsafe { reader.is_valid(row) } {
@@ -79,9 +80,12 @@ unsafe extern "C" fn sum_list_scalar(
             continue;
         }
         let entry = unsafe { ListVector::get_entry(list_vec, row) };
-        let child_vec = unsafe { ListVector::get_child(list_vec) };
-        let total_elements = unsafe { ListVector::get_size(list_vec) };
-        let child_reader = unsafe { VectorReader::from_vector(child_vec, total_elements) };
+        let child_reader = unsafe {
+            VectorReader::from_vector(
+                ListVector::get_child(list_vec),
+                ListVector::get_size(list_vec),
+            )
+        };
 
         let mut sum: i64 = 0;
         for i in 0..entry.length as usize {
@@ -93,7 +97,6 @@ unsafe extern "C" fn sum_list_scalar(
         unsafe { writer.write_i64(row, sum) };
     }
 }
-
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     unsafe {
