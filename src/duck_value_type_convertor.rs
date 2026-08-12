@@ -1,7 +1,6 @@
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{DuckInterval, LogicalType, TypeId, VectorReader, VectorWriter,
-};
+use quack_rs::prelude::{DuckInterval, ListVector, LogicalType, TypeId, VectorReader, VectorWriter};
 
 #[derive(Default)]
 pub struct DuckTypeInfo {
@@ -95,7 +94,9 @@ pub trait DuckValueType: Sized {
             None
         }
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self;
+    fn read_valid(reader: &VectorReader, row: usize) -> Self{
+        todo!("子类需要实现read_valid")
+    }
 
     fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
         match vo {
@@ -103,8 +104,37 @@ pub trait DuckValueType: Sized {
             Some(v) => Self::write_valid(writer, row, v),
         }
     }
-    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self);
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self){
+        todo!("子类需要实现write_valid")
+    }
 }
+
+// TypeId::List
+pub struct DuckList<T: DuckValueType> {
+    pub value: Vec<Option<T>>,
+}
+impl<T: DuckValueType> DuckValueType for DuckList<T> {
+    fn logical_type() -> Option<LogicalType> {
+        Some(LogicalType::list(T::type_id().expect("T::type_id() must not be None")))
+    }
+    fn read_by_c_duckdb_vector(list_vec: &duckdb_vector, row: usize) -> Option<Self> {
+        let item_type = T::type_id()?;
+        let entry = unsafe { ListVector::get_entry(*list_vec, row) };
+        let child_reader = unsafe {
+            VectorReader::from_vector(
+                ListVector::get_child(*list_vec),
+                ListVector::get_size(*list_vec),
+            )
+        };
+        let mut vec: Vec<Option<T>> = Vec::with_capacity(entry.length as usize);
+        for i in 0..entry.length as usize {
+            let idx = entry.offset as usize + i;
+            vec.push(T::read_by_vector_reader(&child_reader, idx));
+        }
+        Some(DuckList { value: vec })
+    }
+}
+
 
 /// TypeId::Boolean
 
@@ -413,7 +443,6 @@ impl DuckValueType for DuckUuid {
 //
 //
 // 这几个包装类型后面再说
-// TypeId::List
 // TypeId::Struct
 // TypeId::Map
 // TypeId::Array

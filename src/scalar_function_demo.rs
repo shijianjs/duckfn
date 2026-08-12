@@ -10,6 +10,7 @@ use quack_rs::prelude::{
     ListVector, LogicalType, Registrar, ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
+use crate::duck_value_type_convertor::DuckList;
 
 ///
 ///
@@ -98,12 +99,27 @@ unsafe extern "C" fn sum_list_scalar(
     }
 }
 
+struct SumListWrapper;
+impl ScalarFunctionAdapter for SumListWrapper {
+    const NAME: &'static str = "sum_list_w";
+    type Args = (Option<DuckList<i64>>,);
+    type Output = i64;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v,)| {
+            v.value.iter().flatten().sum()
+        })
+    }
+}
+
+
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     unsafe {
         let builders = vec![
             DoubleIt::register_builder(),
             FirstWordTuple::register_builder(),
             AddItTuple::register_builder(),
+            SumListWrapper::register_builder(),
         ];
 
         for builder in builders {

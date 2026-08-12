@@ -19,9 +19,13 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         // SAFETY: input is a valid data chunk provided by DuckDB.
         // let reader = unsafe { VectorReader::new(input, 0) };
         let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
-        let readers = (0..chunk.column_count())
-            .map(|i| unsafe { chunk.reader(i) })
-            .collect::<Vec<_>>();
+
+
+
+        // let readers = (0..chunk.column_count())
+        //     .map(|i| unsafe { chunk.reader(i) })
+        //     .collect::<Vec<_>>();
+        let readers = Self::Args::create_readers(&chunk);
         let mut writer = unsafe { VectorWriter::new(output) };
         let row_count = chunk.size();
 

@@ -22,9 +22,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         states: *mut duckdb_aggregate_state,
     ) {
         let chunk = unsafe { DataChunk::from_raw(input) };
-        let readers = (0..chunk.column_count())
-            .map(|i| unsafe { chunk.reader(i) })
-            .collect::<Vec<_>>();
+        let readers = Self::Args::create_readers(&chunk);
         let row_count = chunk.size();
         for row in 0..row_count {
             let args = Self::Args::read(&readers, row);
