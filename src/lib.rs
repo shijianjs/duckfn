@@ -5,6 +5,7 @@ pub mod duck_value_type_convertor;
 pub mod scalar_function_demo;
 pub mod scalar_function_wrapper;
 pub mod aggregate_function_wrapper;
+mod scalar_function_official_demo;
 
 use crate::scalar_function_demo::{AddItTuple, FirstWordTuple};
 use crate::scalar_function_wrapper::{
