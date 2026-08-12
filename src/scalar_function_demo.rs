@@ -1,7 +1,7 @@
-use libduckdb_sys::duckdb_connection;
+use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector};
 use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::Registrar;
+use quack_rs::prelude::{ListVector, LogicalType, Registrar, ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter};
 use tuple_transpose::TupleTranspose;
 use crate::aggregate_function_demo;
 use crate::scalar_function_wrapper::{
@@ -59,6 +59,41 @@ impl ScalarFunctionAdapter for AddItTuple {
     }
 }
 
+// ============================================================================
+// Scalar: sum_list(LIST(BIGINT)) → BIGINT
+// ============================================================================
+
+unsafe extern "C" fn sum_list_scalar(
+    _info: duckdb_function_info,
+    input: duckdb_data_chunk,
+    output: duckdb_vector,
+) {
+    let reader = unsafe { VectorReader::new(input, 0) };
+    let mut writer = unsafe { VectorWriter::new(output) };
+    let row_count = reader.row_count();
+    let list_vec = unsafe { duckdb_data_chunk_get_vector(input, 0) };
+
+    for row in 0..row_count {
+        if !unsafe { reader.is_valid(row) } {
+            unsafe { writer.set_null(row) };
+            continue;
+        }
+        let entry = unsafe { ListVector::get_entry(list_vec, row) };
+        let child_vec = unsafe { ListVector::get_child(list_vec) };
+        let total_elements = unsafe { ListVector::get_size(list_vec) };
+        let child_reader = unsafe { VectorReader::from_vector(child_vec, total_elements) };
+
+        let mut sum: i64 = 0;
+        for i in 0..entry.length as usize {
+            let idx = entry.offset as usize + i;
+            if unsafe { child_reader.is_valid(idx) } {
+                sum += unsafe { child_reader.read_i64(idx) };
+            }
+        }
+        unsafe { writer.write_i64(row, sum) };
+    }
+}
+
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     unsafe {
@@ -71,6 +106,13 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         for builder in builders {
             connection.register_scalar(builder)?;
         }
+        // ── Scalar: sum_list (param_logical) ────────────────────────────
+        connection.register_scalar(
+            ScalarFunctionBuilder::new("sum_list")
+                .param_logical(LogicalType::list(TypeId::BigInt))
+                .returns(TypeId::BigInt)
+                .function(sum_list_scalar),
+        )?;
     }
     Ok(())
 }
