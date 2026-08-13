@@ -1,9 +1,7 @@
-// src/lib.rs
-pub mod aggregate_function_demo;
-pub mod scalar_function_demo;
-mod scalar_function_official_demo;
+mod demo;
 pub mod wrapper;
 
+use demo::{aggregate_function_demo, scalar_function_demo};
 use libduckdb_sys::duckdb_connection;
 use quack_rs::connection::Connection;
 use quack_rs::entry_point_v2;
@@ -11,13 +9,12 @@ use quack_rs::error::ExtensionError;
 use wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 
 fn register(connection: &Connection) -> Result<(), ExtensionError> {
-    let con: duckdb_connection = connection.as_raw_connection();
     unsafe {
         scalar_function_demo::register(connection)?;
         // DoubleIt::register(con)?;
         // FirstWordTuple::register(con)?;
         // AddItTuple::register(con)?;
-        aggregate_function_demo::register_aggregate_demo(con)?;
+        aggregate_function_demo::register(connection)?;
     }
     Ok(())
 }

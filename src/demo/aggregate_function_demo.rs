@@ -1,12 +1,13 @@
+use crate::demo::scalar_function_demo::{AddItTuple, DoubleIt, FirstWordTuple};
 use crate::wrapper::aggregate_function_wrapper::AggregateFunctionAdapter;
 use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 use libduckdb_sys::{
-    duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info,
-    duckdb_vector, idx_t,
+    duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };
+use quack_rs::connection::Connection;
 use quack_rs::prelude::{
-    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState,
-    TypeId, VectorReader, VectorWriter,
+    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, LogicalType, Registrar,
+    ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
 
@@ -120,10 +121,8 @@ unsafe extern "C" fn wc_state_destroy(states: *mut duckdb_aggregate_state, count
     unsafe { FfiState::<WordCountState>::destroy_callback(states, count) };
 }
 
-pub unsafe fn register_aggregate_demo(
-    con: libduckdb_sys::duckdb_connection,
-) -> Result<(), ExtensionError> {
-    unsafe {
+pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
+    let builders = vec![
         AggregateFunctionBuilder::new("word_count")
             .param(TypeId::Varchar)
             .returns(TypeId::BigInt)
@@ -132,10 +131,11 @@ pub unsafe fn register_aggregate_demo(
             .update(wc_update)
             .combine(wc_combine)
             .finalize(wc_finalize)
-            .destructor(wc_state_destroy)
-            .register(con)?;
-
-        WordCountStateWrapper::register(con)?;
+            .destructor(wc_state_destroy),
+        WordCountStateWrapper::register_builder(),
+    ];
+    for builder in builders {
+        unsafe { connection.register_aggregate(builder) }?;
     }
     Ok(())
 }

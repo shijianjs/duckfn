@@ -1,7 +1,7 @@
 use crate::wrapper::duck_value_type_convertor::DuckList;
 use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
-use libduckdb_sys::{duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info,
-                    duckdb_vector,
+use libduckdb_sys::{
+    duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector,
 };
 use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
@@ -104,9 +104,7 @@ impl ScalarFunctionAdapter for SumListWrapper {
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| {
-            v.value.iter().flatten().sum()
-        })
+        args.transpose().map(|(v,)| v.value.iter().flatten().sum())
     }
 }
 struct SumListNest;
@@ -117,7 +115,8 @@ impl ScalarFunctionAdapter for SumListNest {
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
         args.transpose().map(|(v,)| {
-            v.value.iter()
+            v.value
+                .iter()
                 .flatten()
                 .map(|v| v.value.iter().flatten().sum::<i64>())
                 .sum()
@@ -125,27 +124,20 @@ impl ScalarFunctionAdapter for SumListNest {
     }
 }
 
-
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
-    unsafe {
-        let builders = vec![
-            DoubleIt::register_builder(),
-            FirstWordTuple::register_builder(),
-            AddItTuple::register_builder(),
-            SumListWrapper::register_builder(),
-            SumListNest::register_builder(),
-        ];
-
-        for builder in builders {
-            connection.register_scalar(builder)?;
-        }
-        // ── Scalar: sum_list (param_logical) ────────────────────────────
-        connection.register_scalar(
-            ScalarFunctionBuilder::new("sum_list")
-                .param_logical(LogicalType::list(TypeId::BigInt))
-                .returns(TypeId::BigInt)
-                .function(sum_list_scalar),
-        )?;
+    let builders = vec![
+        DoubleIt::register_builder(),
+        FirstWordTuple::register_builder(),
+        AddItTuple::register_builder(),
+        SumListWrapper::register_builder(),
+        SumListNest::register_builder(),
+        ScalarFunctionBuilder::new("sum_list")
+            .param_logical(LogicalType::list(TypeId::BigInt))
+            .returns(TypeId::BigInt)
+            .function(sum_list_scalar),
+    ];
+    for builder in builders {
+        unsafe { connection.register_scalar(builder) }?;
     }
     Ok(())
 }
