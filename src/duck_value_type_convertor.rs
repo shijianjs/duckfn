@@ -2,47 +2,14 @@ use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{DuckInterval, ListVector, LogicalType, TypeId, VectorReader, VectorWriter};
 
-#[derive(Default)]
 pub struct DuckTypeInfo {
-    pub is_logical: bool,
-    pub type_id: Option<TypeId>,
-    pub logical_type: Option<LogicalType>,
-}
-impl DuckTypeInfo {
-    pub fn new(type_id: TypeId) -> Self {
-        DuckTypeInfo {
-            is_logical: false,
-            type_id: Some(type_id),
-            logical_type: None,
-        }
-    }
-    pub fn new_logical(logical_type: LogicalType) -> Self {
-        DuckTypeInfo {
-            is_logical: true,
-            type_id: None,
-            logical_type: Some(logical_type),
-        }
-    }
+    pub type_id: TypeId,
+    pub logical_type: LogicalType,
 }
 
-#[derive(Default)]
 pub struct DuckValueReader {
-    pub vector_reader: Option<VectorReader>,
-    pub c_duckdb_vector: Option<duckdb_vector>,
-}
-impl DuckValueReader {
-    pub fn new(vector_reader: VectorReader) -> Self {
-        DuckValueReader {
-            vector_reader: Some(vector_reader),
-            c_duckdb_vector: None,
-        }
-    }
-    pub fn new_logical(duckdb_vector: duckdb_vector) -> Self {
-        DuckValueReader {
-            vector_reader: None,
-            c_duckdb_vector: Some(duckdb_vector),
-        }
-    }
+    pub vector_reader: VectorReader,
+    pub c_duckdb_vector: duckdb_vector,
 }
 
 /// 映射规则：
@@ -51,50 +18,41 @@ impl DuckValueReader {
 pub trait DuckValueType: Sized {
     fn type_info() -> DuckTypeInfo {
         DuckTypeInfo {
-            is_logical: Self::is_logical(),
             type_id: Self::type_id(),
             logical_type: Self::logical_type(),
         }
     }
-    fn type_id() -> Option<TypeId> {
-        None
-    }
-    fn logical_type() -> Option<LogicalType> {
-        None
+    fn type_id() -> TypeId ;
+    fn logical_type() -> LogicalType {
+        LogicalType::new(Self::type_id())
     }
 
-    fn is_logical() -> bool {
-        Self::logical_type().is_some()
-    }
 
     fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
-        if !Self::is_logical() {
-            DuckValueReader::new(unsafe { chunk.reader(column_index) })
-        } else {
-            DuckValueReader::new_logical(unsafe { chunk.vector(column_index) })
+        DuckValueReader{
+            vector_reader:unsafe { chunk.reader(column_index) },
+            c_duckdb_vector: unsafe { chunk.vector(column_index) },
         }
     }
 
     fn read(reader: &DuckValueReader, row: usize) -> Option<Self> {
-        if let Some(vector_reader) = &reader.vector_reader {
-            Self::read_by_vector_reader(vector_reader, row)
-        } else if let Some(c_duckdb_vector) = &reader.c_duckdb_vector {
-            Self::read_by_c_duckdb_vector(c_duckdb_vector, row)
-        } else {
+        if unsafe { reader.vector_reader.is_valid(row) } {
+            Some(Self::read_valid(reader, row))
+        }else {
             None
         }
-    }
-    fn read_by_c_duckdb_vector(c_duckdb_vector: &duckdb_vector, row: usize) -> Option<Self> {
-        None
     }
     fn read_by_vector_reader(reader: &VectorReader, row: usize) -> Option<Self> {
         if unsafe { reader.is_valid(row) } {
-            Some(Self::read_valid(reader, row))
+            Some(Self::read_valid_by_vector_reader(reader, row))
         } else {
             None
         }
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self{
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self{
+        Self::read_valid_by_vector_reader(&reader.vector_reader, row)
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self{
         todo!("子类需要实现read_valid")
     }
 
@@ -114,24 +72,33 @@ pub struct DuckList<T: DuckValueType> {
     pub value: Vec<Option<T>>,
 }
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
-    fn logical_type() -> Option<LogicalType> {
-        Some(LogicalType::list_from_logical(&LogicalType::new(T::type_id().expect("T::type_id() must not be None"))))
+    fn type_id() -> TypeId {
+        TypeId::List
     }
-    fn read_by_c_duckdb_vector(list_vec: &duckdb_vector, row: usize) -> Option<Self> {
-        let item_type = T::type_id()?;
-        let entry = unsafe { ListVector::get_entry(*list_vec, row) };
+
+    fn logical_type() -> LogicalType {
+        LogicalType::list_from_logical(&T::logical_type())
+    }
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+        let list_vec = reader.c_duckdb_vector;
+        let entry = unsafe { ListVector::get_entry(list_vec, row) };
+        let item_vector = unsafe { ListVector::get_child(list_vec) };
         let child_reader = unsafe {
             VectorReader::from_vector(
-                ListVector::get_child(*list_vec),
-                ListVector::get_size(*list_vec),
+                ListVector::get_child(list_vec),
+                ListVector::get_size(list_vec),
             )
+        };
+        let duck_value_reader = DuckValueReader {
+            vector_reader: child_reader,
+            c_duckdb_vector: item_vector,
         };
         let mut vec: Vec<Option<T>> = Vec::with_capacity(entry.length as usize);
         for i in 0..entry.length as usize {
             let idx = entry.offset as usize + i;
-            vec.push(T::read_by_vector_reader(&child_reader, idx));
+            vec.push(T::read(&duck_value_reader, idx));
         }
-        Some(DuckList { value: vec })
+        DuckList { value: vec }
     }
 }
 
@@ -139,10 +106,10 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
 /// TypeId::Boolean
 
 impl DuckValueType for bool {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Boolean)
+    fn type_id() -> TypeId {
+        TypeId::Boolean
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_bool(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -152,10 +119,10 @@ impl DuckValueType for bool {
 
 /// TypeId::BigInt      // i64
 impl DuckValueType for i64 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::BigInt)
+    fn type_id() -> TypeId {
+        TypeId::BigInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i64(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -164,10 +131,10 @@ impl DuckValueType for i64 {
 }
 /// TypeId::TinyInt     // i8
 impl DuckValueType for i8 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::TinyInt)
+    fn type_id() -> TypeId {
+        TypeId::TinyInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i8(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -176,10 +143,10 @@ impl DuckValueType for i8 {
 }
 /// TypeId::SmallInt    // i16
 impl DuckValueType for i16 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::SmallInt)
+    fn type_id() -> TypeId {
+        TypeId::SmallInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i16(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -189,10 +156,10 @@ impl DuckValueType for i16 {
 
 /// TypeId::Integer     // i32
 impl DuckValueType for i32 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Integer)
+    fn type_id() -> TypeId {
+        TypeId::Integer
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i32(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -202,10 +169,10 @@ impl DuckValueType for i32 {
 
 /// TypeId::UTinyInt    // u8
 impl DuckValueType for u8 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::UTinyInt)
+    fn type_id() -> TypeId {
+        TypeId::UTinyInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u8(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -215,10 +182,10 @@ impl DuckValueType for u8 {
 
 /// TypeId::USmallInt   // u16
 impl DuckValueType for u16 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::USmallInt)
+    fn type_id() -> TypeId {
+        TypeId::USmallInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u16(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -229,10 +196,10 @@ impl DuckValueType for u16 {
 
 /// TypeId::UBigInt     // u64
 impl DuckValueType for u64 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::UBigInt)
+    fn type_id() -> TypeId {
+        TypeId::UBigInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u64(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -242,10 +209,10 @@ impl DuckValueType for u64 {
 
 /// TypeId::HugeInt     // i128
 impl DuckValueType for i128 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::HugeInt)
+    fn type_id() -> TypeId {
+        TypeId::HugeInt
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i128(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -268,10 +235,10 @@ impl DuckValueType for i128 {
 
 /// TypeId::Float       // f32
 impl DuckValueType for f32 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Float)
+    fn type_id() -> TypeId {
+        TypeId::Float
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_f32(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -281,10 +248,10 @@ impl DuckValueType for f32 {
 
 /// TypeId::Double      // f64
 impl DuckValueType for f64 {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Double)
+    fn type_id() -> TypeId {
+        TypeId::Double
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_f64(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -298,11 +265,11 @@ pub struct DuckTimestamp {
 }
 
 impl DuckValueType for DuckTimestamp {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Timestamp)
+    fn type_id() -> TypeId {
+        TypeId::Timestamp
     }
 
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         Self {
             micros_since_epoch: unsafe { reader.read_timestamp(row) },
         }
@@ -320,10 +287,10 @@ pub struct DuckDate {
 }
 
 impl DuckValueType for DuckDate {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Date)
+    fn type_id() -> TypeId {
+        TypeId::Date
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         Self {
             days_since_epoch: unsafe { reader.read_date(row) },
         }
@@ -339,10 +306,10 @@ pub struct DuckTime {
 }
 
 impl DuckValueType for DuckTime {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Time)
+    fn type_id() -> TypeId {
+        TypeId::Time
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         Self {
             micros_since_midnight: unsafe { reader.read_time(row) },
         }
@@ -353,10 +320,10 @@ impl DuckValueType for DuckTime {
 }
 ///TypeId::Interval
 impl DuckValueType for DuckInterval {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Interval)
+    fn type_id() -> TypeId {
+        TypeId::Interval
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_interval(row) }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -366,10 +333,10 @@ impl DuckValueType for DuckInterval {
 
 /// TypeId::Varchar
 impl DuckValueType for String {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Varchar)
+    fn type_id() -> TypeId {
+        TypeId::Varchar
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_str(row).to_string() }
     }
     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
@@ -383,10 +350,10 @@ pub struct DuckBlob {
     pub value: Vec<u8>,
 }
 impl DuckValueType for DuckBlob {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Blob)
+    fn type_id() -> TypeId {
+        TypeId::Blob
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         Self {
             value: unsafe { reader.read_blob(row).to_vec() },
         }
@@ -404,10 +371,10 @@ pub struct DuckUuid {
 }
 
 impl DuckValueType for DuckUuid {
-    fn type_id() -> Option<TypeId> {
-        Some(TypeId::Uuid)
+    fn type_id() -> TypeId {
+        TypeId::Uuid
     }
-    fn read_valid(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         Self {
             value: unsafe { reader.read_uuid(row) },
         }

@@ -45,3 +45,11 @@ cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT sum_list([1,2,3,4]);
   ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT sum_list_w([1,2,3,4]);
+  ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT sum_list_nest([[1,2],[3,4]]);
+  ";

@@ -12,23 +12,18 @@ pub trait RegisterBuilder: Sized {
     fn returns_logical(self, logical_type: LogicalType) -> Self;
 
     fn with_return_type(self, return_info: DuckTypeInfo) -> Self {
-        if let Some(t) = return_info.type_id {
-            self.returns(t)
-        } else if let Some(t) = return_info.logical_type {
-            self.returns_logical(t)
-        } else {
-            self
-        }
+        self.returns_logical(return_info.logical_type)
     }
 
     fn with_params(self, params: Vec<DuckTypeInfo>) -> Self {
         let mut builder = self;
         for param in params {
-            if let Some(t) = param.type_id {
-                builder = builder.param(t)
-            } else if let Some(t) = param.logical_type {
-                builder = builder.param_logical(t)
-            }
+            builder = builder.param_logical(param.logical_type);
+            // if let Some(t) = param.type_id {
+            //     builder = builder.param(t)
+            // } else if let Some(t) = param.logical_type {
+            //     builder = builder.param_logical(t)
+            // }
         }
         builder
     }

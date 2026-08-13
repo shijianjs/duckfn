@@ -111,6 +111,21 @@ impl ScalarFunctionAdapter for SumListWrapper {
         })
     }
 }
+struct SumListNest;
+impl ScalarFunctionAdapter for SumListNest {
+    const NAME: &'static str = "sum_list_nest";
+    type Args = (Option<DuckList<DuckList<i64>>>,);
+    type Output = i64;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v,)| {
+            v.value.iter()
+                .flatten()
+                .map(|v| v.value.iter().flatten().sum::<i64>())
+                .sum()
+        })
+    }
+}
 
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
@@ -120,6 +135,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             FirstWordTuple::register_builder(),
             AddItTuple::register_builder(),
             SumListWrapper::register_builder(),
+            SumListNest::register_builder(),
         ];
 
         for builder in builders {
