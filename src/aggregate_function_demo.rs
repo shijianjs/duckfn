@@ -1,5 +1,5 @@
-use crate::aggregate_function_wrapper::AggregateFunctionAdapter;
-use crate::scalar_function_wrapper::ScalarFunctionAdapter;
+use crate::wrapper::aggregate_function_wrapper::AggregateFunctionAdapter;
+use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info,
     duckdb_vector, idx_t,

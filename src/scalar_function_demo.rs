@@ -1,8 +1,7 @@
-use crate::aggregate_function_demo;
-use crate::scalar_function_wrapper::ScalarFunctionAdapter;
-use libduckdb_sys::{
-    duckdb_connection, duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info,
-    duckdb_vector,
+use crate::wrapper::duck_value_type_convertor::DuckList;
+use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
+use libduckdb_sys::{duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info,
+                    duckdb_vector,
 };
 use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
@@ -10,7 +9,6 @@ use quack_rs::prelude::{
     ListVector, LogicalType, Registrar, ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
-use crate::duck_value_type_convertor::DuckList;
 
 ///
 ///

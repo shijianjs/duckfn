@@ -1,6 +1,6 @@
-use crate::duck_args_type::DuckArgs;
-use crate::duck_register_builder::RegisterBuilder;
-use crate::duck_value_type_convertor::DuckValueType;
+use crate::wrapper::duck_args_type::DuckArgs;
+use crate::wrapper::duck_register_builder::RegisterBuilder;
+use crate::wrapper::duck_value_type_convertor::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;

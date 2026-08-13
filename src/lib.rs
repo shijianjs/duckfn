@@ -1,22 +1,14 @@
 // src/lib.rs
 pub mod aggregate_function_demo;
-pub mod duck_args_type;
-pub mod duck_value_type_convertor;
 pub mod scalar_function_demo;
-pub mod scalar_function_wrapper;
-pub mod aggregate_function_wrapper;
 mod scalar_function_official_demo;
-mod duck_register_builder;
+pub mod wrapper;
 
-use crate::scalar_function_demo::{AddItTuple, FirstWordTuple};
-use crate::scalar_function_wrapper::{
-    ScalarFunctionAdapter,
-};
 use libduckdb_sys::duckdb_connection;
 use quack_rs::connection::Connection;
 use quack_rs::entry_point_v2;
 use quack_rs::error::ExtensionError;
-use scalar_function_demo::DoubleIt;
+use wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 
 fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let con: duckdb_connection = connection.as_raw_connection();

@@ -1,9 +1,7 @@
+use crate::wrapper::duck_value_type_convertor::{DuckTypeInfo, DuckValueReader, DuckValueType};
 use quack_rs::data_chunk::DataChunk;
-use crate::duck_value_type_convertor::{DuckTypeInfo, DuckValueReader, DuckValueType};
-use quack_rs::prelude::{TypeId, VectorReader};
 
-pub trait DuckArgs : Sized{
-    
+pub trait DuckArgs: Sized {
     fn create_readers(chunk: &DataChunk) -> Vec<DuckValueReader>;
 
     fn read(readers: &[DuckValueReader], row: usize) -> Self;
