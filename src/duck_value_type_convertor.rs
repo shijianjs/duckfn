@@ -42,18 +42,11 @@ pub trait DuckValueType: Sized {
             None
         }
     }
-    fn read_by_vector_reader(reader: &VectorReader, row: usize) -> Option<Self> {
-        if unsafe { reader.is_valid(row) } {
-            Some(Self::read_valid_by_vector_reader(reader, row))
-        } else {
-            None
-        }
-    }
     fn read_valid(reader: &DuckValueReader, row: usize) -> Self{
         Self::read_valid_by_vector_reader(&reader.vector_reader, row)
     }
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self{
-        todo!("子类需要实现read_valid")
+        todo!("子类需要实现read_valid_by_vector_reader")
     }
 
     fn write(writer: &mut VectorWriter, row: usize, vo: Option<Self>) {
