@@ -115,7 +115,7 @@ pub struct DuckList<T: DuckValueType> {
 }
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn logical_type() -> Option<LogicalType> {
-        Some(LogicalType::list(T::type_id().expect("T::type_id() must not be None")))
+        Some(LogicalType::list_from_logical(&LogicalType::new(T::type_id().expect("T::type_id() must not be None"))))
     }
     fn read_by_c_duckdb_vector(list_vec: &duckdb_vector, row: usize) -> Option<Self> {
         let item_type = T::type_id()?;
