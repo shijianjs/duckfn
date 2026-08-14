@@ -7,6 +7,7 @@ use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
 use quack_rs::prelude::{ListVector, LogicalType, MapVector, Registrar, ScalarFunctionBuilder, StructVector, TypeId, VectorReader, VectorWriter};
 use tuple_transpose::TupleTranspose;
+use crate::wrapper::duck_register_builder::RegisterBuilder;
 
 ///
 ///
@@ -123,6 +124,83 @@ impl ScalarFunctionAdapter for SumListNest {
 }
 
 
+
+unsafe extern "C" fn make_list_scalar(
+    _info: duckdb_function_info,
+    input: duckdb_data_chunk,
+    output: duckdb_vector,
+) {
+    // let mut writer = unsafe { VectorWriter::new(output) };
+
+    let row_count = unsafe {
+        libduckdb_sys::duckdb_data_chunk_get_size(input)
+    } as usize;
+
+
+    // output 是 LIST vector
+    let list_vec = output;
+
+
+    // 假设每行写 [1,2,3]
+    let total_elements = row_count * 3;
+
+
+    // 1. 预留 child 空间
+    unsafe {
+        ListVector::reserve(list_vec, total_elements);
+    }
+
+
+    // 2. 获取 child writer
+    let mut child_writer = unsafe {
+        ListVector::child_writer(list_vec)
+    };
+
+
+    let mut offset = 0usize;
+
+
+    for row in 0..row_count {
+
+        // 当前 row 对应 child 区间
+        unsafe {
+            ListVector::set_entry(
+                list_vec,
+                row,
+                offset as u64,
+                3,
+            );
+        }
+
+
+        // 写 child
+        unsafe {
+            child_writer.write_i64(offset, 1);
+            child_writer.write_i64(offset + 1, 2);
+            child_writer.write_i64(offset + 2, 3);
+        }
+        println!("row {} offset {}", row, offset);
+
+
+        offset += 3;
+    }
+
+
+    // 3. 告诉 DuckDB child vector 有多少元素
+    unsafe {
+        ListVector::set_size(
+            list_vec,
+            total_elements,
+        );
+    }
+
+
+    // 如果 list 本身有 null
+    // writer.set_null(row)
+    // 不要调用 set_entry
+}
+
+
 // ============================================================================
 // Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)
 // ============================================================================
@@ -214,6 +292,10 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .param_logical(LogicalType::list(TypeId::BigInt))
             .returns(TypeId::BigInt)
             .function(sum_list_scalar),
+        ScalarFunctionBuilder::new("make_list_scalar")
+            .param_logical(LogicalType::new(TypeId::BigInt))
+            .returns_logical(LogicalType::list(TypeId::BigInt))
+            .function(make_list_scalar),
         ScalarFunctionBuilder::new("make_pair")
             .param(TypeId::Varchar)
             .param(TypeId::Integer)
