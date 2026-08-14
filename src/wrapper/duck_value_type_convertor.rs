@@ -98,14 +98,22 @@ pub trait DuckValueType: Sized {
     }
 
     fn write(writer: &mut DuckValueWriter, idx: usize, vo: Option<Self>) {
-        Self::write_to_vector(&mut writer.vector_writer, idx, vo);
-    }
-    fn write_to_vector(writer: &mut VectorWriter, idx: usize, vo: Option<Self>) {
+        // Self::write_to_vector(&mut writer.vector_writer, idx, vo);
         match vo {
-            None => unsafe { writer.set_null(idx) },
-            Some(v) => Self::write_valid_to_vector(writer, idx, v),
+            None => unsafe { writer.vector_writer.set_null(idx) },
+
+            Some(v) => Self::write_valid(writer, idx, v),
         }
     }
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: Self) {
+        Self::write_valid_to_vector(&mut writer.vector_writer, idx, vo)
+    }
+    // fn write_to_vector(writer: &mut VectorWriter, idx: usize, vo: Option<Self>) {
+    //     match vo {
+    //         None => unsafe { writer.set_null(idx) },
+    //         Some(v) => Self::write_valid_to_vector(writer, idx, v),
+    //     }
+    // }
     fn write_valid_to_vector(writer: &mut VectorWriter, idx: usize, v: Self) {
         todo!("子类需要实现write_valid")
     }
@@ -125,49 +133,6 @@ impl<T: DuckValueType> DuckList<T> {
     }
 
 
-    fn write_valid(
-        writer: &mut DuckValueWriter,
-        idx: usize,
-        v: Self
-    ){
-
-        let offset = writer.offset;
-
-        let len = v.value.len();
-
-
-        unsafe {
-            ListVector::set_entry(
-                writer.c_duckdb_vector,
-                idx,
-                offset as u64,
-                len as u64,
-            );
-        }
-
-
-        let child_writer = &mut writer.child_writer[0];
-
-
-        for value in v.value {
-
-            T::write(
-                child_writer,
-                writer.offset,
-                value,
-            );
-
-            writer.offset += 1;
-        }
-
-
-        unsafe {
-            ListVector::set_size(
-                writer.c_duckdb_vector,
-                writer.offset ,
-            );
-        }
-    }
 }
 
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
@@ -206,9 +171,7 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn create_writer(output: duckdb_vector) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(output);
 
-        let child_vector = unsafe {
-            ListVector::get_child(output)
-        };
+        let child_vector = unsafe { ListVector::get_child(output) };
 
         let child_writer = T::create_writer(child_vector);
 
@@ -216,23 +179,28 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
 
         writer
     }
-    fn write(
-        writer: &mut DuckValueWriter,
-        idx: usize,
-        vo: Option<Self>
-    ) {
-        match vo {
-            None => unsafe {
-                writer.vector_writer.set_null(idx)
-            },
 
-            Some(v) => {
-                Self::write_valid(writer, idx, v)
-            }
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: Self) {
+        let offset = writer.offset;
+
+        let len = v.value.len();
+
+        unsafe {
+            ListVector::set_entry(writer.c_duckdb_vector, idx, offset as u64, len as u64);
+        }
+
+        let child_writer = &mut writer.child_writer[0];
+
+        for value in v.value {
+            T::write(child_writer, writer.offset, value);
+
+            writer.offset += 1;
+        }
+
+        unsafe {
+            ListVector::set_size(writer.c_duckdb_vector, writer.offset);
         }
     }
-
-
 }
 
 /// TypeId::Boolean

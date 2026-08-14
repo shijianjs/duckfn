@@ -59,17 +59,18 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         count: idx_t,
         offset: idx_t,
     ) {
-        let mut writer = unsafe { VectorWriter::new(result) };
+        // let mut writer = unsafe { VectorWriter::new(result) };
+        let mut writer = Self::Output::create_writer(result);
 
         for i in 0..count as usize {
             let state_ptr = unsafe { *source.add(i) };
             match unsafe { FfiState::<Self>::with_state(state_ptr) } {
                 Some(st) => unsafe {
-                    Self::Output::write_to_vector(&mut writer, offset as usize + i, st.result());
+                    Self::Output::write(&mut writer, offset as usize + i, st.result());
 
                     // writer.write_i64(offset as usize + i, st.count)
                 },
-                None => unsafe { writer.set_null(offset as usize + i) },
+                None => unsafe { writer.vector_writer.set_null(offset as usize + i) },
             }
         }
     }

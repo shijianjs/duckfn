@@ -61,6 +61,10 @@ cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT make_list_scalar_w(range) from range(10);
   ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT nest_list_scalar_w(range) from range(10);
+  ";
 
 
 cargo duckdb-ext build; duckdb -unsigned -c "
