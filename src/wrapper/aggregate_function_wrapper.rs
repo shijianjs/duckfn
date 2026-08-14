@@ -73,6 +73,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
                 None => unsafe { writer.vector_writer.set_null(offset as usize + i) },
             }
         }
+        Self::Output::write_finish(&mut writer);
     }
 
     unsafe extern "C" fn c_state_destroy(states: *mut duckdb_aggregate_state, count: idx_t) {

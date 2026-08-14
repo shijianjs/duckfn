@@ -117,6 +117,9 @@ pub trait DuckValueType: Sized {
     fn write_valid_to_vector(writer: &mut VectorWriter, idx: usize, v: Self) {
         todo!("子类需要实现write_valid")
     }
+
+    fn write_finish(writer: &mut DuckValueWriter){
+    }
 }
 
 // TypeId::List
@@ -191,11 +194,14 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
 
         let child_writer = &mut writer.child_writer[0];
 
-        for value in v.value {
-            T::write(child_writer, writer.offset, value);
-
-            writer.offset += 1;
+        for (i,value) in v.value.into_iter().enumerate() {
+            T::write(child_writer, offset+i, value);
         }
+        writer.offset += len;
+    }
+
+    fn write_finish(writer: &mut DuckValueWriter) {
+        T::write_finish(&mut writer.child_writer[0]);
 
         unsafe {
             ListVector::set_size(writer.c_duckdb_vector, writer.offset);

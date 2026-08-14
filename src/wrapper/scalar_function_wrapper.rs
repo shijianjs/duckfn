@@ -34,6 +34,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             let result = Self::apply(args);
             Self::Output::write(&mut writer, row, result);
         }
+        Self::Output::write_finish(&mut writer);
     }
     fn register_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
