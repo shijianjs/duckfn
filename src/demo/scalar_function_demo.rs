@@ -70,19 +70,19 @@ unsafe extern "C" fn sum_list_scalar(
     let mut writer = unsafe { VectorWriter::new(output) };
     let row_count = reader.row_count();
     let list_vec: duckdb_vector = unsafe { duckdb_data_chunk_get_vector(input, 0) };
-
+    let child_reader = unsafe {
+        VectorReader::from_vector(
+            ListVector::get_child(list_vec),
+            ListVector::get_size(list_vec),
+        )
+    };
     for row in 0..row_count {
         if !unsafe { reader.is_valid(row) } {
             unsafe { writer.set_null(row) };
             continue;
         }
         let entry = unsafe { ListVector::get_entry(list_vec, row) };
-        let child_reader = unsafe {
-            VectorReader::from_vector(
-                ListVector::get_child(list_vec),
-                ListVector::get_size(list_vec),
-            )
-        };
+
 
         let mut sum: i64 = 0;
         for i in 0..entry.length as usize {

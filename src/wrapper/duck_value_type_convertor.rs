@@ -1,6 +1,8 @@
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{DuckInterval, ListVector, LogicalType, TypeId, VectorReader, VectorWriter};
+use quack_rs::prelude::{
+    DuckInterval, ListVector, LogicalType, TypeId, VectorReader, VectorWriter,
+};
 
 pub struct DuckTypeInfo {
     pub type_id: TypeId,
@@ -10,6 +12,27 @@ pub struct DuckTypeInfo {
 pub struct DuckValueReader {
     pub vector_reader: VectorReader,
     pub c_duckdb_vector: duckdb_vector,
+    pub child_reader: Vec<DuckValueReader>,
+}
+
+impl DuckValueReader {
+    fn new_from_chunk(chunk: &DataChunk, column_index: usize) -> Self {
+        Self {
+            vector_reader: unsafe { chunk.reader(column_index) },
+            c_duckdb_vector: unsafe { chunk.vector(column_index) },
+            child_reader: vec![],
+        }
+    }
+    fn new_from_vector(  vector: duckdb_vector,
+                         size: usize,) -> DuckValueReader {
+        DuckValueReader {
+            vector_reader: unsafe {
+                VectorReader::from_vector(vector, size)
+            },
+            c_duckdb_vector: vector,
+            child_reader: vec![],
+        }
+    }
 }
 
 /// 映射规则：
@@ -22,30 +45,32 @@ pub trait DuckValueType: Sized {
             logical_type: Self::logical_type(),
         }
     }
-    fn type_id() -> TypeId ;
+    fn type_id() -> TypeId;
     fn logical_type() -> LogicalType {
         LogicalType::new(Self::type_id())
     }
 
-
+    // fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
+    //     DuckValueReader::new_from_chunk(chunk, column_index)
+    // }
     fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
-        DuckValueReader{
-            vector_reader:unsafe { chunk.reader(column_index) },
-            c_duckdb_vector: unsafe { chunk.vector(column_index) },
-        }
+        DuckValueReader::new_from_chunk(chunk, column_index)
+    }
+    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+        DuckValueReader::new_from_vector(vector, size)
     }
 
     fn read(reader: &DuckValueReader, row: usize) -> Option<Self> {
         if unsafe { reader.vector_reader.is_valid(row) } {
             Some(Self::read_valid(reader, row))
-        }else {
+        } else {
             None
         }
     }
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self{
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
         Self::read_valid_by_vector_reader(&reader.vector_reader, row)
     }
-    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self{
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         todo!("子类需要实现read_valid_by_vector_reader")
     }
 
@@ -55,7 +80,7 @@ pub trait DuckValueType: Sized {
             Some(v) => Self::write_valid(writer, row, v),
         }
     }
-    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self){
+    fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
         todo!("子类需要实现write_valid")
     }
 }
@@ -72,29 +97,46 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn logical_type() -> LogicalType {
         LogicalType::list_from_logical(&T::logical_type())
     }
+    fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
+        let mut reader = DuckValueReader::new_from_chunk(chunk, column_index);
+        Self::config_child(reader.c_duckdb_vector, &mut reader);
+        reader
+    }
+
+    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+        let mut reader = DuckValueReader::new_from_vector(vector, size);
+
+        Self::config_child(vector, &mut reader);
+
+        reader
+    }
     fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
         let list_vec = reader.c_duckdb_vector;
         let entry = unsafe { ListVector::get_entry(list_vec, row) };
-        let item_vector = unsafe { ListVector::get_child(list_vec) };
-        let child_reader = unsafe {
-            VectorReader::from_vector(
-                ListVector::get_child(list_vec),
-                ListVector::get_size(list_vec),
-            )
-        };
-        let duck_value_reader = DuckValueReader {
-            vector_reader: child_reader,
-            c_duckdb_vector: item_vector,
-        };
+
+        // 之前是照着官方的写法写在这里的
+        let child_reader = &reader.child_reader[0];
         let mut vec: Vec<Option<T>> = Vec::with_capacity(entry.length as usize);
         for i in 0..entry.length as usize {
             let idx = entry.offset as usize + i;
-            vec.push(T::read(&duck_value_reader, idx));
+            vec.push(T::read(&child_reader, idx));
         }
         DuckList { value: vec }
     }
 }
 
+impl<T: DuckValueType> DuckList<T> {
+    fn config_child(vector: duckdb_vector, reader: &mut DuckValueReader) {
+        let child_vector = unsafe { ListVector::get_child(vector) };
+        let child_size =
+            unsafe {
+                ListVector::get_size(vector)
+            };
+        let child_reader = T::create_reader_from_vector(child_vector, child_size);
+
+        reader.child_reader = vec![child_reader];
+    }
+}
 
 /// TypeId::Boolean
 
