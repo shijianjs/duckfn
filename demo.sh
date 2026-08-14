@@ -57,3 +57,11 @@ cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT sum_list_nest([[1,2],[3,null,4],null]);
   ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT make_pair('hello', 42);
+  ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT make_kv_map('hello', 42);
+  ";

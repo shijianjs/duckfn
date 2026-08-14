@@ -5,9 +5,7 @@ use libduckdb_sys::{
 };
 use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{
-    ListVector, LogicalType, Registrar, ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
-};
+use quack_rs::prelude::{ListVector, LogicalType, MapVector, Registrar, ScalarFunctionBuilder, StructVector, TypeId, VectorReader, VectorWriter};
 use tuple_transpose::TupleTranspose;
 
 ///
@@ -124,6 +122,87 @@ impl ScalarFunctionAdapter for SumListNest {
     }
 }
 
+
+// ============================================================================
+// Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)
+// ============================================================================
+
+unsafe extern "C" fn make_pair_scalar(
+    _info: duckdb_function_info,
+    input: duckdb_data_chunk,
+    output: duckdb_vector,
+) {
+    let key_reader = unsafe { VectorReader::new(input, 0) };
+    let val_reader = unsafe { VectorReader::new(input, 1) };
+    let row_count = key_reader.row_count();
+
+    let mut key_writer = unsafe { StructVector::field_writer(output, 0) };
+    let mut val_writer = unsafe { StructVector::field_writer(output, 1) };
+
+    for row in 0..row_count {
+        let key_valid = unsafe { key_reader.is_valid(row) };
+        let val_valid = unsafe { val_reader.is_valid(row) };
+        if !key_valid || !val_valid {
+            let mut parent_writer = unsafe { VectorWriter::new(output) };
+            unsafe { parent_writer.set_null(row) };
+            continue;
+        }
+        let k = unsafe { key_reader.read_str(row) };
+        let v = unsafe { val_reader.read_i32(row) };
+        unsafe { key_writer.write_varchar(row, k) };
+        unsafe { val_writer.write_i32(row, v) };
+    }
+}
+
+
+// ============================================================================
+// Scalar: make_kv_map(VARCHAR, INTEGER) → MAP(VARCHAR, INTEGER)
+//
+// Demonstrates MapVector, LogicalType::map(), and map write workflow.
+// Creates a single-entry map {key: k, value: v} per row.
+// ============================================================================
+
+unsafe extern "C" fn make_kv_map_scalar(
+    _info: duckdb_function_info,
+    input: duckdb_data_chunk,
+    output: duckdb_vector,
+) {
+    let key_reader = unsafe { VectorReader::new(input, 0) };
+    let val_reader = unsafe { VectorReader::new(input, 1) };
+    let row_count = key_reader.row_count();
+
+    // Reserve space in the MAP child vector for row_count entries (1 per row)
+    unsafe { MapVector::reserve(output, row_count) };
+
+    // Get the key and value child vectors
+    let keys_vec = unsafe { MapVector::keys(output) };
+    let vals_vec = unsafe { MapVector::values(output) };
+    let mut key_writer = unsafe { VectorWriter::from_vector(keys_vec) };
+    let mut val_writer = unsafe { VectorWriter::from_vector(vals_vec) };
+
+    let mut entry_offset: u64 = 0;
+    for row in 0..row_count {
+        let key_valid = unsafe { key_reader.is_valid(row) };
+        let val_valid = unsafe { val_reader.is_valid(row) };
+        if !key_valid || !val_valid {
+            // Empty map for NULL inputs
+            unsafe { MapVector::set_entry(output, row, entry_offset, 0) };
+            continue;
+        }
+        let k = unsafe { key_reader.read_str(row) };
+        let v = unsafe { val_reader.read_i32(row) };
+
+        let child_idx = entry_offset as usize;
+        unsafe { key_writer.write_varchar(child_idx, k) };
+        unsafe { val_writer.write_i32(child_idx, v) };
+
+        unsafe { MapVector::set_entry(output, row, entry_offset, 1) };
+        entry_offset += 1;
+    }
+
+    unsafe { MapVector::set_size(output, entry_offset as usize) };
+}
+
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
         DoubleIt::register_builder(),
@@ -135,6 +214,19 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .param_logical(LogicalType::list(TypeId::BigInt))
             .returns(TypeId::BigInt)
             .function(sum_list_scalar),
+        ScalarFunctionBuilder::new("make_pair")
+            .param(TypeId::Varchar)
+            .param(TypeId::Integer)
+            .returns_logical(LogicalType::struct_type(&[
+                ("key",   TypeId::Varchar),
+                ("value", TypeId::Integer),
+            ]))
+            .function(make_pair_scalar),
+        ScalarFunctionBuilder::new("make_kv_map")
+            .param(TypeId::Varchar)
+            .param(TypeId::Integer)
+            .returns_logical(LogicalType::map(TypeId::Varchar, TypeId::Integer))
+            .function(make_kv_map_scalar),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
