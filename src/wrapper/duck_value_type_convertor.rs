@@ -23,12 +23,9 @@ impl DuckValueReader {
             child_reader: vec![],
         }
     }
-    fn new_from_vector(  vector: duckdb_vector,
-                         size: usize,) -> DuckValueReader {
+    fn new_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         DuckValueReader {
-            vector_reader: unsafe {
-                VectorReader::from_vector(vector, size)
-            },
+            vector_reader: unsafe { VectorReader::from_vector(vector, size) },
             c_duckdb_vector: vector,
             child_reader: vec![],
         }
@@ -89,6 +86,16 @@ pub trait DuckValueType: Sized {
 pub struct DuckList<T: DuckValueType> {
     pub value: Vec<Option<T>>,
 }
+impl<T: DuckValueType> DuckList<T> {
+    fn config_child(vector: duckdb_vector, reader: &mut DuckValueReader) {
+        let child_vector = unsafe { ListVector::get_child(vector) };
+        let child_size = unsafe { ListVector::get_size(vector) };
+        let child_reader = T::create_reader_from_vector(child_vector, child_size);
+
+        reader.child_reader = vec![child_reader];
+    }
+}
+
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn type_id() -> TypeId {
         TypeId::List
@@ -105,9 +112,7 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-
         Self::config_child(vector, &mut reader);
-
         reader
     }
     fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
@@ -122,19 +127,6 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
             vec.push(T::read(&child_reader, idx));
         }
         DuckList { value: vec }
-    }
-}
-
-impl<T: DuckValueType> DuckList<T> {
-    fn config_child(vector: duckdb_vector, reader: &mut DuckValueReader) {
-        let child_vector = unsafe { ListVector::get_child(vector) };
-        let child_size =
-            unsafe {
-                ListVector::get_size(vector)
-            };
-        let child_reader = T::create_reader_from_vector(child_vector, child_size);
-
-        reader.child_reader = vec![child_reader];
     }
 }
 
