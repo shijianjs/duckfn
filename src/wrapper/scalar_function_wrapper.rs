@@ -26,7 +26,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         //     .map(|i| unsafe { chunk.reader(i) })
         //     .collect::<Vec<_>>();
         let readers = Self::Args::create_readers(&chunk);
-        let mut writer = unsafe { VectorWriter::new(output) };
+        let mut writer = Self::Output::create_writer(output);
         let row_count = chunk.size();
 
         for row in 0..row_count {
