@@ -38,6 +38,16 @@ pub struct DuckValueWriter {
     pub child_writer: Vec<DuckValueWriter>,
     pub offset: usize,
 }
+impl DuckValueWriter {
+    fn new_from_vector(vector: duckdb_vector) -> Self {
+        Self {
+            vector_writer: unsafe { VectorWriter::new(vector) },
+            c_duckdb_vector: vector,
+            child_writer: vec![],
+            offset: 0,
+        }
+    }
+}
 
 /// 映射规则：
 /// - 如果 Rust 基础类型已经完整表达了业务语义，可以直接映射；
@@ -113,6 +123,51 @@ impl<T: DuckValueType> DuckList<T> {
 
         reader.child_reader = vec![child_reader];
     }
+
+
+    fn write_valid(
+        writer: &mut DuckValueWriter,
+        idx: usize,
+        v: Self
+    ){
+
+        let offset = writer.offset;
+
+        let len = v.value.len();
+
+
+        unsafe {
+            ListVector::set_entry(
+                writer.c_duckdb_vector,
+                idx,
+                offset as u64,
+                len as u64,
+            );
+        }
+
+
+        let child_writer = &mut writer.child_writer[0];
+
+
+        for value in v.value {
+
+            T::write(
+                child_writer,
+                writer.offset,
+                value,
+            );
+
+            writer.offset += 1;
+        }
+
+
+        unsafe {
+            ListVector::set_size(
+                writer.c_duckdb_vector,
+                writer.offset ,
+            );
+        }
+    }
 }
 
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
@@ -149,16 +204,35 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     }
 
     fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        let mut child_writer = unsafe { ListVector::child_writer(output) };
-        DuckValueWriter {
-            vector_writer: unsafe { VectorWriter::new(output) },
-            c_duckdb_vector: output,
-            child_writer: vec![
+        let mut writer = DuckValueWriter::new_from_vector(output);
 
-            ],
-            offset: 0,
+        let child_vector = unsafe {
+            ListVector::get_child(output)
+        };
+
+        let child_writer = T::create_writer(child_vector);
+
+        writer.child_writer.push(child_writer);
+
+        writer
+    }
+    fn write(
+        writer: &mut DuckValueWriter,
+        idx: usize,
+        vo: Option<Self>
+    ) {
+        match vo {
+            None => unsafe {
+                writer.vector_writer.set_null(idx)
+            },
+
+            Some(v) => {
+                Self::write_valid(writer, idx, v)
+            }
         }
     }
+
+
 }
 
 /// TypeId::Boolean

@@ -59,6 +59,12 @@ cargo duckdb-ext build; duckdb -unsigned -c "
   ";
 cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT make_list_scalar_w(range) from range(10);
+  ";
+
+
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT sum_list_w([1,2,3,4]);
   ";
 cargo duckdb-ext build; duckdb -unsigned -c "

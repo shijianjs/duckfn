@@ -199,6 +199,30 @@ unsafe extern "C" fn make_list_scalar(
     // writer.set_null(row)
     // 不要调用 set_entry
 }
+struct MakeListScalarWrapper;
+impl ScalarFunctionAdapter for MakeListScalarWrapper {
+    const NAME: &'static str = "make_list_scalar_w";
+    type Args = (Option<i64>,);
+    type Output = DuckList<i64>;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v,)| DuckList{ value: vec![Some(v+1), Some(v*2), None]})
+    }
+}
+struct NestListScalarWrapper;
+impl ScalarFunctionAdapter for NestListScalarWrapper {
+    const NAME: &'static str = "nest_list_scalar_w";
+    type Args = (Option<i64>,);
+    type Output = DuckList<DuckList<i64>>;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v,)| DuckList{ value: vec![
+            Some(DuckList{ value: vec![Some(v+1), Some(v*2), None]}),
+            Some(DuckList{ value: vec![Some(v+10), Some(v*10), None]}),
+            None]})
+    }
+}
+
 
 
 // ============================================================================
@@ -288,6 +312,8 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         AddItTuple::register_builder(),
         SumListWrapper::register_builder(),
         SumListNest::register_builder(),
+        MakeListScalarWrapper::register_builder(),
+        NestListScalarWrapper::register_builder(),
         ScalarFunctionBuilder::new("sum_list")
             .param_logical(LogicalType::list(TypeId::BigInt))
             .returns(TypeId::BigInt)
