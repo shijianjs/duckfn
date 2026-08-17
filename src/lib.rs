@@ -1,7 +1,7 @@
 mod demo;
 pub mod wrapper;
 
-use demo::{aggregate_function_demo, scalar_function_demo};
+use demo::{aggregate_function_demo, scalar_function_demo, table_function_demo};
 use libduckdb_sys::duckdb_connection;
 use quack_rs::connection::Connection;
 use quack_rs::entry_point_v2;
@@ -15,6 +15,7 @@ fn register(connection: &Connection) -> Result<(), ExtensionError> {
         // FirstWordTuple::register(con)?;
         // AddItTuple::register(con)?;
         aggregate_function_demo::register(connection)?;
+        table_function_demo::register(connection)?;
     }
     Ok(())
 }
