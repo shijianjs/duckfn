@@ -21,11 +21,9 @@ pub struct DuckValueReader {
 
 impl DuckValueReader {
     fn new_from_chunk(chunk: &DataChunk, column_index: usize) -> Self {
-        Self {
-            vector_reader: unsafe { chunk.reader(column_index) },
-            c_duckdb_vector: unsafe { chunk.vector(column_index) },
-            child_reader: vec![],
-        }
+        let vector = unsafe { chunk.vector(column_index) };
+        let size = chunk.size();
+        Self::new_from_vector(vector, size)
     }
     fn new_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         DuckValueReader {
@@ -72,7 +70,9 @@ pub trait DuckValueType: Sized {
     //     DuckValueReader::new_from_chunk(chunk, column_index)
     // }
     fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
-        DuckValueReader::new_from_chunk(chunk, column_index)
+        let vector = unsafe { chunk.vector(column_index) };
+        let size = chunk.size();
+        Self::create_reader_from_vector(vector, size)
     }
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         DuckValueReader::new_from_vector(vector, size)
@@ -112,12 +112,6 @@ pub trait DuckValueType: Sized {
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: Self) {
         Self::write_valid_to_vector_writer(&mut writer.vector_writer, idx, vo)
     }
-    // fn write_to_vector(writer: &mut VectorWriter, idx: usize, vo: Option<Self>) {
-    //     match vo {
-    //         None => unsafe { writer.set_null(idx) },
-    //         Some(v) => Self::write_valid_to_vector(writer, idx, v),
-    //     }
-    // }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: Self) {
         todo!("子类需要实现write_valid")
     }
@@ -132,17 +126,7 @@ pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub field_names_type: PhantomData<N>,
 }
-impl<F0: DuckValueType, N: FieldNames> DuckStruct1<F0, N> {
-    fn config_child( reader: &mut DuckValueReader) {
-        let vector: duckdb_vector = reader.c_duckdb_vector;
-        let row_count = reader.vector_reader.row_count();
-        let f0_vector = unsafe { StructVector::get_child(vector, 0) };
-
-        let f0_reader = F0::create_reader_from_vector(f0_vector, row_count);
-
-        reader.child_reader = vec![f0_reader];
-    }
-}
+impl<F0: DuckValueType, N: FieldNames> DuckStruct1<F0, N> {}
 impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn type_id() -> TypeId {
         TypeId::Struct
@@ -151,15 +135,15 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
         let vec = N::field_names();
         LogicalType::struct_type_from_logical(&vec![(vec[0].as_str(), F0::logical_type())])
     }
-    fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
-        let mut reader = DuckValueReader::new_from_chunk(chunk, column_index);
-        Self::config_child( &mut reader);
-        reader
-    }
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-        Self::config_child( &mut reader);
+        let row_count = reader.vector_reader.row_count();
+        let f0_vector = unsafe { StructVector::get_child(vector, 0) };
+
+        let f0_reader = F0::create_reader_from_vector(f0_vector, row_count);
+
+        reader.child_reader = vec![f0_reader];
         reader
     }
 }
@@ -168,16 +152,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
 pub struct DuckList<T: DuckValueType> {
     pub value: Vec<Option<T>>,
 }
-impl<T: DuckValueType> DuckList<T> {
-    fn config_child(reader: &mut DuckValueReader) {
-        let vector: duckdb_vector = reader.c_duckdb_vector;
-        let child_vector = unsafe { ListVector::get_child(vector) };
-        let child_size = unsafe { ListVector::get_size(vector) };
-        let child_reader = T::create_reader_from_vector(child_vector, child_size);
-
-        reader.child_reader = vec![child_reader];
-    }
-}
+impl<T: DuckValueType> DuckList<T> {}
 
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn type_id() -> TypeId {
@@ -187,15 +162,14 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn logical_type() -> LogicalType {
         LogicalType::list_from_logical(&T::logical_type())
     }
-    fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
-        let mut reader = DuckValueReader::new_from_chunk(chunk, column_index);
-        Self::config_child(&mut reader);
-        reader
-    }
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-        Self::config_child(&mut reader);
+        let child_vector = unsafe { ListVector::get_child(vector) };
+        let child_size = unsafe { ListVector::get_size(vector) };
+        let child_reader = T::create_reader_from_vector(child_vector, child_size);
+
+        reader.child_reader = vec![child_reader];
         reader
     }
     fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
