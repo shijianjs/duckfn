@@ -117,6 +117,14 @@ pub trait DuckValueType: Sized {
     }
 
     fn write_finish(writer: &mut DuckValueWriter) {}
+
+    fn struct_child_reader(reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
+        let row_count = reader.vector_reader.row_count();
+        let vector = reader.c_duckdb_vector;
+        let f1_vector = unsafe { StructVector::get_child(vector, field_index) };
+        let f1_reader = Self::create_reader_from_vector(f1_vector, row_count);
+        f1_reader
+    }
 }
 
 pub trait FieldNames: Sized {
@@ -138,9 +146,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-        let row_count = reader.vector_reader.row_count();
-        let f0_vector = unsafe { StructVector::get_child(vector, 0) };
-        let f0_reader = F0::create_reader_from_vector(f0_vector, row_count);
+        let f0_reader = F0::struct_child_reader(&reader,0);
         reader.child_reader = vec![f0_reader];
         reader
     }
@@ -151,6 +157,42 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
             field_names_type: PhantomData,
         }
     }
+}
+pub struct DuckStruct2<F0: DuckValueType, F1: DuckValueType, N: FieldNames> {
+    pub f0: Option<F0>,
+    pub f1: Option<F1>,
+    pub field_names_type: PhantomData<N>,
+}
+impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckStruct2<F0, F1, N> {}
+impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for DuckStruct2<F0, F1, N> {
+    fn type_id() -> TypeId {
+        TypeId::Struct
+    }
+    fn logical_type() -> LogicalType {
+        LogicalType::struct_type_from_logical(&vec![
+            (N::FIELD_NAMES[0], F0::logical_type()),
+            (N::FIELD_NAMES[1], F1::logical_type()),
+        ])
+    }
+
+    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+        let mut reader = DuckValueReader::new_from_vector(vector, size);
+        let f0_reader = F0::struct_child_reader(&reader, 0);
+        let f1_reader = F1::struct_child_reader(&reader, 1);
+        reader.child_reader = vec![f0_reader, f1_reader];
+        reader
+    }
+
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+        Self{
+            f0: F0::read(&reader.child_reader[0], row),
+            f1: F1::read(&reader.child_reader[1], row),
+            field_names_type: PhantomData,
+        }
+    }
+}
+
+impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckStruct2<F0, F1, N> {
 }
 
 // TypeId::List

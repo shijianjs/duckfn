@@ -97,3 +97,6 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT struct_scalar_w({hello_count:15});";
 
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT struct_nest_scalar_w({struct:{hello_count:15},list:[1,null,2]});";
+
