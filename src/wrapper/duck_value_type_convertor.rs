@@ -384,17 +384,17 @@ impl DuckValueType for i128 {
 }
 
 /// TypeId::UHugeInt    // u128 不考虑，没read_u128这个方法
-// impl DuckValueType for u128 {
-//     fn type_id() -> TypeId {
-//         TypeId::UHugeInt
-//     }
-//     fn read_valid(reader: &VectorReader, row: usize) -> Self {
-//         unsafe { reader.read_u128(row) }
-//     }
-//     fn write_valid(writer: &mut VectorWriter, row: usize, v: Self) {
-//         unsafe { writer.write_u128(row, v) }
-//     }
-// }
+impl DuckValueType for u128 {
+    fn type_id() -> TypeId {
+        TypeId::UHugeInt
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_u128(row) }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_u128(row, v) }
+    }
+}
 
 /// TypeId::Float       // f32
 impl DuckValueType for f32 {
@@ -442,6 +442,137 @@ impl DuckValueType for DuckTimestamp {
         unsafe { writer.write_timestamp(row, v.micros_since_epoch) }
     }
 }
+// TypeId::TimestampTz
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimestampTz {
+    pub millis_since_epoch: i64,
+}
+// pub const unsafe fn write_timestamp_ms(&mut self, idx: usize, millis_since_epoch: i64) {
+impl DuckValueType for DuckTimestampTz {
+    fn type_id() -> TypeId {
+        TypeId::TimestampTz
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        Self {
+            millis_since_epoch: unsafe { reader.read_timestamp_tz(row) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_timestamp_ms(row, v.millis_since_epoch) }
+    }
+}
+// TypeId::TimestampS
+// pub const unsafe fn write_timestamp_s(&mut self, idx: usize, seconds_since_epoch: i64) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimestampS {
+    pub seconds_since_epoch: i64,
+}
+
+impl DuckValueType for DuckTimestampS {
+    fn type_id() -> TypeId {
+        TypeId::TimestampS
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        Self {
+            seconds_since_epoch: unsafe { reader.read_timestamp_s(row) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_timestamp_s(row, v.seconds_since_epoch) }
+    }
+}
+// TypeId::TimestampMs
+// pub const unsafe fn write_timestamp_ms(&mut self, idx: usize, millis_since_epoch: i64) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimestampMs {
+    pub millis_since_epoch: i64,
+}
+impl DuckValueType for DuckTimestampMs {
+    fn type_id() -> TypeId {
+        TypeId::TimestampMs
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        Self {
+            millis_since_epoch: unsafe { reader.read_timestamp_ms(row) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_timestamp_ms(row, v.millis_since_epoch) }
+    }
+}
+
+// TypeId::TimestampNs
+// pub const unsafe fn write_timestamp_ns(&mut self, idx: usize, nanos_since_epoch: i64) {
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimestampNs {
+    pub nanos_since_epoch: i64,
+}
+
+impl DuckValueType for DuckTimestampNs {
+    fn type_id() -> TypeId {
+        TypeId::TimestampNs
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        Self {
+            nanos_since_epoch: unsafe { reader.read_timestamp_ns(row) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_timestamp_ns(row, v.nanos_since_epoch) }
+    }
+}
+// TypeId::TimeTz
+// pub const unsafe fn write_time_tz(&mut self, idx: usize, bits: u64) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimeTz {
+    pub bits: u64,
+}
+
+impl DuckValueType for DuckTimeTz {
+    fn type_id() -> TypeId {
+        TypeId::TimeTz
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        Self {
+            bits: unsafe { reader.read_time_tz(row) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_time_tz(row, v.bits) }
+    }
+}
+// TypeId::Decimal
+// pub const unsafe fn read_decimal(&self, idx: usize, WIDTH: u8) -> i128 {
+// pub const unsafe fn write_decimal(&mut self, idx: usize, WIDTH: u8, unscaled: i128) {
+pub trait DecimalShape:Sized{
+    const WIDTH: u8;
+    const SCALE: u8;
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckDecimal<T: DecimalShape> {
+    pub unscaled: i128,
+    pub shape: PhantomData<T>,
+}
+impl<T: DecimalShape> DuckValueType for DuckDecimal<T> {
+    fn type_id() -> TypeId {
+        TypeId::Decimal
+    }
+    fn logical_type() -> LogicalType {
+        LogicalType::decimal(T::WIDTH, T::SCALE)
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        Self {
+            shape: PhantomData::<T>,
+            unscaled: unsafe { reader.read_decimal(row, T::WIDTH) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
+        unsafe { writer.write_decimal(row, T::WIDTH, v.unscaled) }
+    }
+}
+
+
 // pub const unsafe fn write_date(&mut self, idx: usize, days_since_epoch: i32) {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -550,13 +681,6 @@ impl DuckValueType for DuckUuid {
 // ===================================================
 // 这几个类型quack-rs没做read、write方法
 //
-// TypeId::TimestampTz
-// TypeId::TimestampS
-// TypeId::TimestampMs
-// TypeId::TimestampNs
-// TypeId::UHugeInt
-// TypeId::TimeTz
-// TypeId::Decimal
 // TypeId::Enum
 // TypeId::Union
 // TypeId::Bit
