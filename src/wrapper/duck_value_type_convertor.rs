@@ -92,13 +92,8 @@ pub trait DuckValueType: Sized {
         todo!("子类需要实现read_valid_by_vector_reader")
     }
 
-    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        DuckValueWriter {
-            vector_writer: unsafe { VectorWriter::new(output) },
-            c_duckdb_vector: output,
-            child_writer: vec![],
-            offset: 0,
-        }
+    fn create_writer(vector: duckdb_vector) -> DuckValueWriter {
+        DuckValueWriter::new_from_vector(vector)
     }
 
     fn write(writer: &mut DuckValueWriter, idx: usize, vo: Option<Self>) {
