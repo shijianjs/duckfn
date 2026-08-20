@@ -120,7 +120,8 @@ pub trait DuckValueType: Sized {
 }
 
 pub trait FieldNames: Sized {
-    fn field_names() -> Vec<String>;
+    // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
+    const FIELD_NAMES: &'static [&'static str];
 }
 pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
@@ -132,19 +133,23 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
         TypeId::Struct
     }
     fn logical_type() -> LogicalType {
-        let vec = N::field_names();
-        LogicalType::struct_type_from_logical(&vec![(vec[0].as_str(), F0::logical_type())])
+        LogicalType::struct_type_from_logical(&vec![(N::FIELD_NAMES[0], F0::logical_type())])
     }
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
         let row_count = reader.vector_reader.row_count();
         let f0_vector = unsafe { StructVector::get_child(vector, 0) };
-
         let f0_reader = F0::create_reader_from_vector(f0_vector, row_count);
-
         reader.child_reader = vec![f0_reader];
         reader
+    }
+
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+        Self{
+            f0: F0::read(&reader.child_reader[0], row),
+            field_names_type: PhantomData,
+        }
     }
 }
 

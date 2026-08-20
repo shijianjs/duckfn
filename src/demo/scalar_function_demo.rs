@@ -1,4 +1,4 @@
-use crate::wrapper::duck_value_type_convertor::DuckList;
+use crate::wrapper::duck_value_type_convertor::{DuckList, DuckStruct1, FieldNames};
 use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 use libduckdb_sys::{
     duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector,
@@ -223,6 +223,22 @@ impl ScalarFunctionAdapter for NestListScalarWrapper {
     }
 }
 
+struct StructScalarWrapper;
+struct StructScalarWrapperArg1;
+impl FieldNames for StructScalarWrapperArg1 {
+    const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
+}
+impl ScalarFunctionAdapter for StructScalarWrapper {
+    const NAME: &'static str = "struct_scalar_w";
+    type Args = (Option<DuckStruct1<i64,StructScalarWrapperArg1>>,);
+    type Output = i64;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v,)| {
+            v.f0.map(|v| {v+10})
+        }).flatten()
+    }
+}
 
 
 // ============================================================================
@@ -335,6 +351,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .param(TypeId::Integer)
             .returns_logical(LogicalType::map(TypeId::Varchar, TypeId::Integer))
             .function(make_kv_map_scalar),
+        StructScalarWrapper::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
