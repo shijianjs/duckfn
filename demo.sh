@@ -75,10 +75,9 @@ cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT sum_list_nest([[1,2],[3,4]]);
   ";
-cargo duckdb-ext build; duckdb -unsigned -c "
-  LOAD './target/debug/rusty_quack.duckdb_extension';
-  SELECT sum_list_nest([[1,2],[3,null,4],null]);
-  ";
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT sum_list_nest([[1,2],[3,null,4],null]);";
+
 cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT sum_list_nest(v) from (values ([[1,2],[3,null,4],null]),([[1],[3,null]])) t(v);

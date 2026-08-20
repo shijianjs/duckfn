@@ -1,8 +1,7 @@
+use std::marker::PhantomData;
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{
-    DuckInterval, ListVector, LogicalType, TypeId, VectorReader, VectorWriter,
-};
+use quack_rs::prelude::{DuckInterval, ListVector, LogicalType, StructVector, TypeId, VectorReader, VectorWriter};
 
 pub struct DuckTypeInfo {
     pub type_id: TypeId,
@@ -121,6 +120,49 @@ pub trait DuckValueType: Sized {
     fn write_finish(writer: &mut DuckValueWriter){
     }
 }
+
+pub trait FieldNames: Sized {
+    fn field_names() -> Vec<String>;
+}
+pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
+    pub f0: Option<F0>,
+    pub field_names_type: PhantomData<N>,
+}
+impl<F0: DuckValueType, N: FieldNames> DuckStruct1<F0, N> {
+    fn config_child(vector: duckdb_vector, reader: &mut DuckValueReader) {
+        let row_count =  reader.vector_reader.row_count() ;
+        let f0_vector = unsafe { StructVector::get_child(vector, 0) };
+
+        let f0_reader = F0::create_reader_from_vector(f0_vector, row_count);
+
+        reader.child_reader = vec![f0_reader];
+    }
+}
+impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
+    fn type_id() -> TypeId {
+        TypeId::Struct
+    }
+    fn logical_type() -> LogicalType {
+        let vec = N::field_names();
+        LogicalType::struct_type_from_logical(&vec![
+            (vec[0].as_str(), F0::logical_type()),
+        ])
+    }
+    fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
+        let mut reader = DuckValueReader::new_from_chunk(chunk, column_index);
+        Self::config_child(reader.c_duckdb_vector, &mut reader);
+        reader
+    }
+
+    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+        let mut reader = DuckValueReader::new_from_vector(vector, size);
+        Self::config_child(vector, &mut reader);
+        reader
+    }
+}
+
+
+
 
 // TypeId::List
 pub struct DuckList<T: DuckValueType> {

@@ -30,6 +30,7 @@ fn count_down() -> Result<TableFunctionBuilder, ExtensionError> {
                 unsafe { chunk.set_size(0) };
                 return Ok(());
             }
+            
             let mut writer = unsafe { chunk.writer(0) };
             unsafe { writer.write_i64(0, state.remaining as i64) };
             state.remaining -= 1;
