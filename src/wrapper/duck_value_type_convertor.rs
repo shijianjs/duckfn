@@ -535,7 +535,7 @@ impl DuckValueType for DuckBlob {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckUuid {
-    pub value: i128,
+    pub value: u128,
 }
 
 impl DuckValueType for DuckUuid {
