@@ -26,15 +26,19 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         //     .map(|i| unsafe { chunk.reader(i) })
         //     .collect::<Vec<_>>();
         let readers = Self::Args::create_readers(&chunk);
-        let mut writer = Self::Output::create_writer(output);
+        // let mut writer = Self::Output::create_writer(output);
         let row_count = chunk.size();
 
+        let mut output_vec:Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
         for row in 0..row_count {
             let args = Self::Args::read(&readers, row);
-            let result = Self::apply(args);
-            Self::Output::write(&mut writer, row, &result);
+            let result: Option<Self::Output> = Self::apply(args);
+            // Self::Output::write(&mut writer, row, &result);
+            output_vec.push(result);
         }
-        Self::Output::write_finish(&mut writer);
+        // let vec: Vec<Option<&Self::Output>> = output_vec.iter().map(|x| { x.as_ref() }).collect::<Vec<_>>();
+        Self::Output::write_batch(output,&output_vec);
+        // Self::Output::write_finish(&mut writer);
     }
     fn register_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)

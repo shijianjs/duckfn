@@ -201,7 +201,7 @@ impl ScalarFunctionAdapter for NestListScalarWrapper {
                     value: vec![Some(v + 1), Some(v * 2), None],
                 }),
                 Some(DuckList {
-                    value: vec![Some(v + 10), Some(v * 10), None],
+                    value: (0..v).map(|x| Some(x)).collect(),
                 }),
                 None,
             ],
