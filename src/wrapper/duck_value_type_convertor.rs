@@ -545,30 +545,38 @@ impl DuckValueType for DuckTimeTz {
 // TypeId::Decimal
 // pub const unsafe fn read_decimal(&self, idx: usize, WIDTH: u8) -> i128 {
 // pub const unsafe fn write_decimal(&mut self, idx: usize, WIDTH: u8, unscaled: i128) {
-pub trait DecimalShape:Sized{
+pub trait DecimalShapeDef:Sized{
     const WIDTH: u8;
     const SCALE: u8;
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DuckDecimal<T: DecimalShape> {
+pub struct DuckDecimal<T: DecimalShapeDef> {
     pub unscaled: i128,
+    pub scale: u8,
     pub shape: PhantomData<T>,
 }
-impl<T: DecimalShape> DuckValueType for DuckDecimal<T> {
+impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
     fn type_id() -> TypeId {
         TypeId::Decimal
     }
     fn logical_type() -> LogicalType {
         LogicalType::decimal(T::WIDTH, T::SCALE)
     }
-    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+        let logical = unsafe { quack_rs::vector::vector_get_column_type(reader.c_duckdb_vector) };
+        let width = unsafe { logical.decimal_width() };
+        let scale = unsafe { logical.decimal_scale() };
         Self {
+            scale,
             shape: PhantomData::<T>,
-            unscaled: unsafe { reader.read_decimal(row, T::WIDTH) },
+            unscaled: unsafe { reader.vector_reader.read_decimal(row, width) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_decimal(row, T::WIDTH, v.unscaled) }
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: Self) {
+        let logical = unsafe { quack_rs::vector::vector_get_column_type(writer.c_duckdb_vector) };
+        let width = unsafe { logical.decimal_width() };
+        // let scale = unsafe { logical.decimal_scale() };
+        unsafe { writer.vector_writer.write_decimal(idx, width, vo.unscaled) }
     }
 }
 
