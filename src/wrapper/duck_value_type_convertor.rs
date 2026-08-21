@@ -113,12 +113,18 @@ pub trait DuckValueType: Sized {
 
     fn write_finish(writer: &mut DuckValueWriter) {}
 
-    fn struct_child_reader(reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
+    fn struct_field_reader(reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
         let row_count = reader.vector_reader.row_count();
         let vector = reader.c_duckdb_vector;
-        let f1_vector = unsafe { StructVector::get_child(vector, field_index) };
-        let f1_reader = Self::create_reader_from_vector(f1_vector, row_count);
-        f1_reader
+        let field_vector = unsafe { StructVector::get_child(vector, field_index) };
+        let field_reader = Self::create_reader_from_vector(field_vector, row_count);
+        field_reader
+    }
+    fn struct_field_writer(writer: &DuckValueWriter, field_index: usize) -> DuckValueWriter {
+        let vector = writer.c_duckdb_vector;
+        let field_vector = unsafe { StructVector::get_child(vector, field_index) };
+        let field_writer = Self::create_writer(field_vector);
+        field_writer
     }
 }
 
@@ -130,7 +136,6 @@ pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub field_names_type: PhantomData<N>,
 }
-impl<F0: DuckValueType, N: FieldNames> DuckStruct1<F0, N> {}
 impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn type_id() -> TypeId {
         TypeId::Struct
@@ -141,7 +146,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-        let f0_reader = F0::struct_child_reader(&reader,0);
+        let f0_reader = F0::struct_field_reader(&reader, 0);
         reader.child_reader = vec![f0_reader];
         reader
     }
@@ -152,13 +157,23 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
             field_names_type: PhantomData,
         }
     }
+    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+        let mut writer = DuckValueWriter::new_from_vector(output);
+        let f0_reader = F0::struct_field_writer(&writer, 0);
+        writer.child_writer = vec![f0_reader];
+        writer
+    }
+
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: Self) {
+        F0::write(&mut writer.child_writer[0], idx, v.f0);
+    }
+
 }
 pub struct DuckStruct2<F0: DuckValueType, F1: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub f1: Option<F1>,
     pub field_names_type: PhantomData<N>,
 }
-impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckStruct2<F0, F1, N> {}
 impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for DuckStruct2<F0, F1, N> {
     fn type_id() -> TypeId {
         TypeId::Struct
@@ -172,8 +187,8 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-        let f0_reader = F0::struct_child_reader(&reader, 0);
-        let f1_reader = F1::struct_child_reader(&reader, 1);
+        let f0_reader = F0::struct_field_reader(&reader, 0);
+        let f1_reader = F1::struct_field_reader(&reader, 1);
         reader.child_reader = vec![f0_reader, f1_reader];
         reader
     }
@@ -185,10 +200,20 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
             field_names_type: PhantomData,
         }
     }
+    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+        let mut writer = DuckValueWriter::new_from_vector(output);
+        let f0_reader = F0::struct_field_writer(&writer, 0);
+        let f1_reader = F1::struct_field_writer(&writer, 1);
+        writer.child_writer = vec![f0_reader, f1_reader];
+        writer
+    }
+
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: Self) {
+        F0::write(&mut writer.child_writer[0], idx, v.f0);
+        F1::write(&mut writer.child_writer[1], idx, v.f1);
+    }
 }
 
-impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckStruct2<F0, F1, N> {
-}
 
 // TypeId::List
 pub struct DuckList<T: DuckValueType> {

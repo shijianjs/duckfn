@@ -1,3 +1,4 @@
+use crate::wrapper::duck_register_builder::RegisterBuilder;
 use crate::wrapper::duck_value_type_convertor::{DuckList, DuckStruct1, DuckStruct2, FieldNames};
 use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 use libduckdb_sys::{
@@ -5,9 +6,11 @@ use libduckdb_sys::{
 };
 use quack_rs::connection::Connection;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{ListVector, LogicalType, MapVector, Registrar, ScalarFunctionBuilder, StructVector, TypeId, VectorReader, VectorWriter};
+use quack_rs::prelude::{
+    ListVector, LogicalType, MapVector, Registrar, ScalarFunctionBuilder, StructVector, TypeId,
+    VectorReader, VectorWriter,
+};
 use tuple_transpose::TupleTranspose;
-use crate::wrapper::duck_register_builder::RegisterBuilder;
 
 ///
 ///
@@ -84,7 +87,6 @@ unsafe extern "C" fn sum_list_scalar(
         }
         let entry = unsafe { ListVector::get_entry(list_vec, row) };
 
-
         let mut sum: i64 = 0;
         for i in 0..entry.length as usize {
             let idx = entry.offset as usize + i;
@@ -123,8 +125,6 @@ impl ScalarFunctionAdapter for SumListNest {
     }
 }
 
-
-
 unsafe extern "C" fn make_list_scalar(
     _info: duckdb_function_info,
     input: duckdb_data_chunk,
@@ -132,46 +132,29 @@ unsafe extern "C" fn make_list_scalar(
 ) {
     // let mut writer = unsafe { VectorWriter::new(output) };
 
-    let row_count = unsafe {
-        libduckdb_sys::duckdb_data_chunk_get_size(input)
-    } as usize;
-
+    let row_count = unsafe { libduckdb_sys::duckdb_data_chunk_get_size(input) } as usize;
 
     // output 是 LIST vector
     let list_vec = output;
 
-
     // 假设每行写 [1,2,3]
     let total_elements = row_count * 3;
-
 
     // 1. 预留 child 空间
     unsafe {
         ListVector::reserve(list_vec, total_elements);
     }
 
-
     // 2. 获取 child writer
-    let mut child_writer = unsafe {
-        ListVector::child_writer(list_vec)
-    };
-
+    let mut child_writer = unsafe { ListVector::child_writer(list_vec) };
 
     let mut offset = 0usize;
 
-
     for row in 0..row_count {
-
         // 当前 row 对应 child 区间
         unsafe {
-            ListVector::set_entry(
-                list_vec,
-                row,
-                offset as u64,
-                3,
-            );
+            ListVector::set_entry(list_vec, row, offset as u64, 3);
         }
-
 
         // 写 child
         unsafe {
@@ -181,19 +164,13 @@ unsafe extern "C" fn make_list_scalar(
         }
         println!("row {} offset {}", row, offset);
 
-
         offset += 3;
     }
 
-
     // 3. 告诉 DuckDB child vector 有多少元素
     unsafe {
-        ListVector::set_size(
-            list_vec,
-            total_elements,
-        );
+        ListVector::set_size(list_vec, total_elements);
     }
-
 
     // 如果 list 本身有 null
     // writer.set_null(row)
@@ -206,7 +183,9 @@ impl ScalarFunctionAdapter for MakeListScalarWrapper {
     type Output = DuckList<i64>;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| DuckList{ value: vec![Some(v+1), Some(v*2), None]})
+        args.transpose().map(|(v,)| DuckList {
+            value: vec![Some(v + 1), Some(v * 2), None],
+        })
     }
 }
 struct NestListScalarWrapper;
@@ -216,10 +195,17 @@ impl ScalarFunctionAdapter for NestListScalarWrapper {
     type Output = DuckList<DuckList<i64>>;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| DuckList{ value: vec![
-            Some(DuckList{ value: vec![Some(v+1), Some(v*2), None]}),
-            Some(DuckList{ value: vec![Some(v+10), Some(v*10), None]}),
-            None]})
+        args.transpose().map(|(v,)| DuckList {
+            value: vec![
+                Some(DuckList {
+                    value: vec![Some(v + 1), Some(v * 2), None],
+                }),
+                Some(DuckList {
+                    value: vec![Some(v + 10), Some(v * 10), None],
+                }),
+                None,
+            ],
+        })
     }
 }
 
@@ -230,19 +216,17 @@ impl FieldNames for StructScalarWrapperArg1 {
 }
 impl ScalarFunctionAdapter for StructScalarWrapper {
     const NAME: &'static str = "struct_scalar_w";
-    type Args = (Option<DuckStruct1<i64,StructScalarWrapperArg1>>,);
+    type Args = (Option<DuckStruct1<i64, StructScalarWrapperArg1>>,);
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| {
-            v.f0.map(|v| {v+10})
-        }).flatten()
+        args.transpose().map(|(v,)| v.f0.map(|v| v + 10)).flatten()
     }
 }
 struct NestStructScalarWrapper;
 struct NestStructScalarWrapperOuter;
 impl FieldNames for NestStructScalarWrapperOuter {
-    const FIELD_NAMES: &'static [&'static str] = &["struct","list"];
+    const FIELD_NAMES: &'static [&'static str] = &["struct", "list"];
 }
 struct NestStructScalarWrapperInner;
 impl FieldNames for NestStructScalarWrapperInner {
@@ -250,21 +234,52 @@ impl FieldNames for NestStructScalarWrapperInner {
 }
 impl ScalarFunctionAdapter for NestStructScalarWrapper {
     const NAME: &'static str = "struct_nest_scalar_w";
-    type Args = (Option<DuckStruct2<
-        DuckStruct1<i64,NestStructScalarWrapperInner>,
-        DuckList<i64>,
-        NestStructScalarWrapperOuter>>,);
+    type Args = (
+        Option<
+            DuckStruct2<
+                DuckStruct1<i64, NestStructScalarWrapperInner>,
+                DuckList<i64>,
+                NestStructScalarWrapperOuter,
+            >,
+        >,
+    );
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(outer, )| {
-            (outer.f0, outer.f1).transpose().map(|(struct1, list1)| {
-                struct1.f0.map(|v| { v + list1.value.iter().flatten().sum::<i64>() })
+        args.transpose()
+            .map(|(outer,)| {
+                (outer.f0, outer.f1).transpose().map(|(struct1, list1)| {
+                    struct1
+                        .f0
+                        .map(|v| v + list1.value.iter().flatten().sum::<i64>())
+                })
             })
-        }).flatten()?
+            .flatten()?
     }
 }
+struct NestStructOutputScalarWrapper;
+impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
+    const NAME: &'static str = "struct_nest_output_scalar_w";
+    type Args = (Option<i32>,);
+    type Output = DuckStruct2<
+        DuckStruct1<i32, NestStructScalarWrapperInner>,
+        DuckList<i32>,
+        NestStructScalarWrapperOuter,
+    >;
 
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(outer,)| DuckStruct2 {
+            f0: Some(DuckStruct1 {
+                f0: Some(100 + outer),
+                field_names_type: Default::default(),
+            }),
+            f1: Some(DuckList {
+                value: (0..outer).map(|x| Some(x)).collect(),
+            }),
+            field_names_type: Default::default(),
+        })
+    }
+}
 
 // ============================================================================
 // Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)
@@ -296,7 +311,6 @@ unsafe extern "C" fn make_pair_scalar(
         unsafe { val_writer.write_i32(row, v) };
     }
 }
-
 
 // ============================================================================
 // Scalar: make_kv_map(VARCHAR, INTEGER) → MAP(VARCHAR, INTEGER)
@@ -367,7 +381,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .param(TypeId::Varchar)
             .param(TypeId::Integer)
             .returns_logical(LogicalType::struct_type(&[
-                ("key",   TypeId::Varchar),
+                ("key", TypeId::Varchar),
                 ("value", TypeId::Integer),
             ]))
             .function(make_pair_scalar),
@@ -378,6 +392,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .function(make_kv_map_scalar),
         StructScalarWrapper::register_builder(),
         NestStructScalarWrapper::register_builder(),
+        NestStructOutputScalarWrapper::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
