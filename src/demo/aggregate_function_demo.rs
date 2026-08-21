@@ -10,6 +10,7 @@ use quack_rs::prelude::{
     ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
+use crate::wrapper::duck_value_type_convertor::DuckList;
 
 /// ============= demo wrapper封装版  ============
 ///
@@ -37,6 +38,31 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
         Some(self.count)
     }
 }
+
+#[derive(Default, Debug, Clone)]
+struct AggListWrapper{
+    li:DuckList<i64>
+}
+impl AggregateState for AggListWrapper {}
+impl AggregateFunctionAdapter for AggListWrapper {
+    const NAME: &'static str = "agg_list_w";
+    type Args = (Option<i64>,);
+    type Output = DuckList<i64>;
+    fn handle_row(&mut self, args: Self::Args) {
+        self.li.value.push(args.0);
+    }
+
+    fn combine(&mut self, other: &Self) {
+        self.li.value.extend(other.li.value.iter().cloned());
+    }
+
+    fn result(&self) -> Option<Self::Output> {
+        Some(self.li.clone())
+    }
+}
+
+
+
 
 /// ============= demo 官方的 ============
 
@@ -133,6 +159,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .finalize(wc_finalize)
             .destructor(wc_state_destroy),
         WordCountStateWrapper::register_builder(),
+        AggListWrapper::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_aggregate(builder) }?;

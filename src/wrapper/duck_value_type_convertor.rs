@@ -153,6 +153,7 @@ pub trait FieldNames: Sized {
     // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
     const FIELD_NAMES: &'static [&'static str];
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub field_names_type: PhantomData<N>,
@@ -200,6 +201,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     }
 
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckStruct2<F0: DuckValueType, F1: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub f1: Option<F1>,
@@ -264,6 +266,7 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
 
 
 // TypeId::List
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DuckList<T: DuckValueType> {
     pub value: Vec<Option<T>>,
 }

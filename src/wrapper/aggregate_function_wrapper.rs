@@ -5,7 +5,7 @@ use libduckdb_sys::{duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::VectorWriter;
+use quack_rs::prelude::{AggregateFunctionInfo, ListVector, VectorWriter};
 
 pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     unsafe extern "C" fn c_state_size(_info: duckdb_function_info) -> idx_t {
@@ -53,28 +53,67 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     }
 
     unsafe extern "C" fn c_finalize(
-        _info: duckdb_function_info,
+        info: duckdb_function_info,
         source: *mut duckdb_aggregate_state,
         result: duckdb_vector,
         count: idx_t,
         offset: idx_t,
     ) {
+        let info = AggregateFunctionInfo::new(info);
+        if offset !=0 {
+            info.set_error(format!("non-zero aggregate finalize result offset is not supported: {}",
+                                   offset).as_str());
+            return;
+        }
         // let mut writer = unsafe { VectorWriter::new(result) };
-        let mut writer = Self::Output::create_writer(result);
+        // let mut writer = Self::Output::create_writer(result);
+        // let child_size = unsafe {
+        //     ListVector::get_size(result)
+        // };
+        // println!(
+        //     "FINALIZE: offset={}, count={}, child_size={}",
+        //     offset, count, child_size
+        // );
 
+        let mut output_vec:Vec<Option<Self::Output>> = Vec::with_capacity(count as usize);
         for i in 0..count as usize {
             let state_ptr = unsafe { *source.add(i) };
             match unsafe { FfiState::<Self>::with_state(state_ptr) } {
                 Some(st) => unsafe {
-                    Self::Output::write(&mut writer, offset as usize + i, &st.result());
+                    // Self::Output::write(&mut writer, offset as usize + i, &st.result());
+                    output_vec.push(st.result());
 
                     // writer.write_i64(offset as usize + i, st.count)
                 },
-                None => unsafe { writer.vector_writer.set_null(offset as usize + i) },
+                None => output_vec.push(None),
+                // None => unsafe { writer.vector_writer.set_null(offset as usize + i) },
             }
         }
-        Self::Output::write_finish(&mut writer);
+        Self::Output::write_batch(result, &output_vec);
     }
+    // unsafe extern "C" fn c_finalize(
+    //     _info: duckdb_function_info,
+    //     source: *mut duckdb_aggregate_state,
+    //     result: duckdb_vector,
+    //     count: idx_t,
+    //     offset: idx_t,
+    // ) {
+    //     // let mut writer = unsafe { VectorWriter::new(result) };
+    //     let mut writer = Self::Output::create_writer(result);
+    // 
+    //     for i in 0..count as usize {
+    //         let state_ptr = unsafe { *source.add(i) };
+    //         match unsafe { FfiState::<Self>::with_state(state_ptr) } {
+    //             Some(st) => unsafe {
+    //                 Self::Output::write(&mut writer, offset as usize + i, &st.result());
+    // 
+    //                 // writer.write_i64(offset as usize + i, st.count)
+    //             },
+    //             None => unsafe { writer.vector_writer.set_null(offset as usize + i) },
+    //         }
+    //     }
+    //     Self::Output::write_finish(&mut writer);
+    // }
 
     unsafe extern "C" fn c_state_destroy(states: *mut duckdb_aggregate_state, count: idx_t) {
         unsafe { FfiState::<Self>::destroy_callback(states, count) };
