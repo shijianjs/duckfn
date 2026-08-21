@@ -560,7 +560,8 @@ impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
         TypeId::Decimal
     }
     fn logical_type() -> LogicalType {
-        todo!("可能Decimal有问题，但不清楚怎么处理，且我自己用不到decimal，后面再说；\
+        todo!("Decimal暂不可用：\
+        可能Decimal有问题，但不清楚怎么处理，且我自己用不到decimal，后面再说；\
         输入的decimal指定类型不合适，可能就是处理decimal的函数；输出可指定类型、但也未必合适了；\
         或许可以分为两个类型、一个读一个写，读用获取到的类型、写用指定的类型");
         LogicalType::decimal(T::WIDTH, T::SCALE)
