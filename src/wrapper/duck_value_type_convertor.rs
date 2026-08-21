@@ -550,7 +550,7 @@ pub trait DecimalShapeDef:Sized{
     const SCALE: u8;
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DuckDecimal<T: DecimalShapeDef> {
+struct DuckDecimal<T: DecimalShapeDef> {
     pub unscaled: i128,
     pub scale: u8,
     pub shape: PhantomData<T>,
