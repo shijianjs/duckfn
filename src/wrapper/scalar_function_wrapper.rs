@@ -32,7 +32,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         for row in 0..row_count {
             let args = Self::Args::read(&readers, row);
             let result = Self::apply(args);
-            Self::Output::write(&mut writer, row, result);
+            Self::Output::write(&mut writer, row, &result);
         }
         Self::Output::write_finish(&mut writer);
     }

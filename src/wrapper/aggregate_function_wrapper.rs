@@ -66,7 +66,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             let state_ptr = unsafe { *source.add(i) };
             match unsafe { FfiState::<Self>::with_state(state_ptr) } {
                 Some(st) => unsafe {
-                    Self::Output::write(&mut writer, offset as usize + i, st.result());
+                    Self::Output::write(&mut writer, offset as usize + i, &st.result());
 
                     // writer.write_i64(offset as usize + i, st.count)
                 },

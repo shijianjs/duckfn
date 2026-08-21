@@ -1,8 +1,6 @@
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{
-    DuckInterval, ListVector, LogicalType, StructVector, TypeId, VectorReader, VectorWriter,
-};
+use quack_rs::prelude::{DuckInterval, ListBuilder, ListVector, LogicalType, StructVector, TypeId, VectorReader, VectorWriter};
 use std::marker::PhantomData;
 
 pub struct DuckTypeInfo {
@@ -39,6 +37,7 @@ pub struct DuckValueWriter {
     pub c_duckdb_vector: duckdb_vector,
     pub child_writer: Vec<DuckValueWriter>,
     pub offset: usize,
+    pub list_builder:Option<ListBuilder>,
 }
 impl DuckValueWriter {
     fn new_from_vector(vector: duckdb_vector) -> Self {
@@ -47,6 +46,7 @@ impl DuckValueWriter {
             c_duckdb_vector: vector,
             child_writer: vec![],
             offset: 0,
+            list_builder: None,
         }
     }
 }
@@ -96,7 +96,7 @@ pub trait DuckValueType: Sized {
         DuckValueWriter::new_from_vector(vector)
     }
 
-    fn write(writer: &mut DuckValueWriter, idx: usize, vo: Option<Self>) {
+    fn write(writer: &mut DuckValueWriter, idx: usize, vo: &Option<Self>) {
         // Self::write_to_vector(&mut writer.vector_writer, idx, vo);
         match vo {
             None => unsafe { writer.vector_writer.set_null(idx) },
@@ -104,10 +104,10 @@ pub trait DuckValueType: Sized {
             Some(v) => Self::write_valid(writer, idx, v),
         }
     }
-    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: Self) {
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         Self::write_valid_to_vector_writer(&mut writer.vector_writer, idx, vo)
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: Self) {
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         todo!("子类需要实现write_valid")
     }
 
@@ -164,8 +164,8 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
         writer
     }
 
-    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: Self) {
-        F0::write(&mut writer.child_writer[0], idx, v.f0);
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
+        F0::write(&mut writer.child_writer[0], idx, &vo.f0);
     }
 
 }
@@ -208,9 +208,9 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
         writer
     }
 
-    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: Self) {
-        F0::write(&mut writer.child_writer[0], idx, v.f0);
-        F1::write(&mut writer.child_writer[1], idx, v.f1);
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
+        F0::write(&mut writer.child_writer[0], idx, &vo.f0);
+        F1::write(&mut writer.child_writer[1], idx, &vo.f1);
     }
 }
 
@@ -264,8 +264,27 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
 
         writer
     }
+    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    //     let mut writer = DuckValueWriter::new_from_vector(output);
+    //     writer.list_builder = Some(unsafe{ ListBuilder::new(output) });
+    //     writer
+    // }
 
-    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: Self) {
+    // 尝试改为官方推荐的ListBuilder，失败，不支持递归嵌套
+    // fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
+    //     if let Some(builder) = &mut writer.list_builder {
+    //         unsafe {
+    //             builder.push_row(idx, vo.value.len(), move|writer, base| {
+    //                 let mut child_writer = T::create_writer(writer.as_raw());
+    //                 for (i, val) in vo.value.iter().enumerate() {
+    //                     T::write(&mut child_writer, base + i, val);
+    //                 }
+    //                 T::write_finish(&mut child_writer);
+    //             });
+    //         }
+    //     }
+    // }
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: &Self) {
         let offset = writer.offset;
 
         let len = v.value.len();
@@ -276,8 +295,8 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
 
         let child_writer = &mut writer.child_writer[0];
 
-        for (i, value) in v.value.into_iter().enumerate() {
-            T::write(child_writer, offset + i, value);
+        for (i, value) in v.value.iter().enumerate() {
+            T::write(child_writer, offset + i, &value);
         }
         writer.offset += len;
     }
@@ -289,6 +308,13 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
             ListVector::set_size(writer.c_duckdb_vector, writer.offset);
         }
     }
+    // fn write_finish(writer: &mut DuckValueWriter) {
+    //     unsafe {
+    //         if let Some(builder) = writer.list_builder.take() {
+    //            unsafe  { builder.finish(); }
+    //         }
+    //     }
+    // }
 }
 
 /// TypeId::Boolean
@@ -300,8 +326,8 @@ impl DuckValueType for bool {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_bool(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_bool(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_bool(idx, *v) }
     }
 }
 
@@ -313,8 +339,8 @@ impl DuckValueType for i64 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i64(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_i64(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i64(idx, *v) }
     }
 }
 /// TypeId::TinyInt     // i8
@@ -325,8 +351,8 @@ impl DuckValueType for i8 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i8(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_i8(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i8(idx, *v) }
     }
 }
 /// TypeId::SmallInt    // i16
@@ -337,8 +363,8 @@ impl DuckValueType for i16 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i16(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_i16(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i16(idx, *v) }
     }
 }
 
@@ -350,8 +376,8 @@ impl DuckValueType for i32 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i32(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_i32(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i32(idx, *v) }
     }
 }
 
@@ -363,8 +389,8 @@ impl DuckValueType for u8 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u8(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_u8(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_u8(idx, *v) }
     }
 }
 
@@ -376,8 +402,8 @@ impl DuckValueType for u16 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u16(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_u16(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_u16(idx, *v) }
     }
 }
 /// TypeId::UInteger    // u32
@@ -390,8 +416,8 @@ impl DuckValueType for u64 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u64(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_u64(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_u64(idx, *v) }
     }
 }
 
@@ -403,8 +429,8 @@ impl DuckValueType for i128 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_i128(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_i128(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i128(idx, *v) }
     }
 }
 
@@ -416,8 +442,8 @@ impl DuckValueType for u128 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u128(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_u128(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_u128(idx, *v) }
     }
 }
 
@@ -429,8 +455,8 @@ impl DuckValueType for f32 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_f32(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_f32(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_f32(idx, *v) }
     }
 }
 
@@ -442,8 +468,8 @@ impl DuckValueType for f64 {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_f64(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_f64(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_f64(idx, *v) }
     }
 }
 ///TypeId::Timestamp
@@ -463,8 +489,8 @@ impl DuckValueType for DuckTimestamp {
         }
     }
 
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_timestamp(row, v.micros_since_epoch) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_timestamp(idx, v.micros_since_epoch) }
     }
 }
 // TypeId::TimestampTz
@@ -482,8 +508,8 @@ impl DuckValueType for DuckTimestampTz {
             millis_since_epoch: unsafe { reader.read_timestamp_tz(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_timestamp_ms(row, v.millis_since_epoch) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_timestamp_ms(idx, v.millis_since_epoch) }
     }
 }
 // TypeId::TimestampS
@@ -502,8 +528,8 @@ impl DuckValueType for DuckTimestampS {
             seconds_since_epoch: unsafe { reader.read_timestamp_s(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_timestamp_s(row, v.seconds_since_epoch) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_timestamp_s(idx, v.seconds_since_epoch) }
     }
 }
 // TypeId::TimestampMs
@@ -521,8 +547,8 @@ impl DuckValueType for DuckTimestampMs {
             millis_since_epoch: unsafe { reader.read_timestamp_ms(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_timestamp_ms(row, v.millis_since_epoch) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_timestamp_ms(idx, v.millis_since_epoch) }
     }
 }
 
@@ -543,8 +569,8 @@ impl DuckValueType for DuckTimestampNs {
             nanos_since_epoch: unsafe { reader.read_timestamp_ns(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_timestamp_ns(row, v.nanos_since_epoch) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_timestamp_ns(idx, v.nanos_since_epoch) }
     }
 }
 // TypeId::TimeTz
@@ -563,8 +589,8 @@ impl DuckValueType for DuckTimeTz {
             bits: unsafe { reader.read_time_tz(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_time_tz(row, v.bits) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_time_tz(idx, v.bits) }
     }
 }
 // TypeId::Decimal
@@ -601,7 +627,7 @@ impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
             unscaled: unsafe { reader.vector_reader.read_decimal(row, width) },
         }
     }
-    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: Self) {
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         let logical = unsafe { quack_rs::vector::vector_get_column_type(writer.c_duckdb_vector) };
         let width = unsafe { logical.decimal_width() };
         // let scale = unsafe { logical.decimal_scale() };
@@ -626,8 +652,8 @@ impl DuckValueType for DuckDate {
             days_since_epoch: unsafe { reader.read_date(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_date(row, v.days_since_epoch) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_date(idx, v.days_since_epoch) }
     }
 }
 // pub const unsafe fn write_time(&mut self, idx: usize, micros_since_midnight: i64) {
@@ -645,8 +671,8 @@ impl DuckValueType for DuckTime {
             micros_since_midnight: unsafe { reader.read_time(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_time(row, v.micros_since_midnight) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_time(idx, v.micros_since_midnight) }
     }
 }
 ///TypeId::Interval
@@ -657,8 +683,8 @@ impl DuckValueType for DuckInterval {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_interval(row) }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_interval(row, v) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_interval(idx, *v) }
     }
 }
 
@@ -670,8 +696,8 @@ impl DuckValueType for String {
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_str(row).to_string() }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_str(row, v.as_str()) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_str(idx, v.as_str()) }
     }
 }
 // pub unsafe fn read_blob(&self, idx: usize) -> &[u8] {
@@ -689,8 +715,8 @@ impl DuckValueType for DuckBlob {
             value: unsafe { reader.read_blob(row).to_vec() },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_blob(row, v.value.as_slice()) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_blob(idx, v.value.as_slice()) }
     }
 }
 
@@ -710,8 +736,8 @@ impl DuckValueType for DuckUuid {
             value: unsafe { reader.read_uuid(row) },
         }
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, row: usize, v: Self) {
-        unsafe { writer.write_uuid(row, v.value) }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_uuid(idx, v.value) }
     }
 }
 
