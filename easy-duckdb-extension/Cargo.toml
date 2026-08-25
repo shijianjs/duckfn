@@ -1,0 +1,19 @@
+[package]
+name = "easy-duckdb-extension"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+#name = "easy_duckdb_extension"
+#path = "src/lib.rs"
+
+[dependencies]
+quack-rs = "0.16.0"
+# loadable-extension 功能
+# libduckdb-sys 加上 features = ["loadable-extension"] 从根本上改变了 DuckDB API 函数的工作方式：
+# Without feature:  duckdb_query(...)  →  calls linked libduckdb directly
+# With feature:     duckdb_query(...)  →  dispatches through an AtomicPtr table
+# AtomicPtr 表初始值为空。DuckDB 通过调用来填充它。 duckdb_rs_extension_api_init 。
+# headers only — no linked library
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
+tuple-transpose = "0.1.0"

@@ -33,8 +33,9 @@ quack-rs = "0.16.0"
 # headers only — no linked library
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 tuple-transpose = "0.1.0"
+easy-duckdb-extension = { path = "easy-duckdb-extension"}
 easy-duckdb-extension-macro = { path = "easy-duckdb-extension-macro"}
 
 [workspace]
 resolver = "3"
-members = ["easy-duckdb-extension-macro"]
+members = ["easy-duckdb-extension","easy-duckdb-extension-macro"]

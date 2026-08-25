@@ -569,6 +569,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "easy-duckdb-extension"
+version = "0.1.0"
+dependencies = [
+ "libduckdb-sys",
+ "quack-rs",
+ "tuple-transpose",
+]
+
+[[package]]
 name = "easy-duckdb-extension-macro"
 version = "0.1.0"
 dependencies = [
@@ -1769,6 +1778,7 @@ name = "rusty_quack"
 version = "0.1.0"
 dependencies = [
  "duckdb",
+ "easy-duckdb-extension",
  "easy-duckdb-extension-macro",
  "libduckdb-sys",
  "quack-rs",

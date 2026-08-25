@@ -1,6 +1,6 @@
-use crate::wrapper::duck_register_builder::RegisterBuilder;
-use crate::wrapper::duck_value_type_convertor::{DuckList, DuckStruct1, DuckStruct2, FieldNames};
-use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
+use easy_duckdb_extension::duck_register_builder::RegisterBuilder;
+use easy_duckdb_extension::duck_value_type_convertor::{DuckList, DuckStruct1, DuckStruct2, FieldNames};
+use easy_duckdb_extension::scalar_function_wrapper::ScalarFunctionAdapter;
 use libduckdb_sys::{
     duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector,
 };

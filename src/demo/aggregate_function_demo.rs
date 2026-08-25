@@ -1,16 +1,14 @@
-use crate::demo::scalar_function_demo::{AddItTuple, DoubleIt, FirstWordTuple};
-use crate::wrapper::aggregate_function_wrapper::AggregateFunctionAdapter;
-use crate::wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
+use easy_duckdb_extension::aggregate_function_wrapper::AggregateFunctionAdapter;
+use easy_duckdb_extension::duck_value_type_convertor::DuckList;
+use easy_duckdb_extension::scalar_function_wrapper::ScalarFunctionAdapter;
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };
 use quack_rs::connection::Connection;
 use quack_rs::prelude::{
-    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, LogicalType, Registrar,
-    ScalarFunctionBuilder, TypeId, VectorReader, VectorWriter,
+    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
-use crate::wrapper::duck_value_type_convertor::DuckList;
 
 /// ============= demo wrapper封装版  ============
 ///

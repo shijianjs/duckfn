@@ -2,11 +2,10 @@ mod demo;
 pub mod wrapper;
 
 use demo::{aggregate_function_demo, scalar_function_demo, table_function_demo};
-use libduckdb_sys::duckdb_connection;
+use easy_duckdb_extension::scalar_function_wrapper::ScalarFunctionAdapter;
 use quack_rs::connection::Connection;
 use quack_rs::entry_point_v2;
 use quack_rs::error::ExtensionError;
-use wrapper::scalar_function_wrapper::ScalarFunctionAdapter;
 
 fn register(connection: &Connection) -> Result<(), ExtensionError> {
     unsafe {
