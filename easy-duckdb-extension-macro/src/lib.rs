@@ -1,4 +1,5 @@
 mod duck_struct_derive;
+pub(crate) mod macro_utils;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};

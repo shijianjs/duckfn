@@ -1,4 +1,4 @@
-use proc_macro2::Ident;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
@@ -15,7 +15,8 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> syn::Result<TokenStream2
     {
         let fields = named
             .into_iter()
-            .map(|f| FieldWrapper { field: f })
+            .enumerate()
+            .map(|(index, f)| FieldWrapper { field: f, index })
             .collect();
         let context = DuckStructContext {
             input: input.to_owned(),
@@ -39,25 +40,44 @@ impl DuckStructContext {
     fn struct_name(&self) -> &syn::Ident {
         &self.input.ident
     }
+
     fn build_duck_value_type_impl(&self) -> syn::Result<TokenStream2> {
         let struct_name = self.struct_name();
+        let logical_types = self.logical_types()?;
         Ok(quote! {
-
             impl easy_duckdb_extension::duck_value_type_convertor::DuckValueType for #struct_name {
                 fn type_id() -> TypeId {
                     TypeId::Struct
                 }
 
                 fn logical_type() -> LogicalType {
-                    LogicalType::struct_type_from_logical(&vec![(N::FIELD_NAMES[0], F0::logical_type())])
+                    LogicalType::struct_type_from_logical(&vec![
+                        #(#logical_types),*
+                    ])
                 }
             }
         })
+    }
+
+    fn logical_types(&self) -> syn::Result<Vec<TokenStream2>> {
+        self.fields_to_code(|f| f.logical_type())
+    }
+
+    fn fields_to_code(
+        &self,
+        x: fn(&FieldWrapper) -> syn::Result<TokenStream2>,
+    ) -> syn::Result<Vec<TokenStream2>> {
+        self.fields
+            .iter()
+            .map(x)
+            .into_iter()
+            .collect::<syn::Result<Vec<_>>>()
     }
 }
 
 struct FieldWrapper {
     field: syn::Field,
+    index: usize,
 }
 impl FieldWrapper {
     fn field_name(&self) -> &Option<Ident> {
@@ -84,44 +104,17 @@ impl FieldWrapper {
         }
     }
 
-    fn assert_impl_duck_value_type(&self) -> syn::Result<TokenStream2>{
+    fn assert_impl_duck_value_type(&self) -> syn::Result<TokenStream2> {
         let ty = self.type_or_through_option();
         Ok(quote! {
             easy_duckdb_extension::duck_value_type_convertor::assert_impl_duck_value_type::<#ty>()
         })
     }
-    fn logical_type(&self)-> syn::Result<TokenStream2>{
+    fn logical_type(&self) -> syn::Result<TokenStream2> {
         let ty = self.type_or_through_option().to_owned();
-        let name = self.require_field_name()?;
+        let name = self.require_field_name()?.to_string();
         Ok(quote! {
             (#name, #ty::logical_type())
         })
     }
-}
-
-fn get_option_inner(ty: &Type) -> (bool, &Type) {
-    get_type_inner(ty, "Option")
-}
-
-fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
-    if let Type::Path(TypePath {
-        path: Path { segments, .. },
-        ..
-    }) = ty
-    {
-        if let Some(v) = segments.iter().next() {
-            if v.ident == name {
-                let t = match &v.arguments {
-                    PathArguments::AngleBracketed(a) => match a.args.iter().next() {
-                        Some(GenericArgument::Type(t)) => {
-                            return (true, t);
-                        }
-                        _ => {}
-                    },
-                    (_) => {}
-                };
-            }
-        }
-    }
-    (false, ty)
 }

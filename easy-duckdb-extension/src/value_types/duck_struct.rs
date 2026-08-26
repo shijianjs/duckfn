@@ -3,7 +3,7 @@ use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{LogicalType, TypeId};
 use std::marker::PhantomData;
 
-pub trait FieldNames: Sized+Clone {
+pub trait FieldNames: Sized + Clone {
     // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
     const FIELD_NAMES: &'static [&'static str];
 }
@@ -30,7 +30,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     }
 
     fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-        Self{
+        Self {
             f0: F0::read(&reader.child_reader[0], row),
             field_names_type: PhantomData,
         }
@@ -45,7 +45,10 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
 
-        let f0_vec: Vec<Option<&F0>> = output_vec.iter().map(|x| x.as_ref().and_then(|v| v.f0.as_ref())).collect();
+        let f0_vec: Vec<Option<&F0>> = output_vec
+            .iter()
+            .map(|x| x.as_ref().and_then(|v| v.f0.as_ref()))
+            .collect();
         let f0_writer = F0::struct_field_writer_batch(&writer, 0, &f0_vec);
         writer.child_writer = vec![f0_writer];
 
@@ -55,7 +58,6 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
     }
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,14 +80,15 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
 
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
-        let f0_reader = F0::struct_field_reader(&reader, 0);
-        let f1_reader = F1::struct_field_reader(&reader, 1);
-        reader.child_reader = vec![f0_reader, f1_reader];
+        reader.child_reader = vec![
+            F0::struct_field_reader(&reader, 0),
+            F1::struct_field_reader(&reader, 1),
+        ];
         reader
     }
 
     fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-        Self{
+        Self {
             f0: F0::read(&reader.child_reader[0], row),
             f1: F1::read(&reader.child_reader[1], row),
             field_names_type: PhantomData,
@@ -102,16 +105,24 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
 
-        let f0_vec: Vec<Option<&F0>> = output_vec.iter()
-            .map(|x| x.as_ref().and_then(|v| v.f0.as_ref()))
-            .collect();
-        let f0_writer = F0::struct_field_writer_batch(&writer, 0, &f0_vec);
-
-        let f1_vec: Vec<Option<&F1>> = output_vec.iter()
-            .map(|x| x.as_ref().and_then(|v| v.f1.as_ref()))
-            .collect();
-        let f1_writer = F1::struct_field_writer_batch(&writer, 1, &f1_vec);
-        writer.child_writer = vec![f0_writer, f1_writer];
+        writer.child_writer = vec![
+            F0::struct_field_writer_batch(
+                &writer,
+                0,
+                &output_vec
+                    .iter()
+                    .map(|x| x.as_ref().and_then(|v| v.f0.as_ref()))
+                    .collect::<Vec<_>>(),
+            ),
+            F1::struct_field_writer_batch(
+                &writer,
+                1,
+                &output_vec
+                    .iter()
+                    .map(|x| x.as_ref().and_then(|v| v.f1.as_ref()))
+                    .collect::<Vec<_>>(),
+            ),
+        ];
 
         writer
     }
