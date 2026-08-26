@@ -102,11 +102,12 @@ pub trait DuckValueType: Sized+Clone {
         Self::write_finish(&mut writer);
     }
 
-    fn create_writer(vector: duckdb_vector) -> DuckValueWriter {
-        DuckValueWriter::new_from_vector(vector)
-    }
+    // fn create_writer(vector: duckdb_vector) -> DuckValueWriter {
+    //     DuckValueWriter::new_from_vector(vector)
+    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
-        Self::create_writer(vector)
+        // Self::create_writer(vector)
+        DuckValueWriter::new_from_vector(vector)
     }
 
 
@@ -135,12 +136,12 @@ pub trait DuckValueType: Sized+Clone {
         let field_reader = Self::create_reader_from_vector(field_vector, row_count);
         field_reader
     }
-    fn struct_field_writer(writer: &DuckValueWriter, field_index: usize) -> DuckValueWriter {
-        let vector = writer.c_duckdb_vector;
-        let field_vector = unsafe { StructVector::get_child(vector, field_index) };
-        let field_writer = Self::create_writer(field_vector);
-        field_writer
-    }
+    // fn struct_field_writer(writer: &DuckValueWriter, field_index: usize) -> DuckValueWriter {
+    //     let vector = writer.c_duckdb_vector;
+    //     let field_vector = unsafe { StructVector::get_child(vector, field_index) };
+    //     let field_writer = Self::create_writer(field_vector);
+    //     field_writer
+    // }
     fn struct_field_writer_batch(writer: &DuckValueWriter, field_index: usize,output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let vector = writer.c_duckdb_vector;
         let field_vector = unsafe { StructVector::get_child(vector, field_index) };
@@ -182,12 +183,12 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
             field_names_type: PhantomData,
         }
     }
-    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        let mut writer = DuckValueWriter::new_from_vector(output);
-        let f0_writer = F0::struct_field_writer(&writer, 0);
-        writer.child_writer = vec![f0_writer];
-        writer
-    }
+    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    //     let mut writer = DuckValueWriter::new_from_vector(output);
+    //     let f0_writer = F0::struct_field_writer(&writer, 0);
+    //     writer.child_writer = vec![f0_writer];
+    //     writer
+    // }
 
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
@@ -236,13 +237,13 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
             field_names_type: PhantomData,
         }
     }
-    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        let mut writer = DuckValueWriter::new_from_vector(output);
-        let f0_writer = F0::struct_field_writer(&writer, 0);
-        let f1_writer = F1::struct_field_writer(&writer, 1);
-        writer.child_writer = vec![f0_writer, f1_writer];
-        writer
-    }
+    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    //     let mut writer = DuckValueWriter::new_from_vector(output);
+    //     let f0_writer = F0::struct_field_writer(&writer, 0);
+    //     let f1_writer = F1::struct_field_writer(&writer, 1);
+    //     writer.child_writer = vec![f0_writer, f1_writer];
+    //     writer
+    // }
 
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
@@ -307,17 +308,17 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
         DuckList { value: vec }
     }
 
-    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        let mut writer = DuckValueWriter::new_from_vector(output);
-
-        let child_vector = unsafe { ListVector::get_child(output) };
-
-        let child_writer = T::create_writer(child_vector);
-
-        writer.child_writer.push(child_writer);
-
-        writer
-    }
+    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    //     let mut writer = DuckValueWriter::new_from_vector(output);
+    //
+    //     let child_vector = unsafe { ListVector::get_child(output) };
+    //
+    //     let child_writer = T::create_writer(child_vector);
+    //
+    //     writer.child_writer.push(child_writer);
+    //
+    //     writer
+    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
         let total_elements: usize = output_vec.iter()
@@ -408,9 +409,9 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
         DuckList::<T>::read_valid(reader, row).value
     }
 
-    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        DuckList::<T>::create_writer(output)
-    }
+    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    //     DuckList::<T>::create_writer(output)
+    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
         let total_elements: usize = output_vec.iter()
@@ -473,9 +474,9 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
             .and_then(|v| v.into_iter().collect::<Option<Vec<_>>>())
     }
 
-    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-        DuckList::<T>::create_writer(output)
-    }
+    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    //     DuckList::<T>::create_writer(output)
+    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
         let total_elements: usize = output_vec.iter()
