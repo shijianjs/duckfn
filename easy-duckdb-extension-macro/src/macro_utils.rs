@@ -27,3 +27,23 @@ pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     }
     (false, ty)
 }
+
+pub fn add_vec_turbofish(ty: &mut syn::Type) {
+    let syn::Type::Path(type_path) = ty else {
+        return;
+    };
+
+    let Some(segment) = type_path.path.segments.last_mut() else {
+        return;
+    };
+
+    // if segment.ident != "Vec" {
+    //     return;
+    // }
+
+    let syn::PathArguments::AngleBracketed(args) = &mut segment.arguments else {
+        return;
+    };
+
+    args.colon2_token = Some(Default::default());
+}

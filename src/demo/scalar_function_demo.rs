@@ -12,6 +12,7 @@ use quack_rs::prelude::{
     VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
+use easy_duckdb_extension_macro::DuckStruct;
 
 ///
 ///
@@ -311,6 +312,13 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
         })
     }
 }
+
+#[derive(Clone, Debug, DuckStruct)]
+pub struct DuckStructDemo1{
+    pub count:i64,
+    pub data:Vec<i64>,
+}
+
 
 // ============================================================================
 // Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)
