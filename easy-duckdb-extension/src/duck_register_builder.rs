@@ -1,4 +1,4 @@
-use crate::duck_value_type_convertor::DuckTypeInfo;
+use crate::value_types::duck_value_type::DuckTypeInfo;
 use quack_rs::aggregate::AggregateFunctionBuilder;
 use quack_rs::prelude::{LogicalType, ScalarFunctionBuilder, ScalarOverloadBuilder, TypeId};
 

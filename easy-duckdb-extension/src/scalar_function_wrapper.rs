@@ -1,11 +1,11 @@
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
-use crate::duck_value_type_convertor::DuckValueType;
+use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
 use quack_rs::prelude::{
-    ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder, VectorWriter,
+    ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder,
 };
 
 pub trait ScalarFunctionAdapter: Sized + 'static {

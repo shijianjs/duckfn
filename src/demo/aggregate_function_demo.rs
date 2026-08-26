@@ -1,6 +1,6 @@
 use easy_duckdb_extension::aggregate_function_wrapper::AggregateFunctionAdapter;
-use easy_duckdb_extension::duck_value_type_convertor::DuckList;
 use easy_duckdb_extension::scalar_function_wrapper::ScalarFunctionAdapter;
+use easy_duckdb_extension::value_types::duck_list::DuckList;
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };

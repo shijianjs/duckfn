@@ -1,4 +1,4 @@
-use crate::duck_value_type_convertor::{DuckTypeInfo, DuckValueReader, DuckValueType};
+use crate::value_types::duck_value_type::{DuckTypeInfo, DuckValueReader, DuckValueType};
 use quack_rs::data_chunk::DataChunk;
 
 pub trait DuckArgs: Sized {
