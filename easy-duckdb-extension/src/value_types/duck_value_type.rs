@@ -6,12 +6,6 @@ use quack_rs::prelude::{LogicalType, StructVector, TypeId, VectorReader, VectorW
 /// - 如果 Rust 基础类型已经完整表达了业务语义，可以直接映射；
 /// - 如果多个逻辑类型共享同一个物理表示，就应该 newtype 包装。
 pub trait DuckValueType: Sized+Clone {
-    fn type_info() -> DuckTypeInfo {
-        DuckTypeInfo {
-            type_id: Self::type_id(),
-            logical_type: Self::logical_type(),
-        }
-    }
     fn type_id() -> TypeId;
     fn logical_type() -> LogicalType {
         LogicalType::new(Self::type_id())
@@ -104,11 +98,6 @@ pub trait DuckValueType: Sized+Clone {
 /// 用来给宏校验 DuckValueType 是否被类型实现
 pub fn assert_impl_duck_value_type<T: DuckValueType>() {}
 
-
-pub struct DuckTypeInfo {
-    pub type_id: TypeId,
-    pub logical_type: LogicalType,
-}
 
 pub struct DuckValueReader {
     /// rust api, 和下面的c_duckdb_vector一比一对应

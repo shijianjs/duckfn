@@ -1,12 +1,13 @@
-use crate::value_types::duck_value_type::{DuckTypeInfo, DuckValueReader, DuckValueType};
+use crate::value_types::duck_value_type::{ DuckValueReader, DuckValueType};
 use quack_rs::data_chunk::DataChunk;
+use quack_rs::prelude::LogicalType;
 
 pub trait DuckArgs: Sized {
     fn create_readers(chunk: &DataChunk) -> Vec<DuckValueReader>;
 
     fn read(readers: &[DuckValueReader], row: usize) -> Self;
 
-    fn params() -> Vec<DuckTypeInfo>;
+    fn params() -> Vec<LogicalType>;
 }
 
 impl<A: DuckValueType> DuckArgs for (Option<A>,) {
@@ -19,8 +20,8 @@ impl<A: DuckValueType> DuckArgs for (Option<A>,) {
         (A::read(&readers[0], row),)
     }
 
-    fn params() -> Vec<DuckTypeInfo> {
-        vec![A::type_info()]
+    fn params() -> Vec<LogicalType> {
+        vec![A::logical_type()]
     }
 }
 
@@ -33,7 +34,7 @@ impl<A: DuckValueType, B: DuckValueType> DuckArgs for (Option<A>, Option<B>) {
         (A::read(&readers[0], row), B::read(&readers[1], row))
     }
 
-    fn params() -> Vec<DuckTypeInfo> {
-        vec![A::type_info(), B::type_info()]
+    fn params() -> Vec<LogicalType> {
+        vec![A::logical_type(), B::logical_type()]
     }
 }

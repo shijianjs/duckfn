@@ -43,14 +43,14 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     fn register_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
             .function(Self::scalar_function_wrapper)
-            .with_return_type(Self::Output::type_info())
+            .with_return_type(Self::Output::logical_type())
             .with_params(Self::Args::params())
     }
     fn register_overload_builder() -> ScalarOverloadBuilder {
         ScalarOverloadBuilder::new()
             // .returns(Self::Output::type_id())
             .function(Self::scalar_function_wrapper)
-            .with_return_type(Self::Output::type_info())
+            .with_return_type(Self::Output::logical_type())
             .with_params(Self::Args::params())
     }
 

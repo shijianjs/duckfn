@@ -127,7 +127,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .combine(Self::c_combine)
             .finalize(Self::c_finalize)
             .destructor(Self::c_state_destroy)
-            .with_return_type(Self::Output::type_info())
+            .with_return_type(Self::Output::logical_type())
             .with_params(Self::Args::params())
     }
 
