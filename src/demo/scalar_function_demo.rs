@@ -28,7 +28,7 @@ impl ScalarFunctionAdapter for DoubleIt {
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| v * 2)
+        args.transpose().map(|(v, )| v * 2)
     }
 }
 
@@ -40,7 +40,7 @@ impl ScalarFunctionAdapter for FirstWordTuple {
     type Output = String;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| {
+        args.transpose().map(|(v, )| {
             v.as_str()
                 .split_whitespace()
                 .next()
@@ -105,7 +105,7 @@ impl ScalarFunctionAdapter for SumListWrapper {
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| v.value.iter().flatten().sum())
+        args.transpose().map(|(v, )| v.value.iter().flatten().sum())
     }
 }
 struct SumListNest;
@@ -115,7 +115,7 @@ impl ScalarFunctionAdapter for SumListNest {
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| {
+        args.transpose().map(|(v, )| {
             v.value
                 .iter()
                 .flatten()
@@ -183,7 +183,7 @@ impl ScalarFunctionAdapter for MakeListScalarWrapper {
     type Output = DuckList<i64>;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| DuckList {
+        args.transpose().map(|(v, )| DuckList {
             value: vec![Some(v + 1), Some(v * 2), None],
         })
     }
@@ -195,7 +195,7 @@ impl ScalarFunctionAdapter for NestListScalarWrapper {
     type Output = DuckList<DuckList<i64>>;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| DuckList {
+        args.transpose().map(|(v, )| DuckList {
             value: vec![
                 Some(DuckList {
                     value: vec![Some(v + 1), Some(v * 2), None],
@@ -208,8 +208,23 @@ impl ScalarFunctionAdapter for NestListScalarWrapper {
         })
     }
 }
+struct NestVecScalarWrapper;
+impl ScalarFunctionAdapter for NestVecScalarWrapper {
+    const NAME: &'static str = "nest_vec_scalar_w";
+    type Args = (Option<i64>,);
+    type Output = Vec<Option<Vec<Option<i64>>>>;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v, )| vec![
+            Some(vec![Some(v + 1), Some(v * 2), None]),
+            Some((0..v).map(|x| Some(x)).collect()),
+            None,
+        ])
+    }
+}
 
 struct StructScalarWrapper;
+#[derive(Clone)]
 struct StructScalarWrapperArg1;
 impl FieldNames for StructScalarWrapperArg1 {
     const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
@@ -220,14 +235,16 @@ impl ScalarFunctionAdapter for StructScalarWrapper {
     type Output = i64;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(v,)| v.f0.map(|v| v + 10)).flatten()
+        args.transpose().map(|(v, )| v.f0.map(|v| v + 10)).flatten()
     }
 }
 struct NestStructScalarWrapper;
+#[derive(Clone)]
 struct NestStructScalarWrapperOuter;
 impl FieldNames for NestStructScalarWrapperOuter {
     const FIELD_NAMES: &'static [&'static str] = &["struct", "list"];
 }
+#[derive(Clone)]
 struct NestStructScalarWrapperInner;
 impl FieldNames for NestStructScalarWrapperInner {
     const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
@@ -247,7 +264,7 @@ impl ScalarFunctionAdapter for NestStructScalarWrapper {
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
         args.transpose()
-            .map(|(outer,)| {
+            .map(|(outer, )| {
                 (outer.f0, outer.f1).transpose().map(|(struct1, list1)| {
                     struct1
                         .f0
@@ -268,7 +285,7 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
     >;
 
     fn apply(args: Self::Args) -> Option<Self::Output> {
-        args.transpose().map(|(outer,)| DuckStruct2 {
+        args.transpose().map(|(outer, )| DuckStruct2 {
             f0: Some(DuckStruct1 {
                 f0: Some(100 + outer),
                 field_names_type: Default::default(),
@@ -393,6 +410,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         StructScalarWrapper::register_builder(),
         NestStructScalarWrapper::register_builder(),
         NestStructOutputScalarWrapper::register_builder(),
+        NestVecScalarWrapper::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;

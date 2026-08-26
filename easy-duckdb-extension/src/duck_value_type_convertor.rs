@@ -37,7 +37,7 @@ pub struct DuckValueWriter {
     pub c_duckdb_vector: duckdb_vector,
     pub child_writer: Vec<DuckValueWriter>,
     pub offset: usize,
-    pub list_builder:Option<ListBuilder>,
+    // pub list_builder:Option<ListBuilder>,
 }
 impl DuckValueWriter {
     fn new_from_vector(vector: duckdb_vector) -> Self {
@@ -46,7 +46,7 @@ impl DuckValueWriter {
             c_duckdb_vector: vector,
             child_writer: vec![],
             offset: 0,
-            list_builder: None,
+            // list_builder: None,
         }
     }
 }
@@ -54,7 +54,7 @@ impl DuckValueWriter {
 /// 映射规则：
 /// - 如果 Rust 基础类型已经完整表达了业务语义，可以直接映射；
 /// - 如果多个逻辑类型共享同一个物理表示，就应该 newtype 包装。
-pub trait DuckValueType: Sized {
+pub trait DuckValueType: Sized+Clone {
     fn type_info() -> DuckTypeInfo {
         DuckTypeInfo {
             type_id: Self::type_id(),
@@ -148,8 +148,10 @@ pub trait DuckValueType: Sized {
         field_writer
     }
 }
+pub fn assert_impl_duck_value_type<T: DuckValueType>() {}
 
-pub trait FieldNames: Sized {
+
+pub trait FieldNames: Sized+Clone {
     // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
     const FIELD_NAMES: &'static [&'static str];
 }
@@ -158,6 +160,7 @@ pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub field_names_type: PhantomData<N>,
 }
+
 impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn type_id() -> TypeId {
         TypeId::Struct
@@ -389,6 +392,69 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     //     }
     // }
 }
+impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
+    fn type_id() -> TypeId {
+        DuckList::<T>::type_id()
+    }
+
+    fn logical_type() -> LogicalType {
+        DuckList::<T>::logical_type()
+    }
+
+    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+        DuckList::<T>::create_reader_from_vector(vector, size)
+    }
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+        DuckList::<T>::read_valid(reader, row).value
+    }
+
+    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+        DuckList::<T>::create_writer(output)
+    }
+    fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
+        let mut writer = DuckValueWriter::new_from_vector(vector);
+        let total_elements: usize = output_vec.iter()
+            .filter_map(|x| x.as_ref().map(|v| v.len()))
+            .sum();
+        unsafe { ListVector::reserve(vector, total_elements) };
+        let child_vector = unsafe { ListVector::get_child(vector) };
+
+        let vec: Vec<Option<&T>> = output_vec
+            .iter()
+            .filter_map(|x| x.as_ref().copied())
+            .flat_map(|list| {
+                list.iter().map(|x| x.as_ref())
+            })
+            .collect();
+
+        let child_writer = T::create_writer_batch(child_vector,&vec);
+
+        writer.child_writer.push(child_writer);
+
+        writer
+    }
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: &Self) {
+        let offset = writer.offset;
+
+        let len = v.len();
+
+        unsafe {
+            ListVector::set_entry(writer.c_duckdb_vector, idx, offset as u64, len as u64);
+        }
+
+        let child_writer = &mut writer.child_writer[0];
+
+        for (i, value) in v.iter().enumerate() {
+            T::write(child_writer, offset + i, &value);
+        }
+        writer.offset += len;
+    }
+
+    fn write_finish(writer: &mut DuckValueWriter) {
+        DuckList::<T>::write_finish(writer)
+    }
+}
+
 
 /// TypeId::Boolean
 
@@ -669,7 +735,7 @@ impl DuckValueType for DuckTimeTz {
 // TypeId::Decimal
 // pub const unsafe fn read_decimal(&self, idx: usize, WIDTH: u8) -> i128 {
 // pub const unsafe fn write_decimal(&mut self, idx: usize, WIDTH: u8, unscaled: i128) {
-pub trait DecimalShapeDef:Sized{
+pub trait DecimalShapeDef:Sized+Clone{
     const WIDTH: u8;
     const SCALE: u8;
 }
