@@ -454,6 +454,71 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
         DuckList::<T>::write_finish(writer)
     }
 }
+impl<T: DuckValueType> DuckValueType for Vec<T> {
+    fn type_id() -> TypeId {
+        DuckList::<T>::type_id()
+    }
+
+    fn logical_type() -> LogicalType {
+        DuckList::<T>::logical_type()
+    }
+
+    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+        DuckList::<T>::create_reader_from_vector(vector, size)
+    }
+    fn read(reader: &DuckValueReader, row: usize) -> Option<Self> {
+        // Option<Vec<Option<T>>> -> Option<Vec<T>>
+        DuckList::<T>::read(reader, row)
+            .map(|li| {li.value})
+            .and_then(|v| v.into_iter().collect::<Option<Vec<_>>>())
+    }
+
+    fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+        DuckList::<T>::create_writer(output)
+    }
+    fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
+        let mut writer = DuckValueWriter::new_from_vector(vector);
+        let total_elements: usize = output_vec.iter()
+            .filter_map(|x| x.as_ref().map(|v| v.len()))
+            .sum();
+        unsafe { ListVector::reserve(vector, total_elements) };
+        let child_vector = unsafe { ListVector::get_child(vector) };
+
+        let vec: Vec<Option<&T>> = output_vec
+            .iter()
+            .filter_map(|x| x.as_ref().copied())
+            .flat_map(|list| {
+                list.iter().map(|x| Some(x))
+            })
+            .collect();
+
+        let child_writer = T::create_writer_batch(child_vector,&vec);
+
+        writer.child_writer.push(child_writer);
+
+        writer
+    }
+    fn write_valid(writer: &mut DuckValueWriter, idx: usize, v: &Self) {
+        let offset = writer.offset;
+
+        let len = v.len();
+
+        unsafe {
+            ListVector::set_entry(writer.c_duckdb_vector, idx, offset as u64, len as u64);
+        }
+
+        let child_writer = &mut writer.child_writer[0];
+
+        for (i, value) in v.iter().enumerate() {
+            T::write_valid(child_writer, offset + i, value);
+        }
+        writer.offset += len;
+    }
+
+    fn write_finish(writer: &mut DuckValueWriter) {
+        DuckList::<T>::write_finish(writer)
+    }
+}
 
 
 /// TypeId::Boolean

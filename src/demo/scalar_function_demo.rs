@@ -222,6 +222,19 @@ impl ScalarFunctionAdapter for NestVecScalarWrapper {
         ])
     }
 }
+struct NestVecNoNullScalarWrapper;
+impl ScalarFunctionAdapter for NestVecNoNullScalarWrapper {
+    const NAME: &'static str = "nest_vec_no_null_scalar_w";
+    type Args = (Option<i64>,);
+    type Output = Vec<Vec<i64>>;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(v, )| vec![
+            vec![v + 1, v * 2],
+            (0..v).map(|x| x).collect(),
+        ])
+    }
+}
 
 struct StructScalarWrapper;
 #[derive(Clone)]
@@ -411,6 +424,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         NestStructScalarWrapper::register_builder(),
         NestStructOutputScalarWrapper::register_builder(),
         NestVecScalarWrapper::register_builder(),
+        NestVecNoNullScalarWrapper::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
