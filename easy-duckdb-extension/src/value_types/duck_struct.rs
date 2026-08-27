@@ -29,11 +29,11 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
         reader
     }
 
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-        Self {
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
+        Some(Self {
             f0: F0::read(&reader.child_reader[0], row),
             field_names_type: PhantomData,
-        }
+        })
     }
     // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
     //     let mut writer = DuckValueWriter::new_from_vector(output);
@@ -87,12 +87,12 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
         reader
     }
 
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-        Self {
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
+        Some(Self {
             f0: F0::read(&reader.child_reader[0], row),
             f1: F1::read(&reader.child_reader[1], row),
             field_names_type: PhantomData,
-        }
+        })
     }
     // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
     //     let mut writer = DuckValueWriter::new_from_vector(output);

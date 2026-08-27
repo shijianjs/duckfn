@@ -154,15 +154,15 @@ impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
         或许可以分为两个类型、一个读一个写，读用获取到的类型、写用指定的类型");
         LogicalType::decimal(T::WIDTH, T::SCALE)
     }
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         let logical = unsafe { quack_rs::vector::vector_get_column_type(reader.c_duckdb_vector) };
         let width = unsafe { logical.decimal_width() };
         let scale = unsafe { logical.decimal_scale() };
-        Self {
+        Some(Self {
             scale,
             shape: PhantomData::<T>,
             unscaled: unsafe { reader.vector_reader.read_decimal(row, width) },
-        }
+        })
     }
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         let logical = unsafe { quack_rs::vector::vector_get_column_type(writer.c_duckdb_vector) };

@@ -28,7 +28,7 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
         reader.child_reader = vec![child_reader];
         reader
     }
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         let list_vec = reader.c_duckdb_vector;
         let entry = unsafe { ListVector::get_entry(list_vec, row) };
 
@@ -39,7 +39,7 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
             let idx = entry.offset as usize + i;
             vec.push(T::read(&child_reader, idx));
         }
-        DuckList { value: vec }
+        Some(DuckList { value: vec })
     }
 
     // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
@@ -140,8 +140,8 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         DuckList::<T>::create_reader_from_vector(vector, size)
     }
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-        DuckList::<T>::read_valid(reader, row).value
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
+        DuckList::<T>::read_valid(reader, row).map(|li| li.value)
     }
 
     // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
@@ -203,9 +203,9 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
     fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         DuckList::<T>::create_reader_from_vector(vector, size)
     }
-    fn read(reader: &DuckValueReader, row: usize) -> Option<Self> {
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         // Option<Vec<Option<T>>> -> Option<Vec<T>>
-        DuckList::<T>::read(reader, row)
+        DuckList::<T>::read_valid(reader, row)
             .map(|li| {li.value})
             .and_then(|v| v.into_iter().collect::<Option<Vec<_>>>())
     }

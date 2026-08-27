@@ -25,14 +25,16 @@ pub trait DuckValueType: Sized+Clone {
 
     fn read(reader: &DuckValueReader, row: usize) -> Option<Self> {
         if unsafe { reader.vector_reader.is_valid(row) } {
-            Some(Self::read_valid(reader, row))
+            Self::read_valid(reader, row)
         } else {
             None
         }
     }
-    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-        Self::read_valid_by_vector_reader(&reader.vector_reader, row)
+    
+    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
+        Some(Self::read_valid_by_vector_reader(&reader.vector_reader, row))
     }
+    
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         todo!("子类需要实现read_valid_by_vector_reader")
     }
@@ -64,6 +66,8 @@ pub trait DuckValueType: Sized+Clone {
             Some(v) => Self::write_valid(writer, idx, v),
         }
     }
+    /// 外部可以调用write_valid
+    /// - 只要已经处理了null，就不需要管其他的
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         Self::write_valid_to_vector_writer(&mut writer.vector_writer, idx, vo)
     }
