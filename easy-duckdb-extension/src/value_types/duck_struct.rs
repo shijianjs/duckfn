@@ -1,7 +1,4 @@
-use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
-use libduckdb_sys::duckdb_vector;
-use quack_rs::prelude::{LogicalType, TypeId};
-use std::marker::PhantomData;
+use crate::{DuckValueReader, DuckValueType, DuckValueWriter};
 
 pub trait FieldNames: Sized + Clone {
     // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
@@ -11,18 +8,18 @@ pub trait FieldNames: Sized + Clone {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
-    pub field_names_type: PhantomData<N>,
+    pub field_names_type: std::marker::PhantomData<N>,
 }
 
 impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
-    fn type_id() -> TypeId {
-        TypeId::Struct
+    fn type_id() -> quack_rs::prelude::TypeId {
+        quack_rs::prelude::TypeId::Struct
     }
-    fn logical_type() -> LogicalType {
-        LogicalType::struct_type_from_logical(&vec![(N::FIELD_NAMES[0], F0::logical_type())])
+    fn logical_type() -> quack_rs::prelude::LogicalType {
+        quack_rs::prelude::LogicalType::struct_type_from_logical(&vec![(N::FIELD_NAMES[0], F0::logical_type())])
     }
 
-    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+    fn create_reader_from_vector(vector: libduckdb_sys::duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
         let f0_reader = F0::struct_field_reader(&reader, 0);
         reader.child_reader = vec![f0_reader];
@@ -32,17 +29,17 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         Some(Self {
             f0: F0::read(&reader.child_reader[0], row),
-            field_names_type: PhantomData,
+            field_names_type: std::marker::PhantomData,
         })
     }
-    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    // fn create_writer(output: libduckdb_sys::duckdb_vector) -> DuckValueWriter {
     //     let mut writer = DuckValueWriter::new_from_vector(output);
     //     let f0_writer = F0::struct_field_writer(&writer, 0);
     //     writer.child_writer = vec![f0_writer];
     //     writer
     // }
 
-    fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
+    fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
 
         let f0_vec: Vec<Option<&F0>> = output_vec
@@ -64,21 +61,21 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
 pub struct DuckStruct2<F0: DuckValueType, F1: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub f1: Option<F1>,
-    pub field_names_type: PhantomData<N>,
+    pub field_names_type: std::marker::PhantomData<N>,
 }
 
 impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for DuckStruct2<F0, F1, N> {
-    fn type_id() -> TypeId {
-        TypeId::Struct
+    fn type_id() -> quack_rs::prelude::TypeId {
+        quack_rs::prelude::TypeId::Struct
     }
-    fn logical_type() -> LogicalType {
-        LogicalType::struct_type_from_logical(&vec![
+    fn logical_type() -> quack_rs::prelude::LogicalType {
+        quack_rs::prelude::LogicalType::struct_type_from_logical(&vec![
             (N::FIELD_NAMES[0], F0::logical_type()),
             (N::FIELD_NAMES[1], F1::logical_type()),
         ])
     }
 
-    fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
+    fn create_reader_from_vector(vector: libduckdb_sys::duckdb_vector, size: usize) -> DuckValueReader {
         let mut reader = DuckValueReader::new_from_vector(vector, size);
         reader.child_reader = vec![
             F0::struct_field_reader(&reader, 0),
@@ -91,10 +88,10 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
         Some(Self {
             f0: F0::read(&reader.child_reader[0], row),
             f1: F1::read(&reader.child_reader[1], row),
-            field_names_type: PhantomData,
+            field_names_type: std::marker::PhantomData,
         })
     }
-    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
+    // fn create_writer(output: libduckdb_sys::duckdb_vector) -> DuckValueWriter {
     //     let mut writer = DuckValueWriter::new_from_vector(output);
     //     let f0_writer = F0::struct_field_writer(&writer, 0);
     //     let f1_writer = F1::struct_field_writer(&writer, 1);
@@ -102,7 +99,7 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
     //     writer
     // }
 
-    fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
+    fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
 
         writer.child_writer = vec![
