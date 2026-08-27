@@ -2,7 +2,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckStruct2Tmp<F0: easy_duckdb_extension::DuckValueType, F1: easy_duckdb_extension::DuckValueType, N: easy_duckdb_extension::FieldNames> {
     pub f0: Option<F0>,
-    pub f1: Option<F1>,
+    pub f1: F1,
     pub field_names_type: std::marker::PhantomData<N>,
 }
 
@@ -29,7 +29,7 @@ impl<F0: easy_duckdb_extension::DuckValueType, F1: easy_duckdb_extension::DuckVa
     fn read_valid(reader: &easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
         Some(Self {
             f0: F0::read(&reader.child_reader[0], row),
-            f1: F1::read(&reader.child_reader[1], row),
+            f1: F1::read(&reader.child_reader[1], row)?,
             field_names_type: std::marker::PhantomData,
         })
     }
@@ -58,7 +58,7 @@ impl<F0: easy_duckdb_extension::DuckValueType, F1: easy_duckdb_extension::DuckVa
                 1,
                 &output_vec
                     .iter()
-                    .map(|x| x.as_ref().and_then(|v| v.f1.as_ref()))
+                    .map(|x| x.as_ref().and_then(|v| Some(&v.f1)))
                     .collect::<Vec<_>>(),
             ),
         ];
@@ -68,6 +68,6 @@ impl<F0: easy_duckdb_extension::DuckValueType, F1: easy_duckdb_extension::DuckVa
 
     fn write_valid(writer: &mut easy_duckdb_extension::DuckValueWriter, idx: usize, vo: &Self) {
         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
-        F1::write(&mut writer.child_writer[1], idx, &vo.f1);
+        F1::write_valid(&mut writer.child_writer[1], idx, &vo.f1);
     }
 }

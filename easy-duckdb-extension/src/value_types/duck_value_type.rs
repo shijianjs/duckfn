@@ -23,6 +23,7 @@ pub trait DuckValueType: Sized+Clone {
         DuckValueReader::new_from_vector(vector, size)
     }
 
+    /// 仅处理null，子类不能重写
     fn read(reader: &DuckValueReader, row: usize) -> Option<Self> {
         if unsafe { reader.vector_reader.is_valid(row) } {
             Self::read_valid(reader, row)
@@ -57,7 +58,7 @@ pub trait DuckValueType: Sized+Clone {
         DuckValueWriter::new_from_vector(vector)
     }
 
-
+    /// 仅处理null，子类不能重写、因为可能调不到
     fn write(writer: &mut DuckValueWriter, idx: usize, vo: &Option<Self>) {
         // Self::write_to_vector(&mut writer.vector_writer, idx, vo);
         match vo {

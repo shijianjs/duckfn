@@ -49,6 +49,7 @@ impl DuckStructContext {
         let assert_impl_duck_value_type =
             self.fields_to_code(|f| f.assert_impl_duck_value_type())?;
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
+        let field_writer_batch = self.fields_to_code(|f| f.field_writer_batch())?;
         Ok(quote! {
             impl easy_duckdb_extension::DuckValueType for #struct_name {
                 fn type_id() -> quack_rs::prelude::TypeId {
@@ -74,6 +75,16 @@ impl DuckStructContext {
                     Some(Self {
                         #(#read_valid)*
                     })
+                }
+
+                fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> easy_duckdb_extension::DuckValueWriter {
+                    let mut writer = easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
+
+                    writer.child_writer = vec![
+                        #(#field_writer_batch),*
+                    ];
+
+                    writer
                 }
 
             }
@@ -176,19 +187,55 @@ impl FieldWrapper {
         let ty = self.type_or_through_option();
         let field_name = self.require_field_name()?;
         let index   = self.index;
-        let try_op = self.try_op();
+        let try_op = if self.is_option().is_ok() {
+            quote!()
+        } else {
+            quote!(?)
+        };
 
         Ok(quote! {
             #field_name: #ty::read(&reader.child_reader[#index], row) #try_op,
         })
     }
 
-    fn try_op(&self) -> TokenStream2 {
-        let try_op = if self.is_option().is_ok() {
-            quote!()
-        } else {
-            quote!(?)
+    ///     fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> easy_duckdb_extension::DuckValueWriter {
+    //         let mut writer = easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
+    //
+    //         writer.child_writer = vec![
+    //             F0::struct_field_writer_batch(
+    //                 &writer,
+    //                 0,
+    //                 &output_vec
+    //                     .iter()
+    //                     .map(|x| x.as_ref().and_then(|v| v.f0.as_ref()))
+    //                     .collect::<Vec<_>>(),
+    //             ),
+    //             F1::struct_field_writer_batch(
+    //                 &writer,
+    //                 1,
+    //                 &output_vec
+    //                     .iter()
+    //                     .map(|x| x.as_ref().and_then(|v| v.f1.as_ref()))
+    //                     .collect::<Vec<_>>(),
+    //             ),
+    //         ];
+    //
+    //         writer
+    //     }
+    fn field_writer_batch(&self) -> syn::Result<TokenStream2> {
+        let ty = self.type_or_through_option();
+        let field_name = self.require_field_name()?;
+        let index = self.index;
+        let count_converter= if self.is_option().is_ok() {
+            quote! { |v| v.#field_name.as_ref() }
+        }else {
+            quote! { |v| Some(&v.#field_name) }
         };
-        try_op
+        Ok(quote! {
+            #ty::struct_field_writer_batch(&writer, #index, &output_vec
+                    .iter()
+                    .map(|x| x.as_ref().and_then(#count_converter))
+                    .collect::<Vec<_>>())
+        })
     }
 }
