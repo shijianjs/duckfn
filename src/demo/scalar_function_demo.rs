@@ -313,12 +313,6 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
     }
 }
 
-#[derive(Clone, Debug, DuckStruct)]
-pub struct DuckStructDemo1{
-    pub count:i64,
-    pub data:Vec<i64>,
-}
-
 
 // ============================================================================
 // Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)

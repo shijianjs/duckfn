@@ -1,3 +1,4 @@
+use crate::macro_utils::add_vec_turbofish;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::__private::TokenStream2;
@@ -6,7 +7,6 @@ use syn::{
     Data, DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Path, PathArguments, Type,
     TypePath,
 };
-use crate::macro_utils::add_vec_turbofish;
 
 pub(crate) fn duck_struct_derive(input: DeriveInput) -> syn::Result<TokenStream2> {
     if let Data::Struct(DataStruct {
@@ -46,26 +46,34 @@ impl DuckStructContext {
         let struct_name = self.struct_name();
         let logical_types = self.logical_types()?;
         let field_readers = self.fields_to_code(|f| f.field_reader())?;
-        let assert_impl_duck_value_type = self.fields_to_code(|f| f.assert_impl_duck_value_type())?;
+        let assert_impl_duck_value_type =
+            self.fields_to_code(|f| f.assert_impl_duck_value_type())?;
+        let read_valid = self.fields_to_code(|f| f.read_valid())?;
         Ok(quote! {
             impl easy_duckdb_extension::DuckValueType for #struct_name {
-                fn type_id() -> TypeId {
-                    TypeId::Struct
+                fn type_id() -> quack_rs::prelude::TypeId {
+                    quack_rs::prelude::TypeId::Struct
                 }
 
-                fn logical_type() -> LogicalType {
+                fn logical_type() -> quack_rs::prelude::LogicalType {
                     #(#assert_impl_duck_value_type;)*
-                    LogicalType::struct_type_from_logical(&vec![
+                    quack_rs::prelude::LogicalType::struct_type_from_logical(&vec![
                         #(#logical_types),*
                     ])
                 }
 
-                fn create_reader_from_vector(vector: duckdb_vector, size: usize) -> easy_duckdb_extension::DuckValueReader {
+                fn create_reader_from_vector(vector: libduckdb_sys::duckdb_vector, size: usize) -> easy_duckdb_extension::DuckValueReader {
                     let mut reader = easy_duckdb_extension::DuckValueReader::new_from_vector(vector, size);
                     reader.child_reader = vec![
                         #(#field_readers),*
                     ];
                     reader
+                }
+
+                fn read_valid(reader: &easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
+                    Some(Self {
+                        #(#read_valid)*
+                    })
                 }
 
             }
@@ -93,7 +101,6 @@ struct FieldWrapper {
     index: usize,
 }
 impl FieldWrapper {
-
     fn new(field: syn::Field, index: usize) -> FieldWrapper {
         let mut wrapper = FieldWrapper { field, index };
         wrapper.init();
@@ -158,18 +165,30 @@ impl FieldWrapper {
             #ty::struct_field_reader(&reader, #index)
         })
     }
-    //    fn read_valid(reader: &DuckValueReader, row: usize) -> Self {
-    //         Self {
+    //    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
+    //         Some(Self {
     //             f0: F0::read(&reader.child_reader[0], row),
     //             f1: F1::read(&reader.child_reader[1], row),
     //             field_names_type: PhantomData,
-    //         }
+    //         })
     //     }
-    fn read_valid(&self, reader: &syn::Ident, row: &syn::Ident) -> syn::Result<TokenStream2> {
+    fn read_valid(&self) -> syn::Result<TokenStream2> {
         let ty = self.type_or_through_option();
         let field_name = self.require_field_name()?;
+        let index   = self.index;
+        let try_op = self.try_op();
+
         Ok(quote! {
-            #ty::read_valid(&#reader.child_reader[#field_name], #row)
+            #field_name: #ty::read(&reader.child_reader[#index], row) #try_op,
         })
+    }
+
+    fn try_op(&self) -> TokenStream2 {
+        let try_op = if self.is_option().is_ok() {
+            quote!()
+        } else {
+            quote!(?)
+        };
+        try_op
     }
 }
