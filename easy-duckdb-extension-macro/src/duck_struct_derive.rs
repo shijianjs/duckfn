@@ -155,7 +155,7 @@ impl FieldWrapper {
     fn assert_impl_duck_value_type(&self) -> syn::Result<TokenStream2> {
         let ty = self.type_or_through_option();
         Ok(quote! {
-            easy_duckdb_extension::assert_impl_duck_value_type::<#ty>()
+            ::easy_duckdb_extension::assert_impl_duck_value_type::<#ty>()
         })
     }
     fn logical_type(&self) -> syn::Result<TokenStream2> {
