@@ -50,35 +50,37 @@ impl DuckStructContext {
             self.fields_to_code(|f| f.assert_impl_duck_value_type())?;
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
         let field_writer_batch = self.fields_to_code(|f| f.field_writer_batch())?;
+        let write_valid = self.fields_to_code(|f| f.write_valid())?;
+
         Ok(quote! {
-            impl easy_duckdb_extension::DuckValueType for #struct_name {
-                fn type_id() -> quack_rs::prelude::TypeId {
-                    quack_rs::prelude::TypeId::Struct
+            impl ::easy_duckdb_extension::DuckValueType for #struct_name {
+                fn type_id() -> ::quack_rs::prelude::TypeId {
+                    ::quack_rs::prelude::TypeId::Struct
                 }
 
-                fn logical_type() -> quack_rs::prelude::LogicalType {
+                fn logical_type() -> ::quack_rs::prelude::LogicalType {
                     #(#assert_impl_duck_value_type;)*
-                    quack_rs::prelude::LogicalType::struct_type_from_logical(&vec![
+                    ::quack_rs::prelude::LogicalType::struct_type_from_logical(&vec![
                         #(#logical_types),*
                     ])
                 }
 
-                fn create_reader_from_vector(vector: libduckdb_sys::duckdb_vector, size: usize) -> easy_duckdb_extension::DuckValueReader {
-                    let mut reader = easy_duckdb_extension::DuckValueReader::new_from_vector(vector, size);
+                fn create_reader_from_vector(vector: ::libduckdb_sys::duckdb_vector, size: usize) -> ::easy_duckdb_extension::DuckValueReader {
+                    let mut reader = ::easy_duckdb_extension::DuckValueReader::new_from_vector(vector, size);
                     reader.child_reader = vec![
                         #(#field_readers),*
                     ];
                     reader
                 }
 
-                fn read_valid(reader: &easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
+                fn read_valid(reader: &::easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
                     Some(Self {
                         #(#read_valid)*
                     })
                 }
 
-                fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> easy_duckdb_extension::DuckValueWriter {
-                    let mut writer = easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
+                fn create_writer_batch(vector: ::libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> ::easy_duckdb_extension::DuckValueWriter {
+                    let mut writer = ::easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
 
                     writer.child_writer = vec![
                         #(#field_writer_batch),*
@@ -87,6 +89,9 @@ impl DuckStructContext {
                     writer
                 }
 
+                fn write_valid(writer: &mut ::easy_duckdb_extension::DuckValueWriter, idx: usize, vo: &Self) {
+                    #(#write_valid)*
+                }
             }
         })
     }
@@ -238,4 +243,23 @@ impl FieldWrapper {
                     .collect::<Vec<_>>())
         })
     }
+
+    //     fn write_valid(writer: &mut easy_duckdb_extension::DuckValueWriter, idx: usize, vo: &Self) {
+    //         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
+    //         F1::write_valid(&mut writer.child_writer[1], idx, &vo.f1);
+    //     }
+    fn write_valid(&self) -> syn::Result<TokenStream2> {
+        let ty = self.type_or_through_option();
+        let field_name = self.require_field_name()?;
+        let index = self.index;
+        let write_method= if self.is_option().is_ok() {
+            quote! { #ty::write }
+        }else {
+            quote! { #ty::write_valid }
+        };
+        Ok(quote! {
+            #write_method(&mut writer.child_writer[#index], idx, &vo.#field_name);
+        })
+    }
 }
+
