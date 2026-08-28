@@ -9,6 +9,7 @@ use quack_rs::prelude::{
     AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
+use easy_duckdb_extension::DuckResult;
 
 /// ============= demo wrapper封装版  ============
 ///
@@ -24,16 +25,18 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
     const NAME: &'static str = "word_count_w";
     type Args = (Option<String>,);
     type Output = i64;
-    fn handle_row(&mut self, args: Self::Args) {
+    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()>{
         self.count += args.transpose().map(|(t,)| count_words(&t)).unwrap_or(0);
+        Ok(())
     }
 
-    fn combine(&mut self, other: &Self) {
+    fn combine(&mut self, other: &Self) -> DuckResult<()> {
         self.count += other.count;
+        Ok(())
     }
 
-    fn result(&self) -> Option<Self::Output> {
-        Some(self.count)
+    fn result(&self) -> DuckResult<Option<Self::Output>> {
+        Ok(Some(self.count))
     }
 }
 
@@ -46,16 +49,22 @@ impl AggregateFunctionAdapter for AggListWrapper {
     const NAME: &'static str = "agg_list_w";
     type Args = (Option<i64>,);
     type Output = DuckList<i64>;
-    fn handle_row(&mut self, args: Self::Args) {
-        self.li.value.push(args.0);
+    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()>{
+        let value = args.0;
+        if let Some(12)=value{
+            return Err(ExtensionError::new("Value is 12"));
+        }
+        self.li.value.push(value);
+        Ok(())
     }
 
-    fn combine(&mut self, other: &Self) {
+    fn combine(&mut self, other: &Self) -> DuckResult<()> {
         self.li.value.extend(other.li.value.iter().cloned());
+        Ok(())
     }
 
-    fn result(&self) -> Option<Self::Output> {
-        Some(self.li.clone())
+    fn result(&self) -> DuckResult<Option<Self::Output>> {
+        Ok(Some(self.li.clone()))
     }
 }
 

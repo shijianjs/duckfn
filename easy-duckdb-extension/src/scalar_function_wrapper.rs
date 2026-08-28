@@ -1,9 +1,9 @@
+use crate::DuckResult;
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::error::ExtensionError;
 use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
@@ -44,7 +44,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             .with_params(Self::Args::params())
     }
 
-    unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {
+    unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
         Self::register_builder().register(con)
     }
 
@@ -56,7 +56,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
 
     fn apply_with_null(
         args_option: Option<Self::Args>,
-    ) -> Result<Option<Self::Output>, ExtensionError> {
+    ) -> DuckResult<Option<Self::Output>> {
         Ok(args_option.map(|args| Self::apply(args)).flatten())
     }
     fn apply(args: Self::Args) -> Option<Self::Output>;

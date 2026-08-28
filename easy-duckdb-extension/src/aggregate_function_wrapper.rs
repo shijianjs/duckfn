@@ -1,7 +1,11 @@
+use crate::DuckResult;
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
-use libduckdb_sys::{duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t};
+use libduckdb_sys::{
+    duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info,
+    duckdb_vector, idx_t,
+};
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
@@ -51,7 +55,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             let src = unsafe { FfiState::<Self>::with_state(src_ptr) };
             let tgt = unsafe { FfiState::<Self>::with_state_mut(tgt_ptr) };
             if let (Some(s), Some(t)) = (src, tgt) {
-                let result = t.combine_handle_err(s);
+                let result = t.combine(s);
                 if let Err(e) = result {
                     info.set_error(e.as_str());
                     return;
@@ -68,20 +72,25 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         offset: idx_t,
     ) {
         let info = unsafe { AggregateFunctionInfo::new(_info) };
-        if offset !=0 {
-            info.set_error(format!("non-zero aggregate finalize result offset is not supported: {}",
-                                   offset).as_str());
+        if offset != 0 {
+            info.set_error(
+                format!(
+                    "non-zero aggregate finalize result offset is not supported: {}",
+                    offset
+                )
+                .as_str(),
+            );
             return;
         }
 
-        let mut output_vec:Vec<Option<Self::Output>> = Vec::with_capacity(count as usize);
+        let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(count as usize);
         for i in 0..count as usize {
             let state_ptr = unsafe { *source.add(i) };
             match unsafe { FfiState::<Self>::with_state(state_ptr) } {
                 Some(st) => unsafe {
-                    let result1 = st.result_handle_err();
+                    let result1 = (st.result());
                     match result1 {
-                        Ok(r) => {output_vec.push(r)}
+                        Ok(r) => output_vec.push(r),
                         Err(e) => {
                             info.set_error(e.as_str());
                             return;
@@ -110,7 +119,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .with_params(Self::Args::params())
     }
 
-    unsafe fn register(con: duckdb_connection) -> Result<(), ExtensionError> {
+    unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
         Self::register_builder().register(con)
     }
 
@@ -121,23 +130,13 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     type Args: DuckArgs;
     type Output: DuckValueType;
 
-    fn handle_row_with_null(&mut self, args: Option<Self::Args>)->Result<(), ExtensionError>{
+    fn handle_row_with_null(&mut self, args: Option<Self::Args>) -> DuckResult<()> {
         if let Some(args) = args {
-            self.handle_row(args);
+            self.handle_row(args)?;
         }
         Ok(())
     }
-    fn handle_row(&mut self, args: Self::Args);
-
-
-    fn combine_handle_err(&mut self, other: &Self)->Result<(), ExtensionError>{
-        self.combine(other);
-        Ok(())
-    }
-    fn combine(&mut self, other: &Self);
-
-    fn result_handle_err(&self) -> Result<Option<Self::Output>, ExtensionError>{
-        Ok(self.result())
-    }
-    fn result(&self) -> Option<Self::Output>;
+    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()>;
+    fn combine(&mut self, other: &Self) -> DuckResult<()>;
+    fn result(&self) -> DuckResult<Option<Self::Output>>;
 }
