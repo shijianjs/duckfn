@@ -106,6 +106,9 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
 
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT struct_nest_output_scalar_w(range::int) from range(9);";
+  
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT nest_struct_macro_output_scalar_w(range::int) from range(9);";
 
 
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';

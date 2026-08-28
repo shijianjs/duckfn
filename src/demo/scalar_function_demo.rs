@@ -312,6 +312,30 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
         })
     }
 }
+struct NestStructMacroOutputScalarWrapper;
+#[derive(DuckStruct,Clone)]
+struct NestStructMacroOuter{
+    struct1:NestStructMacroInner,
+    list1:Vec<i64>
+}
+#[derive(DuckStruct,Clone)]
+struct NestStructMacroInner{
+    hello_count:i64,
+}
+impl ScalarFunctionAdapter for NestStructMacroOutputScalarWrapper {
+    const NAME: &'static str = "nest_struct_macro_output_scalar_w";
+    type Args = (Option<i32>,);
+    type Output = NestStructMacroOuter;
+
+    fn apply(args: Self::Args) -> Option<Self::Output> {
+        args.transpose().map(|(outer, )| NestStructMacroOuter {
+            struct1: NestStructMacroInner {
+                hello_count: (100 + outer) as i64,
+            },
+            list1: (0..outer).map(|x| x as i64).collect(),
+        })
+    }
+}
 
 
 // ============================================================================
@@ -428,6 +452,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         NestStructOutputScalarWrapper::register_builder(),
         NestVecScalarWrapper::register_builder(),
         NestVecNoNullScalarWrapper::register_builder(),
+        NestStructMacroOutputScalarWrapper::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
