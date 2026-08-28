@@ -4,41 +4,32 @@ use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{
-    ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder,
-};
+use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
     unsafe extern "C" fn scalar_function_wrapper(
-        _info: duckdb_function_info,
+        info: duckdb_function_info,
         input: duckdb_data_chunk,
         output: duckdb_vector,
     ) {
-        let info = unsafe { ScalarFunctionInfo::new(_info) };
-
-        // SAFETY: input is a valid data chunk provided by DuckDB.
-        // let reader = unsafe { VectorReader::new(input, 0) };
+        let fn_info = unsafe { ScalarFunctionInfo::new(info) };
         let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
-
-
-
-        // let readers = (0..chunk.column_count())
-        //     .map(|i| unsafe { chunk.reader(i) })
-        //     .collect::<Vec<_>>();
         let readers = Self::Args::create_readers(&chunk);
-        // let mut writer = Self::Output::create_writer(output);
         let row_count = chunk.size();
 
-        let mut output_vec:Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
+        let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
         for row in 0..row_count {
             let args = Self::Args::read(&readers, row);
-            let result: Option<Self::Output> = Self::apply_with_null(args);
-            // Self::Output::write(&mut writer, row, &result);
-            output_vec.push(result);
+            let result = Self::apply_with_null(args);
+            match result {
+                Ok(r) => output_vec.push(r),
+                Err(e) => {
+                    fn_info.set_error(e.as_str());
+                    return;
+                }
+            }
         }
-        // let vec: Vec<Option<&Self::Output>> = output_vec.iter().map(|x| { x.as_ref() }).collect::<Vec<_>>();
-        Self::Output::write_batch(output,&output_vec);
-        // Self::Output::write_finish(&mut writer);
+        Self::Output::write_batch(output, &output_vec);
     }
     fn register_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
@@ -48,7 +39,6 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     }
     fn register_overload_builder() -> ScalarOverloadBuilder {
         ScalarOverloadBuilder::new()
-            // .returns(Self::Output::type_id())
             .function(Self::scalar_function_wrapper)
             .with_return_type(Self::Output::logical_type())
             .with_params(Self::Args::params())
@@ -64,9 +54,10 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     type Args: DuckArgs;
     type Output: DuckValueType;
 
-    // fn apply(args: Self::Args) -> Option<Self::Output>;
-    fn apply_with_null(args_option: Option<Self::Args>) -> Option<Self::Output>{
-        args_option.map(|args| Self::apply(args)).flatten()
+    fn apply_with_null(
+        args_option: Option<Self::Args>,
+    ) -> Result<Option<Self::Output>, ExtensionError> {
+        Ok(args_option.map(|args| Self::apply(args)).flatten())
     }
     fn apply(args: Self::Args) -> Option<Self::Output>;
 }
