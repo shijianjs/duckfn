@@ -23,7 +23,7 @@ path = "src/wasm_lib.rs"
 crate-type = ["staticlib"]
 
 [dependencies]
-duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
+#duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
 quack-rs = "0.16.0"
 # loadable-extension 功能
 # libduckdb-sys 加上 features = ["loadable-extension"] 从根本上改变了 DuckDB API 函数的工作方式：
