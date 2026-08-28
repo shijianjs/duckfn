@@ -28,6 +28,7 @@ pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     (false, ty)
 }
 
+/// 给泛型加上`::`，例如`Vec<T>` -> `Vec::<T>`
 pub fn add_colon2_token(ty: &mut syn::Type) {
     let syn::Type::Path(type_path) = ty else {
         return;
@@ -36,10 +37,6 @@ pub fn add_colon2_token(ty: &mut syn::Type) {
     let Some(segment) = type_path.path.segments.last_mut() else {
         return;
     };
-
-    // if segment.ident != "Vec" {
-    //     return;
-    // }
 
     let syn::PathArguments::AngleBracketed(args) = &mut segment.arguments else {
         return;
