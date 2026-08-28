@@ -28,7 +28,7 @@ pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     (false, ty)
 }
 
-pub fn add_vec_turbofish(ty: &mut syn::Type) {
+pub fn add_colon2_token(ty: &mut syn::Type) {
     let syn::Type::Path(type_path) = ty else {
         return;
     };

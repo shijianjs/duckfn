@@ -1,35 +1,32 @@
-use crate::macro_utils::add_vec_turbofish;
-use proc_macro2::{Ident, TokenStream};
+use crate::macro_utils::add_colon2_token;
+use darling::util::extract_option;
+use proc_macro2::Ident;
 use quote::quote;
 use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
-use syn::{
-    Data, DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Path, PathArguments, Type,
-    TypePath,
-};
+use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
 
 pub(crate) fn duck_struct_derive(input: DeriveInput) -> syn::Result<TokenStream2> {
-    if let Data::Struct(DataStruct {
+    let Data::Struct(DataStruct {
         fields: Fields::Named(FieldsNamed { named, .. }),
         ..
     }) = input.to_owned().data
-    {
-        let fields = named
-            .into_iter()
-            .enumerate()
-            .map(|(index, f)| FieldWrapper::new(f, index))
-            .collect();
-        let context = DuckStructContext {
-            input: input.to_owned(),
-            fields,
-        };
-        return context.build_duck_value_type_impl();
-    } else {
+    else {
         return Err(syn::Error::new(
             input.span(),
             "Only named fields are allowed",
         ));
-    }
+    };
+    let fields = named
+        .into_iter()
+        .enumerate()
+        .map(|(index, f)| FieldWrapper::new(f, index))
+        .collect();
+    let context = DuckStructContext {
+        input: input.to_owned(),
+        fields,
+    };
+    context.build_duck_value_type_impl()
 }
 
 struct DuckStructContext {
@@ -119,14 +116,14 @@ struct FieldWrapper {
 impl FieldWrapper {
     fn new(field: syn::Field, index: usize) -> FieldWrapper {
         let mut wrapper = FieldWrapper { field, index };
-        wrapper.init();
+        // wrapper.init();
         wrapper
     }
 
-    fn init(&mut self) -> &mut FieldWrapper {
-        add_vec_turbofish(&mut self.field.ty);
-        self
-    }
+    // fn init(&mut self) -> &mut FieldWrapper {
+    //     add_colon2_token(&mut self.field.ty);
+    //     self
+    // }
 
     fn field_name(&self) -> &Option<Ident> {
         &self.field.ident
@@ -137,29 +134,34 @@ impl FieldWrapper {
             .as_ref()
             .ok_or(syn::Error::new(self.field.span(), "Field name is required"))
     }
-    fn is_option(&self) -> darling::Result<&Type> {
-        darling::util::extract_option::from_ref(&self.field.ty)
+    fn extract_option(&self) -> darling::Result<&Type> {
+        extract_option::from_ref(&self.field.ty)
     }
 
     /// 穿透Option的类型
     /// - 如果是Option类型，则返回Option内部的类型
     /// - 如果不是Option类型，则返回当前类型
     /// - 只支持单层Option
-    fn type_or_through_option(&self) -> &Type {
-        match self.is_option() {
-            Ok(ty) => ty,
-            Err(e) => &self.field.ty,
-        }
+    /// - 给泛型加上::，例如Vec<T> -> Vec::<T>
+    fn duck_value_type(&self) -> Type {
+        let x = if let Ok(ty) = self.extract_option() {
+            ty
+        } else {
+            &self.field.ty
+        };
+        let mut x1 = x.to_owned();
+        add_colon2_token(&mut x1);
+        x1
     }
 
     fn assert_impl_duck_value_type(&self) -> syn::Result<TokenStream2> {
-        let ty = self.type_or_through_option();
+        let ty = self.duck_value_type();
         Ok(quote! {
             ::easy_duckdb_extension::assert_impl_duck_value_type::<#ty>()
         })
     }
     fn logical_type(&self) -> syn::Result<TokenStream2> {
-        let ty = self.type_or_through_option();
+        let ty = self.duck_value_type();
         let name = self.require_field_name()?.to_string();
         Ok(quote! {
             (#name, #ty::logical_type())
@@ -175,7 +177,7 @@ impl FieldWrapper {
     //         reader
     //     }
     fn field_reader(&self) -> syn::Result<TokenStream2> {
-        let ty = self.type_or_through_option();
+        let ty = self.duck_value_type();
         let index = self.index;
         Ok(quote! {
             #ty::struct_field_reader(&reader, #index)
@@ -189,10 +191,10 @@ impl FieldWrapper {
     //         })
     //     }
     fn read_valid(&self) -> syn::Result<TokenStream2> {
-        let ty = self.type_or_through_option();
+        let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
-        let index   = self.index;
-        let try_op = if self.is_option().is_ok() {
+        let index = self.index;
+        let try_op = if self.is_option() {
             quote!()
         } else {
             quote!(?)
@@ -201,6 +203,10 @@ impl FieldWrapper {
         Ok(quote! {
             #field_name: #ty::read(&reader.child_reader[#index], row) #try_op,
         })
+    }
+
+    fn is_option(&self) -> bool {
+        self.extract_option().is_ok()
     }
 
     ///     fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> easy_duckdb_extension::DuckValueWriter {
@@ -228,12 +234,12 @@ impl FieldWrapper {
     //         writer
     //     }
     fn field_writer_batch(&self) -> syn::Result<TokenStream2> {
-        let ty = self.type_or_through_option();
+        let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;
-        let count_converter= if self.is_option().is_ok() {
+        let count_converter = if self.is_option() {
             quote! { |v| v.#field_name.as_ref() }
-        }else {
+        } else {
             quote! { |v| Some(&v.#field_name) }
         };
         Ok(quote! {
@@ -249,12 +255,12 @@ impl FieldWrapper {
     //         F1::write_valid(&mut writer.child_writer[1], idx, &vo.f1);
     //     }
     fn write_valid(&self) -> syn::Result<TokenStream2> {
-        let ty = self.type_or_through_option();
+        let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;
-        let write_method= if self.is_option().is_ok() {
+        let write_method = if self.is_option() {
             quote! { #ty::write }
-        }else {
+        } else {
             quote! { #ty::write_valid }
         };
         Ok(quote! {
@@ -262,4 +268,3 @@ impl FieldWrapper {
         })
     }
 }
-
