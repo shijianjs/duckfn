@@ -28,7 +28,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             let args = Self::Args::read(&readers, row);
             let state_ptr = unsafe { *states.add(row) };
             if let Some(st) = unsafe { FfiState::<Self>::with_state_mut(state_ptr) } {
-                st.handle_row(args);
+                st.handle_row_with_null(args);
             }
         }
     }
@@ -142,6 +142,11 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     type Args: DuckArgs;
     type Output: DuckValueType;
 
+    fn handle_row_with_null(&mut self, args: Option<Self::Args>){
+        if let Some(args) = args {
+            self.handle_row(args);
+        }
+    }
     fn handle_row(&mut self, args: Self::Args);
 
     fn combine(&mut self, other: &Self);

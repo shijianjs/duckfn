@@ -32,7 +32,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         let mut output_vec:Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
         for row in 0..row_count {
             let args = Self::Args::read(&readers, row);
-            let result: Option<Self::Output> = Self::apply(args);
+            let result: Option<Self::Output> = Self::apply_with_null(args);
             // Self::Output::write(&mut writer, row, &result);
             output_vec.push(result);
         }
@@ -64,5 +64,9 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     type Args: DuckArgs;
     type Output: DuckValueType;
 
+    // fn apply(args: Self::Args) -> Option<Self::Output>;
+    fn apply_with_null(args_option: Option<Self::Args>) -> Option<Self::Output>{
+        args_option.map(|args| Self::apply(args)).flatten()
+    }
     fn apply(args: Self::Args) -> Option<Self::Output>;
 }
