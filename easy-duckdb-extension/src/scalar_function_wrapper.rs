@@ -14,12 +14,12 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     ) {
         let fn_info = unsafe { ScalarFunctionInfo::new(info) };
         let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
-        let readers = Self::Args::create_readers(&chunk);
+        let readers = Self::Args::create_arg_readers(&chunk);
         let row_count = chunk.size();
 
         let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
         for row in 0..row_count {
-            let args = Self::Args::read(&readers, row);
+            let args = Self::Args::read_args(&readers, row);
             let result = Self::apply_with_null(args);
             match result {
                 Ok(r) => output_vec.push(r),
@@ -35,13 +35,13 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         ScalarFunctionBuilder::new(Self::NAME)
             .function(Self::scalar_function_wrapper)
             .with_return_type(Self::Output::logical_type())
-            .with_params(Self::Args::params())
+            .with_params(Self::Args::arg_types())
     }
     fn register_overload_builder() -> ScalarOverloadBuilder {
         ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
             .with_return_type(Self::Output::logical_type())
-            .with_params(Self::Args::params())
+            .with_params(Self::Args::arg_types())
     }
 
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {

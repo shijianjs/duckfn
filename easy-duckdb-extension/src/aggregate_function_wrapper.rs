@@ -27,10 +27,10 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     ) {
         let info = unsafe { AggregateFunctionInfo::new(_info) };
         let chunk = unsafe { DataChunk::from_raw(input) };
-        let readers = Self::Args::create_readers(&chunk);
+        let readers = Self::Args::create_arg_readers(&chunk);
         let row_count = chunk.size();
         for row in 0..row_count {
-            let args = Self::Args::read(&readers, row);
+            let args = Self::Args::read_args(&readers, row);
             let state_ptr = unsafe { *states.add(row) };
             if let Some(st) = unsafe { FfiState::<Self>::with_state_mut(state_ptr) } {
                 let result = st.handle_row_with_null(args);
@@ -116,7 +116,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .finalize(Self::c_finalize)
             .destructor(Self::c_state_destroy)
             .with_return_type(Self::Output::logical_type())
-            .with_params(Self::Args::params())
+            .with_params(Self::Args::arg_types())
     }
 
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {

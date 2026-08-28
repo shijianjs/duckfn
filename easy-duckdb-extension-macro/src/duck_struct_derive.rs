@@ -26,7 +26,7 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> syn::Result<TokenStream2
         input: input.to_owned(),
         fields,
     };
-    context.build_duck_value_type_impl()
+    context.build_all()
 }
 
 struct DuckStructContext {
@@ -39,9 +39,15 @@ impl DuckStructContext {
         &self.input.ident
     }
 
+    fn build_all(&self) -> syn::Result<TokenStream2> {
+        let mut ts = self.build_duck_value_type_impl()?;
+        ts.extend(self.build_duck_args_impl()?);
+        Ok(ts)
+    }
+
     fn build_duck_value_type_impl(&self) -> syn::Result<TokenStream2> {
         let struct_name = self.struct_name();
-        let logical_types = self.logical_types()?;
+        let logical_types = self.fields_to_code(|f| f.name_type_pair())?;
         let field_readers = self.fields_to_code(|f| f.field_reader())?;
         let assert_impl_duck_value_type =
             self.fields_to_code(|f| f.assert_impl_duck_value_type())?;
@@ -57,20 +63,21 @@ impl DuckStructContext {
 
                 fn logical_type() -> ::quack_rs::prelude::LogicalType {
                     #(#assert_impl_duck_value_type;)*
-                    ::quack_rs::prelude::LogicalType::struct_type_from_logical(&vec![
+                    ::quack_rs::prelude::LogicalType::struct_type_from_logical(&Vec::from([
                         #(#logical_types),*
-                    ])
+                    ]))
                 }
 
                 fn create_reader_from_vector(vector: ::libduckdb_sys::duckdb_vector, size: usize) -> ::easy_duckdb_extension::DuckValueReader {
                     let mut reader = ::easy_duckdb_extension::DuckValueReader::new_from_vector(vector, size);
-                    reader.child_reader = vec![
+                    reader.child_reader = Vec::from([
                         #(#field_readers),*
-                    ];
+                    ]);
                     reader
                 }
 
                 fn read_valid(reader: &::easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
+                    let readers = &reader.child_reader;
                     Some(Self {
                         #(#read_valid)*
                     })
@@ -79,9 +86,9 @@ impl DuckStructContext {
                 fn create_writer_batch(vector: ::libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> ::easy_duckdb_extension::DuckValueWriter {
                     let mut writer = ::easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
 
-                    writer.child_writer = vec![
+                    writer.child_writer = Vec::from([
                         #(#field_writer_batch),*
-                    ];
+                    ]);
 
                     writer
                 }
@@ -93,8 +100,38 @@ impl DuckStructContext {
         })
     }
 
-    fn logical_types(&self) -> syn::Result<Vec<TokenStream2>> {
-        self.fields_to_code(|f| f.logical_type())
+    fn build_duck_args_impl(&self) -> syn::Result<TokenStream2> {
+        let struct_name = self.struct_name();
+        let read_valid = self.fields_to_code(|f| f.read_valid())?;
+        let logical_types = self.fields_to_code(|f| f.logical_type())?;
+        let reader_by_trunk = self.fields_to_code(|f| f.reader_by_trunk())?;
+        Ok(quote! {
+            impl ::easy_duckdb_extension::DuckArgs for #struct_name {
+
+                fn create_arg_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<::easy_duckdb_extension::DuckValueReader> {
+                    use easy_duckdb_extension::DuckValueType;
+
+                    Vec::from([
+                        #(#reader_by_trunk),*
+                    ])
+                }
+                fn read_args(readers: &[::easy_duckdb_extension::DuckValueReader], row: usize) -> Option<Self> {
+                    use easy_duckdb_extension::DuckValueType;
+
+                    Some(Self {
+                        #(#read_valid)*
+                    })
+                }
+
+                fn arg_types() -> Vec<::quack_rs::prelude::LogicalType> {
+                    use easy_duckdb_extension::DuckValueType;
+
+                    Vec::from([
+                        #(#logical_types),*
+                    ])
+                }
+            }
+        })
     }
 
     fn fields_to_code(
@@ -160,11 +197,17 @@ impl FieldWrapper {
             ::easy_duckdb_extension::assert_impl_duck_value_type::<#ty>()
         })
     }
-    fn logical_type(&self) -> syn::Result<TokenStream2> {
-        let ty = self.duck_value_type();
+    fn name_type_pair(&self) -> syn::Result<TokenStream2> {
+        let ty = self.logical_type()?;
         let name = self.require_field_name()?.to_string();
         Ok(quote! {
-            (#name, #ty::logical_type())
+            (#name, #ty)
+        })
+    }
+    fn logical_type(&self) -> syn::Result<TokenStream2> {
+        let ty = self.duck_value_type();
+        Ok(quote! {
+            #ty::logical_type()
         })
     }
 
@@ -183,6 +226,21 @@ impl FieldWrapper {
             #ty::struct_field_reader(&reader, #index)
         })
     }
+    //    fn create_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<crate::DuckValueReader> {
+    //         vec![
+    //             A::create_reader(chunk, 0),
+    //             B::create_reader(chunk, 1)
+    //         ]
+    //     }
+    fn reader_by_trunk(&self) -> syn::Result<TokenStream2> {
+        let ty = self.duck_value_type();
+        let index = self.index;
+        Ok(quote! {
+            #ty::create_reader(chunk, #index)
+        })
+    }
+
+
     //    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
     //         Some(Self {
     //             f0: F0::read(&reader.child_reader[0], row),
@@ -201,7 +259,7 @@ impl FieldWrapper {
         };
 
         Ok(quote! {
-            #field_name: #ty::read(&reader.child_reader[#index], row) #try_op,
+            #field_name: #ty::read(&readers[#index], row) #try_op,
         })
     }
 

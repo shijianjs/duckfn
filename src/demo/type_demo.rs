@@ -27,9 +27,10 @@ impl<F0: easy_duckdb_extension::DuckValueType, F1: easy_duckdb_extension::DuckVa
     }
 
     fn read_valid(reader: &easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
+        let readers = &reader.child_reader;
         Some(Self {
-            f0: F0::read(&reader.child_reader[0], row),
-            f1: F1::read(&reader.child_reader[1], row)?,
+            f0: F0::read(&readers[0], row),
+            f1: F1::read(&readers[1], row)?,
             field_names_type: std::marker::PhantomData,
         })
     }
