@@ -57,7 +57,11 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     fn apply_with_null(
         args_option: Option<Self::Args>,
     ) -> DuckResult<Option<Self::Output>> {
-        Ok(args_option.map(|args| Self::apply(args)).flatten())
+        if let Some(args) = args_option {
+            Self::apply(args)
+        } else {
+            Ok(None)
+        }
     }
-    fn apply(args: Self::Args) -> Option<Self::Output>;
+    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>>;
 }
