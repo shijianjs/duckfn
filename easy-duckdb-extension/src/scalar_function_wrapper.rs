@@ -1,35 +1,41 @@
-use crate::DuckResult;
+use crate::{panic_to_string, DuckResult};
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
+use std::panic::catch_unwind;
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
     unsafe extern "C" fn scalar_function_wrapper(
-        info: duckdb_function_info,
+        _info: duckdb_function_info,
         input: duckdb_data_chunk,
         output: duckdb_vector,
     ) {
-        let fn_info = unsafe { ScalarFunctionInfo::new(info) };
-        let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
-        let readers = Self::Args::create_arg_readers(&chunk);
-        let row_count = chunk.size();
+        let info = unsafe { ScalarFunctionInfo::new(_info) };
+        let unwind = catch_unwind(|| {
+            let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
+            let readers = Self::Args::create_arg_readers(&chunk);
+            let row_count = chunk.size();
 
-        let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
-        for row in 0..row_count {
-            let args = Self::Args::read_args(&readers, row);
-            let result = Self::apply_with_null(args);
-            match result {
-                Ok(r) => output_vec.push(r),
-                Err(e) => {
-                    fn_info.set_error(e.as_str());
-                    return;
+            let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
+            for row in 0..row_count {
+                let args = Self::Args::read_args(&readers, row);
+                let result = Self::apply_with_null(args);
+                match result {
+                    Ok(r) => output_vec.push(r),
+                    Err(e) => {
+                        info.set_error(e.as_str());
+                        return;
+                    }
                 }
             }
+            Self::Output::write_batch(output, &output_vec);
+        });
+        if let Err(e) = unwind {
+            info.set_error(&panic_to_string(e));
         }
-        Self::Output::write_batch(output, &output_vec);
     }
     fn register_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
@@ -54,9 +60,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     type Args: DuckArgs;
     type Output: DuckValueType;
 
-    fn apply_with_null(
-        args_option: Option<Self::Args>,
-    ) -> DuckResult<Option<Self::Output>> {
+    fn apply_with_null(args_option: Option<Self::Args>) -> DuckResult<Option<Self::Output>> {
         if let Some(args) = args_option {
             Self::apply(args)
         } else {

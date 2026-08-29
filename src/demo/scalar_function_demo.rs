@@ -12,7 +12,7 @@ use quack_rs::prelude::{
     VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
-use easy_duckdb_extension::DuckResult;
+use easy_duckdb_extension::{duck_error, DuckResult};
 use easy_duckdb_extension_macro::DuckStruct;
 
 ///
@@ -339,6 +339,31 @@ impl ScalarFunctionAdapter for NestStructMacroOutputScalarWrapper {
 }
 
 
+#[derive(DuckStruct,Clone)]
+struct ErrorScalarDemo{
+    input:i64,
+}
+impl ScalarFunctionAdapter for ErrorScalarDemo {
+    const NAME: &'static str = "error_scalar_demo";
+    type Args = ErrorScalarDemo;
+    type Output = i64;
+
+    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+        let i = args.input;
+        if i==10 {
+            return Err(duck_error("error: input is 10"));
+        }
+        if i==20 {
+            panic!("panic: input is 20")
+        }
+        if i==30 {
+            panic!()
+        }
+        Ok(Some(i *2))
+    }
+}
+
+
 // ============================================================================
 // Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)
 // ============================================================================
@@ -454,6 +479,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         NestVecScalarWrapper::register_builder(),
         NestVecNoNullScalarWrapper::register_builder(),
         NestStructMacroOutputScalarWrapper::register_builder(),
+        ErrorScalarDemo::register_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;

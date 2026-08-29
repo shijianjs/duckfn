@@ -7,11 +7,14 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [profile.release]
+## 下面两个官方模板的
 lto = true
 strip = true
-panic = "abort"             # required — panics across FFI are undefined behavior
-opt-level = 3
-codegen-units = 1
+
+## 下面三个是quack-rs加的
+#panic = "abort"             # required — panics across FFI are undefined behavior
+#opt-level = 3
+#codegen-units = 1
 
 [[example]]
 # crate-type can't be (at the moment) be overriden for specific targets
