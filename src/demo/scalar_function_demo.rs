@@ -345,7 +345,7 @@ struct ErrorScalarDemo{
 }
 impl ScalarFunctionAdapter for ErrorScalarDemo {
     const NAME: &'static str = "error_scalar_demo";
-    type Args = ErrorScalarDemo;
+    type Args = Self;
     type Output = i64;
 
     fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
