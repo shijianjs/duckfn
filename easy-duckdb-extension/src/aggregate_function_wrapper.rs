@@ -113,7 +113,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         unsafe { FfiState::<Self>::destroy_callback(states, count) };
     }
 
-    fn register_builder() -> AggregateFunctionBuilder {
+    fn aggregate_function_builder() -> AggregateFunctionBuilder {
         AggregateFunctionBuilder::new(Self::NAME)
             .state_size(Self::c_state_size)
             .init(Self::c_state_init)
@@ -126,7 +126,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     }
 
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
-        Self::register_builder().register(con)
+        Self::aggregate_function_builder().register(con)
     }
 
     const NAME: &'static str;

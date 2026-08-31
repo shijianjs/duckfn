@@ -164,8 +164,8 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .combine(wc_combine)
             .finalize(wc_finalize)
             .destructor(wc_state_destroy),
-        WordCountStateWrapper::register_builder(),
-        AggListWrapper::register_builder(),
+        WordCountStateWrapper::aggregate_function_builder(),
+        AggListWrapper::aggregate_function_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_aggregate(builder) }?;

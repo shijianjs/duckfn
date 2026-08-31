@@ -23,6 +23,7 @@ impl ItemFnWrapper {
 
             #vis mod #name{
                 use super::*;
+                use easy_duckdb_extension::ScalarFunctionAdapter;
 
                 #duck_args
 
@@ -43,7 +44,7 @@ impl ItemFnWrapper {
     //ScalarFunctionImpl
     fn build_scalar_function_impl(&self) -> TokenStream2Result {
         let name = self.name();
-        let (result, return_type) = self.resolve_return_type()?;
+        let (_, return_type) = self.resolve_return_type()?;
         let return_clause = self.build_return_clause()?;
         let get_data = self.args_to_code(|x| { x.build_get_data()})?;
 
@@ -62,7 +63,12 @@ impl ItemFnWrapper {
                     #return_clause
                 }
             }
-
+            pub fn scalar_function_builder() -> quack_rs::prelude::ScalarFunctionBuilder {
+                ScalarFunctionImpl::scalar_function_builder()
+            }
+            pub fn scalar_overload_builder() -> quack_rs::prelude::ScalarOverloadBuilder {
+                ScalarFunctionImpl::scalar_overload_builder()
+            }
         })
     }
 
@@ -167,6 +173,7 @@ impl FnArgWrapper {
     }
 }
 
+#[derive(Clone, Copy)]
 enum DuckScalarResult {
     Plain,
     Option,

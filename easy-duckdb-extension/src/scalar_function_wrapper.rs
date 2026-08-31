@@ -34,13 +34,13 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             Self::Output::write_batch(output, &output_vec);
         });
     }
-    fn register_builder() -> ScalarFunctionBuilder {
+    fn scalar_function_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
             .function(Self::scalar_function_wrapper)
             .with_return_type(Self::Output::logical_type())
             .with_params(Self::Args::arg_types())
     }
-    fn register_overload_builder() -> ScalarOverloadBuilder {
+    fn scalar_overload_builder() -> ScalarOverloadBuilder {
         ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
             .with_return_type(Self::Output::logical_type())
@@ -48,7 +48,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     }
 
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
-        Self::register_builder().register(con)
+        Self::scalar_function_builder().register(con)
     }
 
     const NAME: &'static str;

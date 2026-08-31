@@ -451,13 +451,13 @@ unsafe extern "C" fn make_kv_map_scalar(
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
         // DoubleIt::register_builder(),
-        double_it5::ScalarFunctionImpl::register_builder(),
-        FirstWordTuple::register_builder(),
-        AddItTuple::register_builder(),
-        SumListWrapper::register_builder(),
-        SumListNest::register_builder(),
-        MakeListScalarWrapper::register_builder(),
-        NestListScalarWrapper::register_builder(),
+        double_it5::scalar_function_builder(),
+        FirstWordTuple::scalar_function_builder(),
+        AddItTuple::scalar_function_builder(),
+        SumListWrapper::scalar_function_builder(),
+        SumListNest::scalar_function_builder(),
+        MakeListScalarWrapper::scalar_function_builder(),
+        NestListScalarWrapper::scalar_function_builder(),
         ScalarFunctionBuilder::new("sum_list")
             .param_logical(LogicalType::list(TypeId::BigInt))
             .returns(TypeId::BigInt)
@@ -479,13 +479,13 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .param(TypeId::Integer)
             .returns_logical(LogicalType::map(TypeId::Varchar, TypeId::Integer))
             .function(make_kv_map_scalar),
-        StructScalarWrapper::register_builder(),
-        NestStructScalarWrapper::register_builder(),
-        NestStructOutputScalarWrapper::register_builder(),
-        NestVecScalarWrapper::register_builder(),
-        NestVecNoNullScalarWrapper::register_builder(),
-        NestStructMacroOutputScalarWrapper::register_builder(),
-        ErrorScalarDemo::register_builder(),
+        StructScalarWrapper::scalar_function_builder(),
+        NestStructScalarWrapper::scalar_function_builder(),
+        NestStructOutputScalarWrapper::scalar_function_builder(),
+        NestVecScalarWrapper::scalar_function_builder(),
+        NestVecNoNullScalarWrapper::scalar_function_builder(),
+        NestStructMacroOutputScalarWrapper::scalar_function_builder(),
+        ErrorScalarDemo::scalar_function_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
