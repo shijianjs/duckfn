@@ -23,39 +23,39 @@ use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 ///   SELECT double_it5(3);
 ///   ";
 /// ```
-// pub struct DoubleIt;
-//
-// impl ScalarFunctionAdapter for DoubleIt {
-//     const NAME: &'static str = "double_it5";
-//     type Args = (Option<i64>,);
-//     type Output = i64;
-//
-//     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-//         Ok(args.transpose().map(|(v, )| v * 2))
-//     }
-// }
 
 #[duck_scalar_function]
 pub fn double_it5(input:i64)->i64{
     input*2
 }
 
-pub struct FirstWordTuple;
+// pub struct FirstWordTuple;
+//
+// impl ScalarFunctionAdapter for FirstWordTuple {
+//     const NAME: &'static str = "first_word_tuple";
+//     type Args = (Option<String>,);
+//     type Output = String;
+//
+//     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
+//         Ok(args.transpose().map(|(v, )| {
+//             v.as_str()
+//                 .split_whitespace()
+//                 .next()
+//                 .unwrap_or("")
+//                 .to_string()
+//         }))
+//     }
+// }
 
-impl ScalarFunctionAdapter for FirstWordTuple {
-    const NAME: &'static str = "first_word_tuple";
-    type Args = (Option<String>,);
-    type Output = String;
-
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| {
-            v.as_str()
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .to_string()
-        }))
-    }
+#[duck_scalar_function]
+pub fn first_word_tuple(input: Option<String>) -> Option<String> {
+    input.map(|v| {
+        v.as_str()
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string()
+    })
 }
 
 pub struct AddItTuple;
@@ -452,7 +452,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
         // DoubleIt::register_builder(),
         double_it5::scalar_function_builder(),
-        FirstWordTuple::scalar_function_builder(),
+        first_word_tuple::scalar_function_builder(),
         AddItTuple::scalar_function_builder(),
         SumListWrapper::scalar_function_builder(),
         SumListNest::scalar_function_builder(),
