@@ -13,7 +13,7 @@ use quack_rs::prelude::{
 };
 use tuple_transpose::TupleTranspose;
 use easy_duckdb_extension::{duck_error, DuckOptionResult, DuckResult};
-use easy_duckdb_extension_macro::DuckStruct;
+use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 
 ///
 ///
@@ -23,16 +23,21 @@ use easy_duckdb_extension_macro::DuckStruct;
 ///   SELECT double_it5(3);
 ///   ";
 /// ```
-pub struct DoubleIt;
+// pub struct DoubleIt;
+//
+// impl ScalarFunctionAdapter for DoubleIt {
+//     const NAME: &'static str = "double_it5";
+//     type Args = (Option<i64>,);
+//     type Output = i64;
+//
+//     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
+//         Ok(args.transpose().map(|(v, )| v * 2))
+//     }
+// }
 
-impl ScalarFunctionAdapter for DoubleIt {
-    const NAME: &'static str = "double_it5";
-    type Args = (Option<i64>,);
-    type Output = i64;
-
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| v * 2))
-    }
+#[duck_scalar_function]
+pub fn double_it5(input:i64)->i64{
+    input*2
 }
 
 pub struct FirstWordTuple;
@@ -445,7 +450,8 @@ unsafe extern "C" fn make_kv_map_scalar(
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
-        DoubleIt::register_builder(),
+        // DoubleIt::register_builder(),
+        double_it5::ScalarFunctionImpl::register_builder(),
         FirstWordTuple::register_builder(),
         AddItTuple::register_builder(),
         SumListWrapper::register_builder(),

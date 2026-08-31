@@ -36,10 +36,8 @@ cargo duckdb-ext build; duckdb -unsigned -c "
   SELECT add_it_tuple(3,5);
   ";
 
-cargo duckdb-ext build; duckdb -unsigned -c "
-  LOAD './target/debug/rusty_quack.duckdb_extension';
-  SELECT double_it5(3);
-  ";
+cargo duckdb-ext build; duckdb -unsigned -c "  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT double_it5(3);  ";
 
 cargo duckdb-ext build; duckdb -unsigned -c "
   LOAD './target/debug/rusty_quack.duckdb_extension';

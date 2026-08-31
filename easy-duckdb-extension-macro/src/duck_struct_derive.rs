@@ -1,12 +1,14 @@
-use crate::macro_utils::add_colon2_token;
-use darling::util::extract_option;
+use crate::macro_utils::{add_colon2_token, extract_option, TokenStream2Result};
 use proc_macro2::Ident;
 use quote::quote;
 use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
-use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
+use syn::{
+    Data, DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Path, Type, TypePath,
+};
+use syn_match::path_match;
 
-pub(crate) fn duck_struct_derive(input: DeriveInput) -> syn::Result<TokenStream2> {
+pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
     let Data::Struct(DataStruct {
         fields: Fields::Named(FieldsNamed { named, .. }),
         ..
@@ -39,13 +41,13 @@ impl DuckStructContext {
         &self.input.ident
     }
 
-    fn build_all(&self) -> syn::Result<TokenStream2> {
+    fn build_all(&self) -> TokenStream2Result {
         let mut ts = self.build_duck_value_type_impl()?;
         ts.extend(self.build_duck_args_impl()?);
         Ok(ts)
     }
 
-    fn build_duck_value_type_impl(&self) -> syn::Result<TokenStream2> {
+    fn build_duck_value_type_impl(&self) -> TokenStream2Result {
         let struct_name = self.struct_name();
         let logical_types = self.fields_to_code(|f| f.name_type_pair())?;
         let field_readers = self.fields_to_code(|f| f.field_reader())?;
@@ -100,7 +102,7 @@ impl DuckStructContext {
         })
     }
 
-    fn build_duck_args_impl(&self) -> syn::Result<TokenStream2> {
+    fn build_duck_args_impl(&self) -> TokenStream2Result {
         let struct_name = self.struct_name();
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
         let logical_types = self.fields_to_code(|f| f.logical_type())?;
@@ -136,7 +138,7 @@ impl DuckStructContext {
 
     fn fields_to_code(
         &self,
-        x: fn(&FieldWrapper) -> syn::Result<TokenStream2>,
+        x: fn(&FieldWrapper) -> TokenStream2Result,
     ) -> syn::Result<Vec<TokenStream2>> {
         self.fields
             .iter()
@@ -171,8 +173,9 @@ impl FieldWrapper {
             .as_ref()
             .ok_or(syn::Error::new(self.field.span(), "Field name is required"))
     }
-    fn extract_option(&self) -> darling::Result<&Type> {
-        extract_option::from_ref(&self.field.ty)
+    fn extract_option(&self) -> Option<&Type> {
+        // extract_option::from_ref(&self.field.ty)
+        extract_option(&self.field.ty)
     }
 
     /// 穿透Option的类型
@@ -181,7 +184,7 @@ impl FieldWrapper {
     /// - 只支持单层Option
     /// - 给泛型加上::，例如Vec<T> -> Vec::<T>
     fn duck_value_type(&self) -> Type {
-        let x = if let Ok(ty) = self.extract_option() {
+        let x = if let Some(ty) = self.extract_option() {
             ty
         } else {
             &self.field.ty
@@ -191,20 +194,20 @@ impl FieldWrapper {
         x1
     }
 
-    fn assert_impl_duck_value_type(&self) -> syn::Result<TokenStream2> {
+    fn assert_impl_duck_value_type(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         Ok(quote! {
             ::easy_duckdb_extension::assert_impl_duck_value_type::<#ty>()
         })
     }
-    fn name_type_pair(&self) -> syn::Result<TokenStream2> {
+    fn name_type_pair(&self) -> TokenStream2Result {
         let ty = self.logical_type()?;
         let name = self.require_field_name()?.to_string();
         Ok(quote! {
             (#name, #ty)
         })
     }
-    fn logical_type(&self) -> syn::Result<TokenStream2> {
+    fn logical_type(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         Ok(quote! {
             #ty::logical_type()
@@ -219,7 +222,7 @@ impl FieldWrapper {
     //         ];
     //         reader
     //     }
-    fn field_reader(&self) -> syn::Result<TokenStream2> {
+    fn field_reader(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         let index = self.index;
         Ok(quote! {
@@ -232,14 +235,13 @@ impl FieldWrapper {
     //             B::create_reader(chunk, 1)
     //         ]
     //     }
-    fn reader_by_trunk(&self) -> syn::Result<TokenStream2> {
+    fn reader_by_trunk(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         let index = self.index;
         Ok(quote! {
             #ty::create_reader(chunk, #index)
         })
     }
-
 
     //    fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
     //         Some(Self {
@@ -248,7 +250,7 @@ impl FieldWrapper {
     //             field_names_type: PhantomData,
     //         })
     //     }
-    fn read_valid(&self) -> syn::Result<TokenStream2> {
+    fn read_valid(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;
@@ -264,7 +266,7 @@ impl FieldWrapper {
     }
 
     fn is_option(&self) -> bool {
-        self.extract_option().is_ok()
+        self.extract_option().is_some()
     }
 
     ///     fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> easy_duckdb_extension::DuckValueWriter {
@@ -291,7 +293,7 @@ impl FieldWrapper {
     //
     //         writer
     //     }
-    fn field_writer_batch(&self) -> syn::Result<TokenStream2> {
+    fn field_writer_batch(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;
@@ -312,7 +314,7 @@ impl FieldWrapper {
     //         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
     //         F1::write_valid(&mut writer.child_writer[1], idx, &vo.f1);
     //     }
-    fn write_valid(&self) -> syn::Result<TokenStream2> {
+    fn write_valid(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;

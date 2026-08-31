@@ -1,5 +1,39 @@
+use proc_macro::TokenStream;
 use syn::__private::TokenStream2;
 use syn::{GenericArgument, Path, PathArguments, Type, TypePath};
+use syn_match::path_match;
+
+/// 常用过程宏返回值类型
+pub type TokenStream2Result = syn::Result<TokenStream2>;
+pub fn handle_token_stream2_result(result: TokenStream2Result) -> TokenStream {
+    match result {
+        Ok(token) => TokenStream::from(token),
+        Err(err) => TokenStream::from(err.to_compile_error()),
+    }
+}
+
+pub fn extract_option(x: &Type) -> Option<&Type> {
+    // extract_option::from_ref(&self.field.ty)
+    let Type::Path(type_path) = x else {
+        return None;
+    };
+    let path = &type_path.path;
+    path_match!(path,
+        Option<$inner> => Some(inner)
+        _=> None
+    )
+    .and_then(|inner| match inner {
+        GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    })
+}
+
+pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {
+    match x {
+        GenericArgument::Type(ty) => Ok(ty),
+        _ => Err(syn::Error::new_spanned(x, "expected a type")),
+    }
+}
 
 pub fn get_option_inner(ty: &Type) -> (bool, &Type) {
     get_type_inner(ty, "Option")
@@ -7,9 +41,9 @@ pub fn get_option_inner(ty: &Type) -> (bool, &Type) {
 
 pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     if let Type::Path(TypePath {
-                          path: Path { segments, .. },
-                          ..
-                      }) = ty
+        path: Path { segments, .. },
+        ..
+    }) = ty
     {
         if let Some(v) = segments.iter().next() {
             if v.ident == name {
