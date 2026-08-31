@@ -5,6 +5,7 @@ use quack_rs::aggregate::AggregateFunctionInfo;
 
 /// quack_rs结果类型
 pub type DuckResult<T> = Result<T, ExtensionError>;
+pub type DuckOptionResult<T> = DuckResult<Option<T>>;
 
 /// 创建quack_rs错误
 pub fn duck_error(message: impl Into<String>) -> ExtensionError {

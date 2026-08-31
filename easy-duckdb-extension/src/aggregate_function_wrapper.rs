@@ -1,7 +1,7 @@
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{DuckResult, duck_aggregate_unwind, duck_scalar_unwind};
+use crate::{duck_aggregate_unwind, duck_scalar_unwind, DuckOptionResult, DuckResult};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info,
     duckdb_vector, idx_t,
@@ -144,5 +144,5 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     }
     fn handle_row(&mut self, args: Self::Args) -> DuckResult<()>;
     fn combine(&mut self, other: &Self) -> DuckResult<()>;
-    fn result(&self) -> DuckResult<Option<Self::Output>>;
+    fn result(&self) -> DuckOptionResult<Self::Output>;
 }

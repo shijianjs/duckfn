@@ -1,4 +1,4 @@
-use crate::{panic_to_string, DuckResult, duck_scalar_unwind};
+use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult};
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
@@ -57,12 +57,12 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     type Args: DuckArgs;
     type Output: DuckValueType;
 
-    fn apply_with_null(args_option: Option<Self::Args>) -> DuckResult<Option<Self::Output>> {
+    fn apply_with_null(args_option: Option<Self::Args>) -> DuckOptionResult<Self::Output> {
         if let Some(args) = args_option {
             Self::apply(args)
         } else {
             Ok(None)
         }
     }
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>>;
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output>;
 }

@@ -12,7 +12,7 @@ use quack_rs::prelude::{
     VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
-use easy_duckdb_extension::{duck_error, DuckResult};
+use easy_duckdb_extension::{duck_error, DuckOptionResult, DuckResult};
 use easy_duckdb_extension_macro::DuckStruct;
 
 ///
@@ -30,7 +30,7 @@ impl ScalarFunctionAdapter for DoubleIt {
     type Args = (Option<i64>,);
     type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| v * 2))
     }
 }
@@ -42,7 +42,7 @@ impl ScalarFunctionAdapter for FirstWordTuple {
     type Args = (Option<String>,);
     type Output = String;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| {
             v.as_str()
                 .split_whitespace()
@@ -59,7 +59,7 @@ impl ScalarFunctionAdapter for AddItTuple {
     const NAME: &'static str = "add_it_tuple";
     type Args = (Option<i64>, Option<i64>);
     type Output = i64;
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, v2)| v + v2))
     }
 }
@@ -107,7 +107,7 @@ impl ScalarFunctionAdapter for SumListWrapper {
     type Args = (Option<DuckList<i64>>,);
     type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| v.value.iter().flatten().sum()))
     }
 }
@@ -117,7 +117,7 @@ impl ScalarFunctionAdapter for SumListNest {
     type Args = (Option<DuckList<DuckList<i64>>>,);
     type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| {
             v.value
                 .iter()
@@ -185,7 +185,7 @@ impl ScalarFunctionAdapter for MakeListScalarWrapper {
     type Args = (Option<i64>,);
     type Output = DuckList<i64>;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| DuckList {
             value: vec![Some(v + 1), Some(v * 2), None],
         }))
@@ -197,7 +197,7 @@ impl ScalarFunctionAdapter for NestListScalarWrapper {
     type Args = (Option<i64>,);
     type Output = DuckList<DuckList<i64>>;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| DuckList {
             value: vec![
                 Some(DuckList {
@@ -217,7 +217,7 @@ impl ScalarFunctionAdapter for NestVecScalarWrapper {
     type Args = (Option<i64>,);
     type Output = Vec<Option<Vec<Option<i64>>>>;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| vec![
             Some(vec![Some(v + 1), Some(v * 2), None]),
             Some((0..v).map(|x| Some(x)).collect()),
@@ -231,7 +231,7 @@ impl ScalarFunctionAdapter for NestVecNoNullScalarWrapper {
     type Args = (Option<i64>,);
     type Output = Vec<Vec<i64>>;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| vec![
             vec![v + 1, v * 2],
             (0..v).map(|x| x).collect(),
@@ -250,7 +250,7 @@ impl ScalarFunctionAdapter for StructScalarWrapper {
     type Args = (Option<DuckStruct1<i64, StructScalarWrapperArg1>>,);
     type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(v, )| v.f0.map(|v| v + 10)).flatten())
     }
 }
@@ -278,7 +278,7 @@ impl ScalarFunctionAdapter for NestStructScalarWrapper {
     );
     type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose()
             .map(|(outer, )| {
                 (outer.f0, outer.f1).transpose().map(|(struct1, list1)| {
@@ -300,7 +300,7 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
         NestStructScalarWrapperOuter,
     >;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(outer, )| DuckStruct2 {
             f0: Some(DuckStruct1 {
                 f0: Some(100 + outer),
@@ -328,7 +328,7 @@ impl ScalarFunctionAdapter for NestStructMacroOutputScalarWrapper {
     type Args = (Option<i32>,);
     type Output = NestStructMacroOuter;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose().map(|(outer, )| NestStructMacroOuter {
             struct1: NestStructMacroInner {
                 hello_count: (100 + outer) as i64,
@@ -348,7 +348,7 @@ impl ScalarFunctionAdapter for ErrorScalarDemo {
     type Args = Self;
     type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckResult<Option<Self::Output>> {
+    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         let i = args.input;
         if i==10 {
             return Err(duck_error("error: input is 10"));

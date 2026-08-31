@@ -8,7 +8,7 @@ use quack_rs::prelude::{
     AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId, VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
-use easy_duckdb_extension::DuckResult;
+use easy_duckdb_extension::{DuckOptionResult, DuckResult};
 
 /// ============= demo wrapper封装版  ============
 ///
@@ -34,7 +34,7 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
         Ok(())
     }
 
-    fn result(&self) -> DuckResult<Option<Self::Output>> {
+    fn result(&self) -> DuckOptionResult<Self::Output> {
         Ok(Some(self.count))
     }
 }
@@ -62,7 +62,7 @@ impl AggregateFunctionAdapter for AggListWrapper {
         Ok(())
     }
 
-    fn result(&self) -> DuckResult<Option<Self::Output>> {
+    fn result(&self) -> DuckOptionResult<Self::Output> {
         Ok(Some(self.li.clone()))
     }
 }
