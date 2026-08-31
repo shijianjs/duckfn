@@ -98,7 +98,6 @@ impl ItemFnWrapper {
         self.args()
             .iter()
             .map(x)
-            .into_iter()
             .collect::<syn::Result<Vec<_>>>()
     }
 
@@ -124,8 +123,8 @@ impl ItemFnWrapper {
     }
 
     fn build_return_clause(&self) -> TokenStream2Result {
-        let (result, return_type) = self.resolve_return_type()?;
-        match result {
+        let (result_type, _) = self.resolve_return_type()?;
+        match result_type {
             DuckScalarResult::Plain => Ok(quote! { Ok(Some(result)) }),
             DuckScalarResult::Option =>Ok(quote! { Ok(result) }),
             DuckScalarResult::DuckOptionResult => Ok(quote! { result }),
