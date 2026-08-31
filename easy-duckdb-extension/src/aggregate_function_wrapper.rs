@@ -1,7 +1,7 @@
-use crate::DuckResult;
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
+use crate::{DuckResult, duck_aggregate_unwind, duck_scalar_unwind};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info,
     duckdb_vector, idx_t,
@@ -26,20 +26,22 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         states: *mut duckdb_aggregate_state,
     ) {
         let info = unsafe { AggregateFunctionInfo::new(_info) };
-        let chunk = unsafe { DataChunk::from_raw(input) };
-        let readers = Self::Args::create_arg_readers(&chunk);
-        let row_count = chunk.size();
-        for row in 0..row_count {
-            let args = Self::Args::read_args(&readers, row);
-            let state_ptr = unsafe { *states.add(row) };
-            if let Some(st) = unsafe { FfiState::<Self>::with_state_mut(state_ptr) } {
-                let result = st.handle_row_with_null(args);
-                if let Err(e) = result {
-                    info.set_error(e.as_str());
-                    return;
+        duck_aggregate_unwind(&info, || {
+            let chunk = unsafe { DataChunk::from_raw(input) };
+            let readers = Self::Args::create_arg_readers(&chunk);
+            let row_count = chunk.size();
+            for row in 0..row_count {
+                let args = Self::Args::read_args(&readers, row);
+                let state_ptr = unsafe { *states.add(row) };
+                if let Some(st) = unsafe { FfiState::<Self>::with_state_mut(state_ptr) } {
+                    let result = st.handle_row_with_null(args);
+                    if let Err(e) = result {
+                        info.set_error(e.as_str());
+                        return;
+                    }
                 }
             }
-        }
+        });
     }
 
     unsafe extern "C" fn c_combine(
@@ -49,19 +51,21 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         count: idx_t,
     ) {
         let info = unsafe { AggregateFunctionInfo::new(_info) };
-        for i in 0..count as usize {
-            let src_ptr = unsafe { *source.add(i) };
-            let tgt_ptr = unsafe { *target.add(i) };
-            let src = unsafe { FfiState::<Self>::with_state(src_ptr) };
-            let tgt = unsafe { FfiState::<Self>::with_state_mut(tgt_ptr) };
-            if let (Some(s), Some(t)) = (src, tgt) {
-                let result = t.combine(s);
-                if let Err(e) = result {
-                    info.set_error(e.as_str());
-                    return;
+        duck_aggregate_unwind(&info, || {
+            for i in 0..count as usize {
+                let src_ptr = unsafe { *source.add(i) };
+                let tgt_ptr = unsafe { *target.add(i) };
+                let src = unsafe { FfiState::<Self>::with_state(src_ptr) };
+                let tgt = unsafe { FfiState::<Self>::with_state_mut(tgt_ptr) };
+                if let (Some(s), Some(t)) = (src, tgt) {
+                    let result = t.combine(s);
+                    if let Err(e) = result {
+                        info.set_error(e.as_str());
+                        return;
+                    }
                 }
             }
-        }
+        });
     }
 
     unsafe extern "C" fn c_finalize(
@@ -72,35 +76,37 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         offset: idx_t,
     ) {
         let info = unsafe { AggregateFunctionInfo::new(_info) };
-        if offset != 0 {
-            info.set_error(
-                format!(
-                    "non-zero aggregate finalize result offset is not supported: {}",
-                    offset
-                )
-                .as_str(),
-            );
-            return;
-        }
-
-        let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(count as usize);
-        for i in 0..count as usize {
-            let state_ptr = unsafe { *source.add(i) };
-            match unsafe { FfiState::<Self>::with_state(state_ptr) } {
-                Some(st) => unsafe {
-                    let result1 = (st.result());
-                    match result1 {
-                        Ok(r) => output_vec.push(r),
-                        Err(e) => {
-                            info.set_error(e.as_str());
-                            return;
-                        }
-                    };
-                },
-                None => output_vec.push(None),
+        duck_aggregate_unwind(&info, || {
+            if offset != 0 {
+                info.set_error(
+                    format!(
+                        "non-zero aggregate finalize result offset is not supported: {}",
+                        offset
+                    )
+                    .as_str(),
+                );
+                return;
             }
-        }
-        Self::Output::write_batch(result, &output_vec);
+
+            let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(count as usize);
+            for i in 0..count as usize {
+                let state_ptr = unsafe { *source.add(i) };
+                match unsafe { FfiState::<Self>::with_state(state_ptr) } {
+                    Some(st) => unsafe {
+                        let result1 = (st.result());
+                        match result1 {
+                            Ok(r) => output_vec.push(r),
+                            Err(e) => {
+                                info.set_error(e.as_str());
+                                return;
+                            }
+                        };
+                    },
+                    None => output_vec.push(None),
+                }
+            }
+            Self::Output::write_batch(result, &output_vec);
+        });
     }
 
     unsafe extern "C" fn c_state_destroy(states: *mut duckdb_aggregate_state, count: idx_t) {

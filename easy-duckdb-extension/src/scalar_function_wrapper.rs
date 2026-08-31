@@ -1,4 +1,4 @@
-use crate::{panic_to_string, DuckResult};
+use crate::{panic_to_string, DuckResult, duck_scalar_unwind};
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
@@ -13,8 +13,8 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         input: duckdb_data_chunk,
         output: duckdb_vector,
     ) {
-        let info = unsafe { ScalarFunctionInfo::new(_info) };
-        let unwind = catch_unwind(|| {
+        let info: ScalarFunctionInfo = unsafe { ScalarFunctionInfo::new(_info) };
+        duck_scalar_unwind(&info,|| {
             let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
             let readers = Self::Args::create_arg_readers(&chunk);
             let row_count = chunk.size();
@@ -33,9 +33,6 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             }
             Self::Output::write_batch(output, &output_vec);
         });
-        if let Err(e) = unwind {
-            info.set_error(&panic_to_string(e));
-        }
     }
     fn register_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
