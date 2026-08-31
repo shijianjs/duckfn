@@ -108,7 +108,7 @@ mod simple_think {
 
 
     // 另一种设想
-
+    // 还是不了，设想而已，没必要，sql语法就能实现: SELECT word_count(list(arg1)) from aa
     #[derive(Clone, DuckStruct)]
     struct SimpleAggArg{
         arg1:String,
