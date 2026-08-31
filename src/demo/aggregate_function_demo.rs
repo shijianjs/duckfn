@@ -1,14 +1,16 @@
 use easy_duckdb_extension::aggregate_function_wrapper::AggregateFunctionAdapter;
 use easy_duckdb_extension::value_types::duck_list::DuckList;
+use easy_duckdb_extension::{DuckOptionResult, DuckResult, DuckValueType};
+use easy_duckdb_extension_macro::DuckStruct;
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };
 use quack_rs::connection::Connection;
 use quack_rs::prelude::{
-    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId, VectorReader, VectorWriter,
+    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId,
+    VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
-use easy_duckdb_extension::{DuckOptionResult, DuckResult};
 
 /// ============= demo wrapper封装版  ============
 ///
@@ -20,12 +22,19 @@ struct WordCountStateWrapper {
 
 impl AggregateState for WordCountStateWrapper {}
 
+#[derive(Clone, DuckStruct)]
+struct WordCountArgs {
+    input: Option<String>,
+}
+
 impl AggregateFunctionAdapter for WordCountStateWrapper {
     const NAME: &'static str = "word_count_w";
-    type Args = (Option<String>,);
+    type Args = WordCountArgs;
     type Output = i64;
-    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()>{
-        self.count += args.transpose().map(|(t,)| count_words(&t)).unwrap_or(0);
+
+    // #[duckdb_aggregate_function]
+    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()> {
+        self.count += args.input.map(|(t)| count_words(&t)).unwrap_or(0);
         Ok(())
     }
 
@@ -40,17 +49,17 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
 }
 
 #[derive(Default, Debug, Clone)]
-struct AggListWrapper{
-    li:DuckList<i64>
+struct AggListWrapper {
+    li: DuckList<i64>,
 }
 impl AggregateState for AggListWrapper {}
 impl AggregateFunctionAdapter for AggListWrapper {
     const NAME: &'static str = "agg_list_w";
     type Args = (Option<i64>,);
     type Output = DuckList<i64>;
-    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()>{
+    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()> {
         let value = args.0;
-        if let Some(12)=value{
+        if let Some(12) = value {
             return Err(ExtensionError::new("Value is 12"));
         }
         self.li.value.push(value);
@@ -67,8 +76,49 @@ impl AggregateFunctionAdapter for AggListWrapper {
     }
 }
 
+mod simple_think {
+
+    //     简化的设想，但没省多少
+
+    use easy_duckdb_extension::{DuckOptionResult, DuckResult, DuckValueType};
+    use easy_duckdb_extension_macro::DuckStruct;
+
+    trait AggState<T: DuckValueType> {
+        fn combine(&mut self, other: &Self) -> DuckResult<()>;
+        fn result(&self) -> DuckOptionResult<T>;
+    }
 
 
+
+
+    struct WcAggStateImpl {
+        count: i64,
+    }
+    impl AggState<i64> for WcAggStateImpl {
+        fn combine(&mut self, other: &Self) -> DuckResult<()> {
+            todo!()
+        }
+
+        fn result(&self) -> DuckOptionResult<i64> {
+            todo!()
+        }
+    }
+    /* #[duck_agg] */
+    fn word_count_w(input: Option<String>, arg2: i64, /* #[state]*/ state: WcAggStateImpl) {}
+
+
+    // 另一种设想
+
+    #[derive(Clone, DuckStruct)]
+    struct SimpleAggArg{
+        arg1:String,
+        arg2:i64,
+    }
+    // #[simple_agg]
+    fn word_count_w_simple(arg:Vec<SimpleAggArg>)->i64{
+        todo!()
+    }
+}
 
 /// ============= demo 官方的 ============
 
