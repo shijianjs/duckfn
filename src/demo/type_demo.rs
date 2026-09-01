@@ -1,64 +1,32 @@
 
+mod count_down_m{
+    use quack_rs::prelude::{BindInfo, LogicalType, Value};
+    use easy_duckdb_extension::{duck_error, DuckBindArgs, DuckResult, DuckValueType};
+    use easy_duckdb_extension_macro::DuckStruct;
 
-
-/* #[duck_agg] */
-fn word_count_w(input: Option<String>, arg2: i64, /* #[state]*/  state: &mut WcAggState)-> easy_duckdb_extension::DuckResult<()>  {
-    todo!()
-}
-
-#[derive(Default, Debug, Clone)]
-struct WcAggState {
-    count: i64,
-}
-impl easy_duckdb_extension::DuckAggregateState for WcAggState {
-    type Output = i64;
-
-    fn combine(&mut self, other: &Self) -> easy_duckdb_extension::DuckResult<()> {
-        todo!()
+    #[derive(Debug,Clone,DuckStruct)]
+    pub struct TableFunArgs{
+        pub start: i32,
+        pub b: Option<i32>,
     }
-
-    fn result(&self) -> easy_duckdb_extension::DuckOptionResult<i64> {
-        todo!()
-    }
-}
-
-mod word_count_w{
-    use super::*;
-
-    #[derive(easy_duckdb_extension_macro::DuckStruct, Clone,)]
-    pub struct DuckArgsImpl{
-        input: Option<String>,
-        arg2: i64,
-    }
-
-
-    #[derive(Default, Debug, Clone)]
-    struct AggregateFunctionImpl {
-        state: WcAggState,
-    }
-
-    impl quack_rs::prelude::AggregateState for AggregateFunctionImpl {}
-
-
-    impl easy_duckdb_extension::AggregateFunctionAdapter for AggregateFunctionImpl {
-        const NAME: &'static str = "word_count_w";
-        type Args = DuckArgsImpl;
-        type Output = <WcAggState as easy_duckdb_extension::DuckAggregateState>::Output;
-
-        // #[duckdb_aggregate_function]
-        fn handle_row(&mut self, args: Self::Args) -> easy_duckdb_extension::DuckResult<()> {
-            word_count_w(args.input, args.arg2, &mut self.state)
+    impl DuckBindArgs for TableFunArgs {
+        fn read_args(bind: &BindInfo) -> DuckResult<Self> {
+            let value: Value = unsafe { bind.get_named_parameter_value("start") };
+            let value1:Option<i32> = i32::read_by_duck_value(&value)?;
+            Ok(
+                TableFunArgs {
+                    start: value1.ok_or(duck_error("start cannot be null"))?,
+                    b: value1,
+                }
+            )
         }
 
-        fn combine(&mut self, other: &Self) -> easy_duckdb_extension::DuckResult<()> {
-            use easy_duckdb_extension::{DuckAggregateState};
-            self.state.combine(&other.state)
+        fn param_logical() -> Vec<LogicalType> {
+            todo!()
         }
 
-        fn result(&self) -> easy_duckdb_extension::DuckOptionResult<Self::Output> {
-            use easy_duckdb_extension::{DuckAggregateState};
-            self.state.result()
+        fn named_param_logical() -> Vec<(String, LogicalType)> {
+            todo!()
         }
     }
-
 }

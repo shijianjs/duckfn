@@ -1,7 +1,8 @@
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use quack_rs::interval::DuckInterval;
-use quack_rs::prelude::{LogicalType, TypeId, VectorReader, VectorWriter};
+use quack_rs::prelude::{LogicalType, TypeId, Value, VectorReader, VectorWriter};
 use std::marker::PhantomData;
+use crate::DuckResult;
 
 ///TypeId::Timestamp
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +23,11 @@ impl DuckValueType for DuckTimestamp {
 
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_timestamp(idx, v.micros_since_epoch) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            micros_since_epoch:value.as_timestamp()
+        }
     }
 }
 
@@ -44,6 +50,12 @@ impl DuckValueType for DuckTimestampTz {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_timestamp_ms(idx, v.millis_since_epoch) }
     }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            millis_since_epoch:value.as_timestamp_tz()
+        }
+    }
+
 }
 
 // TypeId::TimestampS
@@ -64,6 +76,11 @@ impl DuckValueType for DuckTimestampS {
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_timestamp_s(idx, v.seconds_since_epoch) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            seconds_since_epoch:value.as_timestamp_s()
+        }
     }
 }
 
@@ -86,6 +103,11 @@ impl DuckValueType for DuckTimestampMs {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_timestamp_ms(idx, v.millis_since_epoch) }
     }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            millis_since_epoch:value.as_timestamp_ms()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +126,11 @@ impl DuckValueType for DuckTimestampNs {
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_timestamp_ns(idx, v.nanos_since_epoch) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            nanos_since_epoch:value.as_timestamp_ns()
+        }
     }
 }
 
@@ -125,6 +152,11 @@ impl DuckValueType for DuckTimeTz {
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_time_tz(idx, v.bits) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            bits:value.as_time_tz()
+        }
     }
 }
 
@@ -153,6 +185,14 @@ impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
         输入的decimal指定类型不合适，可能就是处理decimal的函数；输出可指定类型、但也未必合适了；\
         或许可以分为两个类型、一个读一个写，读用获取到的类型、写用指定的类型");
         LogicalType::decimal(T::WIDTH, T::SCALE)
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        // Some(Self {
+        //     scale: T::SCALE,
+        //     shape: PhantomData::<T>,
+        //     unscaled: value.as_decimal(T::WIDTH),
+        // })
+        todo!( "Decimal暂不可用")
     }
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         let logical = unsafe { quack_rs::vector::vector_get_column_type(reader.c_duckdb_vector) };
@@ -189,6 +229,11 @@ impl DuckValueType for DuckDate {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_date(idx, v.days_since_epoch) }
     }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            days_since_epoch:value.as_date()
+        }
+    }
 }
 
 // pub const unsafe fn write_time(&mut self, idx: usize, micros_since_midnight: i64) {
@@ -208,6 +253,11 @@ impl DuckValueType for DuckTime {
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_time(idx, v.micros_since_midnight) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            micros_since_midnight:value.as_time()
+        }
     }
 }
 
@@ -229,6 +279,12 @@ impl DuckValueType for DuckBlob {
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_blob(idx, v.value.as_slice()) }
+
+    }
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(Self{
+            value:value.as_blob()?
+        })
     }
 }
 
@@ -249,6 +305,11 @@ impl DuckValueType for DuckUuid {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_uuid(idx, v.value) }
     }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self{
+            value:value.as_uuid()
+        }
+    }
 }
 
 ///TypeId::Interval
@@ -261,5 +322,8 @@ impl DuckValueType for DuckInterval {
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_interval(idx, *v) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        value.as_interval()
     }
 }

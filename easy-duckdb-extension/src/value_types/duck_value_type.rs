@@ -1,11 +1,12 @@
+use crate::{DuckOptionResult, DuckResult};
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{LogicalType, StructVector, TypeId, VectorReader, VectorWriter};
+use quack_rs::prelude::{LogicalType, StructVector, TypeId, Value, VectorReader, VectorWriter};
 
 /// 映射规则：
 /// - 如果 Rust 基础类型已经完整表达了业务语义，可以直接映射；
 /// - 如果多个逻辑类型共享同一个物理表示，就应该 newtype 包装。
-pub trait DuckValueType: Sized+Clone {
+pub trait DuckValueType: Sized + Clone {
     fn type_id() -> TypeId;
     fn logical_type() -> LogicalType {
         LogicalType::new(Self::type_id())
@@ -31,18 +32,20 @@ pub trait DuckValueType: Sized+Clone {
             None
         }
     }
-    
+
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
-        Some(Self::read_valid_by_vector_reader(&reader.vector_reader, row))
+        Some(Self::read_valid_by_vector_reader(
+            &reader.vector_reader,
+            row,
+        ))
     }
-    
+
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         todo!("子类需要实现read_valid_by_vector_reader")
     }
 
-    fn write_batch(output: duckdb_vector,output_vec: &[Option<Self>]) {
-        let refs: Vec<Option<&Self>> =
-            output_vec.iter().map(|v| v.as_ref()).collect();
+    fn write_batch(output: duckdb_vector, output_vec: &[Option<Self>]) {
+        let refs: Vec<Option<&Self>> = output_vec.iter().map(|v| v.as_ref()).collect();
         let mut writer = Self::create_writer_batch(output, &refs);
         for (idx, result) in output_vec.iter().enumerate() {
             Self::write(&mut writer, idx, result);
@@ -78,7 +81,6 @@ pub trait DuckValueType: Sized+Clone {
 
     fn write_finish(writer: &mut DuckValueWriter) {}
 
-
     fn struct_field_reader(reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
         let row_count = reader.vector_reader.row_count();
         let vector = reader.c_duckdb_vector;
@@ -92,17 +94,35 @@ pub trait DuckValueType: Sized+Clone {
     //     let field_writer = Self::create_writer(field_vector);
     //     field_writer
     // }
-    fn struct_field_writer_batch(writer: &DuckValueWriter, field_index: usize,output_vec: &[Option<&Self>]) -> DuckValueWriter {
+    fn struct_field_writer_batch(
+        writer: &DuckValueWriter,
+        field_index: usize,
+        output_vec: &[Option<&Self>],
+    ) -> DuckValueWriter {
         let vector = writer.c_duckdb_vector;
         let field_vector = unsafe { StructVector::get_child(vector, field_index) };
         let field_writer = Self::create_writer_batch(field_vector, output_vec);
         field_writer
     }
+
+    /// 表函数解析参数时使用
+    fn read_by_duck_value(value: &Value) -> DuckOptionResult<Self> {
+        if value.is_null() {
+            Ok(None)
+        } else {
+            Ok(Some(Self::read_by_duck_value_valid(value)?))
+        }
+    }
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(Self::read_by_duck_value_valid_simple(value))
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        todo!("子类需要实现read_by_duck_value_valid_simple")
+    }
 }
 
 /// 用来给宏校验 DuckValueType 是否被类型实现
 pub fn assert_impl_duck_value_type<T: DuckValueType>() {}
-
 
 pub struct DuckValueReader {
     /// rust api, 和下面的c_duckdb_vector一比一对应
@@ -148,10 +168,8 @@ impl DuckValueWriter {
     }
 }
 
-
 // TypeId::TimestampNs
 // pub const unsafe fn write_timestamp_ns(&mut self, idx: usize, nanos_since_epoch: i64) {
-
 
 // pub const unsafe fn write_date(&mut self, idx: usize, days_since_epoch: i32) {
 
