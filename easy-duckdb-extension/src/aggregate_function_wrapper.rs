@@ -1,7 +1,7 @@
 use crate::duck_args_type::DuckArgs;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{duck_aggregate_unwind, duck_scalar_unwind, DuckOptionResult, DuckResult};
+use crate::{DuckOptionResult, DuckResult, duck_aggregate_unwind, duck_scalar_unwind};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info,
     duckdb_vector, idx_t,
@@ -147,9 +147,19 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     fn result(&self) -> DuckOptionResult<Self::Output>;
 }
 
-
 pub trait DuckAggregateState {
-    type Output : DuckValueType;
-    fn combine(&mut self, other: &Self) -> DuckResult<()>;
-    fn result(&self) -> DuckOptionResult<Self::Output>;
+    type Output: DuckValueType;
+    fn combine(&mut self, other: &Self) -> DuckResult<()> {
+        self.simple_combine(other);
+        Ok(())
+    }
+    fn simple_combine(&mut self, other: &Self) {
+        todo!("simple_combine is not implemented")
+    }
+    fn result(&self) -> DuckOptionResult<Self::Output> {
+        Ok(Some(self.simple_result()))
+    }
+    fn simple_result(&self) -> Self::Output {
+        todo!("simple_result is not implemented")
+    }
 }

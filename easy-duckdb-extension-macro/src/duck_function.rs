@@ -8,7 +8,6 @@ pub struct ItemFnWrapper {
     item_fn: ItemFn,
 }
 
-impl ItemFnWrapper {}
 
 impl ItemFnWrapper {
     pub fn new(item_fn: ItemFn) -> Self {
@@ -16,12 +15,10 @@ impl ItemFnWrapper {
     }
 
     pub fn build_scalar_function(&self) -> TokenStream2Result {
-        let scalar_function_impl = self.build_scalar_function_impl()?;
-        self.common_build(scalar_function_impl)
+        self.common_build(self.build_scalar_function_impl()?)
     }
     pub(crate) fn build_aggregate_function(&self) -> TokenStream2Result {
-        let scalar_function_impl = self.build_aggregate_function_impl()?;
-        self.common_build(scalar_function_impl)
+        self.common_build(self.build_aggregate_function_impl()?)
     }
 
     fn common_build(&self, scalar_function_impl: TokenStream2) -> TokenStream2Result {
@@ -45,7 +42,6 @@ impl ItemFnWrapper {
     fn build_duck_args(&self) -> TokenStream2Result {
         let fields = self.args_to_code(|x| x.build_duck_args_field())?;
         Ok(quote! {
-            use easy_duckdb_extension::ScalarFunctionAdapter;
 
             #[derive(easy_duckdb_extension_macro::DuckStruct, Clone)]
             pub struct DuckArgsImpl{
@@ -61,6 +57,8 @@ impl ItemFnWrapper {
         let get_data = self.args_to_code(|x| x.build_get_data())?;
 
         Ok(quote! {
+            use easy_duckdb_extension::ScalarFunctionAdapter;
+
             pub struct ScalarFunctionImpl;
 
             impl easy_duckdb_extension::ScalarFunctionAdapter for ScalarFunctionImpl{
@@ -88,6 +86,7 @@ impl ItemFnWrapper {
         let get_data = self.args_to_code(|x| x.build_get_data())?;
         let agg_state_arg = self.agg_state_arg()?;
         let agg_state_type = agg_state_arg.resolve_state_type()?;
+        let agg_row_return = self.build_agg_row_return()?;
 
         Ok(quote! {
             use easy_duckdb_extension::AggregateFunctionAdapter;
@@ -110,6 +109,7 @@ impl ItemFnWrapper {
                     #name(
                         #(#get_data),*
                     )
+                    #agg_row_return
                 }
 
                 fn combine(&mut self, other: &Self) -> easy_duckdb_extension::DuckResult<()> {
@@ -197,6 +197,16 @@ impl ItemFnWrapper {
             "Aggregate state type not found",
         ))
     }
+
+    fn build_agg_row_return(&self) -> TokenStream2Result {
+        if let ReturnType::Default=self.item_fn.sig.output {
+            return Ok(quote! {
+                ;
+                Ok(())
+            });
+        }
+        Ok(quote! {})
+    }
 }
 
 struct FnArgWrapper {
@@ -214,6 +224,16 @@ impl FnArgWrapper {
             "Only like `foo: f64` is supported",
         ))
     }
+    fn resolve_type(&self) -> syn::Result<&syn::Type> {
+        if let syn::FnArg::Typed(pat) = &self.fn_arg {
+            return Ok(&*pat.ty);
+        }
+        Err(syn::Error::new_spanned(
+            self.fn_arg.to_owned(),
+            "Only like `foo: f64` is supported",
+        ))
+    }
+
     fn resolve_state_type(&self) -> syn::Result<&syn::Type> {
         let ty = self.resolve_type()?;
 
@@ -234,20 +254,10 @@ impl FnArgWrapper {
         Ok(&type_ref.elem)
     }
 
-    fn resolve_type(&self) -> syn::Result<&syn::Type> {
-        if let syn::FnArg::Typed(pat) = &self.fn_arg {
-            return Ok(&*pat.ty);
-        }
-        Err(syn::Error::new_spanned(
-            self.fn_arg.to_owned(),
-            "Only like `foo: f64` is supported",
-        ))
-    }
-
     fn is_agg_state(&self) -> bool {
         if let Ok(ty) = self.resolve_type(){
             if let syn::Type::Reference(type_ref) = ty{
-                return true;
+                return type_ref.mutability.is_some();
             }
         }
         false

@@ -13,9 +13,8 @@ use quack_rs::prelude::{
 use tuple_transpose::TupleTranspose;
 
 #[duck_aggregate_function]
-fn word_count_m(input: Option<String>, state: &mut WcAggState)-> DuckResult<()>  {
+fn word_count_m(input: Option<String>, state: &mut WcAggState)  {
     state.count += input.map(|s| count_words(&s)).unwrap_or(0);
-    Ok(())
 }
 
 #[derive(Default, Debug, Clone)]
@@ -24,14 +23,11 @@ struct WcAggState {
 }
 impl easy_duckdb_extension::DuckAggregateState for WcAggState {
     type Output = i64;
-
-    fn combine(&mut self, other: &Self) -> DuckResult<()> {
+    fn simple_combine(&mut self, other: &Self) {
         self.count += other.count;
-        Ok(())
     }
-
-    fn result(&self) -> DuckOptionResult<i64> {
-        Ok(Some(self.count))
+    fn simple_result(&self) -> Self::Output {
+        self.count
     }
 }
 
