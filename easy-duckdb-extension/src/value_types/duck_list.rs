@@ -129,11 +129,11 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     // }
 
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
-        let vec1 = value.list_items();
-        let mut vec:Vec<Option<T>> = Vec::with_capacity(vec1.len());
-        for x in vec1.iter() {
-            vec.push(T::read_by_duck_value(x)?)
-        }
+        let vec = value.list_items()
+            .iter()
+            .map(T::read_by_duck_value)
+            .collect::<DuckResult<Vec<_>>>()?;
+
         Ok(DuckList { value: vec })
     }
 }
@@ -202,7 +202,7 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
 
 
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
-        Ok(DuckList::<T>::read_by_duck_value_valid(value)?.value)
+        DuckList::<T>::read_by_duck_value_valid(value).map(|li| li.value)
     }
 }
 
@@ -273,11 +273,12 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
 
 
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
-        let vec1 = value.list_items();
-        let mut vec:Vec<T> = Vec::with_capacity(vec1.len());
-        for x in vec1.iter() {
-            let option = T::read_by_duck_value(x)?;
-            vec.push(option.ok_or(duck_error("Vec<T> value is None"))?)
+        let values = value.list_items();
+        let mut vec:Vec<T> = Vec::with_capacity(values.len());
+        for x in values.iter() {
+            let t = T::read_by_duck_value(x)?
+                .ok_or_else(|| duck_error("Vec<T> value is None"))?;
+            vec.push(t)
         }
         Ok(vec)
     }
