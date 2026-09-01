@@ -146,3 +146,10 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     fn combine(&mut self, other: &Self) -> DuckResult<()>;
     fn result(&self) -> DuckOptionResult<Self::Output>;
 }
+
+
+pub trait DuckAggregateState {
+    type Output : DuckValueType;
+    fn combine(&mut self, other: &Self) -> DuckResult<()>;
+    fn result(&self) -> DuckOptionResult<Self::Output>;
+}

@@ -1,9 +1,9 @@
-pub mod aggregate_function_wrapper;
-pub mod duck_args_type;
-pub mod duck_register_builder;
-pub mod scalar_function_wrapper;
-pub mod value_types;
-pub mod helpers;
+pub(crate) mod aggregate_function_wrapper;
+pub(crate) mod duck_args_type;
+pub(crate) mod duck_register_builder;
+pub(crate) mod scalar_function_wrapper;
+pub(crate) mod value_types;
+pub(crate) mod helpers;
 
 pub use aggregate_function_wrapper::*;
 pub use duck_args_type::*;

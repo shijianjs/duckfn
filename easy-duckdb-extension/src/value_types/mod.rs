@@ -1,8 +1,8 @@
-pub mod duck_value_type;
-pub mod simple_types;
-pub mod duck_list;
-pub mod duck_struct;
-pub mod wrapper_types;
+pub(crate) mod duck_value_type;
+pub(crate) mod simple_types;
+pub(crate) mod duck_list;
+pub(crate) mod duck_struct;
+pub(crate) mod wrapper_types;
 
 pub use duck_value_type::*;
 pub use simple_types::*;

@@ -2,7 +2,7 @@ mod demo;
 pub mod wrapper;
 
 use demo::{aggregate_function_demo, scalar_function_demo, table_function_demo};
-use easy_duckdb_extension::scalar_function_wrapper::ScalarFunctionAdapter;
+use easy_duckdb_extension::ScalarFunctionAdapter;
 use quack_rs::connection::Connection;
 use quack_rs::entry_point_v2;
 use quack_rs::error::ExtensionError;

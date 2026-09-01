@@ -1,5 +1,5 @@
-use easy_duckdb_extension::aggregate_function_wrapper::AggregateFunctionAdapter;
-use easy_duckdb_extension::value_types::duck_list::DuckList;
+use easy_duckdb_extension::AggregateFunctionAdapter;
+use easy_duckdb_extension::DuckList;
 use easy_duckdb_extension::{DuckOptionResult, DuckResult, DuckValueType};
 use easy_duckdb_extension_macro::DuckStruct;
 use libduckdb_sys::{
@@ -80,31 +80,12 @@ mod simple_think {
 
     //     简化的设想，但没省多少
 
-    use easy_duckdb_extension::{DuckOptionResult, DuckResult, DuckValueType};
+    use easy_duckdb_extension::{DuckAggregateState, DuckOptionResult, DuckResult, DuckValueType};
     use easy_duckdb_extension_macro::DuckStruct;
 
-    trait AggState<T: DuckValueType> {
-        fn combine(&mut self, other: &Self) -> DuckResult<()>;
-        fn result(&self) -> DuckOptionResult<T>;
-    }
 
 
 
-
-    struct WcAggStateImpl {
-        count: i64,
-    }
-    impl AggState<i64> for WcAggStateImpl {
-        fn combine(&mut self, other: &Self) -> DuckResult<()> {
-            todo!()
-        }
-
-        fn result(&self) -> DuckOptionResult<i64> {
-            todo!()
-        }
-    }
-    /* #[duck_agg] */
-    fn word_count_w(input: Option<String>, arg2: i64, /* #[state]*/ state: WcAggStateImpl) {}
 
 
     // 另一种设想
