@@ -1,6 +1,7 @@
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use libduckdb_sys::duckdb_vector;
-use quack_rs::prelude::{ListVector, LogicalType, TypeId};
+use quack_rs::prelude::{ListVector, LogicalType, TypeId, Value};
+use crate::{duck_error, DuckResult};
 
 // TypeId::List
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -126,6 +127,15 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
     //         }
     //     }
     // }
+
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        let vec1 = value.list_items();
+        let mut vec:Vec<Option<T>> = Vec::with_capacity(vec1.len());
+        for x in vec1.iter() {
+            vec.push(T::read_by_duck_value(x)?)
+        }
+        Ok(DuckList { value: vec })
+    }
 }
 
 impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
@@ -188,6 +198,11 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
 
     fn write_finish(writer: &mut DuckValueWriter) {
         DuckList::<T>::write_finish(writer)
+    }
+
+
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(DuckList::<T>::read_by_duck_value_valid(value)?.value)
     }
 }
 
@@ -254,5 +269,16 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
 
     fn write_finish(writer: &mut DuckValueWriter) {
         DuckList::<T>::write_finish(writer)
+    }
+
+
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        let vec1 = value.list_items();
+        let mut vec:Vec<T> = Vec::with_capacity(vec1.len());
+        for x in vec1.iter() {
+            let option = T::read_by_duck_value(x)?;
+            vec.push(option.ok_or(duck_error("Vec<T> value is None"))?)
+        }
+        Ok(vec)
     }
 }
