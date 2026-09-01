@@ -137,3 +137,7 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT error_scalar_demo(30);";
 
+
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  from count_down_it(start=12);";
+

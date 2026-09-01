@@ -1,14 +1,14 @@
-pub(crate) mod aggregate_function_wrapper;
+pub(crate) mod aggregate_function_adapter;
 pub(crate) mod duck_args_type;
 pub(crate) mod duck_register_builder;
-pub(crate) mod scalar_function_wrapper;
+pub(crate) mod scalar_function_adapter;
 pub(crate) mod value_types;
 pub(crate) mod helpers;
 
-pub use aggregate_function_wrapper::*;
+pub use aggregate_function_adapter::*;
 pub use duck_args_type::*;
 pub use duck_register_builder::*;
-pub use scalar_function_wrapper::*;
+pub use scalar_function_adapter::*;
 pub use value_types::*;
 pub use helpers::*;
 
