@@ -1,6 +1,4 @@
-use crate::{
-    DuckArgs, DuckOptionResult, DuckResult, DuckValueReader, DuckValueType, duck_scalar_unwind,
-};
+use crate::{duck_error, duck_scalar_unwind, DuckArgs, DuckOptionResult, DuckResult, DuckValueReader, DuckValueType, panic_to_string, panic_to_duck_error};
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{
@@ -9,6 +7,7 @@ use quack_rs::prelude::{
 };
 use quack_rs::table::builder;
 use quack_rs::vector::vector_size;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub trait TableFunctionAdapter: Sized + 'static {
     fn table_function_builder() -> DuckResult<TableFunctionBuilder> {
@@ -17,9 +16,10 @@ pub trait TableFunctionAdapter: Sized + 'static {
         // 1. bind closure: declare the output schema, read parameters,
         //    return the initial scan state.
         builder
-            .with_state::<Self::DataIterator, _>(|bind| Self::with_state(bind))
+            .with_state(Self::with_state)
             // 2. scan closure: mutate state, write rows, set chunk size.
-            .scan(|state, chunk| Self::scan(state, chunk))
+            // .scan(|state, chunk| Self::scan(state, chunk))
+            .scan(Self::scan)
             .build()
     }
 
@@ -35,9 +35,11 @@ pub trait TableFunctionAdapter: Sized + 'static {
     }
 
     fn with_state(bind: &BindInfo) -> DuckResult<Self::DataIterator> {
-        let args: Self::Args = Self::read_args(bind)?;
-        Self::config_result_columns(bind,&args);
-        Self::init_data_iterator(args)
+        catch_unwind(|| {
+            let args: Self::Args = Self::read_args(bind)?;
+            Self::config_result_columns(bind, &args);
+            Self::init_data_iterator(args)
+        }).map_err(panic_to_duck_error).flatten()
     }
 
     fn config_result_columns(bind: &BindInfo, args: &Self::Args) {
@@ -45,7 +47,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
     }
 
     fn read_args(bind: &BindInfo) -> DuckResult<Self::Args> {
-              let raw = unsafe { bind.get_named_parameter_value("start") };
+        let raw = unsafe { bind.get_named_parameter_value("start") };
         let i = raw.as_i64();
         //         // let x = State {
         //         //     remaining: raw.as_i64_or(0).max(0) as u64,
@@ -57,24 +59,26 @@ pub trait TableFunctionAdapter: Sized + 'static {
     //     where
     //         F: Fn(&mut S, &DataChunk) -> Result<(), ExtensionError> + Send + Sync + 'static,
     fn scan(state: &mut Self::DataIterator, chunk: &DataChunk) -> DuckResult<()> {
-        let size = vector_size();
-        // println!("size: {}", size);
-        let mut writer = unsafe { chunk.writer(0) };
-        for i in 0..size {
-            let option = state.next();
-            match option {
-                Some(value) => {
-                    // unsafe { writer.write_i64(i as usize, value) } ;
-                    todo!()
-                }
-                None => {
-                    unsafe { chunk.set_size(i as usize) };
-                    return Ok(());
+        catch_unwind(AssertUnwindSafe(|| {
+            let size = vector_size();
+            // println!("size: {}", size);
+            let mut writer = unsafe { chunk.writer(0) };
+            for i in 0..size {
+                let option = state.next();
+                match option {
+                    Some(value) => {
+                        // unsafe { writer.write_i64(i as usize, value) } ;
+                        todo!()
+                    }
+                    None => {
+                        unsafe { chunk.set_size(i as usize) };
+                        return Ok(());
+                    }
                 }
             }
-        }
-        unsafe { chunk.set_size(size as usize) };
-        Ok(())
+            unsafe { chunk.set_size(size as usize) };
+            Ok(())
+        })).map_err(panic_to_duck_error).flatten()
     }
 
     const NAME: &'static str;
