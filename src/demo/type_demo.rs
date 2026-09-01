@@ -33,14 +33,14 @@ mod word_count_w{
 
 
     #[derive(Default, Debug, Clone)]
-    struct DuckAggImpl {
+    struct AggregateFunctionImpl {
         state: WcAggState,
     }
 
-    impl quack_rs::prelude::AggregateState for DuckAggImpl {}
+    impl quack_rs::prelude::AggregateState for AggregateFunctionImpl {}
 
 
-    impl easy_duckdb_extension::AggregateFunctionAdapter for DuckAggImpl {
+    impl easy_duckdb_extension::AggregateFunctionAdapter for AggregateFunctionImpl {
         const NAME: &'static str = "word_count_w";
         type Args = DuckArgsImpl;
         type Output = <WcAggState as easy_duckdb_extension::DuckAggregateState>::Output;

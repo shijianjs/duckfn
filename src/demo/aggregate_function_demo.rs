@@ -1,7 +1,7 @@
 use easy_duckdb_extension::AggregateFunctionAdapter;
 use easy_duckdb_extension::DuckList;
 use easy_duckdb_extension::{DuckOptionResult, DuckResult, DuckValueType};
-use easy_duckdb_extension_macro::DuckStruct;
+use easy_duckdb_extension_macro::{duck_aggregate_function, DuckStruct};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };
@@ -11,6 +11,30 @@ use quack_rs::prelude::{
     VectorReader, VectorWriter,
 };
 use tuple_transpose::TupleTranspose;
+
+#[duck_aggregate_function]
+fn word_count_m(input: Option<String>, state: &mut WcAggState)-> DuckResult<()>  {
+    state.count += input.map(|s| count_words(&s)).unwrap_or(0);
+    Ok(())
+}
+
+#[derive(Default, Debug, Clone)]
+struct WcAggState {
+    count: i64,
+}
+impl easy_duckdb_extension::DuckAggregateState for WcAggState {
+    type Output = i64;
+
+    fn combine(&mut self, other: &Self) -> DuckResult<()> {
+        self.count += other.count;
+        Ok(())
+    }
+
+    fn result(&self) -> DuckOptionResult<i64> {
+        Ok(Some(self.count))
+    }
+}
+
 
 /// ============= demo wrapper封装版  ============
 ///
@@ -197,6 +221,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .destructor(wc_state_destroy),
         WordCountStateWrapper::aggregate_function_builder(),
         AggListWrapper::aggregate_function_builder(),
+        word_count_m::aggregate_function_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_aggregate(builder) }?;

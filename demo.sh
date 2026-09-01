@@ -35,6 +35,12 @@ cargo duckdb-ext build; duckdb -unsigned -c "
       VALUES ('hello world'), ('  padded  '), (''), (NULL)
   ) t(sentence);
   ";
+cargo duckdb-ext build; duckdb -unsigned -c "
+  LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT word_count_m(sentence) FROM (
+      VALUES ('hello world'), ('  padded  '), (''), (NULL)
+  ) t(sentence);
+  ";
 
 
 cargo duckdb-ext build; duckdb -unsigned -c "
