@@ -72,6 +72,7 @@ impl DuckStructContext {
     fn build_all(&self) -> TokenStream2Result {
         let mut ts = self.build_duck_value_type_impl()?;
         ts.extend(self.build_duck_columns_impl()?);
+        ts.extend(self.build_duck_bind_args_impl()?);
         Ok(ts)
     }
 
@@ -173,6 +174,35 @@ impl DuckStructContext {
                     use easy_duckdb_extension::DuckValueType;
 
                     #(#write_columns_batch)*
+                }
+            }
+        })
+    }
+    // DuckBindArgs
+    fn build_duck_bind_args_impl(&self) -> TokenStream2Result {
+        let struct_name = self.struct_name();
+        let read_bind_args = self.fields_to_code(|f| f.read_bind_args())?;
+        let bind_param_logical = self.fields_to_code(|f| f.bind_param_logical())?;
+
+        Ok(quote! {
+            impl easy_duckdb_extension::DuckBindArgs for #struct_name {
+                fn read_bind_args(
+                    bind: &quack_rs::prelude::BindInfo,
+                ) -> easy_duckdb_extension::DuckResult<Self> {
+                    use easy_duckdb_extension::DuckValueType;
+                    Ok(#struct_name {
+                        #(#read_bind_args),*
+                    })
+                }
+
+                fn bind_param_logical() -> Vec<(
+                    Option<&'static str>,
+                    quack_rs::prelude::LogicalType,
+                )> {
+                    use easy_duckdb_extension::DuckValueType;
+                    Vec::from([
+                        #(#bind_param_logical),*
+                    ])
                 }
             }
         })
@@ -418,12 +448,13 @@ impl FieldWrapper {
 
     fn read_bind_args(&self) -> TokenStream2Result {
         let field_name = self.require_field_name()?;
+        let field_name_str = field_name.to_string();
         let index = self.index;
         let ty = self.duck_value_type();
-        let get_value = if self.is_named_param {
-            quote! { unsafe { bind.get_parameter_value(#index) } }
+        let get_value = if !self.is_named_param {
+            quote! { unsafe { bind.get_parameter_value(#index as u64) } }
         } else {
-            quote! {  unsafe { bind.get_named_parameter_value(#field_name) } }
+            quote! {  unsafe { bind.get_named_parameter_value(#field_name_str) } }
         };
         let read_option = quote! {
             #ty::read_by_duck_value(&(#get_value))?
@@ -454,8 +485,9 @@ impl FieldWrapper {
         let result = if self.is_option() {
             read_option
         } else {
+            let err_msg = format!("{} cannot be null", field_name_str);
             quote! {
-                #read_option.ok_or_else(|| easy_duckdb_extension::duck_error(format!("{} cannot be null", #field_name_str)))?
+                #read_option.ok_or_else(|| easy_duckdb_extension::duck_error(#err_msg))?
             }
         };
         Ok(quote! {
