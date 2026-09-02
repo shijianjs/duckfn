@@ -1,4 +1,4 @@
-use easy_duckdb_extension::{DuckOptionResult, DuckResult, TableFunctionAdapter};
+use easy_duckdb_extension::{DuckDataIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
 use easy_duckdb_extension_macro::DuckStruct;
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
@@ -135,16 +135,16 @@ impl TableFunctionAdapter for CountDownS {
     const NAME: &'static str = "count_down_s";
     type Args = CountDownArgs;
     type Output = CountDownOutput;
-    // type DataIterator = std::vec::IntoIter<DuckOptionResult<CountDownOutput>>;
-    type DataIterator = Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>>;
+    // type DataIterator = impl Iterator<Item = DuckOptionResult<Self::Output>>; // 报错
+    // type DataIterator = Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>>;
 
     fn init_data_iterator(
         args: Self::Args,
-    ) -> DuckResult<Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>>> {
+    ) -> DuckResult<DuckDataIterator<Self::Output>> {
         // .collect::<Vec<_>>();
-        Ok((0..args.start)
+        Ok(Box::new((0..args.start)
             .into_iter()
-            .map(|x| Ok(Some(CountDownOutput { n: x }))))
+            .map(|x| Ok(Some(CountDownOutput { n: x })))))
     }
 }
 
