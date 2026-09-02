@@ -163,7 +163,7 @@ impl DuckValueType for DuckTimeTz {
 // TypeId::Decimal
 // pub const unsafe fn read_decimal(&self, idx: usize, WIDTH: u8) -> i128 {
 // pub const unsafe fn write_decimal(&mut self, idx: usize, WIDTH: u8, unscaled: i128) {
-pub trait DecimalShapeDef:Sized+Clone{
+pub trait DecimalShapeDef:Sized+Clone+ Send + Sync + 'static{
     const WIDTH: u8;
     const SCALE: u8;
 }

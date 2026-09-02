@@ -2,15 +2,25 @@ use crate::value_types::duck_value_type::{ DuckValueReader, DuckValueType};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::LogicalType;
 
-pub trait DuckArgs: Sized {
+pub trait DuckColumns: Sized {
     fn create_arg_readers(chunk: &DataChunk) -> Vec<DuckValueReader>;
 
     fn read_args(readers: &[DuckValueReader], row: usize) -> Option<Self>;
 
-    fn arg_types() -> Vec<LogicalType>;
+    fn arg_types() -> Vec<LogicalType>{
+        Self::named_column_types().into_iter().map(|(_, t)| t).collect()
+    }
+
+    fn named_column_types() -> Vec<(String, LogicalType)>{
+        todo!()
+    }
+
+    fn write_columns_batch(chunk: &DataChunk, row: Vec<Option<Self>>){
+        todo!()
+    }
 }
 
-impl<A: DuckValueType> DuckArgs for (Option<A>,) {
+impl<A: DuckValueType> DuckColumns for (Option<A>,) {
     fn create_arg_readers(chunk: &DataChunk) -> Vec<DuckValueReader> {
         vec![A::create_reader(chunk, 0)]
     }
@@ -23,9 +33,17 @@ impl<A: DuckValueType> DuckArgs for (Option<A>,) {
     fn arg_types() -> Vec<LogicalType> {
         vec![A::logical_type()]
     }
+
+    // fn named_column_types() -> Vec<(String, LogicalType)>{
+    //     vec![("arg0".to_string(), A::logical_type())]
+    // }
+
+    fn write_columns_batch(chunk: &DataChunk, row: Vec<Option<Self>>) {
+        todo!()
+    }
 }
 
-impl<A: DuckValueType, B: DuckValueType> DuckArgs for (Option<A>, Option<B>) {
+impl<A: DuckValueType, B: DuckValueType> DuckColumns for (Option<A>, Option<B>) {
 
     fn create_arg_readers(chunk: &DataChunk) -> Vec<DuckValueReader> {
         vec![A::create_reader(chunk, 0), B::create_reader(chunk, 1)]
@@ -34,7 +52,17 @@ impl<A: DuckValueType, B: DuckValueType> DuckArgs for (Option<A>, Option<B>) {
         Some((A::read(&readers[0], row), B::read(&readers[1], row)))
     }
 
-    fn arg_types() -> Vec<LogicalType> {
-        vec![A::logical_type(), B::logical_type()]
+    // fn arg_types() -> Vec<LogicalType> {
+    //     vec![A::logical_type(), B::logical_type()]
+    // }
+    fn named_column_types() -> Vec<(String, LogicalType)>{
+        Vec::from([
+            ("arg0".to_string(), A::logical_type()),
+            ("arg1".to_string(), B::logical_type())
+        ])
+    }
+
+    fn write_columns_batch(chunk: &DataChunk, row: Vec<Option<Self>>) {
+        todo!()
     }
 }

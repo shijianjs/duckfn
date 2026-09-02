@@ -1,6 +1,7 @@
-use crate::{DuckValueReader, DuckValueType, DuckValueWriter};
+use quack_rs::prelude::Value;
+use crate::{DuckResult, DuckValueReader, DuckValueType, DuckValueWriter};
 
-pub trait FieldNames: Sized + Clone {
+pub trait FieldNames: Sized + Clone+ Send + Sync + 'static {
     // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
     const FIELD_NAMES: &'static [&'static str];
 }
@@ -10,6 +11,7 @@ pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub field_names_type: std::marker::PhantomData<N>,
 }
+
 
 impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     fn type_id() -> quack_rs::prelude::TypeId {
@@ -54,6 +56,13 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
 
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
+    }
+
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(Self{
+            f0: { if let Some(v) = value.struct_child(0) { F0::read_by_duck_value(&v)? } else { None } },
+            field_names_type: std::marker::PhantomData,
+        })
     }
 }
 
@@ -127,5 +136,14 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
         F1::write(&mut writer.child_writer[1], idx, &vo.f1);
+    }
+
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(Self{
+            f0: { if let Some(v) = value.struct_child(0) { F0::read_by_duck_value(&v)? } else { None } },
+            f1: { if let Some(v) = value.struct_child(1) { F1::read_by_duck_value(&v)? } else { None } },
+
+            field_names_type: std::marker::PhantomData,
+        })
     }
 }

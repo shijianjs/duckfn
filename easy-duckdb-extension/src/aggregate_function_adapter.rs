@@ -1,4 +1,4 @@
-use crate::duck_args_type::DuckArgs;
+use crate::duck_args_type::DuckColumns;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
 use crate::{DuckOptionResult, DuckResult, duck_aggregate_unwind, duck_scalar_unwind};
@@ -133,7 +133,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
 
     /// cargo add tuple-transpose
     /// 使用这个工具包可以快速处理多个Option参数
-    type Args: DuckArgs;
+    type Args: DuckColumns;
     type Output: DuckValueType;
 
     fn handle_row_with_null(&mut self, args: Option<Self::Args>) -> DuckResult<()> {

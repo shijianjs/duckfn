@@ -1,5 +1,5 @@
 use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult};
-use crate::duck_args_type::DuckArgs;
+use crate::duck_args_type::DuckColumns;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
@@ -54,7 +54,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     const NAME: &'static str;
     /// cargo add tuple-transpose
     /// 使用这个工具包可以快速处理多个Option参数
-    type Args: DuckArgs;
+    type Args: DuckColumns;
     type Output: DuckValueType;
 
     fn apply_with_null(args_option: Option<Self::Args>) -> DuckOptionResult<Self::Output> {

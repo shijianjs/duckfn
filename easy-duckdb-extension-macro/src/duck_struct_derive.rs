@@ -108,7 +108,7 @@ impl DuckStructContext {
         let logical_types = self.fields_to_code(|f| f.logical_type())?;
         let reader_by_trunk = self.fields_to_code(|f| f.reader_by_trunk())?;
         Ok(quote! {
-            impl ::easy_duckdb_extension::DuckArgs for #struct_name {
+            impl ::easy_duckdb_extension::DuckColumns for #struct_name {
 
                 fn create_arg_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<::easy_duckdb_extension::DuckValueReader> {
                     use easy_duckdb_extension::DuckValueType;

@@ -15,7 +15,7 @@ mod count_down_m{
             let value1:Option<i32> = i32::read_by_duck_value(&value)?;
             Ok(
                 TableFunArgs {
-                    start: value1.ok_or(duck_error("start cannot be null"))?,
+                    start: value1.ok_or_else(||duck_error("start cannot be null"))?,
                     b: value1,
                 }
             )
