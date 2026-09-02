@@ -84,6 +84,7 @@ impl DuckStructContext {
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
         let field_writer_batch = self.fields_to_code(|f| f.field_writer_batch())?;
         let write_valid = self.fields_to_code(|f| f.write_valid())?;
+        let read_by_duck_value_valid = self.fields_to_code(|f| f.read_by_duck_value_valid())?;
 
         Ok(quote! {
             impl ::easy_duckdb_extension::DuckValueType for #struct_name {
@@ -125,6 +126,12 @@ impl DuckStructContext {
 
                 fn write_valid(writer: &mut ::easy_duckdb_extension::DuckValueWriter, idx: usize, vo: &Self) {
                     #(#write_valid)*
+                }
+
+                fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> ::easy_duckdb_extension::DuckResult<Self> {
+                    Ok(Self{
+                        #(#read_by_duck_value_valid),*
+                    })
                 }
             }
         })
@@ -443,12 +450,16 @@ impl FieldWrapper {
 
     fn assign_field_null_to_err(&self, read_option: TokenStream) -> TokenStream2Result {
         let field_name = self.require_field_name()?;
-        if self.is_option() {
-            Ok(read_option)
+        let field_name_str = field_name.to_string();
+        let result = if self.is_option() {
+            read_option
         } else {
-            Ok(quote! {
-                #read_option.ok_or_else(|| easy_duckdb_extension::duck_error(format!("{} cannot be null", #field_name)))?
-            })
-        }
+            quote! {
+                #read_option.ok_or_else(|| easy_duckdb_extension::duck_error(format!("{} cannot be null", #field_name_str)))?
+            }
+        };
+        Ok(quote! {
+           #field_name: #result
+        })
     }
 }
