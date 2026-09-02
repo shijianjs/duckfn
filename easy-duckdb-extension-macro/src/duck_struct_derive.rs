@@ -1,6 +1,6 @@
 use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
 use darling::FromDeriveInput;
-use proc_macro2::Ident;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
@@ -247,6 +247,19 @@ impl FieldWrapper {
             (#name, #ty)
         })
     }
+    fn bind_param_logical(&self) -> TokenStream2Result {
+        let ty = self.logical_type()?;
+        let name = self.require_field_name()?.to_string();
+        if self.is_named_param {
+            Ok(quote! {
+                (Some(#name), #ty)
+            })
+        } else {
+            Ok(quote! {
+                (None, #ty)
+            })
+        }
+    }
     fn logical_type(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         Ok(quote! {
@@ -392,6 +405,49 @@ impl FieldWrapper {
                 #ty::write_batch(unsafe{ chunk.vector(#index) }, &row.iter()
                     .map(|o| o.map(|r| &r.#field_name))
                     .collect::<Vec<_>>());
+            })
+        }
+    }
+
+    fn read_bind_args(&self) -> TokenStream2Result {
+        let field_name = self.require_field_name()?;
+        let index = self.index;
+        let ty = self.duck_value_type();
+        let get_value = if self.is_named_param {
+            quote! { unsafe { bind.get_parameter_value(#index) } }
+        } else {
+            quote! {  unsafe { bind.get_named_parameter_value(#field_name) } }
+        };
+        let read_option = quote! {
+            #ty::read_by_duck_value(&(#get_value))?
+        };
+
+        self.assign_field_null_to_err(read_option)
+    }
+
+    fn read_by_duck_value_valid(&self) -> TokenStream2Result {
+        let index = self.index;
+        let ty = self.duck_value_type();
+        let read_option = quote! {
+            {
+                if let Some(v) = value.struct_child(#index) {
+                    #ty::read_by_duck_value(&v)?
+                } else {
+                    None
+                }
+            }
+        };
+
+        self.assign_field_null_to_err(read_option)
+    }
+
+    fn assign_field_null_to_err(&self, read_option: TokenStream) -> TokenStream2Result {
+        let field_name = self.require_field_name()?;
+        if self.is_option() {
+            Ok(read_option)
+        } else {
+            Ok(quote! {
+                #read_option.ok_or_else(|| easy_duckdb_extension::duck_error(format!("{} cannot be null", #field_name)))?
             })
         }
     }

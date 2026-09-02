@@ -290,10 +290,10 @@ impl ScalarFunctionAdapter for NestStructScalarWrapper {
     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
         Ok(args.transpose()
             .map(|(outer, )| {
-                (outer.f0, outer.f1).transpose().map(|(struct1, list1)| {
+                (outer.f0).map(|(struct1)| {
                     struct1
                         .f0
-                        .map(|v| v + list1.value.iter().flatten().sum::<i64>())
+                        .map(|v| v + outer.f1.value.iter().flatten().sum::<i64>())
                 })
             })
             .flatten().flatten())
@@ -315,9 +315,9 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
                 f0: Some(100 + outer),
                 field_names_type: Default::default(),
             }),
-            f1: Some(DuckList {
+            f1: DuckList {
                 value: (0..outer).map(|x| Some(x)).collect(),
-            }),
+            },
             field_names_type: Default::default(),
         }))
     }

@@ -25,7 +25,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
 
     fn config_params(builder: TableFunctionBuilder) -> TableFunctionBuilder {
         let mut builder = builder;
-        for (name, ty) in Self::Args::named_param_logical() {
+        for (name, ty) in Self::Args::bind_param_logical() {
             if let Some(name) = name {
                 builder = builder.named_param_logical(&name.into(), ty);
             }else {
@@ -55,7 +55,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
         //         // let x = State {
         //         //     remaining: raw.as_i64_or(0).max(0) as u64,
         //         // };
-        Self::Args::read_args(bind)
+        Self::Args::read_bind_args(bind)
     }
 
     //     pub fn scan<F>(mut self, f: F) -> Self
@@ -94,8 +94,8 @@ pub trait TableFunctionAdapter: Sized + 'static {
     fn init_data_iterator(args: Self::Args) -> DuckResult<Self::DataIterator>;
 }
 pub trait DuckBindArgs: Sized {
-    fn read_args(bind: &BindInfo) -> DuckResult<Self>;
+    fn read_bind_args(bind: &BindInfo) -> DuckResult<Self>;
 
-    fn named_param_logical() -> Vec<(Option<impl Into<String>>, LogicalType)>;
+    fn bind_param_logical() -> Vec<(Option<impl Into<String>>, LogicalType)>;
 
 }
