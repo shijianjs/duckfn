@@ -135,15 +135,12 @@ impl TableFunctionAdapter for CountDownS {
     const NAME: &'static str = "count_down_s";
     type Args = CountDownArgs;
     type Output = CountDownOutput;
-    // type DataIterator = impl Iterator<Item = DuckOptionResult<Self::Output>>; // 报错
-    // type DataIterator = Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>>;
 
     fn init_data_iterator(
         args: Self::Args,
     ) -> DuckResult<DuckDataIterator<Self::Output>> {
         // .collect::<Vec<_>>();
-        Ok(Box::new((0..args.start)
-            .into_iter()
+        Ok(Box::new((0..args.start).rev()
             .map(|x| Ok(Some(CountDownOutput { n: x })))))
     }
 }
