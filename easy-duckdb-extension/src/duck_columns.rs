@@ -15,7 +15,7 @@ pub trait DuckColumns: Sized {
         todo!()
     }
 
-    fn write_columns_batch(chunk: &DataChunk, row: Vec<Option<Self>>){
+    fn write_columns_batch(chunk: &DataChunk, row: &Vec<Option<&Self>>){
         todo!()
     }
 }
@@ -34,22 +34,22 @@ impl<A: DuckValueType> DuckColumns for (Option<A>,) {
         vec![A::logical_type()]
     }
 
-    // fn named_column_types() -> Vec<(String, LogicalType)>{
-    //     vec![("arg0".to_string(), A::logical_type())]
-    // }
+    fn named_column_types() -> Vec<(String, LogicalType)> {
+        Vec::from( [("arg0".to_string(), A::logical_type())])
+    }
 
-    fn write_columns_batch(chunk: &DataChunk, row: Vec<Option<Self>>) {
+    fn write_columns_batch(chunk: &DataChunk, row: &Vec<Option<&Self>>) {
         todo!()
     }
 }
 
-impl<A: DuckValueType, B: DuckValueType> DuckColumns for (Option<A>, Option<B>) {
+impl<A: DuckValueType, B: DuckValueType> DuckColumns for (Option<A>, B) {
 
     fn create_arg_readers(chunk: &DataChunk) -> Vec<DuckValueReader> {
         vec![A::create_reader(chunk, 0), B::create_reader(chunk, 1)]
     }
     fn read_args(readers: &[DuckValueReader], row: usize) -> Option<Self> {
-        Some((A::read(&readers[0], row), B::read(&readers[1], row)))
+        Some((A::read(&readers[0], row), B::read(&readers[1], row)?))
     }
 
     // fn arg_types() -> Vec<LogicalType> {
@@ -62,7 +62,12 @@ impl<A: DuckValueType, B: DuckValueType> DuckColumns for (Option<A>, Option<B>) 
         ])
     }
 
-    fn write_columns_batch(chunk: &DataChunk, row: Vec<Option<Self>>) {
-        todo!()
+    fn write_columns_batch(chunk: &DataChunk, row: &Vec<Option<&Self>>) {
+        A::write_batch(unsafe{ chunk.vector(0) }, &row.iter()
+            .map(|r| r.and_then(|r| r.0.as_ref()))
+            .collect::<Vec<_>>());
+        B::write_batch(unsafe{ chunk.vector(1) }, &row.iter()
+            .map(|r| r.map(|r| &r.1))
+            .collect::<Vec<_>>());
     }
 }

@@ -1,5 +1,5 @@
 use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult, vec_option_to_ref};
-use crate::duck_args_type::DuckColumns;
+use crate::duck_columns::DuckColumns;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};

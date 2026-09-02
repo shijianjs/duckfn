@@ -62,10 +62,14 @@ pub struct AddItTuple;
 
 impl ScalarFunctionAdapter for AddItTuple {
     const NAME: &'static str = "add_it_tuple";
-    type Args = (Option<i64>, Option<i64>);
+    type Args = (Option<i64>, i64);
     type Output = i64;
     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, v2)| v + v2))
+        if let (Some(v), v2) = args {
+            Ok(Some(v + v2))
+        }else {
+            Ok(None)
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{duck_error, duck_scalar_unwind, DuckColumns, DuckOptionResult, DuckResult, DuckValueReader, DuckValueType, panic_to_string, panic_to_duck_error};
+use crate::{duck_error, duck_scalar_unwind, DuckColumns, DuckOptionResult, DuckResult, DuckValueReader, DuckValueType, panic_to_string, panic_to_duck_error, vec_option_to_ref};
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{
@@ -43,7 +43,9 @@ pub trait TableFunctionAdapter: Sized + 'static {
     }
 
     fn config_result_columns(bind: &BindInfo, args: &Self::Args) {
-        bind.add_result_column("n", TypeId::BigInt);
+        for (name, ty) in Self::Output::named_column_types() {
+            bind.add_result_column_with_type(&name, &ty);
+        }
     }
 
     fn read_args(bind: &BindInfo) -> DuckResult<Self::Args> {
@@ -75,6 +77,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
                     break
                 }
             }
+            Self::Output::write_columns_batch(chunk, &vec_option_to_ref(&output_vec));
             unsafe { chunk.set_size(count as usize) };
             Ok(())
         })).map_err(panic_to_duck_error).flatten()

@@ -1,4 +1,4 @@
-use crate::duck_args_type::DuckColumns;
+use crate::duck_columns::DuckColumns;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
 use crate::{duck_aggregate_unwind, duck_scalar_unwind, vec_option_to_ref, DuckOptionResult, DuckResult};
