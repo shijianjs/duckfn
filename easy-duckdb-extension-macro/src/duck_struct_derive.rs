@@ -107,6 +107,7 @@ impl DuckStructContext {
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
         let name_type_pair = self.fields_to_code(|f| f.name_type_pair())?;
         let reader_by_trunk = self.fields_to_code(|f| f.reader_by_trunk())?;
+        let write_columns_batch = self.fields_to_code(|f| f.write_columns_batch())?;
         Ok(quote! {
             impl ::easy_duckdb_extension::DuckColumns for #struct_name {
 
@@ -131,6 +132,12 @@ impl DuckStructContext {
                     Vec::from([
                         #(#name_type_pair),*
                     ])
+                }
+
+                fn write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
+                    use easy_duckdb_extension::DuckValueType;
+
+                    #(#write_columns_batch)*
                 }
             }
         })
@@ -325,6 +332,33 @@ impl FieldWrapper {
         } else {
             Ok(quote! {
                 #ty::write_valid(&mut writer.child_writer[#index], idx, &vo.#field_name);
+            })
+        }
+    }
+
+    //                fn write_columns_batch(chunk: &DataChunk, row: &Vec<Option<&Self>>) {
+    //                     A::write_batch(unsafe{ chunk.vector(0) }, &row.iter()
+    //                         .map(|r| r.and_then(|r| r.0.as_ref()))
+    //                         .collect::<Vec<_>>());
+    //                     B::write_batch(unsafe{ chunk.vector(1) }, &row.iter()
+    //                         .map(|r| r.map(|r| &r.1))
+    //                         .collect::<Vec<_>>());
+    //                 }
+    fn write_columns_batch(&self) -> TokenStream2Result {
+        let ty = self.duck_value_type();
+        let field_name = self.require_field_name()?;
+        let index = self.index;
+        if self.is_option() {
+            Ok(quote! {
+                #ty::write_batch(unsafe{ chunk.vector(#index) }, &row.iter()
+                    .map(|o| o.and_then(|r| r.#field_name.as_ref()))
+                    .collect::<Vec<_>>());
+            })
+        }else {
+            Ok(quote! {
+                #ty::write_batch(unsafe{ chunk.vector(#index) }, &row.iter()
+                    .map(|o| o.map(|r| &r.#field_name))
+                    .collect::<Vec<_>>());
             })
         }
     }

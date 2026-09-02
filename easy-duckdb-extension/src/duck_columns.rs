@@ -1,5 +1,5 @@
 use crate::value_types::duck_value_type::{ DuckValueReader, DuckValueType};
-use quack_rs::data_chunk::DataChunk;
+use quack_rs::prelude::DataChunk;
 use quack_rs::prelude::LogicalType;
 
 pub trait DuckColumns: Sized {
