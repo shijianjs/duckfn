@@ -43,7 +43,7 @@ impl DuckStructContext {
 
     fn build_all(&self) -> TokenStream2Result {
         let mut ts = self.build_duck_value_type_impl()?;
-        ts.extend(self.build_duck_args_impl()?);
+        ts.extend(self.build_duck_columns_impl()?);
         Ok(ts)
     }
 
@@ -102,22 +102,22 @@ impl DuckStructContext {
         })
     }
 
-    fn build_duck_args_impl(&self) -> TokenStream2Result {
+    fn build_duck_columns_impl(&self) -> TokenStream2Result {
         let struct_name = self.struct_name();
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
-        let logical_types = self.fields_to_code(|f| f.logical_type())?;
+        let name_type_pair = self.fields_to_code(|f| f.name_type_pair())?;
         let reader_by_trunk = self.fields_to_code(|f| f.reader_by_trunk())?;
         Ok(quote! {
             impl ::easy_duckdb_extension::DuckColumns for #struct_name {
 
-                fn create_arg_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<::easy_duckdb_extension::DuckValueReader> {
+                fn create_column_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<::easy_duckdb_extension::DuckValueReader> {
                     use easy_duckdb_extension::DuckValueType;
 
                     Vec::from([
                         #(#reader_by_trunk),*
                     ])
                 }
-                fn read_args(readers: &[::easy_duckdb_extension::DuckValueReader], row: usize) -> Option<Self> {
+                fn read_columns(readers: &[::easy_duckdb_extension::DuckValueReader], row: usize) -> Option<Self> {
                     use easy_duckdb_extension::DuckValueType;
 
                     Some(Self {
@@ -125,11 +125,11 @@ impl DuckStructContext {
                     })
                 }
 
-                fn arg_types() -> Vec<::quack_rs::prelude::LogicalType> {
+                fn named_column_types() -> Vec<(impl Into<String>, ::quack_rs::prelude::LogicalType)> {
                     use easy_duckdb_extension::DuckValueType;
 
                     Vec::from([
-                        #(#logical_types),*
+                        #(#name_type_pair),*
                     ])
                 }
             }
