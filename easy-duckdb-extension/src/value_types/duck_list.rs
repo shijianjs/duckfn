@@ -108,7 +108,7 @@ impl<T: DuckValueType> DuckValueType for DuckList<T> {
         let child_writer = &mut writer.child_writer[0];
 
         for (i, value) in v.value.iter().enumerate() {
-            T::write(child_writer, offset + i, &value);
+            T::write(child_writer, offset + i, value.as_ref());
         }
         writer.offset += len;
     }
@@ -191,7 +191,7 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
         let child_writer = &mut writer.child_writer[0];
 
         for (i, value) in v.iter().enumerate() {
-            T::write(child_writer, offset + i, &value);
+            T::write(child_writer, offset + i, value.as_ref());
         }
         writer.offset += len;
     }

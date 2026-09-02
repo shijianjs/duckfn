@@ -1,4 +1,4 @@
-use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult};
+use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult, vec_option_to_ref};
 use crate::duck_args_type::DuckColumns;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
@@ -31,7 +31,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
                     }
                 }
             }
-            Self::Output::write_batch(output, &output_vec);
+            Self::Output::write_batch(output, &vec_option_to_ref(&output_vec));
         });
     }
     fn scalar_function_builder() -> ScalarFunctionBuilder {

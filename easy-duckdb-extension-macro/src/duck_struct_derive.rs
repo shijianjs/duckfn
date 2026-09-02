@@ -1,4 +1,4 @@
-use crate::macro_utils::{add_colon2_token, extract_option, TokenStream2Result};
+use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
 use proc_macro2::Ident;
 use quote::quote;
 use syn::__private::TokenStream2;
@@ -318,13 +318,14 @@ impl FieldWrapper {
         let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;
-        let write_method = if self.is_option() {
-            quote! { #ty::write }
+        if self.is_option() {
+            Ok(quote! {
+                #ty::write(&mut writer.child_writer[#index], idx, vo.#field_name.as_ref());
+            })
         } else {
-            quote! { #ty::write_valid }
-        };
-        Ok(quote! {
-            #write_method(&mut writer.child_writer[#index], idx, &vo.#field_name);
-        })
+            Ok(quote! {
+                #ty::write_valid(&mut writer.child_writer[#index], idx, &vo.#field_name);
+            })
+        }
     }
 }

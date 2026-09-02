@@ -16,6 +16,10 @@ pub fn panic_to_duck_error(e: Box<dyn std::any::Any + Send>) -> ExtensionError {
     duck_error(panic_to_string(e))
 }
 
+pub fn vec_option_to_ref<T>(vec: &[Option<T>]) -> Vec<Option<&T>> {
+    vec.iter().map(Option::as_ref).collect()
+}
+
 /// 将panic转换成字符串
 pub fn panic_to_string(e: Box<dyn std::any::Any + Send>) -> String {
     if let Some(s) = e.downcast_ref::<&str>() {

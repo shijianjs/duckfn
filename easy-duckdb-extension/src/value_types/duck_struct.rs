@@ -55,7 +55,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     }
 
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
-        F0::write(&mut writer.child_writer[0], idx, &vo.f0);
+        F0::write(&mut writer.child_writer[0], idx, vo.f0.as_ref());
     }
 
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
@@ -134,8 +134,8 @@ impl<F0: DuckValueType, F1: DuckValueType, N: FieldNames> DuckValueType for Duck
     }
 
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
-        F0::write(&mut writer.child_writer[0], idx, &vo.f0);
-        F1::write(&mut writer.child_writer[1], idx, &vo.f1);
+        F0::write(&mut writer.child_writer[0], idx, vo.f0.as_ref());
+        F1::write(&mut writer.child_writer[1], idx, vo.f1.as_ref());
     }
 
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {

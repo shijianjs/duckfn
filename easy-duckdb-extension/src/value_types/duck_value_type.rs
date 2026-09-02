@@ -44,11 +44,12 @@ pub trait DuckValueType: Sized + Clone+ Send + Sync + 'static {
         todo!("子类需要实现read_valid_by_vector_reader")
     }
 
-    fn write_batch(output: duckdb_vector, output_vec: &[Option<Self>]) {
-        let refs: Vec<Option<&Self>> = output_vec.iter().map(|v| v.as_ref()).collect();
-        let mut writer = Self::create_writer_batch(output, &refs);
+    fn write_batch(output: duckdb_vector, output_vec: &[Option<&Self>]) {
+        // let refs: Vec<Option<&Self>> = output_vec.iter().map(|v| v.as_ref()).collect();
+        // let refs: Vec<Option<&Self>> = output_vec.iter().map(|v| v.as_ref()).collect();
+        let mut writer = Self::create_writer_batch(output, &output_vec);
         for (idx, result) in output_vec.iter().enumerate() {
-            Self::write(&mut writer, idx, result);
+            Self::write(&mut writer, idx, *result);
         }
         Self::write_finish(&mut writer);
     }
@@ -62,7 +63,7 @@ pub trait DuckValueType: Sized + Clone+ Send + Sync + 'static {
     }
 
     /// 仅处理null，子类不能重写、因为可能调不到
-    fn write(writer: &mut DuckValueWriter, idx: usize, vo: &Option<Self>) {
+    fn write(writer: &mut DuckValueWriter, idx: usize, vo: Option<&Self>) {
         // Self::write_to_vector(&mut writer.vector_writer, idx, vo);
         match vo {
             None => unsafe { writer.vector_writer.set_null(idx) },

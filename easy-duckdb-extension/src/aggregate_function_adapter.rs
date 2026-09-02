@@ -1,7 +1,7 @@
 use crate::duck_args_type::DuckColumns;
 use crate::duck_register_builder::RegisterBuilder;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{DuckOptionResult, DuckResult, duck_aggregate_unwind, duck_scalar_unwind};
+use crate::{duck_aggregate_unwind, duck_scalar_unwind, vec_option_to_ref, DuckOptionResult, DuckResult};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info,
     duckdb_vector, idx_t,
@@ -105,7 +105,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
                     None => output_vec.push(None),
                 }
             }
-            Self::Output::write_batch(result, &output_vec);
+            Self::Output::write_batch(result, &vec_option_to_ref(&output_vec));
         });
     }
 
