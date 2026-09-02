@@ -1,4 +1,5 @@
 use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
+use darling::FromDeriveInput;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::__private::TokenStream2;
@@ -7,6 +8,12 @@ use syn::{
     Data, DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Path, Type, TypePath,
 };
 use syn_match::path_match;
+
+#[derive(Debug, FromDeriveInput)]
+#[darling(attributes(duck))]
+struct DuckMacroArgs {
+    pub named_param_from: Option<String>,
+}
 
 pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
     let Data::Struct(DataStruct {
@@ -19,14 +26,34 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
             "Only named fields are allowed",
         ));
     };
-    let fields = named
-        .into_iter()
-        .enumerate()
-        .map(|(index, f)| FieldWrapper::new(f, index))
-        .collect();
+    let macro_args = DuckMacroArgs::from_derive_input(&input)?;
+    let mut start_named_param = false;
+    let mut fields: Vec<FieldWrapper> = Vec::new();
+    for (index, f) in named.into_iter().enumerate() {
+        let mut wrapper = FieldWrapper::new(f, index);
+        if start_named_param {
+            wrapper.is_named_param = true;
+        } else if let Some(named_param_from) = &macro_args.named_param_from {
+            if wrapper.require_field_name()?.to_string() == *named_param_from {
+                start_named_param = true;
+                wrapper.is_named_param = true;
+            }
+        }
+        fields.push(wrapper)
+    }
+    if macro_args.named_param_from.is_some() && !start_named_param {
+        return Err(syn::Error::new(
+            input.span(),
+            format!(
+                "named_param_from field `{}` not found",
+                macro_args.named_param_from.as_ref().unwrap()
+            ),
+        ));
+    }
     let context = DuckStructContext {
         input: input.to_owned(),
         fields,
+        macro_args,
     };
     context.build_all()
 }
@@ -34,6 +61,7 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
 struct DuckStructContext {
     input: DeriveInput,
     fields: Vec<FieldWrapper>,
+    macro_args: DuckMacroArgs,
 }
 
 impl DuckStructContext {
@@ -158,10 +186,15 @@ impl DuckStructContext {
 struct FieldWrapper {
     field: syn::Field,
     index: usize,
+    is_named_param: bool,
 }
 impl FieldWrapper {
     fn new(field: syn::Field, index: usize) -> FieldWrapper {
-        let mut wrapper = FieldWrapper { field, index };
+        let mut wrapper = FieldWrapper {
+            field,
+            index,
+            is_named_param: false,
+        };
         // wrapper.init();
         wrapper
     }
@@ -354,7 +387,7 @@ impl FieldWrapper {
                     .map(|o| o.and_then(|r| r.#field_name.as_ref()))
                     .collect::<Vec<_>>());
             })
-        }else {
+        } else {
             Ok(quote! {
                 #ty::write_batch(unsafe{ chunk.vector(#index) }, &row.iter()
                     .map(|o| o.map(|r| &r.#field_name))
