@@ -31,7 +31,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
         let mut builder = builder;
         for (name, ty) in Self::Args::bind_param_logical() {
             if let Some(name) = name {
-                builder = builder.named_param_logical(&name.into(), ty);
+                builder = builder.named_param_logical(&name, ty);
             } else {
                 builder = builder.param_logical(ty)
             }
@@ -113,5 +113,5 @@ pub trait TableFunctionAdapter: Sized + 'static {
 pub trait DuckBindArgs: Sized {
     fn read_bind_args(bind: &BindInfo) -> DuckResult<Self>;
 
-    fn bind_param_logical() -> Vec<(Option<impl Into<String>>, LogicalType)>;
+    fn bind_param_logical() -> Vec<(Option<String>, LogicalType)>;
 }

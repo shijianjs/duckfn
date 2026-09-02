@@ -196,7 +196,7 @@ impl DuckStructContext {
                 }
 
                 fn bind_param_logical() -> Vec<(
-                    Option<&'static str>,
+                    Option<String>,
                     quack_rs::prelude::LogicalType,
                 )> {
                     use easy_duckdb_extension::DuckValueType;
@@ -289,7 +289,7 @@ impl FieldWrapper {
         let name = self.require_field_name()?.to_string();
         if self.is_named_param {
             Ok(quote! {
-                (Some(#name), #ty)
+                (Some(#name.to_string()), #ty)
             })
         } else {
             Ok(quote! {
