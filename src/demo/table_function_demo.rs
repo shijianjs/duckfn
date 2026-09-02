@@ -1,10 +1,15 @@
+use easy_duckdb_extension::{DuckOptionResult, DuckResult, TableFunctionAdapter};
+use easy_duckdb_extension_macro::DuckStruct;
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
+use std::iter::Map;
+use std::ops::Range;
 
 pub fn register(reg: &impl Registrar) -> ExtResult<()> {
     let builders = vec![
         count_down()?,
         count_down_it()?,
+        CountDownS::table_function_builder()?,
     ];
     for builder in builders {
         unsafe { reg.register_table(builder) }?;
@@ -44,9 +49,6 @@ fn count_down() -> Result<TableFunctionBuilder, ExtensionError> {
         .build()
 }
 
-
-
-
 fn count_down_it() -> Result<TableFunctionBuilder, ExtensionError> {
     TableFunctionBuilder::new("count_down_it")
         .named_param("start", TypeId::BigInt)
@@ -68,12 +70,12 @@ fn count_down_it() -> Result<TableFunctionBuilder, ExtensionError> {
                 let option = state.next();
                 match option {
                     Some(value) => {
-                        unsafe { writer.write_i64(i as usize, value as i64) } ;
-                    },
+                        unsafe { writer.write_i64(i as usize, value as i64) };
+                    }
                     None => {
                         unsafe { chunk.set_size(i as usize) };
                         return Ok(());
-                    },
+                    }
                 }
             }
             unsafe { chunk.set_size(size as usize) };
@@ -116,4 +118,38 @@ impl Iterator for Counter {
             None
         }
     }
+}
+
+struct CountDownS {}
+#[derive(Default, Debug, Clone, DuckStruct)]
+#[duck(named_param_from = "start")]
+struct CountDownArgs {
+    start: i64,
+}
+#[derive(Default, Debug, Clone, DuckStruct)]
+struct CountDownOutput {
+    n: i64,
+}
+
+impl TableFunctionAdapter for CountDownS {
+    const NAME: &'static str = "count_down_s";
+    type Args = CountDownArgs;
+    type Output = CountDownOutput;
+    // type DataIterator = std::vec::IntoIter<DuckOptionResult<CountDownOutput>>;
+    type DataIterator = Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>>;
+
+    fn init_data_iterator(
+        args: Self::Args,
+    ) -> DuckResult<Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>>> {
+        // .collect::<Vec<_>>();
+        Ok((0..args.start)
+            .into_iter()
+            .map(|x| Ok(Some(CountDownOutput { n: x }))))
+    }
+}
+
+fn aa() -> Map<Range<i64>, fn(i64) -> DuckOptionResult<CountDownOutput>> {
+    (0..3)
+        .into_iter()
+        .map(|x| Ok(Some(CountDownOutput { n: x })))
 }

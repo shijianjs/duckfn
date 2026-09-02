@@ -11,7 +11,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub trait TableFunctionAdapter: Sized + 'static {
     fn table_function_builder() -> DuckResult<TableFunctionBuilder> {
-        let mut builder = TableFunctionBuilder::new("count_down");
+        let mut builder = TableFunctionBuilder::new(Self::NAME);
         builder = Self::config_params(builder);
         // 1. bind closure: declare the output schema, read parameters,
         //    return the initial scan state.
