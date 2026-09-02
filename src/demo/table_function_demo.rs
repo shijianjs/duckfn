@@ -120,12 +120,12 @@ impl Iterator for Counter {
     }
 }
 
-struct CountDownS {}
 #[derive(Default, Debug, Clone, DuckStruct)]
 #[duck(named_param_from = "start")]
-struct CountDownArgs {
+struct CountDownS {
     start: i64,
 }
+
 #[derive(Default, Debug, Clone, DuckStruct)]
 struct CountDownOutput {
     n: i64,
@@ -133,11 +133,11 @@ struct CountDownOutput {
 
 impl TableFunctionAdapter for CountDownS {
     const NAME: &'static str = "count_down_s";
-    type Args = CountDownArgs;
+    type Args = Self;
     type Output = CountDownOutput;
 
     fn init_data_iterator(
-        args: Self::Args,
+        args: Self,
     ) -> DuckResult<DuckDataIterator<Self::Output>> {
         // .collect::<Vec<_>>();
         Ok(Box::new((0..args.start).rev()
