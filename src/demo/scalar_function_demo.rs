@@ -17,11 +17,8 @@ use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 
 ///
 ///
-/// ```shell
-/// cargo duckdb-ext build; duckdb -unsigned -c "
-///   LOAD './target/debug/rusty_quack.duckdb_extension';
+/// ```sql
 ///   SELECT double_it5(3);
-///   ";
 /// ```
 
 #[duck_scalar_function]
@@ -29,23 +26,6 @@ pub fn double_it5(input:i64)->i64{
     input*2
 }
 
-// pub struct FirstWordTuple;
-//
-// impl ScalarFunctionAdapter for FirstWordTuple {
-//     const NAME: &'static str = "first_word_tuple";
-//     type Args = (Option<String>,);
-//     type Output = String;
-//
-//     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-//         Ok(args.transpose().map(|(v, )| {
-//             v.as_str()
-//                 .split_whitespace()
-//                 .next()
-//                 .unwrap_or("")
-//                 .to_string()
-//         }))
-//     }
-// }
 
 #[duck_scalar_function]
 pub fn first_word_tuple(input: Option<String>) -> Option<String> {
@@ -58,20 +38,12 @@ pub fn first_word_tuple(input: Option<String>) -> Option<String> {
     })
 }
 
-pub struct AddItTuple;
 
-impl ScalarFunctionAdapter for AddItTuple {
-    const NAME: &'static str = "add_it_tuple";
-    type Args = (Option<i64>, i64);
-    type Output = i64;
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        if let (Some(v), v2) = args {
-            Ok(Some(v + v2))
-        }else {
-            Ok(None)
-        }
-    }
+#[duck_scalar_function]
+pub fn add_it_tuple(input: Option<i64>, v2: i64) -> Option<i64> {
+    input.map(|v| v + v2)
 }
+
 
 // ============================================================================
 // Scalar: sum_list(LIST(BIGINT)) → BIGINT
@@ -110,31 +82,27 @@ unsafe extern "C" fn sum_list_scalar(
     }
 }
 
-struct SumListWrapper;
-impl ScalarFunctionAdapter for SumListWrapper {
-    const NAME: &'static str = "sum_list_w";
-    type Args = (Option<DuckList<i64>>,);
-    type Output = i64;
-
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| v.value.iter().flatten().sum()))
-    }
+/// ```sql
+/// SELECT sum_list_w([1,2,3,4]);
+/// ```
+#[duck_scalar_function]
+pub fn sum_list_w(li: Vec<i64>) -> i64 {
+    li.iter().sum()
 }
-struct SumListNest;
-impl ScalarFunctionAdapter for SumListNest {
-    const NAME: &'static str = "sum_list_nest";
-    type Args = (Option<DuckList<DuckList<i64>>>,);
-    type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| {
-            v.value
-                .iter()
-                .flatten()
-                .map(|v| v.value.iter().flatten().sum::<i64>())
-                .sum()
-        }))
-    }
+/// ```sql
+/// SELECT sum_list_nest(v) from (values (
+///   [[1,2],[3,null,4],null]),
+///   ([[1],[3,null]])
+/// ) t(v);
+/// ```
+#[duck_scalar_function]
+pub fn sum_list_nest(input: Vec<Option<Vec<Option<i64>>>>) -> i64 {
+    input
+        .iter()
+        .flatten()
+        .map(|v| v.iter().flatten().sum::<i64>())
+        .sum()
 }
 
 unsafe extern "C" fn make_list_scalar(
@@ -188,188 +156,102 @@ unsafe extern "C" fn make_list_scalar(
     // writer.set_null(row)
     // 不要调用 set_entry
 }
-struct MakeListScalarWrapper;
-impl ScalarFunctionAdapter for MakeListScalarWrapper {
-    const NAME: &'static str = "make_list_scalar_w";
-    type Args = (Option<i64>,);
-    type Output = DuckList<i64>;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| DuckList {
-            value: vec![Some(v + 1), Some(v * 2), None],
-        }))
-    }
-}
-struct NestListScalarWrapper;
-impl ScalarFunctionAdapter for NestListScalarWrapper {
-    const NAME: &'static str = "nest_list_scalar_w";
-    type Args = (Option<i64>,);
-    type Output = DuckList<DuckList<i64>>;
-
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| DuckList {
-            value: vec![
-                Some(DuckList {
-                    value: vec![Some(v + 1), Some(v * 2), None],
-                }),
-                Some(DuckList {
-                    value: (0..v).map(|x| Some(x)).collect(),
-                }),
-                None,
-            ],
-        }))
-    }
-}
-struct NestVecScalarWrapper;
-impl ScalarFunctionAdapter for NestVecScalarWrapper {
-    const NAME: &'static str = "nest_vec_scalar_w";
-    type Args = (Option<i64>,);
-    type Output = Vec<Option<Vec<Option<i64>>>>;
-
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| vec![
-            Some(vec![Some(v + 1), Some(v * 2), None]),
-            Some((0..v).map(|x| Some(x)).collect()),
-            None,
-        ]))
-    }
-}
-struct NestVecNoNullScalarWrapper;
-impl ScalarFunctionAdapter for NestVecNoNullScalarWrapper {
-    const NAME: &'static str = "nest_vec_no_null_scalar_w";
-    type Args = (Option<i64>,);
-    type Output = Vec<Vec<i64>>;
-
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| vec![
-            vec![v + 1, v * 2],
-            (0..v).map(|x| x).collect(),
-        ]))
-    }
+/// ```sql
+/// SELECT make_list_scalar_w(range) from range(10);
+/// ```
+#[duck_scalar_function]
+fn make_list_scalar_w(v: i64) -> Vec<Option<i64>> {
+    vec![Some(v + 1), Some(v * 2), None]
 }
 
-struct StructScalarWrapper;
-#[derive(Clone, Default, Debug)]
-struct StructScalarWrapperArg1;
-impl FieldNames for StructScalarWrapperArg1 {
-    const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
-}
-impl ScalarFunctionAdapter for StructScalarWrapper {
-    const NAME: &'static str = "struct_scalar_w";
-    type Args = (Option<DuckStruct1<i64, StructScalarWrapperArg1>>,);
-    type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(v, )| v.f0.map(|v| v + 10)).flatten())
-    }
+/// ```sql
+/// SELECT nest_list_scalar_w(range) from range(10);
+/// ```
+#[duck_scalar_function]
+fn nest_list_scalar_w(v: i64) -> Vec<Option<Vec<Option<i64>>>> {
+    vec![
+        Some(vec![Some(v + 1), Some(v * 2), None]),
+        Some((0..v).map(|x| Some(x)).collect()),
+        None,
+    ]
 }
-struct NestStructScalarWrapper;
-#[derive(Clone, Default, Debug)]
-struct NestStructScalarWrapperOuter;
-impl FieldNames for NestStructScalarWrapperOuter {
-    const FIELD_NAMES: &'static [&'static str] = &["struct", "list"];
-}
-#[derive(Clone, Default, Debug)]
-struct NestStructScalarWrapperInner;
-impl FieldNames for NestStructScalarWrapperInner {
-    const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
-}
-impl ScalarFunctionAdapter for NestStructScalarWrapper {
-    const NAME: &'static str = "struct_nest_scalar_w";
-    type Args = (
-        Option<
-            DuckStruct2<
-                DuckStruct1<i64, NestStructScalarWrapperInner>,
-                DuckList<i64>,
-                NestStructScalarWrapperOuter,
-            >,
-        >,
-    );
-    type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose()
-            .map(|(outer, )| {
-                (outer.f0).map(|(struct1)| {
-                    struct1
-                        .f0
-                        .map(|v| v + outer.f1.value.iter().flatten().sum::<i64>())
-                })
-            })
-            .flatten().flatten())
-    }
-}
-struct NestStructOutputScalarWrapper;
-impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
-    const NAME: &'static str = "struct_nest_output_scalar_w";
-    type Args = (Option<i32>,);
-    type Output = DuckStruct2<
-        DuckStruct1<i32, NestStructScalarWrapperInner>,
-        DuckList<i32>,
-        NestStructScalarWrapperOuter,
-    >;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(outer, )| DuckStruct2 {
-            f0: Some(DuckStruct1 {
-                f0: Some(100 + outer),
-                field_names_type: Default::default(),
-            }),
-            f1: DuckList {
-                value: (0..outer).map(|x| Some(x)).collect(),
-            },
-            field_names_type: Default::default(),
-        }))
-    }
-}
-struct NestStructMacroOutputScalarWrapper;
-#[derive(DuckStruct,Clone, Default, Debug)]
-struct NestStructMacroOuter{
-    struct1:NestStructMacroInner,
-    list1:Vec<i64>
-}
-#[derive(DuckStruct,Clone, Default, Debug)]
-struct NestStructMacroInner{
-    hello_count:i64,
-}
-impl ScalarFunctionAdapter for NestStructMacroOutputScalarWrapper {
-    const NAME: &'static str = "nest_struct_macro_output_scalar_w";
-    type Args = (Option<i32>,);
-    type Output = NestStructMacroOuter;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        Ok(args.transpose().map(|(outer, )| NestStructMacroOuter {
-            struct1: NestStructMacroInner {
-                hello_count: (100 + outer) as i64,
-            },
-            list1: (0..outer).map(|x| x as i64).collect(),
-        }))
+/// ```sql
+/// SELECT nest_vec_no_null_scalar_w(range) from range(10);
+/// ```
+#[duck_scalar_function]
+pub fn nest_vec_no_null_scalar_w(v: i64) -> Vec<Vec<i64>> {
+    vec![vec![v + 1, v * 2], (0..v).collect()]
+}
+
+#[derive(DuckStruct, Clone, Default, Debug)]
+pub struct StructScalarWrapperArg1{
+    hello_count: i64,
+}
+/// ```sql
+/// SELECT struct_scalar_w({hello_count:15})
+/// ```
+#[duck_scalar_function]
+pub fn struct_scalar_w(arg1:StructScalarWrapperArg1)->i64{
+    arg1.hello_count + 10
+}
+
+
+#[derive(DuckStruct, Clone, Default, Debug)]
+pub struct NestOuter{
+    structf:NestInner,
+    list:Vec<Option<i64>>
+}
+#[derive(DuckStruct, Clone, Default, Debug)]
+pub struct NestInner{
+    hello_count: i64,
+}
+/// ```sql
+/// SELECT struct_nest_scalar_w({struct:{hello_count:15},list:[1,null,2]});
+/// ```
+#[duck_scalar_function]
+pub fn struct_nest_scalar_w(arg1: NestOuter) -> i64 {
+    arg1.structf.hello_count + arg1.list.iter().flatten().sum::<i64>()
+}
+
+
+/// ```sql
+/// SELECT struct_nest_output_scalar_w(10)
+/// ```
+#[duck_scalar_function]
+pub fn struct_nest_output_scalar_w(arg1:i32)->NestOuter{
+    NestOuter {
+        structf: NestInner {
+            hello_count: 100 + arg1 as i64,
+        },
+        list: (0..arg1).map(|x| Some(x as i64)).collect(),
     }
 }
 
 
-#[derive(DuckStruct,Clone, Default, Debug)]
-struct ErrorScalarDemo{
-    input:i64,
-}
-impl ScalarFunctionAdapter for ErrorScalarDemo {
-    const NAME: &'static str = "error_scalar_demo";
-    type Args = Self;
-    type Output = i64;
 
-    fn apply(args: Self::Args) -> DuckOptionResult<Self::Output> {
-        let i = args.input;
-        if i==10 {
-            return Err(duck_error("error: input is 10"));
-        }
-        if i==20 {
-            panic!("panic: input is 20")
-        }
-        if i==30 {
-            panic!()
-        }
-        Ok(Some(i *2))
+/// ```sql
+/// SELECT error_scalar_demo(10);
+/// SELECT error_scalar_demo(20);
+/// SELECT error_scalar_demo(30);
+/// SELECT error_scalar_demo(40);
+/// ```
+#[duck_scalar_function]
+pub fn error_scalar_demo(i:i64) -> DuckOptionResult<i64> {
+    if i==10 {
+        return Err(duck_error("error: input is 10"));
     }
+    if i==20 {
+        panic!("panic: input is 20")
+    }
+    if i==30 {
+        panic!()
+    }
+    Ok(Some(i *2))
 }
 
 
@@ -457,11 +339,11 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         // DoubleIt::register_builder(),
         double_it5::scalar_function_builder(),
         first_word_tuple::scalar_function_builder(),
-        AddItTuple::scalar_function_builder(),
-        SumListWrapper::scalar_function_builder(),
-        SumListNest::scalar_function_builder(),
-        MakeListScalarWrapper::scalar_function_builder(),
-        NestListScalarWrapper::scalar_function_builder(),
+        add_it_tuple::scalar_function_builder(),
+        sum_list_w::scalar_function_builder(),
+        sum_list_nest::scalar_function_builder(),
+        make_list_scalar_w::scalar_function_builder(),
+        nest_list_scalar_w::scalar_function_builder(),
         ScalarFunctionBuilder::new("sum_list")
             .param_logical(LogicalType::list(TypeId::BigInt))
             .returns(TypeId::BigInt)
@@ -483,13 +365,11 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .param(TypeId::Integer)
             .returns_logical(LogicalType::map(TypeId::Varchar, TypeId::Integer))
             .function(make_kv_map_scalar),
-        StructScalarWrapper::scalar_function_builder(),
-        NestStructScalarWrapper::scalar_function_builder(),
-        NestStructOutputScalarWrapper::scalar_function_builder(),
-        NestVecScalarWrapper::scalar_function_builder(),
-        NestVecNoNullScalarWrapper::scalar_function_builder(),
-        NestStructMacroOutputScalarWrapper::scalar_function_builder(),
-        ErrorScalarDemo::scalar_function_builder(),
+        struct_scalar_w::scalar_function_builder(),
+        struct_nest_scalar_w::scalar_function_builder(),
+        struct_nest_output_scalar_w::scalar_function_builder(),
+        nest_vec_no_null_scalar_w::scalar_function_builder(),
+        error_scalar_demo::scalar_function_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;
