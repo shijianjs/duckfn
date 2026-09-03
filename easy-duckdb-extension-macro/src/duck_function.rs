@@ -8,6 +8,9 @@ pub struct ItemFnWrapper {
     item_fn: ItemFn,
 }
 
+impl ItemFnWrapper {
+
+}
 
 impl ItemFnWrapper {
     pub fn new(item_fn: ItemFn) -> Self {
@@ -19,6 +22,9 @@ impl ItemFnWrapper {
     }
     pub(crate) fn build_aggregate_function(&self) -> TokenStream2Result {
         self.common_build(self.build_aggregate_function_impl()?)
+    }
+    pub(crate) fn build_table_function(&self) -> TokenStream2Result {
+        todo!()
     }
 
     fn common_build(&self, scalar_function_impl: TokenStream2) -> TokenStream2Result {
