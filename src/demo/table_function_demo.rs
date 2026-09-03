@@ -139,34 +139,39 @@ impl TableFunctionAdapter for CountDownS {
     fn init_data_iterator(
         args: Self,
     ) -> DuckResult<DuckDataIterator<Self::Output>> {
-        // .collect::<Vec<_>>();
-        Ok(Box::new((0..args.start).rev()
-            .map(|x| {
-                if x==5{
-                    Ok(None)
-                }else {
-                    Ok(Some(CountDownOutput { n: x }))
-                }
-            })))
+        let a =1;
+        if a ==4 {
+            Ok(Box::new(demo4(args.start).map(|x| Ok(Some(x)))))
+        } else if a ==3 {
+            Ok(Box::new(demo3(args.start)?.map(|x| Ok(Some(x)))))
+        } else {
+            demo1(args.start)
+        }
     }
 }
 // 全功能
 //底层/高级模式
-fn demo1() -> DuckResult<DuckDataIterator<CountDownOutput>> {
-    Ok(Box::new(demo4().map(|x| Ok(Some(x)))))
+fn demo1(start: i64) -> DuckResult<DuckDataIterator<CountDownOutput>> {
+    Ok(Box::new(demo4(start).map(|x| {
+        if x.n==5{
+            Ok(None)
+        }else {
+            Ok(Some(x))
+        }
+    })))
 }
 // 这档没太大必要，仅仅是消了个外层的Ok而已，参数异常又是常见异常
-fn demo2() -> DuckDataIterator<CountDownOutput> {
+fn demo2(start: i64) -> DuckDataIterator<CountDownOutput> {
     todo!()
 }
 // 可以处理入参异常，出去的不处理
 //创建数据源可能失败，但 iterator 一旦创建成功，后续只产生正常数据。
-fn demo3() -> DuckResult<impl Iterator<Item = CountDownOutput>> {
-    Ok(demo4())
+fn demo3(start: i64) -> DuckResult<impl Iterator<Item = CountDownOutput>> {
+    Ok(demo4(start))
 }
 // 都不处理
 //参数已经成功解析，后面不会产生 error，也不会产生 NULL。
-fn demo4() -> impl Iterator<Item = CountDownOutput> {
-    (0..10).rev()
+fn demo4(start: i64) -> impl Iterator<Item = CountDownOutput> {
+    (0..start).rev()
         .map(|x| CountDownOutput { n: x })
 }
