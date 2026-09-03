@@ -1,6 +1,6 @@
 
 #[derive(Default, Debug, Clone, easy_duckdb_extension_macro::DuckStruct)]
-struct CountDownOutput {
+pub struct CountDownOutput {
     n: i64,
 }
 // 可以处理入参异常，出去的不处理
@@ -17,7 +17,7 @@ fn demo4(start: i64) -> impl Iterator<Item = CountDownOutput> {
 
 // 全功能
 //底层/高级模式
-fn demo1(start: i64) -> easy_duckdb_extension::DuckResult<easy_duckdb_extension::DuckDataIterator<CountDownOutput>> {
+fn demo1(start: i64) -> easy_duckdb_extension::DuckFullIteratorResult<CountDownOutput> {
     Ok(Box::new(demo4(start).map(|x| {
         if x.n==5{
             Ok(None)
@@ -30,11 +30,11 @@ fn demo1(start: i64) -> easy_duckdb_extension::DuckResult<easy_duckdb_extension:
 pub mod demo1{
     use super::*;
 
-    struct TableFunctionImpl;
+    pub struct TableFunctionImpl;
 
     #[derive(Default, Debug, Clone, easy_duckdb_extension_macro::DuckStruct)]
     #[duck(named_param_from = "start")]
-    struct TableFunctionArgs {
+    pub struct TableFunctionArgs {
         start: i64,
     }
 
@@ -45,7 +45,7 @@ pub mod demo1{
 
         fn init_data_iterator(
             args: Self::Args,
-        ) -> easy_duckdb_extension::DuckResult<easy_duckdb_extension::DuckDataIterator<Self::Output>> {
+        ) -> easy_duckdb_extension::DuckResult<easy_duckdb_extension::DuckFullIterator<Self::Output>> {
             let a =1;
             if a ==4 {
                 let result = demo4(args.start);

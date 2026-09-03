@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use syn::__private::TokenStream2;
-use syn::{GenericArgument, Path, PathArguments, Type, TypePath};
+use syn::{GenericArgument, Path, PathArguments, Type, TypeImplTrait, TypeParamBound, TypePath};
 use syn_match::path_match;
 
 /// 常用过程宏返回值类型
@@ -77,4 +77,27 @@ pub fn add_colon2_token(ty: &mut syn::Type) {
     };
 
     args.colon2_token = Some(Default::default());
+}
+
+/// 获取迭代器`impl Iterator<Item=T>`的`Item`类型
+pub fn iterator_item_type(impl_trait: &TypeImplTrait) -> Option<&Type> {
+    for bound in &impl_trait.bounds {
+        if let TypeParamBound::Trait(trait_bound) = bound {
+            if let Some(segment) = trait_bound.path.segments.last() {
+                if segment.ident == "Iterator" {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                        for arg in &args.args {
+                            if let GenericArgument::AssocType(assoc) = arg {
+                                if assoc.ident == "Item" {
+                                    return Some(&assoc.ty);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }

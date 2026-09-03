@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use quack_rs::interval::DuckInterval;
 use quack_rs::prelude::{LogicalType, TypeId, Value, VectorReader, VectorWriter};
@@ -5,7 +6,7 @@ use std::marker::PhantomData;
 use crate::DuckResult;
 
 ///TypeId::Timestamp
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default,Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimestamp {
     pub micros_since_epoch: i64,
 }
@@ -32,7 +33,7 @@ impl DuckValueType for DuckTimestamp {
 }
 
 // TypeId::TimestampTz
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimestampTz {
     pub millis_since_epoch: i64,
 }
@@ -60,7 +61,7 @@ impl DuckValueType for DuckTimestampTz {
 
 // TypeId::TimestampS
 // pub const unsafe fn write_timestamp_s(&mut self, idx: usize, seconds_since_epoch: i64) {
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimestampS {
     pub seconds_since_epoch: i64,
 }
@@ -86,7 +87,7 @@ impl DuckValueType for DuckTimestampS {
 
 // TypeId::TimestampMs
 // pub const unsafe fn write_timestamp_ms(&mut self, idx: usize, millis_since_epoch: i64) {
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimestampMs {
     pub millis_since_epoch: i64,
 }
@@ -110,7 +111,7 @@ impl DuckValueType for DuckTimestampMs {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimestampNs {
     pub nanos_since_epoch: i64,
 }
@@ -136,7 +137,7 @@ impl DuckValueType for DuckTimestampNs {
 
 // TypeId::TimeTz
 // pub const unsafe fn write_time_tz(&mut self, idx: usize, bits: u64) {
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimeTz {
     pub bits: u64,
 }
@@ -163,12 +164,12 @@ impl DuckValueType for DuckTimeTz {
 // TypeId::Decimal
 // pub const unsafe fn read_decimal(&self, idx: usize, WIDTH: u8) -> i128 {
 // pub const unsafe fn write_decimal(&mut self, idx: usize, WIDTH: u8, unscaled: i128) {
-pub trait DecimalShapeDef:Sized+Clone+ Send + Sync + 'static{
+pub trait DecimalShapeDef:Default+Debug+Sized+Clone+ Send + Sync + 'static{
     const WIDTH: u8;
     const SCALE: u8;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 struct DuckDecimal<T: DecimalShapeDef> {
     pub unscaled: i128,
     pub scale: u8,
@@ -212,7 +213,7 @@ impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckDate {
     pub days_since_epoch: i32,
 }
@@ -237,7 +238,7 @@ impl DuckValueType for DuckDate {
 }
 
 // pub const unsafe fn write_time(&mut self, idx: usize, micros_since_midnight: i64) {
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTime {
     pub micros_since_midnight: i64,
 }
@@ -263,7 +264,7 @@ impl DuckValueType for DuckTime {
 
 // pub unsafe fn read_blob(&self, idx: usize) -> &[u8] {
 // pub unsafe fn write_blob(&mut self, idx: usize, value: &[u8]) {
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct DuckBlob {
     pub value: Vec<u8>,
 }
@@ -288,7 +289,7 @@ impl DuckValueType for DuckBlob {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckUuid {
     pub value: u128,
 }

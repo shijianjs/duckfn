@@ -249,7 +249,7 @@ impl ScalarFunctionAdapter for NestVecNoNullScalarWrapper {
 }
 
 struct StructScalarWrapper;
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 struct StructScalarWrapperArg1;
 impl FieldNames for StructScalarWrapperArg1 {
     const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
@@ -264,12 +264,12 @@ impl ScalarFunctionAdapter for StructScalarWrapper {
     }
 }
 struct NestStructScalarWrapper;
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 struct NestStructScalarWrapperOuter;
 impl FieldNames for NestStructScalarWrapperOuter {
     const FIELD_NAMES: &'static [&'static str] = &["struct", "list"];
 }
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 struct NestStructScalarWrapperInner;
 impl FieldNames for NestStructScalarWrapperInner {
     const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
@@ -323,12 +323,12 @@ impl ScalarFunctionAdapter for NestStructOutputScalarWrapper {
     }
 }
 struct NestStructMacroOutputScalarWrapper;
-#[derive(DuckStruct,Clone)]
+#[derive(DuckStruct,Clone, Default, Debug)]
 struct NestStructMacroOuter{
     struct1:NestStructMacroInner,
     list1:Vec<i64>
 }
-#[derive(DuckStruct,Clone)]
+#[derive(DuckStruct,Clone, Default, Debug)]
 struct NestStructMacroInner{
     hello_count:i64,
 }
@@ -348,7 +348,7 @@ impl ScalarFunctionAdapter for NestStructMacroOutputScalarWrapper {
 }
 
 
-#[derive(DuckStruct,Clone)]
+#[derive(DuckStruct,Clone, Default, Debug)]
 struct ErrorScalarDemo{
     input:i64,
 }

@@ -1,12 +1,13 @@
+use std::fmt::Debug;
 use quack_rs::prelude::Value;
 use crate::{duck_error, DuckResult, DuckValueReader, DuckValueType, DuckValueWriter};
 
-pub trait FieldNames: Sized + Clone+ Send + Sync + 'static {
+pub trait FieldNames:Default+Debug+ Sized + Clone+ Send + Sync + 'static {
     // const FIELD_NAMES: &'static [&'static str] = &["hello_count"];
     const FIELD_NAMES: &'static [&'static str];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default,Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckStruct1<F0: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub field_names_type: std::marker::PhantomData<N>,
@@ -66,7 +67,7 @@ impl<F0: DuckValueType, N: FieldNames> DuckValueType for DuckStruct1<F0, N> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default,Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckStruct2<F0: DuckValueType, F1: DuckValueType, N: FieldNames> {
     pub f0: Option<F0>,
     pub f1: F1,

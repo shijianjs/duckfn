@@ -1,4 +1,4 @@
-use easy_duckdb_extension::{DuckDataIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
+use easy_duckdb_extension::{DuckFullIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
 use easy_duckdb_extension_macro::DuckStruct;
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
@@ -138,7 +138,7 @@ impl TableFunctionAdapter for CountDownS {
 
     fn init_data_iterator(
         args: Self,
-    ) -> DuckResult<DuckDataIterator<Self::Output>> {
+    ) -> DuckResult<DuckFullIterator<Self::Output>> {
         let a =1;
         if a ==4 {
             Ok(Box::new(demo4(args.start).map(|x| Ok(Some(x)))))
@@ -151,7 +151,7 @@ impl TableFunctionAdapter for CountDownS {
 }
 // 全功能
 //底层/高级模式
-fn demo1(start: i64) -> DuckResult<DuckDataIterator<CountDownOutput>> {
+fn demo1(start: i64) -> DuckResult<DuckFullIterator<CountDownOutput>> {
     Ok(Box::new(demo4(start).map(|x| {
         if x.n==5{
             Ok(None)
@@ -161,7 +161,7 @@ fn demo1(start: i64) -> DuckResult<DuckDataIterator<CountDownOutput>> {
     })))
 }
 // 这档没太大必要，仅仅是消了个外层的Ok而已，参数异常又是常见异常
-fn demo2(start: i64) -> DuckDataIterator<CountDownOutput> {
+fn demo2(start: i64) -> DuckFullIterator<CountDownOutput> {
     todo!()
 }
 // 可以处理入参异常，出去的不处理

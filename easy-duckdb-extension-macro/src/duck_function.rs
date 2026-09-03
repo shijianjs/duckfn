@@ -1,21 +1,16 @@
-use crate::macro_utils::{TokenStream2Result, require_generic_arg_type};
+use crate::macro_utils::{iterator_item_type, require_generic_arg_type, TokenStream2Result};
 use quote::quote;
 use syn::__private::TokenStream2;
-use syn::{ItemFn, ReturnType, Type};
+use syn::{GenericArgument, ItemFn, PathArguments, ReturnType, Type, TypeImplTrait, TypeParamBound};
 use syn_match::path_match;
 
 pub struct ItemFnWrapper {
-    item_fn: ItemFn,
+    pub item_fn: ItemFn,
+    pub attr:TokenStream2
 }
 
-impl ItemFnWrapper {
-
-}
 
 impl ItemFnWrapper {
-    pub fn new(item_fn: ItemFn) -> Self {
-        ItemFnWrapper { item_fn }
-    }
 
     pub fn build_scalar_function(&self) -> TokenStream2Result {
         self.common_build(self.build_scalar_function_impl()?)
@@ -24,10 +19,10 @@ impl ItemFnWrapper {
         self.common_build(self.build_aggregate_function_impl()?)
     }
     pub(crate) fn build_table_function(&self) -> TokenStream2Result {
-        todo!()
+        self.common_build(self.build_table_function_impl()?)
     }
 
-    fn common_build(&self, scalar_function_impl: TokenStream2) -> TokenStream2Result {
+    fn common_build(&self, duck_function_impl: TokenStream2) -> TokenStream2Result {
         let name = self.name();
         let vis = self.visibility();
         let duck_args = self.build_duck_args()?;
@@ -40,16 +35,19 @@ impl ItemFnWrapper {
 
                 #duck_args
 
-                #scalar_function_impl
+                #duck_function_impl
             }
         })
     }
 
     fn build_duck_args(&self) -> TokenStream2Result {
         let fields = self.args_to_code(|x| x.build_duck_args_field())?;
+        let attr = &self.attr;
+
         Ok(quote! {
 
-            #[derive(easy_duckdb_extension_macro::DuckStruct, Clone)]
+            #[derive(easy_duckdb_extension_macro::DuckStruct, Debug, Clone, Default)]
+            #[duck(#attr)]
             pub struct DuckArgsImpl{
                 #(#fields)*
             }
@@ -59,7 +57,7 @@ impl ItemFnWrapper {
     fn build_scalar_function_impl(&self) -> TokenStream2Result {
         let name = self.name();
         let (_, return_type) = self.scalar_return_type()?;
-        let return_clause = self.build_return_clause()?;
+        let return_clause = self.build_scalar_return_clause()?;
         let get_data = self.args_to_code(|x| x.build_get_data())?;
 
         Ok(quote! {
@@ -136,6 +134,39 @@ impl ItemFnWrapper {
         })
     }
 
+    fn build_table_function_impl(&self) -> TokenStream2Result {
+        let name = self.name();
+
+        let (_, return_type) = self.scalar_return_type()?;
+        let return_clause = self.build_table_return_clause()?;
+        let get_data = self.args_to_code(|x| x.build_get_data())?;
+
+        Ok(quote! {
+            use easy_duckdb_extension::TableFunctionAdapter;
+
+            pub struct TableFunctionImpl;
+
+            impl easy_duckdb_extension::TableFunctionAdapter for TableFunctionImpl {
+                const NAME: &'static str = "count_down_s";
+                type Args = DuckArgsImpl;
+                type Output = #return_type;
+
+                fn init_data_iterator(
+                    args: Self::Args,
+                ) -> easy_duckdb_extension::DuckFullIteratorResult<Self::Output> {
+                    let result = #name(
+                        #(#get_data),*
+                    );
+                    #return_clause
+                }
+            }
+
+            pub fn table_function_builder() -> easy_duckdb_extension::DuckResult<quack_rs::prelude::TableFunctionBuilder> {
+                TableFunctionImpl::table_function_builder()
+            }
+        })
+    }
+
     fn name(&self) -> &syn::Ident {
         &self.item_fn.sig.ident
     }
@@ -182,13 +213,92 @@ impl ItemFnWrapper {
             "Only like `-> f64` `-> Option<f64>` `-> DuckOptionResult<f64>` is supported",
         ))
     }
+    // fn table_return_type(&self) -> syn::Result<(DuckTableResult, &Type)> {
+    //     if let ReturnType::Type(_, ty) = self.return_type() {
+    //         if let Type::Path(type_path) = &**ty {
+    //             // let path = &type_path.path;
+    //             // let inner_opt = path_match!(path,
+    //             //     easy_duckdb_extension?::DuckFullIteratorResult<$inner> => Some((DuckTableResult::Full,inner))
+    //             //     easy_duckdb_extension?::DuckResult<impl Iterator<Item = SomeDuckStruct>> => Some((DuckTableResult::ResultIterator,inner))
+    //             //     impl Iterator<Item = <$inner>> => Some((DuckTableResult::SimpleIterator,inner))
+    //             //     _=> None
+    //             // );
+    //             // return match inner_opt {
+    //             //     None => Ok((DuckScalarResult::Plain, &**ty)),
+    //             //     Some((outter, inner)) => Ok((outter, require_generic_arg_type(inner)?)),
+    //             // };
+    //         };
+    //     };
+    //     Err(syn::Error::new_spanned(
+    //         self.item_fn.sig.output.to_owned(),
+    //         "Only like
+    //             `-> impl Iterator<Item = SomeDuckStruct>`: simple;
+    //             `-> DuckResult<impl Iterator<Item = SomeDuckStruct>>`: handle input err;
+    //             `-> DuckIteratorResult<SomeDuckStruct>: handle input err and output row err;
+    //         is supported",
+    //     ))
+    // }
+    fn table_return_type(&self) -> syn::Result<(DuckTableResult, &Type)> {
+        if let ReturnType::Type(_, ty) = self.return_type() {
+            if let Type::Path(type_path) = &**ty {
+                if let Some(segment) = type_path.path.segments.last() {
+                    if segment.ident == "DuckFullIteratorResult" {
+                        if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                            if let Some(GenericArgument::Type(inner)) = args.args.first() {
+                                return Ok((DuckTableResult::Full, inner));
+                            }
+                        }
+                    }
 
-    fn build_return_clause(&self) -> TokenStream2Result {
+                    if segment.ident == "DuckResult" {
+                        if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                            if let Some(GenericArgument::Type(inner)) = args.args.first() {
+                                if let Type::ImplTrait(impl_trait) = inner {
+                                    if let Some(item) = iterator_item_type(impl_trait) {
+                                        return Ok((DuckTableResult::ResultIterator, item));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Type::ImplTrait(impl_trait) = &**ty {
+                if let Some(item) = iterator_item_type(impl_trait) {
+                    return Ok((DuckTableResult::SimpleIterator, item));
+                }
+            }
+        }
+
+        Err(syn::Error::new_spanned(
+            &self.item_fn.sig.output,
+            "Only like
+                `-> impl Iterator<Item = SomeDuckStruct>`: simple;
+                `-> DuckResult<impl Iterator<Item = SomeDuckStruct>>`: handle input err;
+                `-> DuckFullIteratorResult<SomeDuckStruct>`: handle input err and output row err;
+            is supported",
+        ))
+    }
+
+    fn return_type(&self) -> &ReturnType {
+        &self.item_fn.sig.output
+    }
+
+    fn build_scalar_return_clause(&self) -> TokenStream2Result {
         let (result_type, _) = self.scalar_return_type()?;
         match result_type {
             DuckScalarResult::Plain => Ok(quote! { Ok(Some(result)) }),
             DuckScalarResult::Option => Ok(quote! { Ok(result) }),
             DuckScalarResult::DuckOptionResult => Ok(quote! { result }),
+        }
+    }
+    fn build_table_return_clause(&self) -> TokenStream2Result {
+        let (result_type, _) = self.table_return_type()?;
+        match result_type {
+            DuckTableResult::Full => Ok(quote! { result }),
+            DuckTableResult::ResultIterator => Ok(quote! { Ok(Box::new(result?.map(|x| Ok(Some(x))))) }),
+            DuckTableResult::SimpleIterator => Ok(quote! { Ok(Box::new(result.map(|x| Ok(Some(x))))) }),
         }
     }
 
@@ -297,3 +407,11 @@ enum DuckScalarResult {
     Option,
     DuckOptionResult,
 }
+
+#[derive(Clone, Copy)]
+enum DuckTableResult {
+    Full,
+    ResultIterator,
+    SimpleIterator,
+}
+

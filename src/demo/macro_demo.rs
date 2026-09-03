@@ -1,6 +1,6 @@
 use easy_duckdb_extension_macro::{duck_aggregate_function, duck_scalar_function, DuckStruct};
 
-#[derive(Clone, Debug, DuckStruct)]
+#[derive(Clone, Default,  Debug, DuckStruct)]
 #[duck(named_param_from = "data")]
 pub struct DuckStructDemo1 {
     pub count: i64,

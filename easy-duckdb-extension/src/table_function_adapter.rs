@@ -12,7 +12,8 @@ use quack_rs::table::builder;
 use quack_rs::vector::vector_size;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-pub type DuckDataIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>;
+pub type DuckFullIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>;
+pub type DuckFullIteratorResult<T> = DuckResult<DuckFullIterator<T>>;
 pub trait TableFunctionAdapter: Sized + 'static {
     fn table_function_builder() -> DuckResult<TableFunctionBuilder> {
         let mut builder = TableFunctionBuilder::new(Self::NAME);
@@ -41,11 +42,11 @@ pub trait TableFunctionAdapter: Sized + 'static {
 
     fn with_state(
         bind: &BindInfo,
-    ) -> DuckResult<DuckDataIterator<Self::Output>> {
+    ) -> DuckFullIteratorResult<Self::Output> {
         catch_unwind(|| {
             let args: Self::Args = Self::read_args(bind)?;
             Self::config_result_columns(bind, &args);
-            let x: DuckDataIterator<Self::Output> =
+            let x: DuckFullIterator<Self::Output> =
                 Box::new(Self::init_data_iterator(args)?);
             Ok(x)
         })
@@ -72,7 +73,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
     //     where
     //         F: Fn(&mut S, &DataChunk) -> Result<(), ExtensionError> + Send + Sync + 'static,
     fn scan(
-        state: &mut DuckDataIterator<Self::Output>,
+        state: &mut DuckFullIterator<Self::Output>,
         chunk: &DataChunk,
     ) -> DuckResult<()> {
         catch_unwind(AssertUnwindSafe(|| {
@@ -108,7 +109,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
 
     fn init_data_iterator(
         args: Self::Args,
-    ) -> DuckResult<DuckDataIterator<Self::Output>>;
+    ) -> DuckFullIteratorResult<Self::Output>;
 }
 pub trait DuckBindArgs: Sized {
     fn read_bind_args(bind: &BindInfo) -> DuckResult<Self>;

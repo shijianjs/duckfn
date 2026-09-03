@@ -2,11 +2,12 @@ use crate::{DuckOptionResult, DuckResult};
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{LogicalType, StructVector, TypeId, Value, VectorReader, VectorWriter};
+use std::fmt::Debug;
 
 /// 映射规则：
 /// - 如果 Rust 基础类型已经完整表达了业务语义，可以直接映射；
 /// - 如果多个逻辑类型共享同一个物理表示，就应该 newtype 包装。
-pub trait DuckValueType: Sized + Clone+ Send + Sync + 'static {
+pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static {
     fn type_id() -> TypeId;
     fn logical_type() -> LogicalType {
         LogicalType::new(Self::type_id())

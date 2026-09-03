@@ -34,13 +34,17 @@ fn handle_duck_function(
     run: fn(ItemFnWrapper) -> TokenStream2Result,
 ) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
-    let _args: DuckArgs = match syn::parse(_attr) {
-        Ok(v) => v,
-        Err(e) => {
-            return e.to_compile_error().into();
-        }
+    // let _args: DuckArgs = match syn::parse(_attr) {
+    //     Ok(v) => v,
+    //     Err(e) => {
+    //         return e.to_compile_error().into();
+    //     }
+    // };
+    
+    let wrapper = ItemFnWrapper { 
+        item_fn:input,
+        attr: _attr.into(),
     };
-    let wrapper = ItemFnWrapper::new(input);
     let result = run(wrapper);
     handle_token_stream2_result(result)
 }
