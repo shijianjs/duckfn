@@ -1,5 +1,5 @@
 use easy_duckdb_extension::{DuckFullIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
-use easy_duckdb_extension_macro::DuckStruct;
+use easy_duckdb_extension_macro::{duck_table_function, DuckStruct};
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
 use std::iter::Map;
@@ -10,6 +10,7 @@ pub fn register(reg: &impl Registrar) -> ExtResult<()> {
         count_down()?,
         count_down_it()?,
         CountDownS::table_function_builder()?,
+        count_down_m_simple::table_function_builder()?,
     ];
     for builder in builders {
         unsafe { reg.register_table(builder) }?;
@@ -126,10 +127,6 @@ struct CountDownS {
     start: i64,
 }
 
-#[derive(Default, Debug, Clone, DuckStruct)]
-struct CountDownOutput {
-    n: i64,
-}
 
 impl TableFunctionAdapter for CountDownS {
     const NAME: &'static str = "count_down_s";
@@ -172,6 +169,18 @@ fn demo3(start: i64) -> DuckResult<impl Iterator<Item = CountDownOutput>> {
 // 都不处理
 //参数已经成功解析，后面不会产生 error，也不会产生 NULL。
 fn demo4(start: i64) -> impl Iterator<Item = CountDownOutput> {
+    (0..start).rev()
+        .map(|x| CountDownOutput { n: x })
+}
+
+
+#[derive(Default, Debug, Clone, DuckStruct)]
+pub struct CountDownOutput {
+    n: i64,
+}
+
+#[duck_table_function(named_param_from = "start")]
+pub fn count_down_m_simple(start: i64) -> impl Iterator<Item =CountDownOutput> {
     (0..start).rev()
         .map(|x| CountDownOutput { n: x })
 }

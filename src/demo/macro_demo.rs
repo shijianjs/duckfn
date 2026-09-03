@@ -1,4 +1,4 @@
-use easy_duckdb_extension_macro::{duck_aggregate_function, duck_scalar_function, DuckStruct};
+use easy_duckdb_extension_macro::{duck_aggregate_function, duck_scalar_function, duck_table_function, DuckStruct};
 
 #[derive(Clone, Default,  Debug, DuckStruct)]
 #[duck(named_param_from = "data")]
@@ -33,4 +33,14 @@ impl easy_duckdb_extension::DuckAggregateState for WcAggState {
     fn result(&self) -> easy_duckdb_extension::DuckOptionResult<i64> {
         todo!()
     }
+}
+
+#[duck_table_function]
+fn table_fun_demo(start: i64) -> impl Iterator<Item =CountDownOutput> {
+    (0..start).rev()
+        .map(|x| CountDownOutput { n: x })
+}
+#[derive(Default, Debug, Clone, easy_duckdb_extension_macro::DuckStruct)]
+pub struct CountDownOutput {
+    n: i64,
 }

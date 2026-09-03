@@ -137,7 +137,7 @@ impl ItemFnWrapper {
     fn build_table_function_impl(&self) -> TokenStream2Result {
         let name = self.name();
 
-        let (_, return_type) = self.scalar_return_type()?;
+        let (_, return_type) = self.table_return_type()?;
         let return_clause = self.build_table_return_clause()?;
         let get_data = self.args_to_code(|x| x.build_get_data())?;
 
@@ -147,7 +147,7 @@ impl ItemFnWrapper {
             pub struct TableFunctionImpl;
 
             impl easy_duckdb_extension::TableFunctionAdapter for TableFunctionImpl {
-                const NAME: &'static str = "count_down_s";
+                const NAME: &'static str = stringify!(#name);
                 type Args = DuckArgsImpl;
                 type Output = #return_type;
 
