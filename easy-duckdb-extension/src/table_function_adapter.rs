@@ -1,18 +1,15 @@
 use crate::{
-    DuckColumns, DuckOptionResult, DuckResult, DuckValueReader, DuckValueType, duck_error,
-    duck_scalar_unwind, panic_to_duck_error, panic_to_string, vec_option_to_ref,
+    DuckColumns, DuckOptionResult, DuckResult, panic_to_duck_error, vec_option_to_ref,
 };
-use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{
-    BindInfo, LogicalType, ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder,
-    TableFunctionBuilder, TypeId,
+    BindInfo, LogicalType,
+    TableFunctionBuilder,
 };
-use quack_rs::table::builder;
 use quack_rs::vector::vector_size;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-pub type DuckFullIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>;
+pub type DuckFullIterator<T> = Box<dyn Iterator<Item=DuckOptionResult<T>> + Send>;
 pub type DuckFullIteratorResult<T> = DuckResult<DuckFullIterator<T>>;
 pub trait TableFunctionAdapter: Sized + 'static {
     fn table_function_builder() -> DuckResult<TableFunctionBuilder> {
@@ -61,25 +58,15 @@ pub trait TableFunctionAdapter: Sized + 'static {
     }
 
     fn read_args(bind: &BindInfo) -> DuckResult<Self::Args> {
-        // let raw = unsafe { bind.get_named_parameter_value("start") };
-        // let i = raw.as_i64();
-        //         // let x = State {
-        //         //     remaining: raw.as_i64_or(0).max(0) as u64,
-        //         // };
         Self::Args::read_bind_args(bind)
     }
 
-    //     pub fn scan<F>(mut self, f: F) -> Self
-    //     where
-    //         F: Fn(&mut S, &DataChunk) -> Result<(), ExtensionError> + Send + Sync + 'static,
     fn scan(
         state: &mut DuckFullIterator<Self::Output>,
         chunk: &DataChunk,
     ) -> DuckResult<()> {
         catch_unwind(AssertUnwindSafe(|| {
             let size = vector_size();
-            // println!("size: {}", size);
-            // let mut writer = unsafe { chunk.writer(0) };
             let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(size as usize);
 
             let mut count = size;
@@ -101,11 +88,8 @@ pub trait TableFunctionAdapter: Sized + 'static {
     }
 
     const NAME: &'static str;
-    /// cargo add tuple-transpose
-    /// 使用这个工具包可以快速处理多个Option参数
     type Args: DuckBindArgs;
     type Output: DuckColumns;
-    // type DataIterator: Iterator<Item = DuckOptionResult<Self::Output>> + Send + 'static;
 
     fn init_data_iterator(
         args: Self::Args,

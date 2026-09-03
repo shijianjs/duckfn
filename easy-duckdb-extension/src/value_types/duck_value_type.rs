@@ -1,5 +1,5 @@
 use crate::{DuckOptionResult, DuckResult};
-use libduckdb_sys::duckdb_vector;
+use libduckdb_sys::{duckdb_is_null_value, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{LogicalType, StructVector, TypeId, Value, VectorReader, VectorWriter};
 use std::fmt::Debug;
@@ -109,7 +109,10 @@ pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static
 
     /// 表函数解析参数时使用
     fn read_by_duck_value(value: &Value) -> DuckOptionResult<Self> {
-        if value.is_null() {
+        if value.is_null() ||
+            // 解决 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+            //   fatal runtime error: Rust cannot catch foreign exceptions, aborting
+            unsafe { duckdb_is_null_value(value.as_raw()) } {
             Ok(None)
         } else {
             Ok(Some(Self::read_by_duck_value_valid(value)?))
