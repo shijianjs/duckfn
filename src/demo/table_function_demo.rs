@@ -180,7 +180,7 @@ pub struct CountDownOutput {
 }
 
 #[duck_table_function(named_param_from = "start")]
-pub fn count_down_m_simple(start: i64) -> impl Iterator<Item =CountDownOutput> {
-    (0..start).rev()
+pub fn count_down_m_simple(start: i64,multi:Option<i64>) -> impl Iterator<Item =CountDownOutput> {
+    (0..(start * multi.unwrap_or(1))).rev()
         .map(|x| CountDownOutput { n: x })
 }

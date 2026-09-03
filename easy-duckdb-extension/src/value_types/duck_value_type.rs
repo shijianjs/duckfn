@@ -13,9 +13,6 @@ pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static
         LogicalType::new(Self::type_id())
     }
 
-    // fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
-    //     DuckValueReader::new_from_chunk(chunk, column_index)
-    // }
     fn create_reader(chunk: &DataChunk, column_index: usize) -> DuckValueReader {
         let vector = unsafe { chunk.vector(column_index) };
         let size = chunk.size();
@@ -46,8 +43,6 @@ pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static
     }
 
     fn write_batch(output: duckdb_vector, output_vec: &[Option<&Self>]) {
-        // let refs: Vec<Option<&Self>> = output_vec.iter().map(|v| v.as_ref()).collect();
-        // let refs: Vec<Option<&Self>> = output_vec.iter().map(|v| v.as_ref()).collect();
         let mut writer = Self::create_writer_batch(output, &output_vec);
         for (idx, result) in output_vec.iter().enumerate() {
             Self::write(&mut writer, idx, *result);
@@ -55,9 +50,6 @@ pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static
         Self::write_finish(&mut writer);
     }
 
-    // fn create_writer(vector: duckdb_vector) -> DuckValueWriter {
-    //     DuckValueWriter::new_from_vector(vector)
-    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         // Self::create_writer(vector)
         DuckValueWriter::new_from_vector(vector)
@@ -90,12 +82,7 @@ pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static
         let field_reader = Self::create_reader_from_vector(field_vector, row_count);
         field_reader
     }
-    // fn struct_field_writer(writer: &DuckValueWriter, field_index: usize) -> DuckValueWriter {
-    //     let vector = writer.c_duckdb_vector;
-    //     let field_vector = unsafe { StructVector::get_child(vector, field_index) };
-    //     let field_writer = Self::create_writer(field_vector);
-    //     field_writer
-    // }
+
     fn struct_field_writer_batch(
         writer: &DuckValueWriter,
         field_index: usize,
@@ -122,7 +109,7 @@ pub trait DuckValueType: Clone + Debug + Default + Sized + Send + Sync + 'static
         Ok(Self::read_by_duck_value_valid_simple(value))
     }
     fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        todo!("子类需要实现read_by_duck_value_valid_simple")
+        todo!("sub class need to implement read_by_duck_value_valid_simple")
     }
 }
 
