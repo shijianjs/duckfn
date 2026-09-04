@@ -352,9 +352,18 @@ pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
     println!("{:?}", map);
     map.into_iter().map(|(_, v)| v.unwrap_or(vec![])).flatten().sum::<i64>()
 }
+/// ```sql
+/// SELECT input_map_notnull_demo(MAP {'key1': [10], 'key2': [20], 'key3': []});
+/// ```
+#[duck_scalar_function]
+pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
+    println!("{:?}", map);
+    map.into_iter().map(|(_, v)| v).flatten().sum::<i64>()
+}
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
+        input_map_notnull_demo::scalar_function_builder(),
         // DoubleIt::register_builder(),
         double_it5::scalar_function_builder(),
         first_word_tuple::scalar_function_builder(),
