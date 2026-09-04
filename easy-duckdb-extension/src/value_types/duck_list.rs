@@ -36,9 +36,6 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
         Some(vec)
     }
 
-    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-    //     DuckList::<T>::create_writer(output)
-    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
         let total_elements: usize = output_vec.iter()
@@ -110,13 +107,9 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         // Option<Vec<Option<T>>> -> Option<Vec<T>>
         Vec::<Option<T>>::read_valid(reader, row)
-            .map(|li| {li})
             .and_then(|v| v.into_iter().collect::<Option<Vec<_>>>())
     }
 
-    // fn create_writer(output: duckdb_vector) -> DuckValueWriter {
-    //     DuckList::<T>::create_writer(output)
-    // }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         let mut writer = DuckValueWriter::new_from_vector(vector);
         let total_elements: usize = output_vec.iter()
