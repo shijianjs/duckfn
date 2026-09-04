@@ -4,7 +4,7 @@ use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, MapVector, TypeId, Value};
 use std::hash::Hash;
 
-impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K, Option<V>> {
+impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<K, Option<V>> {
     fn type_id() -> TypeId {
         TypeId::Map
     }
@@ -14,7 +14,8 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
 
     fn create_reader_from_vector(map_vec: duckdb_vector, size: usize) -> DuckValueReader {
         let child_size = unsafe { MapVector::total_entry_count(map_vec) };
-        let key_reader = K::create_reader_from_vector(unsafe { MapVector::keys(map_vec) }, child_size);
+        let key_reader =
+            K::create_reader_from_vector(unsafe { MapVector::keys(map_vec) }, child_size);
         let value_reader =
             V::create_reader_from_vector(unsafe { MapVector::values(map_vec) }, child_size);
 
@@ -37,9 +38,9 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
     }
 
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
-
         let mut writer = DuckValueWriter::new_from_vector(vector);
-        let total_elements: usize = output_vec.iter()
+        let total_elements: usize = output_vec
+            .iter()
             .filter_map(|x| x.as_ref().map(|v| v.len()))
             .sum();
         unsafe { ListVector::reserve(vector, total_elements) };
@@ -48,21 +49,17 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
         let k_vec: Vec<Option<&K>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| {
-                list.iter().map(|(k,v)| Some(k))
-            })
+            .flat_map(|list| list.iter().map(|(k, v)| Some(k)))
             .collect();
-        let k_writer = K::create_writer_batch(k_vector,&k_vec);
+        let k_writer = K::create_writer_batch(k_vector, &k_vec);
 
         let v_vector = unsafe { MapVector::values(vector) };
         let v_vec: Vec<Option<&V>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| {
-                list.iter().map(|(k,v)| v.as_ref())
-            })
+            .flat_map(|list| list.iter().map(|(k, v)| v.as_ref()))
             .collect();
-        let v_writer = V::create_writer_batch(v_vector,&v_vec);
+        let v_writer = V::create_writer_batch(v_vector, &v_vec);
 
         writer.child_writer = vec![k_writer, v_writer];
         writer
@@ -77,7 +74,7 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
             ListVector::set_entry(writer.c_duckdb_vector, idx, offset as u64, len as u64);
         }
 
-        for (i, (k,v)) in v.iter().enumerate() {
+        for (i, (k, v)) in v.iter().enumerate() {
             let k_writer = &mut writer.child_writer[0];
             let idx = offset + i;
             K::write_valid(k_writer, idx, k);
@@ -99,10 +96,18 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
         let mut map = Self::with_capacity(map_size as usize);
         for i in 0..map_size as usize {
             let k_value_option = value.map_key(i);
-            let k = if let Some(k_value) = k_value_option { K::read_by_duck_value(&k_value)? } else { None };
-            let k_valid = k.ok_or_else(|| { duck_error("Map key cannot be null") })?;
+            let k = if let Some(k_value) = k_value_option {
+                K::read_by_duck_value(&k_value)?
+            } else {
+                None
+            };
+            let k_valid = k.ok_or_else(|| duck_error("Map key cannot be null"))?;
             let v_value_option = value.map_value(i);
-            let v = if let Some(v_value) = v_value_option { V::read_by_duck_value(&v_value)? } else { None };
+            let v = if let Some(v_value) = v_value_option {
+                V::read_by_duck_value(&v_value)?
+            } else {
+                None
+            };
             map.insert(k_valid, v);
         }
         Ok(map)
@@ -113,11 +118,10 @@ trait Helper {
     type H;
 }
 
-
-impl<K: DuckValueType + Hash+Eq, V: DuckValueType> Helper for IndexMap<K, V> {
-    type H = IndexMap::<K, Option<V>>;
+impl<K: DuckValueType + Hash + Eq, V: DuckValueType> Helper for IndexMap<K, V> {
+    type H = IndexMap<K, Option<V>>;
 }
-impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K, V> {
+impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<K, V> {
     fn type_id() -> TypeId {
         <Self as Helper>::H::type_id()
     }
@@ -145,9 +149,9 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
     }
 
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
-
         let mut writer = DuckValueWriter::new_from_vector(vector);
-        let total_elements: usize = output_vec.iter()
+        let total_elements: usize = output_vec
+            .iter()
             .filter_map(|x| x.as_ref().map(|v| v.len()))
             .sum();
         unsafe { ListVector::reserve(vector, total_elements) };
@@ -156,21 +160,17 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
         let k_vec: Vec<Option<&K>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| {
-                list.iter().map(|(k,v)| Some(k))
-            })
+            .flat_map(|list| list.iter().map(|(k, v)| Some(k)))
             .collect();
-        let k_writer = K::create_writer_batch(k_vector,&k_vec);
+        let k_writer = K::create_writer_batch(k_vector, &k_vec);
 
         let v_vector = unsafe { MapVector::values(vector) };
         let v_vec: Vec<Option<&V>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| {
-                list.iter().map(|(k,v)| Some(v))
-            })
+            .flat_map(|list| list.iter().map(|(k, v)| Some(v)))
             .collect();
-        let v_writer = V::create_writer_batch(v_vector,&v_vec);
+        let v_writer = V::create_writer_batch(v_vector, &v_vec);
 
         writer.child_writer = vec![k_writer, v_writer];
         writer
@@ -185,7 +185,7 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
             ListVector::set_entry(writer.c_duckdb_vector, idx, offset as u64, len as u64);
         }
 
-        for (i, (k,v)) in v.iter().enumerate() {
+        for (i, (k, v)) in v.iter().enumerate() {
             let k_writer = &mut writer.child_writer[0];
             let idx = offset + i;
             K::write_valid(k_writer, idx, k);
@@ -202,11 +202,19 @@ impl<K: DuckValueType + Hash+Eq, V: DuckValueType> DuckValueType for IndexMap<K,
         let mut map = Self::with_capacity(map_size as usize);
         for i in 0..map_size as usize {
             let k_value_option = value.map_key(i);
-            let k = if let Some(k_value) = k_value_option { K::read_by_duck_value(&k_value)? } else { None };
-            let k_valid = k.ok_or_else(|| { duck_error("Map key cannot be null") })?;
+            let k = if let Some(k_value) = k_value_option {
+                K::read_by_duck_value(&k_value)?
+            } else {
+                None
+            };
+            let k_valid = k.ok_or_else(|| duck_error("Map key cannot be null"))?;
             let v_value_option = value.map_value(i);
-            let v = if let Some(v_value) = v_value_option { V::read_by_duck_value(&v_value)? } else { None };
-            let v_valid = v.ok_or_else(|| { duck_error("Map value cannot be null") })?;
+            let v = if let Some(v_value) = v_value_option {
+                V::read_by_duck_value(&v_value)?
+            } else {
+                None
+            };
+            let v_valid = v.ok_or_else(|| duck_error("Map value cannot be null"))?;
             map.insert(k_valid, v_valid);
         }
         Ok(map)
