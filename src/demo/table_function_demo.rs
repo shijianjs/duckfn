@@ -1,9 +1,10 @@
 use easy_duckdb_extension::{DuckFullIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
-use easy_duckdb_extension_macro::{duck_table_function, DuckStruct};
+use easy_duckdb_extension_macro::{duck_scalar_function, duck_table_function, DuckStruct};
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
 use std::iter::Map;
 use std::ops::Range;
+use indexmap::IndexMap;
 
 pub fn register(reg: &impl Registrar) -> ExtResult<()> {
     let builders = vec![
@@ -11,6 +12,8 @@ pub fn register(reg: &impl Registrar) -> ExtResult<()> {
         count_down_it()?,
         CountDownS::table_function_builder()?,
         count_down_m_simple::table_function_builder()?,
+        bind_map_demo::table_function_builder()?,
+        
     ];
     for builder in builders {
         unsafe { reg.register_table(builder) }?;
@@ -183,4 +186,14 @@ pub struct CountDownOutput {
 pub fn count_down_m_simple(start: i64,multi:Option<i64>) -> impl Iterator<Item =CountDownOutput> {
     (0..(start * multi.unwrap_or(1))).rev()
         .map(|x| CountDownOutput { n: x })
+}
+
+/// ```sql
+/// from bind_map_demo(MAP {'key1': [10], 'key2': [20,5], 'key3': null});
+/// ```
+#[duck_table_function]
+pub fn bind_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> impl Iterator<Item=CountDownOutput> {
+    println!("{:?}", map);
+    map.into_iter().map(|(_, v)| v.unwrap_or(vec![]))
+        .map(|vec| CountDownOutput { n: vec.iter().sum() })
 }

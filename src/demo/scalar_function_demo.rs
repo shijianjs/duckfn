@@ -344,7 +344,14 @@ pub fn create_map_demo(i:i64)->IndexMap<String, Option<Vec<i64>>>{
     // println!("{:?}", map);
     map
 }
-
+/// ```sql
+/// SELECT input_map_demo(MAP {'key1': [10], 'key2': [20], 'key3': null});
+/// ```
+#[duck_scalar_function]
+pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
+    println!("{:?}", map);
+    map.into_iter().map(|(_, v)| v.unwrap_or(vec![])).flatten().sum::<i64>()
+}
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
@@ -383,6 +390,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         nest_vec_no_null_scalar_w::scalar_function_builder(),
         error_scalar_demo::scalar_function_builder(),
         create_map_demo::scalar_function_builder(),
+        input_map_demo::scalar_function_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;

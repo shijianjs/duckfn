@@ -144,4 +144,8 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
   from count_down_m_simple(start=12);";
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT create_map_demo(range) from range(10);";
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT input_map_demo(MAP {'key1': [10], 'key2': [20,5], 'key3': null});";
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  from bind_map_demo(MAP {'key1': [10], 'key2': [20,5], 'key3': null});";
 
