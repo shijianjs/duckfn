@@ -1,8 +1,6 @@
+use easy_duckdb_extension::{duck_error, DuckOptionResult};
+use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
-use easy_duckdb_extension::RegisterBuilder;
-use easy_duckdb_extension::ScalarFunctionAdapter;
-use easy_duckdb_extension::DuckList;
-use easy_duckdb_extension::{DuckStruct1, DuckStruct2, FieldNames};
 use libduckdb_sys::{
     duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector,
 };
@@ -12,9 +10,6 @@ use quack_rs::prelude::{
     ListVector, LogicalType, MapVector, Registrar, ScalarFunctionBuilder, StructVector, TypeId,
     VectorReader, VectorWriter,
 };
-use tuple_transpose::TupleTranspose;
-use easy_duckdb_extension::{duck_error, DuckOptionResult, DuckResult};
-use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 
 ///
 ///
@@ -23,8 +18,8 @@ use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 /// ```
 
 #[duck_scalar_function]
-pub fn double_it5(input:i64)->i64{
-    input*2
+pub fn double_it5(input: i64) -> i64 {
+    input * 2
 }
 
 

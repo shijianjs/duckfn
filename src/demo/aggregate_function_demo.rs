@@ -1,6 +1,5 @@
 use easy_duckdb_extension::AggregateFunctionAdapter;
-use easy_duckdb_extension::DuckList;
-use easy_duckdb_extension::{DuckOptionResult, DuckResult, DuckValueType};
+use easy_duckdb_extension::{DuckOptionResult, DuckResult};
 use easy_duckdb_extension_macro::{duck_aggregate_function, DuckStruct};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
@@ -10,7 +9,6 @@ use quack_rs::prelude::{
     AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId,
     VectorReader, VectorWriter,
 };
-use tuple_transpose::TupleTranspose;
 
 #[duck_aggregate_function]
 fn word_count_m(input: Option<String>, state: &mut WcAggState)  {
@@ -70,24 +68,24 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
 
 #[derive(Default, Debug, Clone)]
 struct AggListWrapper {
-    li: DuckList<i64>,
+    li: Vec<Option<i64>>,
 }
 impl AggregateState for AggListWrapper {}
 impl AggregateFunctionAdapter for AggListWrapper {
     const NAME: &'static str = "agg_list_w";
     type Args = (Option<i64>,);
-    type Output = DuckList<i64>;
+    type Output = Vec<Option<i64>>;
     fn handle_row(&mut self, args: Self::Args) -> DuckResult<()> {
         let value = args.0;
         if let Some(12) = value {
             return Err(ExtensionError::new("Value is 12"));
         }
-        self.li.value.push(value);
+        self.li.push(value);
         Ok(())
     }
 
     fn combine(&mut self, other: &Self) -> DuckResult<()> {
-        self.li.value.extend(other.li.value.iter().cloned());
+        self.li.extend(other.li.iter().cloned());
         Ok(())
     }
 
@@ -100,12 +98,7 @@ mod simple_think {
 
     //     简化的设想，但没省多少
 
-    use easy_duckdb_extension::{DuckAggregateState, DuckOptionResult, DuckResult, DuckValueType};
     use easy_duckdb_extension_macro::DuckStruct;
-
-
-
-
 
 
     // 另一种设想

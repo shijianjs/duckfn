@@ -4,12 +4,11 @@ use quack_rs::prelude::{ListVector, LogicalType, TypeId, Value};
 use crate::{duck_error, DuckResult};
 
 // TypeId::List
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DuckList<T: DuckValueType> {
     pub value: Vec<Option<T>>,
 }
 
-impl<T: DuckValueType> DuckList<T> {}
 
 impl<T: DuckValueType> DuckValueType for DuckList<T> {
     fn type_id() -> TypeId {
