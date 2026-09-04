@@ -1,4 +1,4 @@
-use easy_duckdb_extension::AggregateFunctionAdapter;
+use easy_duckdb_extension::{AggregateFunctionAdapter, DuckAggregateState};
 use easy_duckdb_extension::{DuckOptionResult, DuckResult};
 use easy_duckdb_extension_macro::{duck_aggregate_function, DuckStruct};
 use libduckdb_sys::{
@@ -66,23 +66,26 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone,DuckStruct)]
 struct AggListWrapper {
     li: Vec<Option<i64>>,
 }
-impl AggregateState for AggListWrapper {}
-impl AggregateFunctionAdapter for AggListWrapper {
-    const NAME: &'static str = "agg_list_w";
-    type Args = (Option<i64>,);
-    type Output = Vec<Option<i64>>;
-    fn handle_row(&mut self, args: Self::Args) -> DuckResult<()> {
-        let value = args.0;
-        if let Some(12) = value {
-            return Err(ExtensionError::new("Value is 12"));
-        }
-        self.li.push(value);
-        Ok(())
+///
+/// ```sql
+/// SELECT range % 3 as g,agg_list_w(range) from range(9) group by g;
+/// ```
+#[duck_aggregate_function]
+fn agg_list_w(input: Option<i64>, state: &mut AggListWrapper)->DuckResult<()> {
+    let value = input;
+    if let Some(12) = value {
+        return Err(ExtensionError::new("Value is 12"));
     }
+    state.li.push(value);
+    Ok(())
+}
+
+impl DuckAggregateState for AggListWrapper {
+    type Output = Vec<Option<i64>>;
 
     fn combine(&mut self, other: &Self) -> DuckResult<()> {
         self.li.extend(other.li.iter().cloned());
@@ -209,7 +212,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
             .finalize(wc_finalize)
             .destructor(wc_state_destroy),
         WordCountStateWrapper::aggregate_function_builder(),
-        AggListWrapper::aggregate_function_builder(),
+        agg_list_w::aggregate_function_builder(),
         word_count_m::aggregate_function_builder(),
     ];
     for builder in builders {
