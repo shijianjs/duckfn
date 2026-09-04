@@ -6,6 +6,7 @@ edition = "2024"
 [lib]
 #name = "easy_duckdb_extension"
 #path = "src/lib.rs"
+crate-type = ["rlib"]
 
 [dependencies]
 quack-rs = "0.16.0"
