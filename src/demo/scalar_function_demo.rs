@@ -1,4 +1,4 @@
-use easy_duckdb_extension::{duck_error, DuckOptionResult};
+use easy_duckdb_extension::{duck_error, DuckOptionArray, DuckOptionResult};
 use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
 use libduckdb_sys::{
@@ -22,7 +22,6 @@ pub fn double_it5(input: i64) -> i64 {
     input * 2
 }
 
-
 #[duck_scalar_function]
 pub fn first_word_tuple(input: Option<String>) -> Option<String> {
     input.map(|v| {
@@ -34,12 +33,10 @@ pub fn first_word_tuple(input: Option<String>) -> Option<String> {
     })
 }
 
-
 #[duck_scalar_function]
 pub fn add_it_tuple(input: Option<i64>, v2: i64) -> Option<i64> {
     input.map(|v| v + v2)
 }
-
 
 // ============================================================================
 // Scalar: sum_list(LIST(BIGINT)) → BIGINT
@@ -161,7 +158,6 @@ fn make_list_scalar_w(v: i64) -> Vec<Option<i64>> {
     vec![Some(v + 1), Some(v * 2), None]
 }
 
-
 /// ```sql
 /// SELECT nest_list_scalar_w(range) from range(10);
 /// ```
@@ -174,8 +170,6 @@ fn nest_list_scalar_w(v: i64) -> Vec<Option<Vec<Option<i64>>>> {
     ]
 }
 
-
-
 /// ```sql
 /// SELECT nest_vec_no_null_scalar_w(range) from range(10);
 /// ```
@@ -185,25 +179,24 @@ pub fn nest_vec_no_null_scalar_w(v: i64) -> Vec<Vec<i64>> {
 }
 
 #[derive(DuckStruct, Clone, Default, Debug)]
-pub struct StructScalarWrapperArg1{
+pub struct StructScalarWrapperArg1 {
     hello_count: i64,
 }
 /// ```sql
 /// SELECT struct_scalar_w({hello_count:15})
 /// ```
 #[duck_scalar_function]
-pub fn struct_scalar_w(arg1:StructScalarWrapperArg1)->i64{
+pub fn struct_scalar_w(arg1: StructScalarWrapperArg1) -> i64 {
     arg1.hello_count + 10
 }
 
-
 #[derive(DuckStruct, Clone, Default, Debug)]
-pub struct NestOuter{
-    structf:NestInner,
-    list:Vec<Option<i64>>
+pub struct NestOuter {
+    structf: NestInner,
+    list: Vec<Option<i64>>,
 }
 #[derive(DuckStruct, Clone, Default, Debug)]
-pub struct NestInner{
+pub struct NestInner {
     hello_count: i64,
 }
 /// ```sql
@@ -214,12 +207,11 @@ pub fn struct_nest_scalar_w(arg1: NestOuter) -> i64 {
     arg1.structf.hello_count + arg1.list.iter().flatten().sum::<i64>()
 }
 
-
 /// ```sql
 /// SELECT struct_nest_output_scalar_w(10)
 /// ```
 #[duck_scalar_function]
-pub fn struct_nest_output_scalar_w(arg1:i32)->NestOuter{
+pub fn struct_nest_output_scalar_w(arg1: i32) -> NestOuter {
     NestOuter {
         structf: NestInner {
             hello_count: 100 + arg1 as i64,
@@ -228,8 +220,6 @@ pub fn struct_nest_output_scalar_w(arg1:i32)->NestOuter{
     }
 }
 
-
-
 /// ```sql
 /// SELECT error_scalar_demo(10);
 /// SELECT error_scalar_demo(20);
@@ -237,19 +227,18 @@ pub fn struct_nest_output_scalar_w(arg1:i32)->NestOuter{
 /// SELECT error_scalar_demo(40);
 /// ```
 #[duck_scalar_function]
-pub fn error_scalar_demo(i:i64) -> DuckOptionResult<i64> {
-    if i==10 {
+pub fn error_scalar_demo(i: i64) -> DuckOptionResult<i64> {
+    if i == 10 {
         return Err(duck_error("error: input is 10"));
     }
-    if i==20 {
+    if i == 20 {
         panic!("panic: input is 20")
     }
-    if i==30 {
+    if i == 30 {
         panic!()
     }
-    Ok(Some(i *2))
+    Ok(Some(i * 2))
 }
-
 
 // ============================================================================
 // Scalar: make_pair(VARCHAR, INTEGER) → STRUCT(key VARCHAR, value INTEGER)
@@ -334,8 +323,15 @@ unsafe extern "C" fn make_kv_map_scalar(
 /// SELECT create_map_demo(range) from range(10);
 /// ```
 #[duck_scalar_function]
-pub fn create_map_demo(i:i64)->IndexMap<String, Option<Vec<i64>>>{
-    let map = (0..i).map(|x| (format!("key {x}"), if x == 5 { None } else { Some((0..x).collect()) })).collect();
+pub fn create_map_demo(i: i64) -> IndexMap<String, Option<Vec<i64>>> {
+    let map = (0..i)
+        .map(|x| {
+            (
+                format!("key {x}"),
+                if x == 5 { None } else { Some((0..x).collect()) },
+            )
+        })
+        .collect();
     // println!("{:?}", map);
     map
 }
@@ -345,7 +341,10 @@ pub fn create_map_demo(i:i64)->IndexMap<String, Option<Vec<i64>>>{
 #[duck_scalar_function]
 pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
     println!("{:?}", map);
-    map.into_iter().map(|(_, v)| v.unwrap_or(vec![])).flatten().sum::<i64>()
+    map.into_iter()
+        .map(|(_, v)| v.unwrap_or(vec![]))
+        .flatten()
+        .sum::<i64>()
 }
 /// ```sql
 /// SELECT input_map_notnull_demo(MAP {'key1': [10], 'key2': [20], 'key3': []});
@@ -356,8 +355,17 @@ pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
     map.into_iter().map(|(_, v)| v).flatten().sum::<i64>()
 }
 
+/// ```sql
+/// SELECT input_array_demo(ARRAY [1, 2]);
+/// ```
+#[duck_scalar_function]
+pub fn input_array_demo(arr: DuckOptionArray<i64, 2>) -> DuckOptionArray<i64, 2> {
+    arr
+}
+
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
+        input_array_demo::scalar_function_builder(),
         input_map_notnull_demo::scalar_function_builder(),
         // DoubleIt::register_builder(),
         double_it5::scalar_function_builder(),
@@ -395,6 +403,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         error_scalar_demo::scalar_function_builder(),
         create_map_demo::scalar_function_builder(),
         input_map_demo::scalar_function_builder(),
+
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;

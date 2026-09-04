@@ -151,3 +151,6 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   from bind_map_demo(MAP {'key1': [10], 'key2': [20,5], 'key3': null});";
 
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT input_array_demo(ARRAY [1, 2]);";
+
