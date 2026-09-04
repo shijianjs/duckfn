@@ -1,4 +1,4 @@
-use easy_duckdb_extension::{duck_error, DuckOptionArray, DuckOptionResult};
+use easy_duckdb_extension::{duck_error, DuckArray, DuckOptionArray, DuckOptionResult};
 use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
 use libduckdb_sys::{
@@ -362,9 +362,14 @@ pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
 pub fn input_array_demo(arr: DuckOptionArray<i64, 2>) -> DuckOptionArray<i64, 2> {
     arr
 }
+#[duck_scalar_function]
+pub fn input_array_notnull_demo(arr: DuckArray<i64, 2>) -> DuckArray<i64, 2> {
+    arr
+}
 
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
+        input_array_notnull_demo::scalar_function_builder(),
         input_array_demo::scalar_function_builder(),
         input_map_notnull_demo::scalar_function_builder(),
         // DoubleIt::register_builder(),
