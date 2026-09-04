@@ -161,55 +161,31 @@ impl DuckValueType for DuckTimeTz {
     }
 }
 
-// TypeId::Decimal
-// pub const unsafe fn read_decimal(&self, idx: usize, WIDTH: u8) -> i128 {
-// pub const unsafe fn write_decimal(&mut self, idx: usize, WIDTH: u8, unscaled: i128) {
-pub trait DecimalShapeDef:Default+Debug+Sized+Clone+ Send + Sync + 'static{
-    const WIDTH: u8;
-    const SCALE: u8;
-}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-struct DuckDecimal<T: DecimalShapeDef> {
+pub struct DuckDecimal<const WIDTH: u8, const SCALE: u8> {
     pub unscaled: i128,
-    pub scale: u8,
-    pub shape: PhantomData<T>,
 }
 
-impl<T: DecimalShapeDef> DuckValueType for DuckDecimal<T> {
+impl<const WIDTH: u8, const SCALE: u8> DuckValueType for DuckDecimal<WIDTH, SCALE> {
     fn type_id() -> TypeId {
         TypeId::Decimal
     }
     fn logical_type() -> LogicalType {
-        todo!("Decimal暂不可用：\
-        可能Decimal有问题，但不清楚怎么处理，且我自己用不到decimal，后面再说；\
-        输入的decimal指定类型不合适，可能就是处理decimal的函数；输出可指定类型、但也未必合适了；\
-        或许可以分为两个类型、一个读一个写，读用获取到的类型、写用指定的类型");
-        LogicalType::decimal(T::WIDTH, T::SCALE)
+        LogicalType::decimal(WIDTH, SCALE)
     }
     fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        // Some(Self {
-        //     scale: T::SCALE,
-        //     shape: PhantomData::<T>,
-        //     unscaled: value.as_decimal(T::WIDTH),
-        // })
-        todo!( "Decimal暂不可用")
+        Self {
+            unscaled: value.as_decimal().value,
+        }
     }
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
-        let logical = unsafe { quack_rs::vector::vector_get_column_type(reader.c_duckdb_vector) };
-        let width = unsafe { logical.decimal_width() };
-        let scale = unsafe { logical.decimal_scale() };
         Some(Self {
-            scale,
-            shape: PhantomData::<T>,
-            unscaled: unsafe { reader.vector_reader.read_decimal(row, width) },
+            unscaled: unsafe { reader.vector_reader.read_decimal(row, WIDTH) },
         })
     }
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
-        let logical = unsafe { quack_rs::vector::vector_get_column_type(writer.c_duckdb_vector) };
-        let width = unsafe { logical.decimal_width() };
-        // let scale = unsafe { logical.decimal_scale() };
-        unsafe { writer.vector_writer.write_decimal(idx, width, vo.unscaled) }
+        unsafe { writer.vector_writer.write_decimal(idx, WIDTH, vo.unscaled) }
     }
 }
 
