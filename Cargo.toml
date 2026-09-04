@@ -38,6 +38,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 tuple-transpose = "0.1.0"
 easy-duckdb-extension = { path = "easy-duckdb-extension"}
 easy-duckdb-extension-macro = { path = "easy-duckdb-extension-macro"}
+indexmap = "2"
 
 [workspace]
 resolver = "3"

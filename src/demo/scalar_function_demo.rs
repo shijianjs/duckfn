@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use easy_duckdb_extension::RegisterBuilder;
 use easy_duckdb_extension::ScalarFunctionAdapter;
 use easy_duckdb_extension::DuckList;
@@ -334,6 +335,17 @@ unsafe extern "C" fn make_kv_map_scalar(
     unsafe { MapVector::set_size(output, entry_offset as usize) };
 }
 
+/// ```sql
+/// SELECT create_map_demo(range) from range(10);
+/// ```
+#[duck_scalar_function]
+pub fn create_map_demo(i:i64)->IndexMap<String, Option<Vec<i64>>>{
+    let map = (0..i).map(|x| (format!("key {x}"), if x == 5 { None } else { Some((0..x).collect()) })).collect();
+    // println!("{:?}", map);
+    map
+}
+
+
 pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
     let builders = vec![
         // DoubleIt::register_builder(),
@@ -370,6 +382,7 @@ pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
         struct_nest_output_scalar_w::scalar_function_builder(),
         nest_vec_no_null_scalar_w::scalar_function_builder(),
         error_scalar_demo::scalar_function_builder(),
+        create_map_demo::scalar_function_builder(),
     ];
     for builder in builders {
         unsafe { connection.register_scalar(builder) }?;

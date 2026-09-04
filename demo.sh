@@ -142,4 +142,6 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
   from count_down_s(12);";
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   from count_down_m_simple(start=12);";
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT create_map_demo(range) from range(10);";
 

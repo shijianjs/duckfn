@@ -186,7 +186,7 @@ impl DuckValueWriter {
 //
 //
 // 这几个包装类型后面再说
-// TypeId::Struct
+//
 // TypeId::Map
 // TypeId::Array
 //
