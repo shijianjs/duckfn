@@ -86,6 +86,7 @@ impl DuckStructContext {
         let field_writer_batch = self.fields_to_code(|f| f.field_writer_batch())?;
         let write_valid = self.fields_to_code(|f| f.write_valid())?;
         let read_by_duck_value_valid = self.fields_to_code(|f| f.read_by_duck_value_valid())?;
+        let write_finish = self.fields_to_code(|f| f.write_finish())?;
 
         Ok(quote! {
             impl ::easy_duckdb_extension::DuckValueType for #struct_name {
@@ -133,6 +134,10 @@ impl DuckStructContext {
                     Ok(Self{
                         #(#read_by_duck_value_valid),*
                     })
+                }
+
+                fn write_finish(writer: &mut DuckValueWriter) {
+                    #(#write_finish)*
                 }
             }
         })
@@ -444,6 +449,21 @@ impl FieldWrapper {
                     .collect::<Vec<_>>());
             })
         }
+    }
+    //    fn write_finish(writer: &mut DuckValueWriter) {
+    //         K::write_finish(&mut writer.child_writer[0]);
+    //         V::write_finish(&mut writer.child_writer[1]);
+    //
+    //         unsafe {
+    //             MapVector::set_size(writer.c_duckdb_vector, writer.offset);
+    //         }
+    //     }
+    fn write_finish(&self) -> TokenStream2Result {
+        let ty = self.duck_value_type();
+        let index = self.index;
+        Ok(quote! {
+            #ty::write_finish(&mut writer.child_writer[#index]);
+        })
     }
 
     fn read_bind_args(&self) -> TokenStream2Result {
