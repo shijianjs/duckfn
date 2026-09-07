@@ -46,7 +46,7 @@ impl ItemFnWrapper {
 
         Ok(quote! {
 
-            #[derive(duckfn_macro::DuckStruct, Debug, Clone, Default)]
+            #[derive(duckfn::DuckStruct, Debug, Clone, Default)]
             #[duck(#attr)]
             pub struct DuckArgsImpl{
                 #(#fields)*

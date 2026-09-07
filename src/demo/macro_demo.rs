@@ -1,4 +1,4 @@
-use duckfn_macro::{duck_aggregate_function, duck_scalar_function, duck_table_function, DuckStruct};
+use duckfn::{duck_aggregate_function, duck_scalar_function, duck_table_function, DuckStruct};
 
 #[derive(Clone, Default,  Debug, DuckStruct)]
 #[duck(named_param_from = "data")]
@@ -40,7 +40,7 @@ fn table_fun_demo(start: i64) -> impl Iterator<Item =CountDownOutput> {
     (0..start).rev()
         .map(|x| CountDownOutput { n: x })
 }
-#[derive(Default, Debug, Clone, duckfn_macro::DuckStruct)]
+#[derive(Default, Debug, Clone, duckfn::DuckStruct)]
 pub struct CountDownOutput {
     n: i64,
 }

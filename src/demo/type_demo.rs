@@ -1,6 +1,6 @@
-use duckfn_macro::duck_table_function;
+use duckfn::duck_table_function;
 
-#[derive(Default, Debug, Clone, duckfn_macro::DuckStruct)]
+#[derive(Default, Debug, Clone, duckfn::DuckStruct)]
 pub struct CountDownOutput {
     n: i64,
 }
@@ -34,7 +34,7 @@ pub mod demo1{
 
     pub struct TableFunctionImpl;
 
-    #[derive(Default, Debug, Clone, duckfn_macro::DuckStruct)]
+    #[derive(Default, Debug, Clone, duckfn::DuckStruct)]
     #[duck(named_param_from = "start")]
     pub struct TableFunctionArgs {
         start: i64,

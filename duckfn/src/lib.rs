@@ -6,6 +6,7 @@ pub(crate) mod value_types;
 pub(crate) mod helpers;
 pub(crate) mod table_function_adapter;
 
+pub use duckfn_macro::*;
 pub use aggregate_function_adapter::*;
 pub use duck_columns::*;
 pub use duck_register_builder::*;

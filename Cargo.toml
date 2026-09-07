@@ -37,7 +37,6 @@ quack-rs = "0.16.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 tuple-transpose = "0.1.0"
 duckfn = { path = "duckfn" }
-duckfn-macro = { path = "duckfn-macro" }
 indexmap = "2"
 
 [workspace]

@@ -138,6 +138,7 @@ dependencies = [
 name = "duckfn"
 version = "0.1.0"
 dependencies = [
+ "duckfn-macro",
  "indexmap",
  "libduckdb-sys",
  "quack-rs",
@@ -900,7 +901,6 @@ name = "rusty_quack"
 version = "0.1.0"
 dependencies = [
  "duckfn",
- "duckfn-macro",
  "indexmap",
  "libduckdb-sys",
  "quack-rs",

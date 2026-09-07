@@ -1,6 +1,6 @@
 use duckfn::{AggregateFunctionAdapter, DuckAggregateState};
 use duckfn::{DuckOptionResult, DuckResult};
-use duckfn_macro::{duck_aggregate_function, DuckStruct};
+use duckfn::{duck_aggregate_function, DuckStruct};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };
@@ -101,7 +101,7 @@ mod simple_think {
 
     //     简化的设想，但没省多少
 
-    use duckfn_macro::DuckStruct;
+    use duckfn::DuckStruct;
 
 
     // 另一种设想
