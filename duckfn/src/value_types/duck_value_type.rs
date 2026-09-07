@@ -75,20 +75,20 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
 
     fn write_finish(writer: &mut DuckValueWriter) {}
 
-    fn struct_field_reader(reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
-        let row_count = reader.vector_reader.row_count();
-        let vector = reader.c_duckdb_vector;
+    fn struct_field_reader(struct_reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
+        let row_count = struct_reader.vector_reader.row_count();
+        let vector = struct_reader.c_duckdb_vector;
         let field_vector = unsafe { StructVector::get_child(vector, field_index) };
         let field_reader = Self::create_reader_from_vector(field_vector, row_count);
         field_reader
     }
 
     fn struct_field_writer_batch(
-        writer: &DuckValueWriter,
+        struct_writer: &DuckValueWriter,
         field_index: usize,
         output_vec: &[Option<&Self>],
     ) -> DuckValueWriter {
-        let vector = writer.c_duckdb_vector;
+        let vector = struct_writer.c_duckdb_vector;
         let field_vector = unsafe { StructVector::get_child(vector, field_index) };
         let field_writer = Self::create_writer_batch(field_vector, output_vec);
         field_writer
