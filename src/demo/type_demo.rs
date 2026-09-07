@@ -59,10 +59,10 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
     }
 
     fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
-        Self::s_write_column_batch(chunk, row, 0, |o| o.and_then(|v| Some(&v.count)));
-        Self::s_write_column_batch(chunk, row, 1, |o| o.and_then(|v| Some(&v.data)));
-        Self::s_write_column_batch(chunk, row, 2, |o| o.and_then(|v| v.age.as_ref()));
-        Self::s_write_column_batch(chunk, row, 3, |o| o.and_then(|v| v.nest_data.as_ref()));
+        Self::s_write_column_batch(chunk, row, 0, |v| Some(&v.count));
+        Self::s_write_column_batch(chunk, row, 1, |v| Some(&v.data));
+        Self::s_write_column_batch(chunk, row, 2, |v| v.age.as_ref());
+        Self::s_write_column_batch(chunk, row, 3, |v| v.nest_data.as_ref());
     }
 
     fn s_create_writer_batch(

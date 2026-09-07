@@ -72,12 +72,12 @@ pub trait DuckStructTrait: DuckValueType {
         chunk: &::quack_rs::prelude::DataChunk,
         row: &Vec<Option<&Self>>,
         index: usize,
-        get_data: fn(Option<&Self>) -> Option<&F>,
+        get_data: fn(&Self) -> Option<&F>,
     ) {
         use crate::DuckValueType;
         F::write_batch(
             unsafe { chunk.vector(index) },
-            &row.iter().map(|o| get_data(*o)).collect::<Vec<_>>(),
+            &row.iter().map(|o|o.and_then(get_data) ).collect::<Vec<_>>(),
         );
     }
     fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>);
