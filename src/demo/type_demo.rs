@@ -34,6 +34,10 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
     fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> quack_rs::prelude::LogicalType)]
     {
         use duckfn::DuckValueType;
+        ::duckfn::assert_impl_duck_value_type::<i64>();
+        ::duckfn::assert_impl_duck_value_type::<Vec<i64>>();
+        ::duckfn::assert_impl_duck_value_type::<i32>();
+        ::duckfn::assert_impl_duck_value_type::<Vec<Vec<i64>>>();
         &[
             ("count", i64::logical_type),
             ("data", Vec::<i64>::logical_type),
