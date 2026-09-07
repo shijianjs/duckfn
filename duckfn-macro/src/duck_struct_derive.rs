@@ -89,7 +89,7 @@ impl DuckStructContext {
         let write_finish = self.fields_to_code(|f| f.write_finish())?;
 
         Ok(quote! {
-            impl ::easy_duckdb_extension::DuckValueType for #struct_name {
+            impl ::duckfn::DuckValueType for #struct_name {
                 fn type_id() -> ::quack_rs::prelude::TypeId {
                     ::quack_rs::prelude::TypeId::Struct
                 }
@@ -101,23 +101,23 @@ impl DuckStructContext {
                     ]))
                 }
 
-                fn create_reader_from_vector(vector: ::libduckdb_sys::duckdb_vector, size: usize) -> ::easy_duckdb_extension::DuckValueReader {
-                    let mut reader = ::easy_duckdb_extension::DuckValueReader::new_from_vector(vector, size);
+                fn create_reader_from_vector(vector: ::libduckdb_sys::duckdb_vector, size: usize) -> ::duckfn::DuckValueReader {
+                    let mut reader = ::duckfn::DuckValueReader::new_from_vector(vector, size);
                     reader.child_reader = Vec::from([
                         #(#field_readers),*
                     ]);
                     reader
                 }
 
-                fn read_valid(reader: &::easy_duckdb_extension::DuckValueReader, row: usize) -> Option<Self> {
+                fn read_valid(reader: &::duckfn::DuckValueReader, row: usize) -> Option<Self> {
                     let readers = &reader.child_reader;
                     Some(Self {
                         #(#read_valid)*
                     })
                 }
 
-                fn create_writer_batch(vector: ::libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> ::easy_duckdb_extension::DuckValueWriter {
-                    let mut writer = ::easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
+                fn create_writer_batch(vector: ::libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> ::duckfn::DuckValueWriter {
+                    let mut writer = ::duckfn::DuckValueWriter::new_from_vector(vector);
 
                     writer.child_writer = Vec::from([
                         #(#field_writer_batch),*
@@ -126,17 +126,17 @@ impl DuckStructContext {
                     writer
                 }
 
-                fn write_valid(writer: &mut ::easy_duckdb_extension::DuckValueWriter, idx: usize, vo: &Self) {
+                fn write_valid(writer: &mut ::duckfn::DuckValueWriter, idx: usize, vo: &Self) {
                     #(#write_valid)*
                 }
 
-                fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> ::easy_duckdb_extension::DuckResult<Self> {
+                fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> ::duckfn::DuckResult<Self> {
                     Ok(Self{
                         #(#read_by_duck_value_valid),*
                     })
                 }
 
-                fn write_finish(writer: &mut DuckValueWriter) {
+                fn write_finish(writer: &mut ::duckfn::DuckValueWriter) {
                     #(#write_finish)*
                 }
             }
@@ -150,17 +150,17 @@ impl DuckStructContext {
         let reader_by_trunk = self.fields_to_code(|f| f.reader_by_trunk())?;
         let write_columns_batch = self.fields_to_code(|f| f.write_columns_batch())?;
         Ok(quote! {
-            impl ::easy_duckdb_extension::DuckColumns for #struct_name {
+            impl ::duckfn::DuckColumns for #struct_name {
 
-                fn create_column_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<::easy_duckdb_extension::DuckValueReader> {
-                    use easy_duckdb_extension::DuckValueType;
+                fn create_column_readers(chunk: &quack_rs::data_chunk::DataChunk) -> Vec<::duckfn::DuckValueReader> {
+                    use duckfn::DuckValueType;
 
                     Vec::from([
                         #(#reader_by_trunk),*
                     ])
                 }
-                fn read_columns(readers: &[::easy_duckdb_extension::DuckValueReader], row: usize) -> Option<Self> {
-                    use easy_duckdb_extension::DuckValueType;
+                fn read_columns(readers: &[::duckfn::DuckValueReader], row: usize) -> Option<Self> {
+                    use duckfn::DuckValueType;
 
                     Some(Self {
                         #(#read_valid)*
@@ -168,7 +168,7 @@ impl DuckStructContext {
                 }
 
                 fn named_column_types() -> Vec<(impl Into<String>, ::quack_rs::prelude::LogicalType)> {
-                    use easy_duckdb_extension::DuckValueType;
+                    use duckfn::DuckValueType;
 
                     Vec::from([
                         #(#name_type_pair),*
@@ -176,7 +176,7 @@ impl DuckStructContext {
                 }
 
                 fn write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
-                    use easy_duckdb_extension::DuckValueType;
+                    use duckfn::DuckValueType;
 
                     #(#write_columns_batch)*
                 }
@@ -190,11 +190,11 @@ impl DuckStructContext {
         let bind_param_logical = self.fields_to_code(|f| f.bind_param_logical())?;
 
         Ok(quote! {
-            impl easy_duckdb_extension::DuckBindArgs for #struct_name {
+            impl duckfn::DuckBindArgs for #struct_name {
                 fn read_bind_args(
                     bind: &quack_rs::prelude::BindInfo,
-                ) -> easy_duckdb_extension::DuckResult<Self> {
-                    use easy_duckdb_extension::DuckValueType;
+                ) -> duckfn::DuckResult<Self> {
+                    use duckfn::DuckValueType;
                     Ok(#struct_name {
                         #(#read_bind_args),*
                     })
@@ -204,7 +204,7 @@ impl DuckStructContext {
                     Option<String>,
                     quack_rs::prelude::LogicalType,
                 )> {
-                    use easy_duckdb_extension::DuckValueType;
+                    use duckfn::DuckValueType;
                     Vec::from([
                         #(#bind_param_logical),*
                     ])
@@ -279,7 +279,7 @@ impl FieldWrapper {
     fn assert_impl_duck_value_type(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         Ok(quote! {
-            ::easy_duckdb_extension::assert_impl_duck_value_type::<#ty>()
+            ::duckfn::assert_impl_duck_value_type::<#ty>()
         })
     }
     fn name_type_pair(&self) -> TokenStream2Result {
@@ -364,8 +364,8 @@ impl FieldWrapper {
         self.extract_option().is_some()
     }
 
-    ///     fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> easy_duckdb_extension::DuckValueWriter {
-    //         let mut writer = easy_duckdb_extension::DuckValueWriter::new_from_vector(vector);
+    ///     fn create_writer_batch(vector: libduckdb_sys::duckdb_vector, output_vec: &[Option<&Self>]) -> duckfn::DuckValueWriter {
+    //         let mut writer = duckfn::DuckValueWriter::new_from_vector(vector);
     //
     //         writer.child_writer = vec![
     //             F0::struct_field_writer_batch(
@@ -405,7 +405,7 @@ impl FieldWrapper {
         })
     }
 
-    //     fn write_valid(writer: &mut easy_duckdb_extension::DuckValueWriter, idx: usize, vo: &Self) {
+    //     fn write_valid(writer: &mut duckfn::DuckValueWriter, idx: usize, vo: &Self) {
     //         F0::write(&mut writer.child_writer[0], idx, &vo.f0);
     //         F1::write_valid(&mut writer.child_writer[1], idx, &vo.f1);
     //     }
@@ -507,7 +507,7 @@ impl FieldWrapper {
         } else {
             let err_msg = format!("{} cannot be null", field_name_str);
             quote! {
-                #read_option.ok_or_else(|| easy_duckdb_extension::duck_error(#err_msg))?
+                #read_option.ok_or_else(|| duckfn::duck_error(#err_msg))?
             }
         };
         Ok(quote! {

@@ -1,5 +1,5 @@
-use easy_duckdb_extension::{DuckFullIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
-use easy_duckdb_extension_macro::{duck_scalar_function, duck_table_function, DuckStruct};
+use duckfn::{DuckFullIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
+use duckfn_macro::{duck_scalar_function, duck_table_function, DuckStruct};
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
 use std::iter::Map;

@@ -1,11 +1,9 @@
 [package]
-name = "easy-duckdb-extension"
+name = "duckfn"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-#name = "easy_duckdb_extension"
-#path = "src/lib.rs"
 crate-type = ["rlib"]
 
 [dependencies]

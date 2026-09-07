@@ -135,7 +135,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "easy-duckdb-extension"
+name = "duckfn"
 version = "0.1.0"
 dependencies = [
  "indexmap",
@@ -144,7 +144,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "easy-duckdb-extension-macro"
+name = "duckfn-macro"
 version = "0.1.0"
 dependencies = [
  "darling",
@@ -899,8 +899,8 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 name = "rusty_quack"
 version = "0.1.0"
 dependencies = [
- "easy-duckdb-extension",
- "easy-duckdb-extension-macro",
+ "duckfn",
+ "duckfn-macro",
  "indexmap",
  "libduckdb-sys",
  "quack-rs",

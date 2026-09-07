@@ -46,7 +46,7 @@ impl ItemFnWrapper {
 
         Ok(quote! {
 
-            #[derive(easy_duckdb_extension_macro::DuckStruct, Debug, Clone, Default)]
+            #[derive(duckfn_macro::DuckStruct, Debug, Clone, Default)]
             #[duck(#attr)]
             pub struct DuckArgsImpl{
                 #(#fields)*
@@ -61,16 +61,16 @@ impl ItemFnWrapper {
         let get_data = self.args_to_code(|x| x.build_get_data())?;
 
         Ok(quote! {
-            use easy_duckdb_extension::ScalarFunctionAdapter;
+            use duckfn::ScalarFunctionAdapter;
 
             pub struct ScalarFunctionImpl;
 
-            impl easy_duckdb_extension::ScalarFunctionAdapter for ScalarFunctionImpl{
+            impl duckfn::ScalarFunctionAdapter for ScalarFunctionImpl{
                 const NAME: &'static str = stringify!(#name);
                 type Args = DuckArgsImpl;
                 type Output = #return_type;
 
-                fn apply(args: Self::Args) -> easy_duckdb_extension::DuckOptionResult<Self::Output> {
+                fn apply(args: Self::Args) -> duckfn::DuckOptionResult<Self::Output> {
                     let result = #name(
                         #(#get_data),*
                     );
@@ -93,8 +93,8 @@ impl ItemFnWrapper {
         let agg_row_return = self.build_agg_row_return()?;
 
         Ok(quote! {
-            use easy_duckdb_extension::AggregateFunctionAdapter;
-            use easy_duckdb_extension::DuckAggregateState;
+            use duckfn::AggregateFunctionAdapter;
+            use duckfn::DuckAggregateState;
 
             #[derive(Default, Debug, Clone)]
             struct AggregateFunctionImpl {
@@ -103,26 +103,26 @@ impl ItemFnWrapper {
 
             impl quack_rs::prelude::AggregateState for AggregateFunctionImpl {}
 
-            impl easy_duckdb_extension::AggregateFunctionAdapter for AggregateFunctionImpl {
+            impl duckfn::AggregateFunctionAdapter for AggregateFunctionImpl {
                 const NAME: &'static str = stringify!(#name);
                 type Args = DuckArgsImpl;
-                type Output = <#agg_state_type as easy_duckdb_extension::DuckAggregateState>::Output;
+                type Output = <#agg_state_type as duckfn::DuckAggregateState>::Output;
 
                 // #[duckdb_aggregate_function]
-                fn handle_row(&mut self, args: Self::Args) -> easy_duckdb_extension::DuckResult<()> {
+                fn handle_row(&mut self, args: Self::Args) -> duckfn::DuckResult<()> {
                     #name(
                         #(#get_data),*
                     )
                     #agg_row_return
                 }
 
-                fn combine(&mut self, other: &Self) -> easy_duckdb_extension::DuckResult<()> {
-                    use easy_duckdb_extension::{DuckAggregateState};
+                fn combine(&mut self, other: &Self) -> duckfn::DuckResult<()> {
+                    use duckfn::{DuckAggregateState};
                     self.state.combine(&other.state)
                 }
 
-                fn result(&self) -> easy_duckdb_extension::DuckOptionResult<Self::Output> {
-                    use easy_duckdb_extension::{DuckAggregateState};
+                fn result(&self) -> duckfn::DuckOptionResult<Self::Output> {
+                    use duckfn::{DuckAggregateState};
                     self.state.result()
                 }
             }
@@ -142,18 +142,18 @@ impl ItemFnWrapper {
         let get_data = self.args_to_code(|x| x.build_get_data())?;
 
         Ok(quote! {
-            use easy_duckdb_extension::TableFunctionAdapter;
+            use duckfn::TableFunctionAdapter;
 
             pub struct TableFunctionImpl;
 
-            impl easy_duckdb_extension::TableFunctionAdapter for TableFunctionImpl {
+            impl duckfn::TableFunctionAdapter for TableFunctionImpl {
                 const NAME: &'static str = stringify!(#name);
                 type Args = DuckArgsImpl;
                 type Output = #return_type;
 
                 fn init_data_iterator(
                     args: Self::Args,
-                ) -> easy_duckdb_extension::DuckFullIteratorResult<Self::Output> {
+                ) -> duckfn::DuckFullIteratorResult<Self::Output> {
                     let result = #name(
                         #(#get_data),*
                     );
@@ -161,7 +161,7 @@ impl ItemFnWrapper {
                 }
             }
 
-            pub fn table_function_builder() -> easy_duckdb_extension::DuckResult<quack_rs::prelude::TableFunctionBuilder> {
+            pub fn table_function_builder() -> duckfn::DuckResult<quack_rs::prelude::TableFunctionBuilder> {
                 TableFunctionImpl::table_function_builder()
             }
         })
@@ -199,7 +199,7 @@ impl ItemFnWrapper {
                 let path = &type_path.path;
                 let inner_opt = path_match!(path,
                     Option<$inner> => Some((DuckScalarResult::Option,inner))
-                    easy_duckdb_extension?::DuckOptionResult<$inner> => Some((DuckScalarResult::DuckOptionResult,inner))
+                    duckfn?::DuckOptionResult<$inner> => Some((DuckScalarResult::DuckOptionResult,inner))
                     _=> None
                 );
                 return match inner_opt {
@@ -218,8 +218,8 @@ impl ItemFnWrapper {
     //         if let Type::Path(type_path) = &**ty {
     //             // let path = &type_path.path;
     //             // let inner_opt = path_match!(path,
-    //             //     easy_duckdb_extension?::DuckFullIteratorResult<$inner> => Some((DuckTableResult::Full,inner))
-    //             //     easy_duckdb_extension?::DuckResult<impl Iterator<Item = SomeDuckStruct>> => Some((DuckTableResult::ResultIterator,inner))
+    //             //     duckfn?::DuckFullIteratorResult<$inner> => Some((DuckTableResult::Full,inner))
+    //             //     duckfn?::DuckResult<impl Iterator<Item = SomeDuckStruct>> => Some((DuckTableResult::ResultIterator,inner))
     //             //     impl Iterator<Item = <$inner>> => Some((DuckTableResult::SimpleIterator,inner))
     //             //     _=> None
     //             // );

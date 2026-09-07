@@ -1,5 +1,5 @@
-use easy_duckdb_extension::{duck_error, DuckArray, DuckOptionArray, DuckOptionResult};
-use easy_duckdb_extension_macro::{duck_scalar_function, DuckStruct};
+use duckfn::{duck_error, DuckArray, DuckOptionArray, DuckOptionResult};
+use duckfn_macro::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
 use libduckdb_sys::{
     duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector,

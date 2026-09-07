@@ -1,6 +1,6 @@
-use easy_duckdb_extension::{AggregateFunctionAdapter, DuckAggregateState};
-use easy_duckdb_extension::{DuckOptionResult, DuckResult};
-use easy_duckdb_extension_macro::{duck_aggregate_function, DuckStruct};
+use duckfn::{AggregateFunctionAdapter, DuckAggregateState};
+use duckfn::{DuckOptionResult, DuckResult};
+use duckfn_macro::{duck_aggregate_function, DuckStruct};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_data_chunk, duckdb_function_info, duckdb_vector, idx_t,
 };
@@ -19,7 +19,7 @@ fn word_count_m(input: Option<String>, state: &mut WcAggState)  {
 struct WcAggState {
     count: i64,
 }
-impl easy_duckdb_extension::DuckAggregateState for WcAggState {
+impl duckfn::DuckAggregateState for WcAggState {
     type Output = i64;
     fn simple_combine(&mut self, other: &Self) {
         self.count += other.count;
@@ -101,7 +101,7 @@ mod simple_think {
 
     //     简化的设想，但没省多少
 
-    use easy_duckdb_extension_macro::DuckStruct;
+    use duckfn_macro::DuckStruct;
 
 
     // 另一种设想

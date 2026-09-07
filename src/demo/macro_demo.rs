@@ -1,4 +1,4 @@
-use easy_duckdb_extension_macro::{duck_aggregate_function, duck_scalar_function, duck_table_function, DuckStruct};
+use duckfn_macro::{duck_aggregate_function, duck_scalar_function, duck_table_function, DuckStruct};
 
 #[derive(Clone, Default,  Debug, DuckStruct)]
 #[duck(named_param_from = "data")]
@@ -10,12 +10,12 @@ pub struct DuckStructDemo1 {
 }
 
 #[duck_scalar_function]
-fn error_scalar_demo(input: i64,input2: i64) -> easy_duckdb_extension::DuckOptionResult<i64> {
+fn error_scalar_demo(input: i64,input2: i64) -> duckfn::DuckOptionResult<i64> {
     Ok(Some(input * 2))
 }
 
 #[duck_aggregate_function]
-fn word_count_w(input: Option<String>, arg2: i64,  state: &mut WcAggState)-> easy_duckdb_extension::DuckResult<()>  {
+fn word_count_w(input: Option<String>, arg2: i64,  state: &mut WcAggState)-> duckfn::DuckResult<()>  {
     todo!()
 }
 
@@ -23,14 +23,14 @@ fn word_count_w(input: Option<String>, arg2: i64,  state: &mut WcAggState)-> eas
 struct WcAggState {
     count: i64,
 }
-impl easy_duckdb_extension::DuckAggregateState for WcAggState {
+impl duckfn::DuckAggregateState for WcAggState {
     type Output = i64;
 
-    fn combine(&mut self, other: &Self) -> easy_duckdb_extension::DuckResult<()> {
+    fn combine(&mut self, other: &Self) -> duckfn::DuckResult<()> {
         todo!()
     }
 
-    fn result(&self) -> easy_duckdb_extension::DuckOptionResult<i64> {
+    fn result(&self) -> duckfn::DuckOptionResult<i64> {
         todo!()
     }
 }
@@ -40,7 +40,7 @@ fn table_fun_demo(start: i64) -> impl Iterator<Item =CountDownOutput> {
     (0..start).rev()
         .map(|x| CountDownOutput { n: x })
 }
-#[derive(Default, Debug, Clone, easy_duckdb_extension_macro::DuckStruct)]
+#[derive(Default, Debug, Clone, duckfn_macro::DuckStruct)]
 pub struct CountDownOutput {
     n: i64,
 }
