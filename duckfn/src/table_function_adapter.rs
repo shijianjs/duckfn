@@ -53,7 +53,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
 
     fn config_result_columns(bind: &BindInfo, args: &Self::Args) {
         for (name, ty) in Self::Output::named_column_types() {
-            bind.add_result_column_with_type(&name.into(), &ty);
+            bind.add_result_column_with_type(&name, &ty);
         }
     }
 

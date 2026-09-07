@@ -11,7 +11,7 @@ pub trait DuckColumns: Sized {
         Self::named_column_types().into_iter().map(|(_, t)| t).collect()
     }
 
-    fn named_column_types() -> Vec<(impl Into<String>, LogicalType)>;
+    fn named_column_types() -> Vec<(String, LogicalType)>;
 
     fn write_columns_batch(chunk: &DataChunk, row: &Vec<Option<&Self>>){
         todo!()

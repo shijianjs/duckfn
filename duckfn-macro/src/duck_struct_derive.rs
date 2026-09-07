@@ -146,7 +146,7 @@ impl DuckStructContext {
     fn build_duck_columns_impl(&self) -> TokenStream2Result {
         let struct_name = self.struct_name();
         let read_valid = self.fields_to_code(|f| f.read_valid())?;
-        let name_type_pair = self.fields_to_code(|f| f.name_type_pair())?;
+        let named_column_types = self.fields_to_code(|f| f.named_column_types())?;
         let reader_by_trunk = self.fields_to_code(|f| f.reader_by_trunk())?;
         let write_columns_batch = self.fields_to_code(|f| f.write_columns_batch())?;
         Ok(quote! {
@@ -167,11 +167,11 @@ impl DuckStructContext {
                     })
                 }
 
-                fn named_column_types() -> Vec<(impl Into<String>, ::quack_rs::prelude::LogicalType)> {
+                fn named_column_types() -> Vec<(String, ::quack_rs::prelude::LogicalType)> {
                     use duckfn::DuckValueType;
 
                     Vec::from([
-                        #(#name_type_pair),*
+                        #(#named_column_types),*
                     ])
                 }
 
@@ -287,6 +287,13 @@ impl FieldWrapper {
         let name = self.require_field_name()?.to_string();
         Ok(quote! {
             (#name, #ty)
+        })
+    }
+    fn named_column_types(&self) -> TokenStream2Result {
+        let ty = self.logical_type()?;
+        let name = self.require_field_name()?.to_string();
+        Ok(quote! {
+            (#name.to_string(), #ty)
         })
     }
     fn bind_param_logical(&self) -> TokenStream2Result {
