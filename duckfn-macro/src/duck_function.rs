@@ -3,11 +3,12 @@ use quote::quote;
 use syn::__private::TokenStream2;
 use syn::{GenericArgument, ItemFn, PathArguments, ReturnType, Type, TypeImplTrait, TypeParamBound};
 use syn_match::path_match;
+use crate::attr_args::DuckArgs;
 
 pub struct ItemFnWrapper {
     pub item_fn: ItemFn,
     pub attr:TokenStream2,
-    pub duck_args: crate::DuckArgs,
+    pub duck_args: DuckArgs,
 }
 
 
@@ -73,6 +74,7 @@ impl ItemFnWrapper {
         let (_, return_type) = self.scalar_return_type()?;
         let return_clause = self.build_scalar_return_clause()?;
         let get_data = self.args_to_code(|x| x.build_get_data())?;
+        let function_register = self.scalar_function_register()?;
 
         Ok(quote! {
 
@@ -99,6 +101,15 @@ impl ItemFnWrapper {
                 ScalarFunctionImpl::scalar_overload_builder()
             }
 
+            #function_register
+        })
+    }
+
+    fn scalar_function_register(&self) -> TokenStream2Result {
+        if !self.auto_register() {
+            return Ok(quote! {});
+        }
+        Ok(quote! {
             duckfn::inventory_submit! {
                 duckfn::DuckFunctionItem{
                     register_fn:|c|{
@@ -110,12 +121,14 @@ impl ItemFnWrapper {
             }
         })
     }
+
     fn build_aggregate_function_impl(&self) -> TokenStream2Result {
         let name = self.name();
         let get_data = self.args_to_code(|x| x.build_get_data())?;
         let agg_state_arg = self.agg_state_arg()?;
         let agg_state_type = agg_state_arg.resolve_state_type()?;
         let agg_row_return = self.build_agg_row_return()?;
+        let function_register = self.aggregate_function_register()?;
 
         Ok(quote! {
             #[derive(Default, Debug, Clone)]
@@ -155,6 +168,15 @@ impl ItemFnWrapper {
                 AggregateFunctionImpl::aggregate_function_builder()
             }
 
+            #function_register
+        })
+    }
+
+    fn aggregate_function_register(&self) -> TokenStream2Result {
+        if !self.auto_register() {
+            return Ok(quote! {});
+        }
+        Ok(quote! {
             duckfn::inventory_submit! {
                 duckfn::DuckFunctionItem{
                     register_fn:|c|{
@@ -173,6 +195,7 @@ impl ItemFnWrapper {
         let (_, return_type) = self.table_return_type()?;
         let return_clause = self.build_table_return_clause()?;
         let get_data = self.args_to_code(|x| x.build_get_data())?;
+        let function_register = self.table_function_register()?;
 
         Ok(quote! {
             use duckfn::TableFunctionAdapter;
@@ -198,6 +221,16 @@ impl ItemFnWrapper {
                 TableFunctionImpl::table_function_builder()
             }
 
+            #function_register
+
+        })
+    }
+
+    fn table_function_register(&self) -> TokenStream2Result {
+        if !self.auto_register() {
+            return Ok(quote! {});
+        }
+        Ok(quote! {
             duckfn::inventory_submit! {
                 duckfn::DuckFunctionItem{
                     register_fn:|c| {
@@ -216,6 +249,10 @@ impl ItemFnWrapper {
 
     fn visibility(&self) -> &syn::Visibility {
         &self.item_fn.vis
+    }
+
+    fn auto_register(&self) -> bool {
+        self.duck_args.auto_register.unwrap_or(true)
     }
 
     fn args(&self) -> Vec<FnArgWrapper> {

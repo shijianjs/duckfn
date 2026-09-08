@@ -21,6 +21,10 @@ use quack_rs::prelude::{
 pub fn double_it5(input: i64) -> i64 {
     input * 2
 }
+#[duck_scalar_function(auto_register = false)]
+pub fn double_it6(input: i64) -> i64 {
+    input * 2
+}
 
 #[duck_scalar_function]
 pub fn first_word_tuple(input: Option<String>) -> Option<String> {

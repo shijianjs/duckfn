@@ -13,6 +13,7 @@ use syn_match::path_match;
 #[darling(attributes(duck))]
 struct DuckMacroArgs {
     pub named_param_from: Option<String>,
+    pub auto_register: Option<bool>,
 }
 
 pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
