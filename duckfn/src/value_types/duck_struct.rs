@@ -18,7 +18,7 @@ pub trait DuckStructTrait: DuckValueType {
     }
 
     /// 获表函数取命名参数开始位置
-    fn s_named_param_after() -> Option<String>;
+    fn s_named_param_from() -> Option<String>;
 
     // ===== reader =====
 
@@ -88,7 +88,7 @@ pub trait DuckStructTrait: DuckValueType {
 
     /// 是否命名参数
     fn s_is_named_param_vec() -> Vec<bool> {
-        let Some(param) = Self::s_named_param_after() else {
+        let Some(param) = Self::s_named_param_from() else {
             return vec![false; Self::s_fields_count()];
         };
 

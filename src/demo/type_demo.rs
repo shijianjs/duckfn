@@ -23,7 +23,7 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
         ]
     }
 
-    fn s_named_param_after() -> Option<String> {
+    fn s_named_param_from() -> Option<String> {
         Some("data".to_string())
     }
 
