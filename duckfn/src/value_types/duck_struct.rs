@@ -9,45 +9,57 @@ use quack_rs::prelude::{BindInfo, LogicalType, StructVector, TypeId, Value};
 pub trait DuckStructTrait: DuckValueType {
 
     // ===== schema =====
+    /// duckdb类型声明
     fn s_named_columns_type_fn() ->  &'static [(&'static str, fn() -> LogicalType)];
 
-
-
+    /// 字段数量
     fn s_fields_count() -> usize {
         Self::s_named_columns_type_fn().len()
     }
 
+    /// 获表函数取命名参数开始位置
     fn s_named_param_after() -> Option<String>;
 
     // ===== reader =====
 
+    /// 创建子字段读取器
     fn s_child_readers(row_count: usize, vectors: Vec<duckdb_vector>) -> Vec<DuckValueReader>;
 
+    /// 从读取器列表中读取一个struct数据
+    /// - 结果可以是一行记录
+    /// - 可以是单列的一个struct数据
     fn s_read_columns(readers: &[DuckValueReader], row: usize) -> Option<Self>;
 
     // ===== DuckValue =====
+    /// 从表函数参数中读取一个struct数据
     fn s_read_duck_values(values: &Vec<Option<&Value>>) -> crate::DuckResult<Self>;
 
     // ===== writer =====
-
+    /// 表函数批量输出
     fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>);
 
+    /// 创建子字段写入器
     fn s_create_writer_batch(
         struct_writer: &DuckValueWriter,
         output_vec: &[Option<&Self>],
     ) -> Vec<DuckValueWriter>;
 
+    /// 写入一个struct数据
     fn s_write_valid(writer: &mut crate::DuckValueWriter, row: usize, vo: &Self);
 
+    /// 写入完成
+    /// - 有子元素递归处理，主要是用来给list、map这样的不定长结构确认长度
     fn s_write_finish(writer: &mut crate::DuckValueWriter);
 
     // ===== generic helpers =====
+    /// 从数据块中获取字段向量列表
     fn s_duckdb_vector_list_by_chunk(chunk: &DataChunk) -> Vec<duckdb_vector> {
         (0..Self::s_fields_count())
             .map(|i| unsafe { chunk.vector(i) })
             .collect()
     }
 
+    /// 从结构体向量中获取字段向量列表
     fn s_duckdb_vector_list_by_struct(
         struct_vector: ::libduckdb_sys::duckdb_vector,
     ) -> Vec<duckdb_vector> {
@@ -56,6 +68,7 @@ pub trait DuckStructTrait: DuckValueType {
             .collect()
     }
 
+    /// 从DuckValue中读取一个struct可空字段数据
     fn s_read_by_duck_value_option<F: DuckValueType>(
         option_value: Option<&Value>,
     ) -> DuckOptionResult<F> {
@@ -65,6 +78,7 @@ pub trait DuckStructTrait: DuckValueType {
             Ok(None)
         }
     }
+    /// 从DuckValue中读取一个struct非空字段数据，如果为空则报错
     fn s_read_by_duck_value_notnull<F: DuckValueType>(
         option_value: Option<&Value>,
         param_name: &str,
@@ -72,6 +86,7 @@ pub trait DuckStructTrait: DuckValueType {
         Self::s_read_by_duck_value_option(option_value)?.ok_or_else(|| duck_error(format!("Parameter {} cannot be null", param_name)))
     }
 
+    /// 是否命名参数
     fn s_is_named_param_vec() -> Vec<bool> {
         let Some(param) = Self::s_named_param_after() else {
             return vec![false; Self::s_fields_count()];
@@ -87,6 +102,7 @@ pub trait DuckStructTrait: DuckValueType {
             })
             .collect()
     }
+    /// 批量写入一个struct数据
     fn s_write_column_batch<F: DuckValueType>(
         chunk: &::quack_rs::prelude::DataChunk,
         row: &Vec<Option<&Self>>,
@@ -100,6 +116,7 @@ pub trait DuckStructTrait: DuckValueType {
         );
     }
 
+    /// 创建子字段写入器
     fn s_field_writer_batch<F: DuckValueType>(
         struct_writer: &DuckValueWriter,
         field_index: usize,
@@ -115,6 +132,7 @@ pub trait DuckStructTrait: DuckValueType {
                 .collect::<Vec<_>>(),
         )
     }
+    /// 写入一个struct字段数据
     fn s_write_field<F: DuckValueType>(
         writer: &mut crate::DuckValueWriter, row: usize,field_idx:usize, data: Option<&F>
     ){
@@ -147,15 +165,6 @@ impl<T: DuckStructTrait> DuckValueType for T {
         let readers = &reader.child_reader;
         Self::s_read_columns(readers, row)
     }
-    fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> crate::DuckResult<Self> {
-        use crate::DuckValueType;
-        let vec = (0..Self::s_fields_count())
-            .into_iter()
-            .map(|i| value.struct_child(i))
-            .collect::<Vec<Option<Value>>>();
-        Self::s_read_duck_values(&vec_option_to_ref(&vec))
-    }
-
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
         use crate::DuckValueType;
         let mut writer = crate::DuckValueWriter::new_from_vector(vector);
@@ -166,8 +175,17 @@ impl<T: DuckStructTrait> DuckValueType for T {
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         Self::s_write_valid(writer, idx, vo);
     }
+
     fn write_finish(writer: &mut crate::DuckValueWriter) {
         Self::s_write_finish(writer);
+    }
+    fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> crate::DuckResult<Self> {
+        use crate::DuckValueType;
+        let vec = (0..Self::s_fields_count())
+            .into_iter()
+            .map(|i| value.struct_child(i))
+            .collect::<Vec<Option<Value>>>();
+        Self::s_read_duck_values(&vec_option_to_ref(&vec))
     }
 }
 impl<T: DuckStructTrait> DuckColumns for T {
