@@ -36,6 +36,10 @@ pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream
 pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_custom_register())
 }
+#[proc_macro_attribute]
+pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    handle_duck_function(_attr, item, |wrapper| wrapper.build_sql_macro())
+}
 
 
 

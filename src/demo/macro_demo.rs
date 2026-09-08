@@ -1,4 +1,5 @@
-use duckfn::{duck_aggregate_function, duck_scalar_function, duck_table_function, DuckStruct};
+use quack_rs::prelude::SqlMacro;
+use duckfn::{duck_aggregate_function, duck_scalar_function, duck_sql_macro, duck_table_function, DuckResult, DuckStruct};
 
 #[derive(Clone, Default,  Debug, DuckStruct)]
 #[duck(named_param_from = "data")]
@@ -43,4 +44,10 @@ fn table_fun_demo(start: i64) -> impl Iterator<Item =CountDownOutput> {
 #[derive(Default, Debug, Clone, duckfn::DuckStruct)]
 pub struct CountDownOutput {
     n: i64,
+}
+
+#[duck_sql_macro]
+pub fn sql_macro_demo()->DuckResult<SqlMacro>{
+    quack_rs::prelude::SqlMacro::scalar("clamp", &["x", "lo", "hi"],
+                                        "greatest(lo, least(hi, x))")
 }

@@ -11,6 +11,9 @@ pub struct ItemFnWrapper {
     pub duck_args: DuckArgs,
 }
 
+impl ItemFnWrapper {
+
+}
 
 impl ItemFnWrapper {
 
@@ -32,6 +35,23 @@ impl ItemFnWrapper {
             duckfn::inventory_submit! {
                 duckfn::DuckFunctionItem{
                     register_fn: #name
+                }
+            }
+        })
+    }
+    pub(crate) fn build_sql_macro(&self) -> TokenStream2Result {
+        let name = self.name();
+        let item_fn = &self.item_fn;
+
+        Ok(quote! {
+            #item_fn
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionItem{
+                    register_fn: |c|{
+                        use quack_rs::prelude::Registrar;
+                        let builder: duckfn::DuckResult<quack_rs::prelude::SqlMacro> = #name();
+                        unsafe { c.register_sql_macro(builder?)}
+                    }
                 }
             }
         })

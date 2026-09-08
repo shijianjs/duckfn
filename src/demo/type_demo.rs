@@ -1,3 +1,11 @@
+use quack_rs::connection::Connection;
+use duckfn::DuckResult;
+
+fn word_count_w_reg(c: &Connection) -> DuckResult<()> {
+    use quack_rs::prelude::Registrar;
+    let sql_macro = quack_rs::prelude::SqlMacro::scalar("clamp", &["x", "lo", "hi"], "greatest(lo, least(hi, x))")?;
+    unsafe { c.register_sql_macro(sql_macro) }
+}
 
 #[derive(Clone, Default, Debug /*DuckStruct*/)]
 // #[duck(named_param_from = "data")]

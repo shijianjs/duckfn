@@ -155,3 +155,5 @@ cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.du
 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
   SELECT input_array_notnull_demo(a) from (values (ARRAY [1, 2]),(ARRAY [4, null])) t(a);";
 
+cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
+  SELECT clamp(range,4, 7) from range(9);";
