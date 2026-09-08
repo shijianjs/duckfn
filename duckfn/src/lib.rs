@@ -5,6 +5,7 @@ pub(crate) mod scalar_function_adapter;
 pub(crate) mod value_types;
 pub(crate) mod helpers;
 pub(crate) mod table_function_adapter;
+pub(crate) mod register;
 
 pub use duckfn_macro::*;
 pub use aggregate_function_adapter::*;
@@ -14,6 +15,8 @@ pub use scalar_function_adapter::*;
 pub use value_types::*;
 pub use helpers::*;
 pub use table_function_adapter::*;
+pub use register::*;
+pub use inventory::submit as inventory_submit;
 
 
 

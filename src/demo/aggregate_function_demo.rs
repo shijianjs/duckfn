@@ -200,23 +200,3 @@ unsafe extern "C" fn wc_state_destroy(states: *mut duckdb_aggregate_state, count
     unsafe { FfiState::<WordCountState>::destroy_callback(states, count) };
 }
 
-pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
-    let builders = vec![
-        AggregateFunctionBuilder::new("word_count")
-            .param(TypeId::Varchar)
-            .returns(TypeId::BigInt)
-            .state_size(wc_state_size)
-            .init(wc_state_init)
-            .update(wc_update)
-            .combine(wc_combine)
-            .finalize(wc_finalize)
-            .destructor(wc_state_destroy),
-        WordCountStateWrapper::aggregate_function_builder(),
-        agg_list_w::aggregate_function_builder(),
-        word_count_m::aggregate_function_builder(),
-    ];
-    for builder in builders {
-        unsafe { connection.register_aggregate(builder) }?;
-    }
-    Ok(())
-}

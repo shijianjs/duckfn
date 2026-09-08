@@ -1,4 +1,4 @@
-use duckfn::{duck_error, DuckArray, DuckOptionArray, DuckOptionResult};
+use duckfn::{duck_error, DuckArray, DuckFunctionItem, DuckOptionArray, DuckOptionResult, DuckResult};
 use duckfn::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
 use libduckdb_sys::{
@@ -367,51 +367,14 @@ pub fn input_array_notnull_demo(arr: DuckArray<i64, 2>) -> DuckArray<i64, 2> {
     arr
 }
 
-pub unsafe fn register(connection: &Connection) -> Result<(), ExtensionError> {
-    let builders = vec![
-        input_array_notnull_demo::scalar_function_builder(),
-        input_array_demo::scalar_function_builder(),
-        input_map_notnull_demo::scalar_function_builder(),
-        // DoubleIt::register_builder(),
-        double_it5::scalar_function_builder(),
-        first_word_tuple::scalar_function_builder(),
-        add_it_tuple::scalar_function_builder(),
-        sum_list_w::scalar_function_builder(),
-        sum_list_nest::scalar_function_builder(),
-        make_list_scalar_w::scalar_function_builder(),
-        nest_list_scalar_w::scalar_function_builder(),
-        ScalarFunctionBuilder::new("sum_list")
-            .param_logical(LogicalType::list(TypeId::BigInt))
-            .returns(TypeId::BigInt)
-            .function(sum_list_scalar),
-        ScalarFunctionBuilder::new("make_list_scalar")
-            .param_logical(LogicalType::new(TypeId::BigInt))
-            .returns_logical(LogicalType::list(TypeId::BigInt))
-            .function(make_list_scalar),
-        ScalarFunctionBuilder::new("make_pair")
-            .param(TypeId::Varchar)
-            .param(TypeId::Integer)
-            .returns_logical(LogicalType::struct_type(&[
-                ("key", TypeId::Varchar),
-                ("value", TypeId::Integer),
-            ]))
-            .function(make_pair_scalar),
-        ScalarFunctionBuilder::new("make_kv_map")
-            .param(TypeId::Varchar)
-            .param(TypeId::Integer)
-            .returns_logical(LogicalType::map(TypeId::Varchar, TypeId::Integer))
-            .function(make_kv_map_scalar),
-        struct_scalar_w::scalar_function_builder(),
-        struct_nest_scalar_w::scalar_function_builder(),
-        struct_nest_output_scalar_w::scalar_function_builder(),
-        nest_vec_no_null_scalar_w::scalar_function_builder(),
-        error_scalar_demo::scalar_function_builder(),
-        create_map_demo::scalar_function_builder(),
-        input_map_demo::scalar_function_builder(),
+mod test{
+    use super::input_array_notnull_demo;
 
-    ];
-    for builder in builders {
-        unsafe { connection.register_scalar(builder) }?;
+    fn d(){
+        duckfn::DuckFunctionItem {
+            register_fn:|c| unsafe {
+                use quack_rs::prelude::Registrar;
+                c.register_scalar(input_array_notnull_demo::scalar_function_builder()) }
+        };
     }
-    Ok(())
 }

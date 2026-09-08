@@ -6,20 +6,6 @@ use std::iter::Map;
 use std::ops::Range;
 use indexmap::IndexMap;
 
-pub fn register(reg: &impl Registrar) -> ExtResult<()> {
-    let builders = vec![
-        count_down()?,
-        count_down_it()?,
-        CountDownS::table_function_builder()?,
-        count_down_m_simple::table_function_builder()?,
-        bind_map_demo::table_function_builder()?,
-        
-    ];
-    for builder in builders {
-        unsafe { reg.register_table(builder) }?;
-    }
-    Ok(())
-}
 
 struct State {
     remaining: u64,

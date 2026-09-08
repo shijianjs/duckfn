@@ -61,7 +61,6 @@ impl ItemFnWrapper {
         let get_data = self.args_to_code(|x| x.build_get_data())?;
 
         Ok(quote! {
-            use duckfn::ScalarFunctionAdapter;
 
             pub struct ScalarFunctionImpl;
 
@@ -78,10 +77,22 @@ impl ItemFnWrapper {
                 }
             }
             pub fn scalar_function_builder() -> quack_rs::prelude::ScalarFunctionBuilder {
+                use duckfn::ScalarFunctionAdapter;
                 ScalarFunctionImpl::scalar_function_builder()
             }
             pub fn scalar_overload_builder() -> quack_rs::prelude::ScalarOverloadBuilder {
+                use duckfn::ScalarFunctionAdapter;
                 ScalarFunctionImpl::scalar_overload_builder()
+            }
+
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionItem{
+                    register_fn:|c|{
+                        use quack_rs::prelude::Registrar;
+                        let builder = scalar_function_builder();
+                        unsafe { c.register_scalar(builder)}
+                    }
+                }
             }
         })
     }
@@ -93,9 +104,6 @@ impl ItemFnWrapper {
         let agg_row_return = self.build_agg_row_return()?;
 
         Ok(quote! {
-            use duckfn::AggregateFunctionAdapter;
-            use duckfn::DuckAggregateState;
-
             #[derive(Default, Debug, Clone)]
             struct AggregateFunctionImpl {
                 state: #agg_state_type,
@@ -129,7 +137,18 @@ impl ItemFnWrapper {
 
 
             pub fn aggregate_function_builder() -> quack_rs::prelude::AggregateFunctionBuilder {
+                use duckfn::AggregateFunctionAdapter;
                 AggregateFunctionImpl::aggregate_function_builder()
+            }
+
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionItem{
+                    register_fn:|c|{
+                        use quack_rs::prelude::Registrar;
+                        let builder = aggregate_function_builder();
+                        unsafe { c.register_aggregate(builder)}
+                    }
+                }
             }
         })
     }
@@ -163,6 +182,16 @@ impl ItemFnWrapper {
 
             pub fn table_function_builder() -> duckfn::DuckResult<quack_rs::prelude::TableFunctionBuilder> {
                 TableFunctionImpl::table_function_builder()
+            }
+
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionItem{
+                    register_fn:|c| {
+                        use quack_rs::prelude::Registrar;
+                        let builder = table_function_builder()?;
+                        unsafe { c.register_table(builder)}
+                    }
+                }
             }
         })
     }
