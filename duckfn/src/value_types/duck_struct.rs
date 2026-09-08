@@ -7,11 +7,47 @@ use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{BindInfo, LogicalType, StructVector, TypeId, Value};
 
 pub trait DuckStructTrait: DuckValueType {
+
+    // ===== schema =====
+    fn s_named_columns_type_fn() ->  &'static [(&'static str, fn() -> LogicalType)];
+
+
+
+    fn s_fields_count() -> usize {
+        Self::s_named_columns_type_fn().len()
+    }
+
+    fn s_named_param_after() -> Option<String>;
+
+    // ===== reader =====
+
+    fn s_child_readers(row_count: usize, vectors: Vec<duckdb_vector>) -> Vec<DuckValueReader>;
+
+    fn s_read_columns(readers: &[DuckValueReader], row: usize) -> Option<Self>;
+
+    // ===== DuckValue =====
+    fn s_read_duck_values(values: &Vec<Option<&Value>>) -> crate::DuckResult<Self>;
+
+    // ===== writer =====
+
+    fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>);
+
+    fn s_create_writer_batch(
+        struct_writer: &DuckValueWriter,
+        output_vec: &[Option<&Self>],
+    ) -> Vec<DuckValueWriter>;
+
+    fn s_write_valid(writer: &mut crate::DuckValueWriter, row: usize, vo: &Self);
+
+    fn s_write_finish(writer: &mut crate::DuckValueWriter);
+
+    // ===== generic helpers =====
     fn s_duckdb_vector_list_by_chunk(chunk: &DataChunk) -> Vec<duckdb_vector> {
         (0..Self::s_fields_count())
             .map(|i| unsafe { chunk.vector(i) })
             .collect()
     }
+
     fn s_duckdb_vector_list_by_struct(
         struct_vector: ::libduckdb_sys::duckdb_vector,
     ) -> Vec<duckdb_vector> {
@@ -19,18 +55,6 @@ pub trait DuckStructTrait: DuckValueType {
             .map(|i| unsafe { StructVector::get_child(struct_vector, i) })
             .collect()
     }
-
-    fn s_child_readers(row_count: usize, vectors: Vec<duckdb_vector>) -> Vec<DuckValueReader>;
-
-    fn s_read_columns(readers: &[DuckValueReader], row: usize) -> Option<Self>;
-
-    fn s_fields_count() -> usize {
-        Self::s_named_columns_type_fn().len()
-    }
-
-    fn s_named_columns_type_fn() ->  &'static [(&'static str, fn() -> LogicalType)];
-
-    fn s_named_param_after() -> Option<String>;
 
     fn s_read_by_duck_value_option<F: DuckValueType>(
         option_value: Option<&Value>,
@@ -41,16 +65,12 @@ pub trait DuckStructTrait: DuckValueType {
             Ok(None)
         }
     }
-
     fn s_read_by_duck_value_notnull<F: DuckValueType>(
         option_value: Option<&Value>,
         param_name: &str,
     ) -> DuckResult<F> {
         Self::s_read_by_duck_value_option(option_value)?.ok_or_else(|| duck_error(format!("Parameter {} cannot be null", param_name)))
     }
-
-    // fn struct_read_bind_args(bind: &BindInfo) -> DuckResult<Self>;
-    fn s_read_duck_values(values: &Vec<Option<&Value>>) -> crate::DuckResult<Self>;
 
     fn s_is_named_param_vec() -> Vec<bool> {
         let Some(param) = Self::s_named_param_after() else {
@@ -67,7 +87,6 @@ pub trait DuckStructTrait: DuckValueType {
             })
             .collect()
     }
-
     fn s_write_column_batch<F: DuckValueType>(
         chunk: &::quack_rs::prelude::DataChunk,
         row: &Vec<Option<&Self>>,
@@ -80,7 +99,6 @@ pub trait DuckStructTrait: DuckValueType {
             &row.iter().map(|o|o.and_then(get_data) ).collect::<Vec<_>>(),
         );
     }
-    fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>);
 
     fn s_field_writer_batch<F: DuckValueType>(
         struct_writer: &DuckValueWriter,
@@ -97,19 +115,11 @@ pub trait DuckStructTrait: DuckValueType {
                 .collect::<Vec<_>>(),
         )
     }
-    fn s_create_writer_batch(
-        struct_writer: &DuckValueWriter,
-        output_vec: &[Option<&Self>],
-    ) -> Vec<DuckValueWriter>;
-
     fn s_write_field<F: DuckValueType>(
         writer: &mut crate::DuckValueWriter, row: usize,field_idx:usize, data: Option<&F>
     ){
         F::write(&mut writer.child_writer[field_idx], row, data)
     }
-    fn s_write_valid(writer: &mut crate::DuckValueWriter, row: usize, vo: &Self);
-
-    fn s_write_finish(writer: &mut crate::DuckValueWriter);
 }
 
 impl<T: DuckStructTrait> DuckValueType for T {

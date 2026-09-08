@@ -8,6 +8,25 @@ pub struct DuckStructDemo1 {
     pub nest_data: Option<Vec<Vec<i64>>>,
 }
 impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
+    fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> quack_rs::prelude::LogicalType)]
+    {
+        use duckfn::DuckValueType;
+        ::duckfn::assert_impl_duck_value_type::<i64>();
+        ::duckfn::assert_impl_duck_value_type::<Vec<i64>>();
+        ::duckfn::assert_impl_duck_value_type::<i32>();
+        ::duckfn::assert_impl_duck_value_type::<Vec<Vec<i64>>>();
+        &[
+            ("count", i64::logical_type),
+            ("data", Vec::<i64>::logical_type),
+            ("age", i32::logical_type),
+            ("nest_data", Vec::<Vec<i64>>::logical_type),
+        ]
+    }
+
+    fn s_named_param_after() -> Option<String> {
+        Some("data".to_string())
+    }
+
     fn s_child_readers(
         row_count: usize,
         vectors: Vec<libduckdb_sys::duckdb_vector>,
@@ -29,25 +48,6 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
             age: i32::read(&readers[2usize], row),
             nest_data: Vec::<Vec<i64>>::read(&readers[3usize], row),
         })
-    }
-
-    fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> quack_rs::prelude::LogicalType)]
-    {
-        use duckfn::DuckValueType;
-        ::duckfn::assert_impl_duck_value_type::<i64>();
-        ::duckfn::assert_impl_duck_value_type::<Vec<i64>>();
-        ::duckfn::assert_impl_duck_value_type::<i32>();
-        ::duckfn::assert_impl_duck_value_type::<Vec<Vec<i64>>>();
-        &[
-            ("count", i64::logical_type),
-            ("data", Vec::<i64>::logical_type),
-            ("age", i32::logical_type),
-            ("nest_data", Vec::<Vec<i64>>::logical_type),
-        ]
-    }
-
-    fn s_named_param_after() -> Option<String> {
-        Some("data".to_string())
     }
 
     fn s_read_duck_values(
