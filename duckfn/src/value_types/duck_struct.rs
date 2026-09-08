@@ -117,7 +117,7 @@ pub trait DuckStructTrait: DuckValueType {
     }
 
     /// 创建子字段写入器
-    fn s_field_writer_batch<F: DuckValueType>(
+    fn s_create_field_writer_batch<F: DuckValueType>(
         struct_writer: &DuckValueWriter,
         field_index: usize,
         output_vec: &[Option<&Self>],

@@ -74,10 +74,10 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
         output_vec: &[Option<&Self>],
     ) -> Vec<duckfn::DuckValueWriter> {
         Vec::from([
-            Self::s_field_writer_batch(struct_writer, 0, output_vec, |v| Some(&v.count)),
-            Self::s_field_writer_batch(struct_writer, 1, output_vec, |v| Some(&v.data)),
-            Self::s_field_writer_batch(struct_writer, 2, output_vec, |v| v.age.as_ref()),
-            Self::s_field_writer_batch(struct_writer, 3, output_vec, |v| v.nest_data.as_ref()),
+            Self::s_create_field_writer_batch(struct_writer, 0, output_vec, |v| Some(&v.count)),
+            Self::s_create_field_writer_batch(struct_writer, 1, output_vec, |v| Some(&v.data)),
+            Self::s_create_field_writer_batch(struct_writer, 2, output_vec, |v| v.age.as_ref()),
+            Self::s_create_field_writer_batch(struct_writer, 3, output_vec, |v| v.nest_data.as_ref()),
         ])
     }
 
