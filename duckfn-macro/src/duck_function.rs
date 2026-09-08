@@ -6,7 +6,8 @@ use syn_match::path_match;
 
 pub struct ItemFnWrapper {
     pub item_fn: ItemFn,
-    pub attr:TokenStream2
+    pub attr:TokenStream2,
+    pub duck_args: crate::DuckArgs,
 }
 
 
