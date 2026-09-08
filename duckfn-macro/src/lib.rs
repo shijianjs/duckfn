@@ -28,6 +28,10 @@ pub fn duck_aggregate_function(_attr: TokenStream, item: TokenStream) -> TokenSt
 pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_table_function())
 }
+#[proc_macro_attribute]
+pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    handle_duck_function(_attr, item, |wrapper| wrapper.build_custom_register())
+}
 
 fn handle_duck_function(
     _attr: TokenStream,

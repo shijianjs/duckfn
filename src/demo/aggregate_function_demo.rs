@@ -1,4 +1,4 @@
-use duckfn::{AggregateFunctionAdapter, DuckAggregateState};
+use duckfn::{duck_custom_register, AggregateFunctionAdapter, DuckAggregateState};
 use duckfn::{DuckOptionResult, DuckResult};
 use duckfn::{duck_aggregate_function, DuckStruct};
 use libduckdb_sys::{
@@ -32,6 +32,11 @@ impl duckfn::DuckAggregateState for WcAggState {
 
 /// ============= demo wrapper封装版  ============
 ///
+
+#[duck_custom_register]
+fn word_count_w_reg(c: &Connection) -> DuckResult<()> {
+    unsafe { c.register_aggregate(WordCountStateWrapper::aggregate_function_builder()) }
+}
 
 #[derive(Default, Debug, Clone)]
 struct WordCountStateWrapper {

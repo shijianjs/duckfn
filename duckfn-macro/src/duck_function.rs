@@ -22,6 +22,19 @@ impl ItemFnWrapper {
     pub(crate) fn build_table_function(&self) -> TokenStream2Result {
         self.common_build(self.build_table_function_impl()?)
     }
+    pub(crate) fn build_custom_register(&self) -> TokenStream2Result {
+        let name = self.name();
+        let item_fn = &self.item_fn;
+
+        Ok(quote! {
+            #item_fn
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionItem{
+                    register_fn: #name
+                }
+            }
+        })
+    }
 
     fn common_build(&self, duck_function_impl: TokenStream2) -> TokenStream2Result {
         let name = self.name();

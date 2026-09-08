@@ -15,7 +15,7 @@ fn error_scalar_demo(input: i64,input2: i64) -> duckfn::DuckOptionResult<i64> {
 }
 
 #[duck_aggregate_function]
-fn word_count_w(input: Option<String>, arg2: i64,  state: &mut WcAggState)-> duckfn::DuckResult<()>  {
+fn word_count_w_demo(input: Option<String>, arg2: i64,  state: &mut WcAggState)-> duckfn::DuckResult<()>  {
     todo!()
 }
 
