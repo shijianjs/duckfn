@@ -43,17 +43,13 @@ impl ItemFnWrapper {
         let name = self.name();
         let item_fn = &self.item_fn;
 
+        let result = self.common_inventory_submit(quote! {
+            let builder: duckfn::DuckResult<quack_rs::prelude::SqlMacro> = #name();
+            unsafe { c.register_sql_macro(builder?)}
+        })?;
         Ok(quote! {
             #item_fn
-            duckfn::inventory_submit! {
-                duckfn::DuckFunctionItem{
-                    register_fn: |c|{
-                        use quack_rs::prelude::Registrar;
-                        let builder: duckfn::DuckResult<quack_rs::prelude::SqlMacro> = #name();
-                        unsafe { c.register_sql_macro(builder?)}
-                    }
-                }
-            }
+            #result
         })
     }
 
@@ -129,13 +125,19 @@ impl ItemFnWrapper {
         if !self.auto_register() {
             return Ok(quote! {});
         }
+        self.common_inventory_submit(quote! {
+            let builder = scalar_function_builder();
+            unsafe { c.register_scalar(builder)}
+        })
+    }
+
+    fn common_inventory_submit(&self, content: TokenStream2) -> TokenStream2Result {
         Ok(quote! {
             duckfn::inventory_submit! {
                 duckfn::DuckFunctionItem{
                     register_fn:|c|{
                         use quack_rs::prelude::Registrar;
-                        let builder = scalar_function_builder();
-                        unsafe { c.register_scalar(builder)}
+                        #content
                     }
                 }
             }
@@ -196,16 +198,9 @@ impl ItemFnWrapper {
         if !self.auto_register() {
             return Ok(quote! {});
         }
-        Ok(quote! {
-            duckfn::inventory_submit! {
-                duckfn::DuckFunctionItem{
-                    register_fn:|c|{
-                        use quack_rs::prelude::Registrar;
-                        let builder = aggregate_function_builder();
-                        unsafe { c.register_aggregate(builder)}
-                    }
-                }
-            }
+        self.common_inventory_submit(quote! {
+            let builder = aggregate_function_builder();
+            unsafe { c.register_aggregate(builder)}
         })
     }
 
@@ -250,16 +245,9 @@ impl ItemFnWrapper {
         if !self.auto_register() {
             return Ok(quote! {});
         }
-        Ok(quote! {
-            duckfn::inventory_submit! {
-                duckfn::DuckFunctionItem{
-                    register_fn:|c| {
-                        use quack_rs::prelude::Registrar;
-                        let builder = table_function_builder()?;
-                        unsafe { c.register_table(builder)}
-                    }
-                }
-            }
+        self.common_inventory_submit(quote! {
+            let builder = table_function_builder()?;
+            unsafe { c.register_table(builder)}
         })
     }
 
