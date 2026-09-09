@@ -4,6 +4,5 @@ mod demo;
 
 
 
-/// 符号名称必须为 {extension_name}_init_c_api ，全部小写，仅包含下划线。如果符号缺失或名称错误，DuckDB 将无法加载扩展。
-// quack_rs::entry_point_v2!(rusty_quack_init_c_api, duckfn::register_all_duckfn);
+/// {extension_name}: 全部小写，仅包含下划线。如果符号缺失或名称错误，DuckDB 将无法加载扩展。
 duckfn_entrypoint!("rusty_quack");
