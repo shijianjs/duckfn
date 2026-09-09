@@ -7,10 +7,9 @@ use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{BindInfo, LogicalType, StructVector, TypeId, Value};
 
 pub trait DuckStructTrait: DuckValueType {
-
     // ===== schema =====
     /// duckdb类型声明
-    fn s_named_columns_type_fn() ->  &'static [(&'static str, fn() -> LogicalType)];
+    fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> LogicalType)];
 
     /// 字段数量
     fn s_fields_count() -> usize {
@@ -83,7 +82,8 @@ pub trait DuckStructTrait: DuckValueType {
         option_value: Option<&Value>,
         param_name: &str,
     ) -> DuckResult<F> {
-        Self::s_read_by_duck_value_option(option_value)?.ok_or_else(|| duck_error(format!("Parameter {} cannot be null", param_name)))
+        Self::s_read_by_duck_value_option(option_value)?
+            .ok_or_else(|| duck_error(format!("Parameter {} cannot be null", param_name)))
     }
 
     /// 是否命名参数
@@ -112,7 +112,7 @@ pub trait DuckStructTrait: DuckValueType {
         use crate::DuckValueType;
         F::write_batch(
             unsafe { chunk.vector(index) },
-            &row.iter().map(|o|o.and_then(get_data) ).collect::<Vec<_>>(),
+            &row.iter().map(|o| o.and_then(get_data)).collect::<Vec<_>>(),
         );
     }
 
@@ -134,8 +134,11 @@ pub trait DuckStructTrait: DuckValueType {
     }
     /// 写入一个struct字段数据
     fn s_write_field<F: DuckValueType>(
-        writer: &mut crate::DuckValueWriter, row: usize,field_idx:usize, data: Option<&F>
-    ){
+        writer: &mut crate::DuckValueWriter,
+        row: usize,
+        field_idx: usize,
+        data: Option<&F>,
+    ) {
         F::write(&mut writer.child_writer[field_idx], row, data)
     }
 }
@@ -146,10 +149,7 @@ impl<T: DuckStructTrait> DuckValueType for T {
     }
     fn logical_type() -> LogicalType {
         let data = Self::s_named_columns_type_fn();
-        let vec1: Vec<(&str, LogicalType)> = data
-            .iter()
-            .map(|(name, ty)| (*name, ty()))
-            .collect();
+        let vec1: Vec<(&str, LogicalType)> = data.iter().map(|(name, ty)| (*name, ty())).collect();
         LogicalType::struct_type_from_logical(&vec1)
     }
     fn create_reader_from_vector(
@@ -157,7 +157,8 @@ impl<T: DuckStructTrait> DuckValueType for T {
         size: usize,
     ) -> crate::DuckValueReader {
         let mut reader = crate::DuckValueReader::new_from_vector(vector, size);
-        reader.child_reader = Self::s_child_readers(size, Self::s_duckdb_vector_list_by_struct(vector));
+        reader.child_reader =
+            Self::s_child_readers(size, Self::s_duckdb_vector_list_by_struct(vector));
         reader
     }
     fn read_valid(reader: &crate::DuckValueReader, row: usize) -> Option<Self> {
@@ -209,15 +210,15 @@ impl<T: DuckStructTrait> DuckColumns for T {
 }
 impl<T: DuckStructTrait> DuckBindArgs for T {
     fn read_bind_args(bind: &BindInfo) -> DuckResult<Self> {
-        let vec = Self::s_is_named_param_vec();
+        let is_named = Self::s_is_named_param_vec();
         let vec1: Vec<Option<Value>> = Self::s_named_columns_type_fn()
             .into_iter()
             .enumerate()
             .map(|(idx, (name, logical_type))| {
-                Some(if vec[idx] {
-                    (unsafe { bind.get_parameter_value(idx as u64) })
+                Some(if is_named[idx] {
+                    unsafe { bind.get_named_parameter_value(&*name) }
                 } else {
-                    (unsafe { bind.get_named_parameter_value(&*name) })
+                    unsafe { bind.get_parameter_value(idx as u64) }
                 })
             })
             .collect::<Vec<Option<Value>>>();
@@ -225,13 +226,18 @@ impl<T: DuckStructTrait> DuckBindArgs for T {
     }
 
     fn bind_param_logical() -> Vec<(Option<String>, LogicalType)> {
-        let vec = Self::s_is_named_param_vec();
+        let is_named = Self::s_is_named_param_vec();
 
         Self::s_named_columns_type_fn()
             .into_iter()
             .enumerate()
             .map(|(idx, (name, logical_type))| {
-                (if vec[idx] { Some(name.to_string()) } else { None }, logical_type())
+                let name_option = if is_named[idx] {
+                    Some(name.to_string())
+                } else {
+                    None
+                };
+                (name_option, logical_type())
             })
             .collect()
     }
