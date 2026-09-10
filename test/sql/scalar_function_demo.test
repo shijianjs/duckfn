@@ -1,0 +1,60 @@
+
+require rusty_quack
+
+
+query I
+SELECT double_it5(21);
+----
+42
+
+
+query T
+SELECT first_word_tuple(sentence) FROM (
+      VALUES ('hello world'), ('  padded  '), (NULL),('')
+  ) t(sentence);
+----
+hello
+padded
+NULL
+(empty)
+
+
+
+query I
+SELECT add_it_tuple(3,5);
+----
+8
+
+
+query I
+SELECT sum_list_w([1,2,3,4]);
+----
+10
+
+# just duckdb_ext "  SELECT sum_list_nest([[1,2],[3,4]]);";
+query I
+SELECT sum_list_nest([[1,2],[3,4]]);
+----
+10
+
+
+
+
+# just duckdb_ext "  SELECT sum_list_nest([[1,2],[3,null,4],null]);";
+query I
+SELECT sum_list_nest([[1,2],[3,null,4],null]);
+----
+10
+
+
+
+
+
+
+#
+# just duckdb_ext "  SELECT sum_list_nest(v) from (values ([[1,2],[3,null,4],null]),([[1],[3,null]])) t(v);";
+query I
+SELECT sum_list_nest(v) from (values ([[1,2],[3,null,4],null]),([[1],[3,null]])) t(v);
+----
+10
+4
