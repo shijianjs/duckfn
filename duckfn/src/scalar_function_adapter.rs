@@ -1,6 +1,6 @@
 use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult, vec_option_to_ref};
 use crate::duck_columns::DuckColumns;
-use crate::duck_register_builder::RegisterBuilder;
+use crate::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
@@ -37,13 +37,13 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     fn scalar_function_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
             .function(Self::scalar_function_wrapper)
-            .with_return_type(Self::Output::logical_type())
+            .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types())
     }
     fn scalar_overload_builder() -> ScalarOverloadBuilder {
         ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
-            .with_return_type(Self::Output::logical_type())
+            .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types())
     }
 

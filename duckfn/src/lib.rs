@@ -1,6 +1,6 @@
 pub(crate) mod aggregate_function_adapter;
 pub(crate) mod duck_columns;
-pub(crate) mod duck_register_builder;
+pub(crate) mod builder_with_params;
 pub(crate) mod scalar_function_adapter;
 pub(crate) mod value_types;
 pub(crate) mod helpers;
@@ -10,7 +10,7 @@ pub(crate) mod register;
 pub use duckfn_macro::*;
 pub use aggregate_function_adapter::*;
 pub use duck_columns::*;
-pub use duck_register_builder::*;
+pub use builder_with_params::*;
 pub use scalar_function_adapter::*;
 pub use value_types::*;
 pub use helpers::*;

@@ -1,5 +1,5 @@
 use crate::duck_columns::DuckColumns;
-use crate::duck_register_builder::RegisterBuilder;
+use crate::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
 use crate::{duck_aggregate_unwind, duck_scalar_unwind, vec_option_to_ref, DuckOptionResult, DuckResult};
 use libduckdb_sys::{
@@ -121,7 +121,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .combine(Self::c_combine)
             .finalize(Self::c_finalize)
             .destructor(Self::c_state_destroy)
-            .with_return_type(Self::Output::logical_type())
+            .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types())
     }
 
