@@ -14,5 +14,8 @@ ext_build:
 duckdb_ext sql: ext_build
     duckdb -unsigned -c "LOAD '{{extension}}'; {{sql}}"
 
+duckdb_ext_debug sql: ext_build
+    duckdb -unsigned -cmd "LOAD '{{extension}}'; {{sql}}"
+
 test:
     make debug test
