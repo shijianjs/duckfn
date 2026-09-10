@@ -139,7 +139,7 @@ unsafe extern "C" fn make_list_scalar(
             child_writer.write_i64(offset + 1, 2);
             child_writer.write_i64(offset + 2, 3);
         }
-        println!("row {} offset {}", row, offset);
+        // println!("row {} offset {}", row, offset);
 
         offset += 3;
     }
@@ -344,7 +344,7 @@ pub fn create_map_demo(i: i64) -> IndexMap<String, Option<Vec<i64>>> {
 /// ```
 #[duck_scalar_function]
 pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
-    println!("{:?}", map);
+    // println!("{:?}", map);
     map.into_iter()
         .map(|(_, v)| v.unwrap_or(vec![]))
         .flatten()
@@ -355,7 +355,7 @@ pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
 /// ```
 #[duck_scalar_function]
 pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
-    println!("{:?}", map);
+    // println!("{:?}", map);
     map.into_iter().map(|(_, v)| v).flatten().sum::<i64>()
 }
 

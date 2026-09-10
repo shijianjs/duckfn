@@ -54,7 +54,7 @@ fn count_down_it() -> Result<TableFunctionBuilder, ExtensionError> {
         // 2. scan closure: mutate state, write rows, set chunk size.
         .scan(|state, chunk| {
             let size = vector_size();
-            println!("size: {}", size);
+            // println!("size: {}", size);
             let mut writer = unsafe { chunk.writer(0) };
             for i in 0..size {
                 let option = state.next();
@@ -179,7 +179,7 @@ pub fn count_down_m_simple(start: i64,multi:Option<i64>) -> impl Iterator<Item =
 /// ```
 #[duck_table_function]
 pub fn bind_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> impl Iterator<Item=CountDownOutput> {
-    println!("{:?}", map);
+    // println!("{:?}", map);
     map.into_iter().map(|(_, v)| v.unwrap_or(vec![]))
         .map(|vec| CountDownOutput { n: vec.iter().sum() })
 }
