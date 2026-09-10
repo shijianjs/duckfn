@@ -366,6 +366,14 @@ pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
 pub fn input_array_demo(arr: DuckOptionArray<i64, 2>) -> DuckOptionArray<i64, 2> {
     arr
 }
+
+/// ```sqllogictest
+/// query T
+/// SELECT input_array_notnull_demo(a) from (values (ARRAY [1, 2]),(ARRAY [4, null])) t(a);
+/// ----
+/// [1, 2]
+/// NULL
+/// ```
 #[duck_scalar_function]
 pub fn input_array_notnull_demo(arr: DuckArray<i64, 2>) -> DuckArray<i64, 2> {
     arr
