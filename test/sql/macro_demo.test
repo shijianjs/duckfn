@@ -1,0 +1,24 @@
+# name: test/sql/macro_demo.test
+# description: test rusty_quack extension
+# group [quack]
+
+require rusty_quack
+
+
+query I
+SELECT clamp(range,4, 7) from range(9);
+----
+4
+4
+4
+4
+4
+5
+6
+7
+7
+
+
+
+
+

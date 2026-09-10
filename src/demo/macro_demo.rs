@@ -46,6 +46,9 @@ pub struct CountDownOutput {
     n: i64,
 }
 
+/// ```sql
+/// SELECT clamp(range,4, 7) from range(9);
+/// ```
 #[duck_sql_macro]
 pub fn sql_macro_demo()->DuckResult<SqlMacro>{
     quack_rs::prelude::SqlMacro::scalar("clamp", &["x", "lo", "hi"],
