@@ -19,4 +19,12 @@ duckdb_ext_debug sql: ext_build
 
 # 这个just命令可以跑所有.text测试
 test:
-    make debug test
+    make configure debug test
+
+config_env:
+	rustup override set 1.86.0
+	rustup target add wasm32-unknown-emscripten
+	rustup target list --installed
+
+build_wasm:
+	cargo build --release --target wasm32-unknown-emscripten --example rusty_quack

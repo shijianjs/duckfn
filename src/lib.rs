@@ -1,7 +1,5 @@
-use duckfn::duckfn_entrypoint;
-
-mod demo;
-mod types;
-
-/// {extension_name}: 全部小写，仅包含下划线。如果符号缺失或名称错误，DuckDB 将无法加载扩展。
-duckfn_entrypoint!("rusty_quack");
+/// 和wasm_lib同样的路径，
+/// 解决官方方式mod路径不一致不能嵌套的问题：
+/// error[E0583]: file not found for module demo --> src\lib.rs:3:1
+/// error[E0583]: file not found for module types --> src\lib.rs:4:1
+mod extension;
