@@ -47,8 +47,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
                 Box::new(Self::init_data_iterator(args)?);
             Ok(x)
         })
-        .map_err(panic_to_duck_error)
-        .flatten()
+        .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
     }
 
     fn config_result_columns(bind: &BindInfo, args: &Self::Args) {
@@ -83,8 +82,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
             unsafe { chunk.set_size(count as usize) };
             Ok(())
         }))
-        .map_err(panic_to_duck_error)
-        .flatten()
+        .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
     }
 
     const NAME: &'static str;
