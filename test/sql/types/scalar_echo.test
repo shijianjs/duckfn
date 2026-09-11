@@ -1,0 +1,8 @@
+require rusty_quack
+
+query R
+SELECT dfn_echo_bool(i) from values (true),(false) t(i);
+----
+true
+false
+
