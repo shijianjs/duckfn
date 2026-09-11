@@ -320,6 +320,77 @@ FROM (
 10
 
 # ============================================================================
+# 常量向量边界
+#
+# 参数直接写字面量时 DuckDB 可能传常量向量；嵌套类型还多一层"常量子向量"。
+# 这里必须区分两种"全 NULL 列表"：
+#   [NULL, NULL]               元素类型是未定型的 SQLNULL（列表类型 NULL[]）
+#   [NULL, NULL]::INTEGER[]    元素类型是 INTEGER
+# 前者会让 DuckDB 给 LIST 挂一个"单元素常量 NULL 子向量"，而 duckfn 是按
+# 下标裸读子向量的，于是从第 2 个元素起越界读到未初始化内存（垃圾值每个
+# 进程都不一样，同一次运行内稳定）：
+#   SELECT dfn_echo_list_integer_n([NULL, NULL]);   -- 实得 [NULL, 631]
+#   SELECT dfn_echo_list_integer_n([NULL, NULL]::INTEGER[]);  -- 同样出错
+# 这是 duckfn 读取路径的既有缺陷，与 echo 函数无关，因此下面只固化不触发
+# 该缺陷、但语义等价的写法。
+# ============================================================================
+
+# 常量字面量：元素都有具体类型，子向量会被真正写满
+query T
+SELECT CAST(dfn_echo_list_integer_n([1, 1, 1, 1]) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_integer_n([1, 2, 3, 4]) AS VARCHAR);
+----
+[1, 1, 1, 1]
+[1, 2, 3, 4]
+
+# 元素显式指定类型后，全 NULL 也安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([NULL::INTEGER, NULL::INTEGER]) AS VARCHAR);
+----
+[NULL, NULL]
+
+# 单个未定型 NULL：列表长度为 1，只读下标 0，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([NULL]) AS VARCHAR);
+----
+[NULL]
+
+# 未定型 NULL 与具体类型混写时整表类型由具体元素决定，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([NULL, 1]) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_integer_n([1, NULL]) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_varchar_n([NULL, NULL, 'x']) AS VARCHAR);
+----
+[NULL, 1]
+[1, NULL]
+[NULL, NULL, x]
+
+# 经过一次真实计算后元素类型确定，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n(list_transform([NULL, NULL]::INTEGER[], lambda x: x)) AS VARCHAR);
+----
+[NULL, NULL]
+
+# 参数是常量表达式、且行数多于列表长度：DuckDB 会 flatten 顶层向量
+query T
+SELECT string_agg(CAST(dfn_echo_list_integer_n([1, 2]) AS VARCHAR), '|') FROM range(5);
+----
+[1, 2]|[1, 2]|[1, 2]|[1, 2]|[1, 2]
+
+# 标量函数里的常量参数（add(x, 3) 中的 3）不影响结果
+query T
+SELECT string_agg(CAST(dfn_echo_integer(i::INTEGER + 3) AS VARCHAR), '|')
+FROM (SELECT range AS i FROM range(3)) t;
+----
+3|4|5
+
+# 元素来自列引用：走真实写入，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([i::INTEGER, i::INTEGER + 3]) AS VARCHAR) FROM (SELECT 0 AS i) t;
+----
+[0, 3]
+
+# ============================================================================
 # NULL 处理：任何参数为 NULL 时结果应为 NULL
 # ============================================================================
 

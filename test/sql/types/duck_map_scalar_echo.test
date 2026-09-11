@@ -374,6 +374,35 @@ SELECT CAST(sum(idx) AS VARCHAR) FROM (
 4950
 
 # ============================================================================
+# 常量向量边界（机理详见 duck_list_scalar_echo.test 中同名小节）
+#
+# map(['a', 'b'], [NULL, NULL]) 的 value 列表元素类型是未定型的 SQLNULL，
+# DuckDB 会给它挂一个"单元素常量 NULL 子向量"，duckfn 按下标裸读会从第 2 个
+# entry 起读到未初始化内存（每次运行值不同）：
+#   SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
+#   -- 实得 {a=NULL, b=631}
+# 下面用等价的显式类型写法固化语义。
+# ============================================================================
+
+# entry 的 value 都相同：与全 NULL 无关，安全
+query T
+SELECT CAST(dfn_echo_map_varchar_integer_n(map(['a', 'b', 'c'], [1, 1, 1])) AS VARCHAR);
+----
+{a=1, b=1, c=1}
+
+# 只有 1 个 entry 时，value 是未定型 NULL 也安全（只读下标 0）
+query T
+SELECT CAST(dfn_echo_map_varchar_integer_n(map(['a'], [NULL])) AS VARCHAR);
+----
+{a=NULL}
+
+# value 列表里混有具体类型时安全
+query T
+SELECT CAST(dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, 1])) AS VARCHAR);
+----
+{a=NULL, b=1}
+
+# ============================================================================
 # NULL 处理：任何参数为 NULL 时结果应为 NULL
 # ============================================================================
 
