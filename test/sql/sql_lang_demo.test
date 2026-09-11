@@ -1,0 +1,32 @@
+
+# query T
+# SELECT 'a' || chr(9) || 'b';
+# ----
+# a\tb
+
+query TTTTTT
+SELECT COLUMNS(*)::VARCHAR
+FROM (SELECT
+          1,
+          3.14,
+          NULL,
+          [1, NULL, 3],
+          {'a': NULL},
+          'hello'
+      );
+----
+1	3.14	NULL	[1, NULL, 3]	{'a': NULL}	hello
+
+
+
+query IITTTT
+SELECT
+          1,
+          3.14,
+          NULL,
+          [1, NULL, 3],
+          {'a': NULL},
+          'hello'
+      ;
+----
+1	3.14	NULL	[1, NULL, 3]	{'a': NULL}	hello
