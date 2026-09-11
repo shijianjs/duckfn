@@ -3,6 +3,14 @@ name = "rusty_quack"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+resolver = "3"
+members = ["duckfn", "duckfn-macro"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.86"
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -40,6 +48,3 @@ tuple-transpose = "0.1.0"
 duckfn = { path = "duckfn" }
 indexmap = "2"
 
-[workspace]
-resolver = "3"
-members = ["duckfn", "duckfn-macro"]

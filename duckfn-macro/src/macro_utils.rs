@@ -1,7 +1,6 @@
 use proc_macro::TokenStream;
 use syn::__private::TokenStream2;
 use syn::{GenericArgument, Path, PathArguments, Type, TypeImplTrait, TypeParamBound, TypePath};
-use syn_match::path_match;
 
 /// 常用过程宏返回值类型
 pub type TokenStream2Result = syn::Result<TokenStream2>;
@@ -13,19 +12,30 @@ pub fn handle_token_stream2_result(result: TokenStream2Result) -> TokenStream {
 }
 
 pub fn extract_option(x: &Type) -> Option<&Type> {
-    // extract_option::from_ref(&self.field.ty)
-    let Type::Path(type_path) = x else {
-        return None;
-    };
-    let path = &type_path.path;
-    path_match!(path,
-        Option<$inner> => Some(inner)
-        _=> None
-    )
-    .and_then(|inner| match inner {
-        GenericArgument::Type(ty) => Some(ty),
-        _ => None,
-    })
+    if let Type::Path(type_path) = x {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Option" {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(GenericArgument::Type(ty)) = args.args.first() {
+                        return Some(ty);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn extract_generic_arg_type(segment: &syn::PathSegment) -> Option<&Type> {
+    if let PathArguments::AngleBracketed(args) = &segment.arguments {
+        if let Some(GenericArgument::Type(ty)) = args.args.first() {
+            Some(ty)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {

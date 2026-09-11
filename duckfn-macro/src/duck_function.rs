@@ -1,13 +1,12 @@
-use crate::macro_utils::{iterator_item_type, require_generic_arg_type, TokenStream2Result};
+use crate::attr_args::DuckArgs;
+use crate::macro_utils::{TokenStream2Result, extract_generic_arg_type, iterator_item_type};
 use quote::quote;
 use syn::__private::TokenStream2;
-use syn::{GenericArgument, ItemFn, PathArguments, ReturnType, Type, TypeImplTrait, TypeParamBound};
-use syn_match::path_match;
-use crate::attr_args::DuckArgs;
+use syn::{GenericArgument, ItemFn, PathArguments, ReturnType, Type};
 
 pub struct ItemFnWrapper {
     pub item_fn: ItemFn,
-    pub attr:TokenStream2,
+    pub attr: TokenStream2,
     pub duck_args: DuckArgs,
 }
 
@@ -284,48 +283,33 @@ impl ItemFnWrapper {
     fn scalar_return_type(&self) -> syn::Result<(DuckScalarResult, &Type)> {
         if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
             if let Type::Path(type_path) = &**ty {
-                let path = &type_path.path;
-                let inner_opt = path_match!(path,
-                    Option<$inner> => Some((DuckScalarResult::Option,inner))
-                    duckfn?::DuckOptionResult<$inner> => Some((DuckScalarResult::DuckOptionResult,inner))
-                    _=> None
-                );
-                return match inner_opt {
-                    None => Ok((DuckScalarResult::Plain, &**ty)),
-                    Some((outter, inner)) => Ok((outter, require_generic_arg_type(inner)?)),
-                };
-            };
-        };
+                if let Some(segment) = type_path.path.segments.last() {
+                    let result_type = match segment.ident.to_string().as_str() {
+                        "Option" => {
+                            extract_generic_arg_type(segment)
+                                .map(|inner| (DuckScalarResult::Option, inner))
+                        }
+                        "DuckOptionResult" => {
+                            extract_generic_arg_type(segment)
+                                .map(|inner| (DuckScalarResult::DuckOptionResult, inner))
+                        }
+                        _ => None,
+                    };
+
+                    if let Some((result_type, inner)) = result_type {
+                        return Ok((result_type, inner));
+                    }
+                }
+
+                return Ok((DuckScalarResult::Plain, &**ty));
+            }
+        }
+
         Err(syn::Error::new_spanned(
             self.item_fn.sig.output.to_owned(),
             "Only like `-> f64` `-> Option<f64>` `-> DuckOptionResult<f64>` is supported",
         ))
     }
-    // fn table_return_type(&self) -> syn::Result<(DuckTableResult, &Type)> {
-    //     if let ReturnType::Type(_, ty) = self.return_type() {
-    //         if let Type::Path(type_path) = &**ty {
-    //             // let path = &type_path.path;
-    //             // let inner_opt = path_match!(path,
-    //             //     duckfn?::DuckFullIteratorResult<$inner> => Some((DuckTableResult::Full,inner))
-    //             //     duckfn?::DuckResult<impl Iterator<Item = SomeDuckStruct>> => Some((DuckTableResult::ResultIterator,inner))
-    //             //     impl Iterator<Item = <$inner>> => Some((DuckTableResult::SimpleIterator,inner))
-    //             //     _=> None
-    //             // );
-    //             // return match inner_opt {
-    //             //     None => Ok((DuckScalarResult::Plain, &**ty)),
-    //             //     Some((outter, inner)) => Ok((outter, require_generic_arg_type(inner)?)),
-    //             // };
-    //         };
-    //     };
-    //     Err(syn::Error::new_spanned(
-    //         self.item_fn.sig.output.to_owned(),
-    //         "Only like
-    //             `-> impl Iterator<Item = SomeDuckStruct>`: simple;
-    //             `-> DuckResult<impl Iterator<Item = SomeDuckStruct>>`: handle input err;
-    //             `-> DuckIteratorResult<SomeDuckStruct>: handle input err and output row err;
-    //         is supported",
-    //     ))
-    // }
     fn table_return_type(&self) -> syn::Result<(DuckTableResult, &Type)> {
         if let ReturnType::Type(_, ty) = self.return_type() {
             if let Type::Path(type_path) = &**ty {

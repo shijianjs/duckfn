@@ -7,7 +7,6 @@ use syn::spanned::Spanned;
 use syn::{
     Data, DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Path, Type, TypePath,
 };
-use syn_match::path_match;
 
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(duck))]
