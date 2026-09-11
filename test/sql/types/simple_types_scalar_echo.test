@@ -1,0 +1,267 @@
+# name: test/sql/types/simple_types_scalar_echo.test
+# description: simple_types.rs 中简单类型的 echo 往返测试
+# group: [types]
+
+require rusty_quack
+
+# ============================================================================
+# BOOLEAN (bool)
+# ============================================================================
+
+query R
+SELECT dfn_echo_bool(i) from values (true),(false) t(i);
+----
+true
+false
+
+query T
+SELECT typeof(dfn_echo_bool(true));
+----
+BOOLEAN
+
+# ============================================================================
+# TINYINT (i8)
+# ============================================================================
+
+query I
+SELECT dfn_echo_tinyint(i) FROM (VALUES
+    (1::TINYINT), ((-1)::TINYINT), (127::TINYINT), ((-128)::TINYINT)
+) t(i);
+----
+1
+-1
+127
+-128
+
+query T
+SELECT typeof(dfn_echo_tinyint(1::TINYINT));
+----
+TINYINT
+
+# ============================================================================
+# SMALLINT (i16)
+# ============================================================================
+
+query I
+SELECT dfn_echo_smallint(i) FROM (VALUES
+    (1::SMALLINT), ((-1)::SMALLINT), (32767::SMALLINT), ((-32768)::SMALLINT)
+) t(i);
+----
+1
+-1
+32767
+-32768
+
+query T
+SELECT typeof(dfn_echo_smallint(1::SMALLINT));
+----
+SMALLINT
+
+# ============================================================================
+# INTEGER (i32)
+# ============================================================================
+
+query I
+SELECT dfn_echo_integer(i) FROM (VALUES
+    (1::INTEGER), ((-1)::INTEGER), (2147483647::INTEGER), ((-2147483648)::INTEGER)
+) t(i);
+----
+1
+-1
+2147483647
+-2147483648
+
+query T
+SELECT typeof(dfn_echo_integer(1::INTEGER));
+----
+INTEGER
+
+# ============================================================================
+# BIGINT (i64)
+# ============================================================================
+
+query I
+SELECT dfn_echo_bigint(i) FROM (VALUES
+    (1::BIGINT), ((-1)::BIGINT),
+    (9223372036854775807::BIGINT), ((-9223372036854775808)::BIGINT)
+) t(i);
+----
+1
+-1
+9223372036854775807
+-9223372036854775808
+
+query T
+SELECT typeof(dfn_echo_bigint(1::BIGINT));
+----
+BIGINT
+
+# ============================================================================
+# HUGEINT (i128)
+# ============================================================================
+
+query T
+SELECT dfn_echo_hugeint(i) FROM (VALUES
+    (1::HUGEINT), ((-1)::HUGEINT),
+    (170141183460469231731687303715884105727::HUGEINT),
+    ((-170141183460469231731687303715884105727)::HUGEINT)
+) t(i);
+----
+1
+-1
+170141183460469231731687303715884105727
+-170141183460469231731687303715884105727
+
+query T
+SELECT typeof(dfn_echo_hugeint(1::HUGEINT));
+----
+HUGEINT
+
+# ============================================================================
+# UTINYINT (u8)
+# ============================================================================
+
+query I
+SELECT dfn_echo_utinyint(i) FROM (VALUES
+    (0::UTINYINT), (1::UTINYINT), (255::UTINYINT)
+) t(i);
+----
+0
+1
+255
+
+query T
+SELECT typeof(dfn_echo_utinyint(1::UTINYINT));
+----
+UTINYINT
+
+# ============================================================================
+# USMALLINT (u16)
+# ============================================================================
+
+query I
+SELECT dfn_echo_usmallint(i) FROM (VALUES
+    (0::USMALLINT), (1::USMALLINT), (65535::USMALLINT)
+) t(i);
+----
+0
+1
+65535
+
+query T
+SELECT typeof(dfn_echo_usmallint(1::USMALLINT));
+----
+USMALLINT
+
+# ============================================================================
+# UBIGINT (u64)
+# ============================================================================
+
+query T
+SELECT dfn_echo_ubigint(i) FROM (VALUES
+    (0::UBIGINT), (1::UBIGINT), (18446744073709551615::UBIGINT)
+) t(i);
+----
+0
+1
+18446744073709551615
+
+query T
+SELECT typeof(dfn_echo_ubigint(1::UBIGINT));
+----
+UBIGINT
+
+# ============================================================================
+# UHUGEINT (u128)
+# ============================================================================
+
+query T
+SELECT dfn_echo_uhugeint(i) FROM (VALUES
+    (0::UHUGEINT), (1::UHUGEINT),
+    (340282366920938463463374607431768211455::UHUGEINT)
+) t(i);
+----
+0
+1
+340282366920938463463374607431768211455
+
+query T
+SELECT typeof(dfn_echo_uhugeint(1::UHUGEINT));
+----
+UHUGEINT
+
+# ============================================================================
+# FLOAT (f32)
+# ============================================================================
+
+query R
+SELECT dfn_echo_float(i) FROM (VALUES
+    (1.5::FLOAT), (-2.25::FLOAT), (0.0::FLOAT)
+) t(i);
+----
+1.5
+-2.25
+0.0
+
+query T
+SELECT typeof(dfn_echo_float(1.5::FLOAT));
+----
+FLOAT
+
+# ============================================================================
+# DOUBLE (f64)
+# ============================================================================
+
+query R
+SELECT dfn_echo_double(i) FROM (VALUES
+    (1.5::DOUBLE), (-2.25::DOUBLE), (0.0::DOUBLE)
+) t(i);
+----
+1.5
+-2.25
+0.0
+
+query T
+SELECT typeof(dfn_echo_double(1.5::DOUBLE));
+----
+DOUBLE
+
+# ============================================================================
+# VARCHAR (String)
+# ============================================================================
+
+query T
+SELECT dfn_echo_varchar(i) FROM (VALUES ('abc'), (''), ('你好 🦆')) t(i);
+----
+abc
+(empty)
+你好 🦆
+
+query T
+SELECT typeof(dfn_echo_varchar('abc'));
+----
+VARCHAR
+
+# ============================================================================
+# NULL 处理：任何参数为 NULL 时结果应为 NULL
+# ============================================================================
+
+query R
+SELECT dfn_echo_bool(NULL);
+----
+NULL
+
+query I
+SELECT dfn_echo_bigint(NULL);
+----
+NULL
+
+query R
+SELECT dfn_echo_double(NULL);
+----
+NULL
+
+query T
+SELECT dfn_echo_varchar(NULL);
+----
+NULL

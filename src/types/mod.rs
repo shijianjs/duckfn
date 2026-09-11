@@ -1,1 +1,1 @@
-mod scalar_echo;
+mod simple_types_scalar_echo;
