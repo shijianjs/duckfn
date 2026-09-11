@@ -1,0 +1,343 @@
+# name: test/sql/types/duck_array_scalar_echo.test
+# description: duck_array.rs 中 ARRAY 类型（[T; N] / [Option<T>; N]）的 echo 往返测试
+# group: [types]
+
+require rusty_quack
+
+# ARRAY 是定长类型，长度 N 是类型的一部分，所以每个函数都绑定一个固定的 N。
+# 所有取值都用 CAST(... AS VARCHAR) 包一层，避免驱动层对 ARRAY 的二次转换影响比对。
+
+# ============================================================================
+# ARRAY(INTEGER, 3) // [i32; 3]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_integer([1, 2, 3]::INTEGER[3]));
+----
+INTEGER[3]
+
+query T
+SELECT CAST(dfn_echo_array_integer(i) AS VARCHAR) FROM (VALUES
+    ([1, 2, 3]::INTEGER[3]),
+    ([-2147483648, 0, 2147483647]::INTEGER[3])
+) t(i);
+----
+[1, 2, 3]
+[-2147483648, 0, 2147483647]
+
+# 定长数组的第 row 行固定占用子向量里 row*N .. row*N+N 这些槽位，
+# 因此中间夹 NULL 行不应影响其它行的元素
+query T
+SELECT CAST(dfn_echo_array_integer(i) AS VARCHAR) FROM (VALUES
+    (NULL::INTEGER[3]),
+    ([4, 5, 6]::INTEGER[3]),
+    ([7, 8, 9]::INTEGER[3])
+) t(i);
+----
+NULL
+[4, 5, 6]
+[7, 8, 9]
+
+# [T; N] 的元素不可为 NULL：数组里出现 NULL 元素时整体返回 NULL
+query T
+SELECT CAST(dfn_echo_array_integer([1, NULL, 3]::INTEGER[3]) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
+# ARRAY(BIGINT, 2) // [i64; 2]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_bigint([1, 2]::BIGINT[2]));
+----
+BIGINT[2]
+
+query T
+SELECT CAST(dfn_echo_array_bigint(
+    [9223372036854775807, -9223372036854775808]::BIGINT[2]
+) AS VARCHAR);
+----
+[9223372036854775807, -9223372036854775808]
+
+# ============================================================================
+# ARRAY(DOUBLE, 3) // [f64; 3]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_double([1.5, 2.5, 3.5]::DOUBLE[3]));
+----
+DOUBLE[3]
+
+query T
+SELECT CAST(dfn_echo_array_double(i) AS VARCHAR) FROM (VALUES
+    ([1.5, -2.25, 0.0]::DOUBLE[3]),
+    ([1e308, 0, -1e-308]::DOUBLE[3])
+) t(i);
+----
+[1.5, -2.25, 0.0]
+[1e+308, 0.0, -1e-308]
+
+# ============================================================================
+# ARRAY(BOOLEAN, 2) // [bool; 2]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_bool([true, false]::BOOLEAN[2]));
+----
+BOOLEAN[2]
+
+query T
+SELECT CAST(dfn_echo_array_bool([true, false]::BOOLEAN[2]) AS VARCHAR);
+----
+[true, false]
+
+# ============================================================================
+# ARRAY(VARCHAR, 2) // [String; 2]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_varchar(['a', 'b']::VARCHAR[2]));
+----
+VARCHAR[2]
+
+# 注意：DuckDB 对 ARRAY 里空字符串的渲染与 LIST 不同（LIST 显示为 ''，ARRAY 直接为空）
+query T
+SELECT CAST(dfn_echo_array_varchar(i) AS VARCHAR) FROM (VALUES
+    (['a', 'bb']::VARCHAR[2]),
+    (['', '你好']::VARCHAR[2])
+) t(i);
+----
+[a, bb]
+[, 你好]
+
+# 空字符串没有被丢掉，长度仍为 0
+query T
+SELECT CAST(length(dfn_echo_array_varchar(['', '你好']::VARCHAR[2])[1]) AS VARCHAR);
+----
+0
+
+# ============================================================================
+# ARRAY(DATE, 2) // [DuckDate; 2]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_date([DATE '2024-01-02', DATE '2024-01-03']::DATE[2]));
+----
+DATE[2]
+
+query T
+SELECT CAST(dfn_echo_array_date(
+    [DATE '2024-01-02', DATE '1969-12-31']::DATE[2]
+) AS VARCHAR);
+----
+[2024-01-02, 1969-12-31]
+
+# ============================================================================
+# ARRAY(DECIMAL(18,3), 2) // [DuckDecimal<18, 3>; 2]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_decimal([1.234, 2.345]::DECIMAL(18,3)[2]));
+----
+DECIMAL(18,3)[2]
+
+query T
+SELECT CAST(dfn_echo_array_decimal(
+    [1.234, -1.234]::DECIMAL(18,3)[2]
+) AS VARCHAR);
+----
+[1.234, -1.234]
+
+# ============================================================================
+# ARRAY(BLOB, 2) // [DuckBlob; 2]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_blob(['\xAA'::BLOB, '\xBB'::BLOB]::BLOB[2]));
+----
+BLOB[2]
+
+# 空 BLOB 在 ARRAY 里渲染为空串（LIST 里是 ''）
+query T
+SELECT CAST(dfn_echo_array_blob(
+    ['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[2]
+) AS VARCHAR);
+----
+[\xAA\xBB, ]
+
+query T
+SELECT CAST(octet_length(dfn_echo_array_blob(['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[2])[2]) AS VARCHAR);
+----
+0
+
+# ============================================================================
+# ARRAY(ARRAY(INTEGER, 2), 2) // [[i32; 2]; 2]，嵌套定长数组
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_nested([[1, 2], [3, 4]]::INTEGER[2][2]));
+----
+INTEGER[2][2]
+
+query T
+SELECT CAST(dfn_echo_array_nested(i) AS VARCHAR) FROM (VALUES
+    ([[1, 2], [3, 4]]::INTEGER[2][2]),
+    ([[5, 6], [7, 8]]::INTEGER[2][2])
+) t(i);
+----
+[[1, 2], [3, 4]]
+[[5, 6], [7, 8]]
+
+# 子数组下标换算：desc[2][1] 应为 3
+query T
+SELECT CAST(dfn_echo_array_nested([[1, 2], [3, 4]]::INTEGER[2][2])[2][1] AS VARCHAR);
+----
+3
+
+# [T; N] 的内层元素不可为 NULL：内层出现 NULL 元素时整体返回 NULL
+query T
+SELECT CAST(dfn_echo_array_nested([[1, NULL], [3, 4]]::INTEGER[2][2]) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
+# ARRAY(INTEGER, 3) // [Option<i32>; 3]，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_integer_n([1, NULL, 3]::INTEGER[3]));
+----
+INTEGER[3]
+
+query T
+SELECT CAST(dfn_echo_array_integer_n([NULL, NULL, NULL]::INTEGER[3]) AS VARCHAR);
+----
+[NULL, NULL, NULL]
+
+# NULL 行 + 可空元素混合
+query T
+SELECT CAST(dfn_echo_array_integer_n(i) AS VARCHAR) FROM (VALUES
+    ([1, NULL, 3]::INTEGER[3]),
+    (NULL::INTEGER[3]),
+    ([NULL, 5, 6]::INTEGER[3])
+) t(i);
+----
+[1, NULL, 3]
+NULL
+[NULL, 5, 6]
+
+# ============================================================================
+# ARRAY(VARCHAR, 2) // [Option<String>; 2]，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_varchar_n(['a', NULL]::VARCHAR[2]));
+----
+VARCHAR[2]
+
+query T
+SELECT CAST(dfn_echo_array_varchar_n(i) AS VARCHAR) FROM (VALUES
+    (['a', NULL]::VARCHAR[2]),
+    ([NULL, NULL]::VARCHAR[2]),
+    (['', 'x']::VARCHAR[2])
+) t(i);
+----
+[a, NULL]
+[NULL, NULL]
+[, x]
+
+# ============================================================================
+# ARRAY(DATE, 2) // [Option<DuckDate>; 2]，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_date_n([DATE '2024-01-02', NULL]::DATE[2]));
+----
+DATE[2]
+
+query T
+SELECT CAST(dfn_echo_array_date_n(
+    [DATE '2024-01-02', NULL]::DATE[2]
+) AS VARCHAR);
+----
+[2024-01-02, NULL]
+
+# ============================================================================
+# ARRAY(ARRAY(INTEGER, 2), 2) // [[Option<i32>; 2]; 2]，内外层均可为 NULL
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_array_nested_n([[1, NULL], NULL]::INTEGER[2][2]));
+----
+INTEGER[2][2]
+
+query T
+SELECT CAST(dfn_echo_array_nested_n(i) AS VARCHAR) FROM (VALUES
+    ([[1, NULL], NULL]::INTEGER[2][2]),
+    (NULL::INTEGER[2][2]),
+    ([[3, 4], NULL]::INTEGER[2][2])
+) t(i);
+----
+[[1, NULL], NULL]
+NULL
+[[3, 4], NULL]
+
+# 外层为 NULL 时内层不受影响
+query T
+SELECT CAST(dfn_echo_array_nested_n([[1, NULL], NULL]::INTEGER[2][2])[2] IS NULL AS VARCHAR);
+----
+true
+
+# ============================================================================
+# 批量扫描：1000 行，验证子向量容量足够（parent_capacity * N）
+# ============================================================================
+
+query T
+SELECT CAST(count(*) AS VARCHAR) FROM (
+    SELECT unnest(dfn_echo_array_integer(a)) AS x
+    FROM (SELECT [1, 2, 3]::INTEGER[3] AS a FROM range(1000)) t
+) s;
+----
+3000
+
+query T
+SELECT CAST(sum(x) AS VARCHAR) FROM (
+    SELECT unnest(dfn_echo_array_integer(a)) AS x
+    FROM (SELECT [1, 2, 3]::INTEGER[3] AS a FROM range(1000)) t
+) s;
+----
+6000
+
+# ============================================================================
+# NULL 处理：任何参数为 NULL 时结果应为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_array_integer(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_bigint(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_double(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_bool(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_varchar(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_date(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_decimal(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_blob(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_nested(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_integer_n(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_varchar_n(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_date_n(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_array_nested_n(NULL) AS VARCHAR);
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
