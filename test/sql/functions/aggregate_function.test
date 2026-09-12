@@ -1,0 +1,243 @@
+# name: test/sql/functions/aggregate_function.test
+# description: duck_aggregate_function 的参数/状态拆分、入参可空性、返回形式、输出类型与注册控制
+# group: [functions]
+
+require rusty_quack
+
+# ============================================================================
+# 基本形态：状态参数在最后 / 无返回类型
+# ============================================================================
+
+query I
+SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x);
+----
+6
+
+query T
+SELECT typeof(dfn_agg_sum(x)) FROM (VALUES (1)) t(x);
+----
+BIGINT
+
+# 空输入：一次 update 都没有，结果来自 Default 状态
+query I
+SELECT dfn_agg_sum(x) FROM (SELECT 1 AS x WHERE false) t(x);
+----
+0
+
+# GROUP BY：每个分组一个状态
+query II rowsort
+SELECT x % 3, dfn_agg_sum(x) FROM range(0, 9) t(x) GROUP BY 1;
+----
+0	9
+1	12
+2	15
+
+# FILTER：被过滤掉的行不进入状态
+query I
+SELECT dfn_agg_sum(x) FILTER (WHERE x % 2 = 0) FROM (VALUES (1), (2), (3), (4)) t(x);
+----
+6
+
+# 跨 chunk（多批 update）
+query I
+SELECT dfn_agg_sum(x) FROM range(0, 10000) t(x);
+----
+49995000
+
+# 多线程：DuckDB 会建多个状态再 combine，结果必须与单线程一致
+statement ok
+PRAGMA threads=4;
+
+query I
+SELECT dfn_agg_sum(x) FROM range(0, 10000) t(x);
+----
+49995000
+
+statement ok
+PRAGMA threads=1;
+
+# DISTINCT 由 DuckDB 在聚合外包装去重
+query I
+SELECT dfn_agg_sum(DISTINCT x) FROM (VALUES (1), (1), (2)) t(x);
+----
+3
+
+# 状态参数在最前：宏按签名顺序取参数，输入仍是位置参数
+query I
+SELECT dfn_agg_state_first(x) FROM (VALUES (1), (2)) t(x);
+----
+3
+
+# 零个输入参数：注册成无参聚合，每行调用一次 update
+query I
+SELECT dfn_agg_row_count() FROM (VALUES (1), (2), (3)) t(x);
+----
+3
+
+# 多个输入参数按位置匹配
+query I
+SELECT dfn_agg_weighted(x, w) FROM (VALUES (1, 10), (2, 20)) t(x, w);
+----
+50
+
+# 参数类型不匹配
+statement error
+SELECT dfn_agg_sum('x');
+----
+No function matches
+
+# ============================================================================
+# 入参可空性：非 Option 参数跳过整行，Option 参数看见 NULL
+# ============================================================================
+
+# NULL 行被跳过，聚合继续（而不是让整组变成 NULL）
+query I
+SELECT dfn_agg_sum(x) FROM (VALUES (1), (NULL), (3)) t(x);
+----
+4
+
+# 整列 NULL：所有行都被跳过
+query I
+SELECT dfn_agg_sum(x) FROM (VALUES (NULL), (NULL)) t(x);
+----
+0
+
+# Option 参数：NULL 以 None 进入函数体，所以能数出 NULL 的个数
+query I
+SELECT dfn_agg_null_count(x) FROM (VALUES (1), (NULL), (3)) t(x);
+----
+1
+
+query I
+SELECT dfn_agg_null_count(x) FROM (VALUES (NULL), (NULL)) t(x);
+----
+2
+
+# 混合：非 Option 参数拦下整行，Option 参数放行 NULL
+query T
+SELECT dfn_agg_mixed(a, b) FROM (VALUES (1, 2), (NULL, 5), (3, NULL), (4, 6)) t(a, b);
+----
+sum:16|nulls:1
+
+# ============================================================================
+# 行处理函数的返回形式：-> () 与 -> DuckResult<()>
+# ============================================================================
+
+query I
+SELECT dfn_agg_checked(x) FROM (VALUES (1), (2)) t(x);
+----
+3
+
+# 某一行返回 Err，整条查询失败
+statement error
+SELECT dfn_agg_checked(x) FROM (VALUES (1), (13), (2)) t(x);
+----
+dfn_agg_checked: unlucky input 13
+
+# panic 被 duck_aggregate_unwind 捕获成查询错误
+query I
+SELECT dfn_agg_panic(1);
+----
+1
+
+statement error
+SELECT dfn_agg_panic(13);
+----
+dfn_agg_panic: unlucky input 13
+
+# ============================================================================
+# 输出类型与结果语义
+# ============================================================================
+
+# f64 输出 + 自定义 combine/result
+query R
+SELECT dfn_agg_avg(x) FROM (VALUES (1), (2), (3)) t(x);
+----
+2.0
+
+# 没有有效行时 result() 返回 None -> SQL NULL
+query R
+SELECT dfn_agg_avg(x) FROM (VALUES (NULL), (NULL)) t(x);
+----
+NULL
+
+query R
+SELECT dfn_agg_avg(x) FROM (SELECT 1 AS x WHERE false) t(x);
+----
+NULL
+
+# VARCHAR 输出
+query T
+SELECT dfn_agg_concat(x) FROM (VALUES ('a'), ('b'), ('c')) t(x);
+----
+a,b,c
+
+query T
+SELECT dfn_agg_concat(x) FROM (VALUES ('a'), (NULL), ('c')) t(x);
+----
+a,c
+
+query T
+SELECT dfn_agg_concat(x) FROM (SELECT 'x' AS x WHERE false) t(x);
+----
+NULL
+
+# LIST 输出：NULL 也按位置收集进列表
+query T
+SELECT dfn_agg_list(x) FROM (VALUES (1), (2), (3)) t(x);
+----
+[1, 2, 3]
+
+query T
+SELECT dfn_agg_list(x) FROM (VALUES (1), (NULL), (3)) t(x);
+----
+[1, NULL, 3]
+
+query T
+SELECT dfn_agg_list(x) FROM (SELECT 1 AS x WHERE false) t(x);
+----
+NULL
+
+# ============================================================================
+# 注册控制：auto_register = false、手动注册、函数集重载
+# ============================================================================
+
+# 只声明、不手动注册：SQL 层看不到这个名字
+statement error
+SELECT dfn_agg_reg_unregistered(1);
+----
+Scalar Function with name dfn_agg_reg_unregistered does not exist
+
+# 手动注册（#[duck_custom_register] + aggregate_function_builder()）后可用
+query I
+SELECT dfn_agg_reg_manual(1);
+----
+1
+
+# 函数集重载：一个 SQL 名字挂多个签名，按参数类型分派
+query T
+SELECT dfn_agg_reg_overload(1);
+----
+int(1);
+
+query T
+SELECT dfn_agg_reg_overload('x');
+----
+str(x);
+
+# 两个重载分支的函数名本身没有被注册
+statement error
+SELECT dfn_agg_reg_over_int(1);
+----
+Scalar Function with name dfn_agg_reg_over_int does not exist
+
+statement error
+SELECT dfn_agg_reg_over_varchar('x');
+----
+Scalar Function with name dfn_agg_reg_over_varchar does not exist
+
+# 重载匹配不到参数类型就报错
+statement error
+SELECT dfn_agg_reg_overload(1.5);
+----
+No function matches
