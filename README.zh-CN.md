@@ -11,6 +11,7 @@
 - 仓库地址：<https://github.com/shijianjs/duckfn>
 - 已发布 crate：[`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
 - 基于：[`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
+- 无需手写 `unsafe`：不需要 `unsafe fn`，函数体里也碰不到裸指针
 - 协议：[MIT](LICENSE)
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。
@@ -66,6 +67,11 @@ duckfn_entrypoint!("my_ext");
 
 `#[duck_scalar_function]` 会自动生成 DuckDB 包装层、逻辑类型，并默认通过 `inventory` 完成注册。
 `duckfn_entrypoint!` 负责导出 DuckDB 加载扩展时查找的 `*_init_c_api` 符号。
+
+上面这段全是安全 Rust：不需要写 `unsafe fn`，不需要解引用裸指针，也不需要接触 DuckDB 的 C
+类型 —— 这些都由生成的包装层完成。唯一会出现 `unsafe` 的地方是手动注册：
+`#[duck_custom_register]` 中调用 quack-rs 的 `unsafe fn register_scalar` /
+`register_aggregate` / `register_table`。
 
 ## 可用宏
 

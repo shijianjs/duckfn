@@ -15,6 +15,7 @@
 
 - 仓库地址：<https://github.com/shijianjs/duckfn>
 - 基于 [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
+- 无需手写 `unsafe`：不需要 `unsafe fn`，函数体里也碰不到裸指针
 - 无需编译 DuckDB，无需 C/C++ 代码
 - 属性驱动、基于 `inventory` 的自动注册
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
@@ -60,6 +61,11 @@ pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
 // 生成扩展入口（扩展名必须全小写、仅含下划线）
 duckfn_entrypoint!("my_ext");
 ```
+
+包装层、逻辑类型和注册都由宏生成，所以上面这段全是安全 Rust —— 不需要 `unsafe fn`，不碰裸
+指针，也不接触 DuckDB 的 C 类型。唯一会出现 `unsafe` 的地方是手动注册：
+`#[duck_custom_register]` 中调用 quack-rs 的 `unsafe fn register_scalar` /
+`register_aggregate` / `register_table`。
 
 ## 可用宏
 

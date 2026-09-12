@@ -12,6 +12,7 @@ code, and no local DuckDB build required.
 - Repository: <https://github.com/shijianjs/duckfn>
 - Crates: [`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
 - Built on: [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
+- No `unsafe` to write: no `unsafe fn`, no raw pointers in your function bodies
 - License: [MIT](LICENSE)
 
 > Status: early / experimental. APIs may change before `1.0`.
@@ -69,6 +70,11 @@ duckfn_entrypoint!("my_ext");
 `#[duck_scalar_function]` generates the DuckDB wrapper, the logical types, and — by default —
 registers the function through `inventory`. `duckfn_entrypoint!` emits the `*_init_c_api` symbol
 DuckDB looks for when loading the extension.
+
+Everything in that snippet is safe Rust: you never write an `unsafe fn`, dereference a raw pointer,
+or name a DuckDB C type — the generated wrapper does that work for you. The only place `unsafe`
+still shows up is manual registration, where `#[duck_custom_register]` calls quack-rs'
+`unsafe fn register_scalar` / `register_aggregate` / `register_table`.
 
 ## Attributes
 

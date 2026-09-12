@@ -16,6 +16,7 @@ required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
 - Built on [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
+- No `unsafe` to write: no `unsafe fn`, no raw pointers in your function bodies
 - No DuckDB build required, no C/C++ code
 - Attribute-driven registration through `inventory`
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
@@ -63,6 +64,11 @@ pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
 // Generate the extension entry point (name must be lowercase + underscores).
 duckfn_entrypoint!("my_ext");
 ```
+
+The wrapper, the logical types and the registration are all generated, so the snippet above is
+entirely safe Rust — no `unsafe fn`, no raw pointers, no DuckDB C types. The only place `unsafe`
+shows up is manual registration: `#[duck_custom_register]` calls quack-rs'
+`unsafe fn register_scalar` / `register_aggregate` / `register_table`.
 
 ## Attributes
 
