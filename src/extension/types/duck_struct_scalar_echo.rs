@@ -1,5 +1,5 @@
 use duckfn::duck_scalar_function;
-use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTimestamp};
+use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckOptionArray, DuckStruct, DuckTimestamp};
 use indexmap::IndexMap;
 
 // ============================================================================
@@ -243,6 +243,11 @@ fn dfn_echo_struct_nested_only(i: DuckStructNestedOnly) -> DuckStructNestedOnly 
 
 // ---------------------------------------------------------------------------
 // struct 作为其它容器的元素
+//
+// 每个容器给两版对照：元素类型不带 Option（NULL 元素无法表示，会让整个容器
+// 变成 NULL）与带 Option（NULL 元素被保留）。带 Option 的版本以 _nullable
+// 结尾（duck_map_scalar_echo.rs / duck_array_scalar_echo.rs 中同类对照用 _n 后缀，
+// 那是给简单类型 / 包装类型元素用的）。
 // ---------------------------------------------------------------------------
 
 /// LIST(STRUCT(id INTEGER, name VARCHAR))
@@ -275,5 +280,40 @@ fn dfn_echo_struct_list_nullable(
 fn dfn_echo_struct_map_value(
     i: IndexMap<String, DuckStructSimple>,
 ) -> IndexMap<String, DuckStructSimple> {
+    i
+}
+
+/// MAP(VARCHAR, STRUCT(id INTEGER, name VARCHAR))，value 可空
+/// - MAP 的 key 不允许为 NULL，所以只有 value 有 Option 变体
+/// ```sql
+/// SELECT dfn_echo_struct_map_value_nullable(
+///     map(['k'], [NULL::STRUCT(id INTEGER, name VARCHAR)]));
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_struct_map_value_nullable(
+    i: IndexMap<String, Option<DuckStructSimple>>,
+) -> IndexMap<String, Option<DuckStructSimple>> {
+    i
+}
+
+/// ARRAY(STRUCT(id INTEGER, name VARCHAR), 2)，元素不可空
+/// ```sql
+/// SELECT dfn_echo_struct_array(
+///     [{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]);
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_struct_array(i: DuckArray<DuckStructSimple, 2>) -> DuckArray<DuckStructSimple, 2> {
+    i
+}
+
+/// ARRAY(STRUCT(id INTEGER, name VARCHAR), 2)，元素可空
+/// ```sql
+/// SELECT dfn_echo_struct_array_nullable(
+///     [{'id': 1, 'name': 'a'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2]);
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_struct_array_nullable(
+    i: DuckOptionArray<DuckStructSimple, 2>,
+) -> DuckOptionArray<DuckStructSimple, 2> {
     i
 }
