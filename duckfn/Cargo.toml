@@ -1,7 +1,17 @@
 [package]
 name = "duckfn"
-version = "0.0.1"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Write DuckDB extensions in plain Rust: attribute macros that turn ordinary functions into scalar/aggregate/table functions, SQL macros and nested LIST/MAP/ARRAY/STRUCT types."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/duckfn"
+keywords = ["duckdb", "extension", "ffi", "database", "macro"]
+categories = ["database", "api-bindings", "development-tools::ffi"]
 
 [lib]
 crate-type = ["rlib"]
@@ -22,6 +32,6 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 
 # 对应duckdb的map语义
 indexmap = "2"
-duckfn-macro = { path = "../duckfn-macro" }
+duckfn-macro = { version = "0.0.1", path = "../duckfn-macro" }
 
 inventory = "0.3"

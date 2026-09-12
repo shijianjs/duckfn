@@ -1,130 +1,116 @@
-# DuckDB Rust extension template
-This is an **experimental** template for Rust based extensions based on the C Extension API of DuckDB. The goal is to
-turn this eventually into a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions
-repository
+# duckfn
 
-Features:
-- No DuckDB build required
-- No C++ or C code required
-- CI/CD chain preconfigured
-- (Coming soon) Works with community extensions
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## Cloning
+**Write DuckDB extensions in plain Rust.**
 
-Clone the repo with submodules
+`duckfn` is a Rust framework for building [DuckDB](https://duckdb.org) extensions on top of
+DuckDB's C Extension API. A single attribute turns an ordinary Rust function into a DuckDB
+**scalar**, **aggregate** or **table function**, a SQL macro, or a nested type — no C/C++ glue
+code, and no local DuckDB build required.
 
-```shell
-git clone --recurse-submodules <repo>
+- Repository: <https://github.com/shijianjs/duckfn>
+- Crates: [`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
+- License: [MIT](LICENSE)
+
+> Status: early / experimental. APIs may change before `1.0`.
+
+## Repository layout
+
+This repository is a Cargo workspace:
+
+| Path | Description | Published to crates.io |
+| --- | --- | --- |
+| [`duckfn/`](duckfn/) | Runtime framework: traits, type adapters, function registration. | Yes |
+| [`duckfn-macro/`](duckfn-macro/) | Procedural macros: `#[duck_scalar_function]`, `#[derive(DuckStruct)]`, ... | Yes |
+| `/` (`rusty_quack`) | Example extension built with `duckfn`. Kept here to reuse DuckDB's official multi-platform CI. | No, example only |
+
+## Quick start
+
+```rust
+use duckfn::{duck_error, duck_scalar_function, duckfn_entrypoint, DuckOptionResult};
+
+/// ```sql
+/// SELECT double_it(21);    -- 42
+/// SELECT double_it(NULL);  -- NULL
+/// SELECT double_it(13);    -- error: unlucky input
+/// ```
+#[duck_scalar_function]
+pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
+    if v == Some(13) {
+        return Err(duck_error("unlucky input"));
+    }
+    Ok(v.map(|x| x * 2))
+}
+
+// Generate the DuckDB extension entry point (extension name must be lowercase + underscores).
+duckfn_entrypoint!("my_ext");
 ```
 
-## Dependencies
-In principle, these extensions can be compiled with the Rust toolchain alone. However, this template relies on some additional
-tooling to make life a little easier and to be able to share CI/CD infrastructure with extension templates for other languages:
+`#[duck_scalar_function]` generates the DuckDB wrapper, the logical types, and — by default —
+registers the function through `inventory`. `duckfn_entrypoint!` emits the `*_init_c_api` symbol
+DuckDB looks for when loading the extension.
 
-- Python3
-- Python3-venv
-- [Make](https://www.gnu.org/software/make)
-- Git
+## Attributes
 
-Installing these dependencies will vary per platform:
-- For Linux, these come generally pre-installed or are available through the distro-specific package manager.
-- For MacOS, [homebrew](https://formulae.brew.sh/).
-- For Windows, [chocolatey](https://community.chocolatey.org/).
+| Attribute | Purpose |
+| --- | --- |
+| `#[duck_scalar_function]` | Register a scalar function. |
+| `#[duck_aggregate_function]` | Register an aggregate function. |
+| `#[duck_table_function]` | Register a table function. |
+| `#[duck_sql_macro]` | Register a SQL macro. |
+| `#[duck_custom_register]` | Manually register builders, signature `fn(&Connection) -> DuckResult<()>`. |
+| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |
+| `duckfn_entrypoint!("name")` | Generate the extension entry point. |
 
-## Building
-After installing the dependencies, building is a two-step process. Firstly run:
+Common macro arguments:
+
+- `auto_register = false` — only generate builders (`scalar_function_builder()`,
+  `scalar_overload_builder()`, ...), don't auto-register; pair it with `#[duck_custom_register]`.
+- `named_param_from = "field"` — where named arguments start for table functions.
+
+## Type mapping
+
+| DuckDB | Rust |
+| --- | --- |
+| `BOOLEAN` | `bool` |
+| `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
+| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
+| `HUGEINT` / `UHUGEINT` | `i128` / `u128` |
+| `FLOAT` / `DOUBLE` | `f32` / `f64` |
+| `VARCHAR` | `String` |
+| `NULL` | `Option<T>` |
+| `LIST(T)` | `Vec<T>`, nestable (`Vec<Option<Vec<Option<T>>>>` ...) |
+| `MAP(K, V)` | `IndexMap<K, V>` |
+| `ARRAY(T, N)` | `[T; N]` (`DuckArray`) / `[Option<T>; N]` (`DuckOptionArray`) |
+| `STRUCT(...)` | `#[derive(DuckStruct)]`, nested structs and lists supported |
+
+Nullability follows the Rust signature: a non-`Option` argument short-circuits the row to `NULL`
+when the input is `NULL` (the body is not called), while an `Option<T>` argument receives `None`
+and decides the semantics itself.
+
+## Error handling and panics
+
+Return `DuckOptionResult<T>` (i.e. `Result<Option<T>, ExtensionError>`) to emit `NULL` or fail the
+query via `duck_error("...")`. Panics inside a function body are caught and converted into a
+DuckDB error instead of unwinding across the FFI boundary.
+
+## Running the example extension
+
+The workspace root contains a full example extension (`rusty_quack`) covering every feature:
+
 ```shell
 make configure
-```
-This will ensure a Python venv is set up with DuckDB and DuckDB's test runner installed. Additionally, depending on configuration,
-DuckDB will be used to determine the correct platform for which you are compiling.
-
-Then, to build the extension run:
-```shell
 make debug
-```
-This delegates the build process to cargo, which will produce a shared library in `target/debug/<shared_lib_name>`. After this step,
-a script is run to transform the shared library into a loadable extension by appending a binary footer. The resulting extension is written
-to the `build/debug` directory.
-
-To create optimized release binaries, simply run `make release` instead.
-
-### Running the extension
-To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
-
-```sh
-duckdb -unsigned
-```
-
-After loading the extension by the file path, you can use the functions provided by the extension. This template registers
-the `rusty_echo()` scalar function and the `rusty_quack()` table function.
-
-```sql
+duckdb -unsigned -c "
 LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
 SELECT rusty_echo('Jane');
+"
 ```
 
-```
-┌─────────────────────┐
-│ rusty_echo('Jane')  │
-│       varchar       │
-├─────────────────────┤
-│ 🐤 Jane 🦀 Jane     │
-└─────────────────────┘
-```
+See [`demo.sh`](demo.sh) for a long list of runnable SQL examples, and
+[`duckfn/README.md`](duckfn/README.md) for the full library documentation.
 
-```sql
-SELECT * FROM rusty_quack('Jane');
-```
+## License
 
-```
-┌─────────────────────┐
-│       column0       │
-│       varchar       │
-├─────────────────────┤
-│ Rusty Quack Jane 🐥 │
-└─────────────────────┘
-```
-
-## Testing
-This extension uses the DuckDB Python client for testing. This should be automatically installed in the `make configure` step.
-The tests themselves are written in the SQLLogicTest format, just like most of DuckDB's tests. A sample test can be found in
-`test/sql/<extension_name>.test`. To run the tests using the *debug* build:
-
-```shell
-make test_debug
-```
-
-or for the *release* build:
-```shell
-make test_release
-```
-
-### Version switching
-Testing with different DuckDB versions is really simple:
-
-First, run
-```
-make clean_all
-```
-to ensure the previous `make configure` step is deleted.
-
-Then, run
-```
-DUCKDB_TEST_VERSION=v1.3.2 make configure
-```
-to select a different duckdb version to test with
-
-Finally, build and test with
-```
-make debug
-make test_debug
-```
-
-### Known issues
-This is a bit of a footgun, but the extensions produced by this template may (or may not) be broken on windows on python3.11
-with the following error on extension load:
-```shell
-IO Error: Extension '<name>.duckdb_extension' could not be loaded: The specified module could not be found
-```
-This was resolved by using python 3.12
+Licensed under the [MIT License](LICENSE).

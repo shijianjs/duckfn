@@ -1,8 +1,17 @@
 [package]
 name = "duckfn-macro"
-version = "0.0.1"
-edition = "2024"
-
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Procedural macros for duckfn: generate DuckDB scalar, aggregate and table functions, SQL macros and STRUCT types from plain Rust code."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/duckfn-macro"
+keywords = ["duckdb", "macro", "proc-macro", "extension", "ffi"]
+categories = ["database", "development-tools::ffi"]
 
 [lib]
 proc-macro = true

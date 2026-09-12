@@ -2,14 +2,22 @@
 name = "rusty_quack"
 version = "0.1.0"
 edition = "2021"
+# 示例插件项目：仅用于演示 duckfn，不发布到 crates.io。
+# 保留在本仓库根目录是为了复用 DuckDB 官方 CI 自动构建各平台的扩展包。
+publish = false
 
 [workspace]
 resolver = "3"
 members = ["duckfn", "duckfn-macro","."]
 
 [workspace.package]
+version = "0.0.1"
 edition = "2024"
 rust-version = "1.86"
+license = "MIT"
+repository = "https://github.com/shijianjs/duckfn"
+homepage = "https://github.com/shijianjs/duckfn"
+authors = ["shijianjs"]
 
 [lib]
 crate-type = ["cdylib"]
