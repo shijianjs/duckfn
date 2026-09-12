@@ -1,14 +1,13 @@
 use crate::duck_columns::DuckColumns;
-use crate::builder_with_params::BuilderWithParams;
+use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{duck_aggregate_unwind, duck_scalar_unwind, vec_option_to_ref, DuckOptionResult, DuckResult};
+use crate::{DuckOptionResult, DuckResult, duck_aggregate_unwind, vec_option_to_ref};
 use libduckdb_sys::{
     duckdb_aggregate_state, duckdb_connection, duckdb_data_chunk, duckdb_function_info,
     duckdb_vector, idx_t,
 };
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::error::ExtensionError;
 use quack_rs::prelude::AggregateFunctionInfo;
 
 pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {

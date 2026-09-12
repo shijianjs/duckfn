@@ -1,11 +1,10 @@
-use crate::{panic_to_string, DuckResult, duck_scalar_unwind, DuckOptionResult, vec_option_to_ref};
 use crate::duck_columns::DuckColumns;
-use crate::builder_with_params::BuilderWithParams;
+use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
+use crate::{DuckOptionResult, DuckResult, duck_scalar_unwind, vec_option_to_ref};
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
-use std::panic::catch_unwind;
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
     unsafe extern "C" fn scalar_function_wrapper(
