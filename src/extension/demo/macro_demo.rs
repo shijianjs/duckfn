@@ -1,3 +1,6 @@
+// 示例代码：部分函数/结构体仅用于演示，并未全部注册或调用。
+#![allow(dead_code)]
+
 use quack_rs::prelude::SqlMacro;
 use duckfn::{duck_aggregate_function, duck_scalar_function, duck_sql_macro, duck_table_function, DuckResult, DuckStruct};
 
@@ -11,12 +14,12 @@ pub struct DuckStructDemo1 {
 }
 
 #[duck_scalar_function]
-fn error_scalar_demo(input: i64,input2: i64) -> duckfn::DuckOptionResult<i64> {
+fn error_scalar_demo(input: i64,_input2: i64) -> duckfn::DuckOptionResult<i64> {
     Ok(Some(input * 2))
 }
 
 #[duck_aggregate_function]
-fn word_count_w_demo(input: Option<String>, arg2: i64,  state: &mut WcAggState)-> duckfn::DuckResult<()>  {
+fn word_count_w_demo(_input: Option<String>, _arg2: i64,  _state: &mut WcAggState)-> duckfn::DuckResult<()>  {
     todo!()
 }
 
@@ -27,7 +30,7 @@ struct WcAggState {
 impl duckfn::DuckAggregateState for WcAggState {
     type Output = i64;
 
-    fn combine(&mut self, other: &Self) -> duckfn::DuckResult<()> {
+    fn combine(&mut self, _other: &Self) -> duckfn::DuckResult<()> {
         todo!()
     }
 

@@ -30,6 +30,7 @@ pub fn handle_duck_function(
 #[darling(derive_syn_parse)]
 pub(crate) struct DuckArgs {
     /// 表函数的命名参数从哪个开始
+    #[allow(dead_code)]
     pub named_param_from: Option<String>,
 
     /// Whether to auto register the function

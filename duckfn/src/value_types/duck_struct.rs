@@ -109,7 +109,6 @@ pub trait DuckStructTrait: DuckValueType {
         index: usize,
         get_data: fn(&Self) -> Option<&F>,
     ) {
-        use crate::DuckValueType;
         F::write_batch(
             unsafe { chunk.vector(index) },
             &row.iter().map(|o| o.and_then(get_data)).collect::<Vec<_>>(),
@@ -169,12 +168,10 @@ impl<T: DuckStructTrait> DuckValueType for T {
         reader
     }
     fn read_valid(reader: &crate::DuckValueReader, row: usize) -> Option<Self> {
-        use crate::DuckValueType;
         let readers = &reader.child_reader;
         Self::s_read_columns(readers, row)
     }
     fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
-        use crate::DuckValueType;
         let mut writer = crate::DuckValueWriter::new_from_vector(vector);
         writer.child_writer = Self::s_create_writer_batch(&writer, output_vec);
         writer
@@ -192,7 +189,6 @@ impl<T: DuckStructTrait> DuckValueType for T {
         Self::s_write_finish(writer);
     }
     fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> crate::DuckResult<Self> {
-        use crate::DuckValueType;
         let vec = (0..Self::s_fields_count())
             .into_iter()
             .map(|i| value.struct_child(i))
@@ -225,7 +221,7 @@ impl<T: DuckStructTrait> DuckBindArgs for T {
         let vec1: Vec<Option<Value>> = Self::s_named_columns_type_fn()
             .into_iter()
             .enumerate()
-            .map(|(idx, (name, logical_type))| {
+            .map(|(idx, (name, _logical_type))| {
                 Some(if is_named[idx] {
                     unsafe { bind.get_named_parameter_value(&*name) }
                 } else {

@@ -38,7 +38,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
         ))
     }
 
-    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+    fn read_valid_by_vector_reader(_reader: &VectorReader, _row: usize) -> Self {
         todo!("子类需要实现read_valid_by_vector_reader")
     }
 
@@ -50,7 +50,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
         Self::write_finish(&mut writer);
     }
 
-    fn create_writer_batch(vector: duckdb_vector, output_vec: &[Option<&Self>]) -> DuckValueWriter {
+    fn create_writer_batch(vector: duckdb_vector, _output_vec: &[Option<&Self>]) -> DuckValueWriter {
         // Self::create_writer(vector)
         DuckValueWriter::new_from_vector(vector)
     }
@@ -77,11 +77,11 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         Self::write_valid_to_vector_writer(&mut writer.vector_writer, idx, vo)
     }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+    fn write_valid_to_vector_writer(_writer: &mut VectorWriter, _idx: usize, _v: &Self) {
         todo!("子类需要实现write_valid")
     }
 
-    fn write_finish(writer: &mut DuckValueWriter) {}
+    fn write_finish(_writer: &mut DuckValueWriter) {}
 
     fn struct_field_reader(struct_reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
         let row_count = struct_reader.vector_reader.row_count();
@@ -116,7 +116,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
         Ok(Self::read_by_duck_value_valid_simple(value))
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+    fn read_by_duck_value_valid_simple(_value: &Value) -> Self {
         todo!("sub class need to implement read_by_duck_value_valid_simple")
     }
 }

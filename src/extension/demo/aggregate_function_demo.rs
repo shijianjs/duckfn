@@ -1,3 +1,6 @@
+// 示例代码：部分函数/结构体仅用于演示，并未全部注册或调用。
+#![allow(dead_code)]
+
 use duckfn::{duck_custom_register, AggregateFunctionAdapter, DuckAggregateState};
 use duckfn::{DuckOptionResult, DuckResult};
 use duckfn::{duck_aggregate_function, DuckStruct};
@@ -6,8 +9,7 @@ use libduckdb_sys::{
 };
 use quack_rs::connection::Connection;
 use quack_rs::prelude::{
-    AggregateFunctionBuilder, AggregateState, ExtensionError, FfiState, Registrar, TypeId,
-    VectorReader, VectorWriter,
+    AggregateState, ExtensionError, FfiState, Registrar, VectorReader, VectorWriter,
 };
 
 #[duck_aggregate_function]
@@ -57,7 +59,7 @@ impl AggregateFunctionAdapter for WordCountStateWrapper {
 
     // #[duckdb_aggregate_function]
     fn handle_row(&mut self, args: Self::Args) -> DuckResult<()> {
-        self.count += args.input.map(|(t)| count_words(&t)).unwrap_or(0);
+        self.count += args.input.map(|t| count_words(&t)).unwrap_or(0);
         Ok(())
     }
 
@@ -117,7 +119,7 @@ mod simple_think {
         arg2:i64,
     }
     // #[simple_agg]
-    fn word_count_w_simple(arg:Vec<SimpleAggArg>)->i64{
+    fn word_count_w_simple(_arg:Vec<SimpleAggArg>)->i64{
         todo!()
     }
 }

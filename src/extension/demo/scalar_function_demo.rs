@@ -1,15 +1,13 @@
-use duckfn::{duck_error, DuckArray, DuckFunctionItem, DuckOptionArray, DuckOptionResult, DuckResult};
+// 示例代码：部分函数/结构体仅用于演示，并未全部注册或调用。
+#![allow(dead_code)]
+
+use duckfn::{duck_error, DuckArray, DuckOptionArray, DuckOptionResult};
 use duckfn::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
 use libduckdb_sys::{
     duckdb_data_chunk, duckdb_data_chunk_get_vector, duckdb_function_info, duckdb_vector,
 };
-use quack_rs::connection::Connection;
-use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{
-    ListVector, LogicalType, MapVector, Registrar, ScalarFunctionBuilder, StructVector, TypeId,
-    VectorReader, VectorWriter,
-};
+use quack_rs::prelude::{ListVector, MapVector, StructVector, VectorReader, VectorWriter};
 
 ///
 ///

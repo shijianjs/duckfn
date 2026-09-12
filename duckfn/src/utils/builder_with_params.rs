@@ -1,6 +1,6 @@
 use quack_rs::aggregate::AggregateFunctionBuilder;
 use quack_rs::aggregate::builder::OverloadBuilder;
-use quack_rs::prelude::{LogicalType, ScalarFunctionBuilder, ScalarOverloadBuilder, TypeId};
+use quack_rs::prelude::{LogicalType, ScalarFunctionBuilder, ScalarOverloadBuilder};
 
 pub trait BuilderWithParams: Sized {
 

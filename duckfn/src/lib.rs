@@ -14,8 +14,6 @@ pub use utils::helpers::*;
 pub use functions::table_function_adapter::*;
 pub use register::*;
 pub use inventory::submit as inventory_submit;
-pub use functions::*;
-pub use utils::*;
 
 
 

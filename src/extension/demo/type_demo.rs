@@ -1,3 +1,6 @@
+// 示例代码：手动实现 DuckStruct 各方法的演示，未全部被调用。
+#![allow(dead_code)]
+
 use quack_rs::connection::Connection;
 use duckfn::DuckResult;
 
@@ -61,7 +64,6 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
     fn s_read_duck_values(
         values: &Vec<Option<&quack_rs::value::Value>>,
     ) -> duckfn::DuckResult<Self> {
-        use duckfn::DuckValueType;
         Ok(Self {
             count: Self::s_read_by_duck_value_notnull(values[0], "count")?,
             data: Self::s_read_by_duck_value_notnull(values[1], "data")?,

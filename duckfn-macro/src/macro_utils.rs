@@ -38,6 +38,7 @@ pub fn extract_generic_arg_type(segment: &syn::PathSegment) -> Option<&Type> {
     }
 }
 
+#[allow(dead_code)]
 pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {
     match x {
         GenericArgument::Type(ty) => Ok(ty),
@@ -45,10 +46,12 @@ pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {
     }
 }
 
+#[allow(dead_code)]
 pub fn get_option_inner(ty: &Type) -> (bool, &Type) {
     get_type_inner(ty, "Option")
 }
 
+#[allow(dead_code)]
 pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     if let Type::Path(TypePath {
         path: Path { segments, .. },
@@ -57,15 +60,14 @@ pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     {
         if let Some(v) = segments.iter().next() {
             if v.ident == name {
-                let t = match &v.arguments {
-                    PathArguments::AngleBracketed(a) => match a.args.iter().next() {
-                        Some(GenericArgument::Type(t)) => {
+                match &v.arguments {
+                    PathArguments::AngleBracketed(a) => {
+                        if let Some(GenericArgument::Type(t)) = a.args.iter().next() {
                             return (true, t);
                         }
-                        _ => {}
-                    },
-                    (_) => {}
-                };
+                    }
+                    _ => {}
+                }
             }
         }
     }

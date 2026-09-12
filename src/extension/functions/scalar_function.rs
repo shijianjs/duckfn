@@ -135,7 +135,7 @@ fn dfn_scalar_null_arg_mixed(a: i32, b: Option<i32>) -> i64 {
 /// SELECT dfn_scalar_null_arg_all(a) FROM (VALUES (NULL), (NULL)) t(a);
 /// ```
 #[duck_scalar_function]
-fn dfn_scalar_null_arg_all(a: i32) -> i32 {
+fn dfn_scalar_null_arg_all(_a: i32) -> i32 {
     panic!("body reached with NULL argument");
 }
 

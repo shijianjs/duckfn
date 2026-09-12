@@ -4,14 +4,9 @@ pub(crate) mod macro_utils;
 mod entrypoint;
 mod attr_args;
 
-use quote::quote;
-use syn::{LitStr};
-use crate::duck_function::ItemFnWrapper;
-use crate::macro_utils::{TokenStream2Result, handle_token_stream2_result};
-use darling::FromMeta;
+use crate::macro_utils::handle_token_stream2_result;
 use proc_macro::TokenStream;
-use syn::parse::Parser;
-use syn::{DeriveInput, ItemFn, Meta, parse_macro_input};
+use syn::{DeriveInput, parse_macro_input};
 use crate::attr_args::handle_duck_function;
 
 #[proc_macro_derive(DuckStruct, attributes(duck))]

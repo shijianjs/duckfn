@@ -1,9 +1,10 @@
-use duckfn::{DuckFullIterator, DuckOptionResult, DuckResult, TableFunctionAdapter};
-use duckfn::{duck_scalar_function, duck_table_function, DuckStruct};
+// 示例代码：部分函数/结构体仅用于演示，并未全部注册或调用。
+#![allow(dead_code)]
+
+use duckfn::{DuckFullIterator, DuckResult, TableFunctionAdapter};
+use duckfn::{duck_table_function, DuckStruct};
 use quack_rs::prelude::*;
 use quack_rs::vector::vector_size;
-use std::iter::Map;
-use std::ops::Range;
 use indexmap::IndexMap;
 
 
@@ -147,7 +148,7 @@ fn demo1(start: i64) -> DuckResult<DuckFullIterator<CountDownOutput>> {
     })))
 }
 // 这档没太大必要，仅仅是消了个外层的Ok而已，参数异常又是常见异常
-fn demo2(start: i64) -> DuckFullIterator<CountDownOutput> {
+fn demo2(_start: i64) -> DuckFullIterator<CountDownOutput> {
     todo!()
 }
 // 可以处理入参异常，出去的不处理

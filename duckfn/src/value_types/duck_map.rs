@@ -49,7 +49,7 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
         let k_vec: Vec<Option<&K>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| list.iter().map(|(k, v)| Some(k)))
+            .flat_map(|list| list.iter().map(|(k, _v)| Some(k)))
             .collect();
         let k_writer = K::create_writer_batch(k_vector, &k_vec);
 
@@ -57,7 +57,7 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
         let v_vec: Vec<Option<&V>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| list.iter().map(|(k, v)| v.as_ref()))
+            .flat_map(|list| list.iter().map(|(_k, v)| v.as_ref()))
             .collect();
         let v_writer = V::create_writer_batch(v_vector, &v_vec);
 
@@ -160,7 +160,7 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
         let k_vec: Vec<Option<&K>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| list.iter().map(|(k, v)| Some(k)))
+            .flat_map(|list| list.iter().map(|(k, _v)| Some(k)))
             .collect();
         let k_writer = K::create_writer_batch(k_vector, &k_vec);
 
@@ -168,7 +168,7 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
         let v_vec: Vec<Option<&V>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| list.iter().map(|(k, v)| Some(v)))
+            .flat_map(|list| list.iter().map(|(_k, v)| Some(v)))
             .collect();
         let v_writer = V::create_writer_batch(v_vector, &v_vec);
 

@@ -1,17 +1,16 @@
 use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
 use darling::FromDeriveInput;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::Ident;
 use quote::quote;
 use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
-use syn::{
-    Data, DataStruct, DeriveInput, Fields, FieldsNamed, GenericArgument, Path, Type, TypePath,
-};
+use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
 
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(duck))]
 struct DuckMacroArgs {
     pub named_param_from: Option<String>,
+    #[allow(dead_code)]
     pub auto_register: Option<bool>,
 }
 
@@ -70,7 +69,7 @@ impl DuckStructContext {
     }
 
     fn build_all(&self) -> TokenStream2Result {
-        let mut ts = self.build_duck_struct_impl()?;
+        let ts = self.build_duck_struct_impl()?;
         Ok(ts)
     }
     fn build_duck_struct_impl(&self) -> TokenStream2Result {
@@ -262,7 +261,7 @@ impl FieldWrapper {
     }
 
     fn new(field: syn::Field, index: usize) -> FieldWrapper {
-        let mut wrapper = FieldWrapper {
+        let wrapper = FieldWrapper {
             field,
             index,
             is_named_param: false,

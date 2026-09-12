@@ -7,10 +7,7 @@ pub(crate) mod duck_map;
 pub(crate) mod duck_struct;
 
 pub use duck_value_type::*;
-pub use simple_types::*;
-pub use duck_list::*;
 pub use duck_array::*;
 pub use wrapper_types::*;
-pub use duck_map::*;
 pub use duck_struct::*;
 

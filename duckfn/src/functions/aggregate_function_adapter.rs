@@ -13,7 +13,7 @@ use quack_rs::prelude::AggregateFunctionInfo;
 
 pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     unsafe extern "C" fn c_state_size(_info: duckdb_function_info) -> idx_t {
-        FfiState::<Self>::size_callback(_info)
+        unsafe { FfiState::<Self>::size_callback(_info) }
     }
 
     unsafe extern "C" fn c_state_init(info: duckdb_function_info, state: duckdb_aggregate_state) {
@@ -92,8 +92,8 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             for i in 0..count as usize {
                 let state_ptr = unsafe { *source.add(i) };
                 match unsafe { FfiState::<Self>::with_state(state_ptr) } {
-                    Some(st) => unsafe {
-                        let result1 = (st.result());
+                    Some(st) => {
+                        let result1 = st.result();
                         match result1 {
                             Ok(r) => output_vec.push(r),
                             Err(e) => {
@@ -101,7 +101,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
                                 return;
                             }
                         };
-                    },
+                    }
                     None => output_vec.push(None),
                 }
             }
@@ -136,7 +136,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     }
 
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
-        Self::aggregate_function_builder().register(con)
+        unsafe { Self::aggregate_function_builder().register(con) }
     }
 
     const NAME: &'static str;
@@ -163,7 +163,7 @@ pub trait DuckAggregateState {
         self.simple_combine(other);
         Ok(())
     }
-    fn simple_combine(&mut self, other: &Self) {
+    fn simple_combine(&mut self, _other: &Self) {
         todo!("simple_combine is not implemented")
     }
     fn result(&self) -> DuckOptionResult<Self::Output> {

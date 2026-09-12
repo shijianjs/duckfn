@@ -50,7 +50,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
         .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
     }
 
-    fn config_result_columns(bind: &BindInfo, args: &Self::Args) {
+    fn config_result_columns(bind: &BindInfo, _args: &Self::Args) {
         for (name, ty) in Self::Output::named_column_types() {
             bind.add_result_column_with_type(&name, &ty);
         }

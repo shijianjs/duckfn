@@ -47,7 +47,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     }
 
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
-        Self::scalar_function_builder().register(con)
+        unsafe { Self::scalar_function_builder().register(con) }
     }
 
     const NAME: &'static str;

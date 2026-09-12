@@ -62,7 +62,7 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckOptionArray<T, N> {
         T::write_finish(&mut writer.child_writer[0]);
     }
 
-    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+    fn read_by_duck_value_valid(_value: &Value) -> DuckResult<Self> {
         Err(duck_error("Bind value to array type is not supported"))
     }
 }
@@ -134,7 +134,7 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckArray<T, N> {
         <Self as Helper>::H::write_finish(writer)
     }
 
-    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+    fn read_by_duck_value_valid(_value: &Value) -> DuckResult<Self> {
         Err(duck_error("Bind value to array type is not supported"))
     }
 }

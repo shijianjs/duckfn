@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use quack_rs::interval::DuckInterval;
 use quack_rs::prelude::{LogicalType, TypeId, Value, VectorReader, VectorWriter};
-use std::marker::PhantomData;
 use crate::DuckResult;
 
 ///TypeId::Timestamp

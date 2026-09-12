@@ -1,4 +1,4 @@
-use crate::value_types::duck_value_type::{ DuckValueReader, DuckValueType};
+use crate::value_types::duck_value_type::DuckValueReader;
 use quack_rs::prelude::DataChunk;
 use quack_rs::prelude::LogicalType;
 
@@ -13,7 +13,7 @@ pub trait DuckColumns: Sized {
 
     fn named_column_types() -> Vec<(String, LogicalType)>;
 
-    fn write_columns_batch(chunk: &DataChunk, row: &Vec<Option<&Self>>){
+    fn write_columns_batch(_chunk: &DataChunk, _row: &Vec<Option<&Self>>){
         todo!()
     }
 }
