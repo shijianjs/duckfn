@@ -329,11 +329,11 @@ impl ItemFnWrapper {
 
                     if segment.ident == "DuckResult" {
                         if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(GenericArgument::Type(inner)) = args.args.first() {
-                                if let Type::ImplTrait(impl_trait) = inner {
-                                    if let Some(item) = iterator_item_type(impl_trait) {
-                                        return Ok((DuckTableResult::ResultIterator, item));
-                                    }
+                            if let Some(GenericArgument::Type(Type::ImplTrait(impl_trait))) =
+                                args.args.first()
+                            {
+                                if let Some(item) = iterator_item_type(impl_trait) {
+                                    return Ok((DuckTableResult::ResultIterator, item));
                                 }
                             }
                         }
@@ -448,10 +448,8 @@ impl FnArgWrapper {
     }
 
     fn is_agg_state(&self) -> bool {
-        if let Ok(ty) = self.resolve_type(){
-            if let syn::Type::Reference(type_ref) = ty{
-                return type_ref.mutability.is_some();
-            }
+        if let Ok(syn::Type::Reference(type_ref)) = self.resolve_type() {
+            return type_ref.mutability.is_some();
         }
         false
     }

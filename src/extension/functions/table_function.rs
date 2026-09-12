@@ -209,7 +209,7 @@ fn dfn_table_typed(n: i64) -> impl Iterator<Item = TypedRow> {
             None
         },
         // LIST 列允许元素为 NULL
-        tags: (0..i).map(|x| Some(x)).collect(),
+        tags: (0..i).map(Some).collect(),
     })
 }
 

@@ -4,6 +4,8 @@ use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, MapVector, TypeId, Value};
 use std::hash::Hash;
 
+// 裸指针由 DuckDB FFI 提供，此处直接解引用
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<K, Option<V>> {
     fn type_id() -> TypeId {
         TypeId::Map
@@ -93,8 +95,8 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
     }
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
         let map_size = value.map_len();
-        let mut map = Self::with_capacity(map_size as usize);
-        for i in 0..map_size as usize {
+        let mut map = Self::with_capacity(map_size);
+        for i in 0..map_size {
             let k_value_option = value.map_key(i);
             let k = if let Some(k_value) = k_value_option {
                 K::read_by_duck_value(&k_value)?
@@ -121,6 +123,8 @@ trait Helper {
 impl<K: DuckValueType + Hash + Eq, V: DuckValueType> Helper for IndexMap<K, V> {
     type H = IndexMap<K, Option<V>>;
 }
+// 裸指针由 DuckDB FFI 提供，此处直接解引用
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<K, V> {
     fn type_id() -> TypeId {
         <Self as Helper>::H::type_id()
@@ -199,8 +203,8 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
     }
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
         let map_size = value.map_len();
-        let mut map = Self::with_capacity(map_size as usize);
-        for i in 0..map_size as usize {
+        let mut map = Self::with_capacity(map_size);
+        for i in 0..map_size {
             let k_value_option = value.map_key(i);
             let k = if let Some(k_value) = k_value_option {
                 K::read_by_duck_value(&k_value)?

@@ -12,14 +12,23 @@ use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::AggregateFunctionInfo;
 
 pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`_info` 由 DuckDB 保证有效。
     unsafe extern "C" fn c_state_size(_info: duckdb_function_info) -> idx_t {
         unsafe { FfiState::<Self>::size_callback(_info) }
     }
 
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`info`/`state` 均由 DuckDB 保证有效。
     unsafe extern "C" fn c_state_init(info: duckdb_function_info, state: duckdb_aggregate_state) {
         unsafe { FfiState::<Self>::init_callback(info, state) };
     }
 
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`_info`/`input`/`states` 均由 DuckDB 保证有效。
     unsafe extern "C" fn c_update(
         _info: duckdb_function_info,
         input: duckdb_data_chunk,
@@ -44,6 +53,9 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         });
     }
 
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`source`/`target` 均由 DuckDB 保证有效。
     unsafe extern "C" fn c_combine(
         _info: duckdb_function_info,
         source: *mut duckdb_aggregate_state,
@@ -68,6 +80,9 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         });
     }
 
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`_info`/`source`/`result` 均由 DuckDB 保证有效。
     unsafe extern "C" fn c_finalize(
         _info: duckdb_function_info,
         source: *mut duckdb_aggregate_state,
@@ -109,6 +124,9 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         });
     }
 
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`states` 由 DuckDB 保证有效。
     unsafe extern "C" fn c_state_destroy(states: *mut duckdb_aggregate_state, count: idx_t) {
         unsafe { FfiState::<Self>::destroy_callback(states, count) };
     }
@@ -135,6 +153,9 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .with_params(Self::Args::column_types())
     }
 
+    /// # Safety
+    ///
+    /// `con` 必须是由 DuckDB 提供的有效连接句柄。
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
         unsafe { Self::aggregate_function_builder().register(con) }
     }

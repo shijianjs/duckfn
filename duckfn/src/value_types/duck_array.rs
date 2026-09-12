@@ -5,6 +5,8 @@ use quack_rs::prelude::{ArrayVector, LogicalType, TypeId, Value};
 pub type DuckOptionArray<T, const N: usize> = [Option<T>; N];
 pub type DuckArray<T, const N: usize> = [T; N];
 
+// 裸指针由 DuckDB FFI 提供，此处直接解引用
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType, const N: usize> DuckValueType for DuckOptionArray<T, N> {
     fn type_id() -> TypeId {
         TypeId::Array
@@ -26,10 +28,10 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckOptionArray<T, N> {
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         // 之前是照着官方的写法写在这里的
         let child_reader = &reader.child_reader[0];
-        let mut vec: Vec<Option<T>> = Vec::with_capacity(N as usize);
+        let mut vec: Vec<Option<T>> = Vec::with_capacity(N);
         for i in 0..N {
             let idx = row * N + i;
-            vec.push(T::read(&child_reader, idx));
+            vec.push(T::read(child_reader, idx));
         }
         vec.try_into().ok()
     }
@@ -74,6 +76,8 @@ impl<T: DuckValueType, const N: usize> Helper for DuckArray<T, N> {
     type H = DuckOptionArray<T,N>;
 }
 
+// 裸指针由 DuckDB FFI 提供，此处直接解引用
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType, const N: usize> DuckValueType for DuckArray<T, N> {
     fn type_id() -> TypeId {
         <Self as Helper>::H::type_id()
@@ -98,10 +102,10 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckArray<T, N> {
     fn read_valid(reader: &DuckValueReader, row: usize) -> Option<Self> {
         // 之前是照着官方的写法写在这里的
         let child_reader = &reader.child_reader[0];
-        let mut vec: Vec<T> = Vec::with_capacity(N as usize);
+        let mut vec: Vec<T> = Vec::with_capacity(N);
         for i in 0..N {
             let idx = row * N + i;
-            vec.push(T::read(&child_reader, idx)?);
+            vec.push(T::read(child_reader, idx)?);
         }
         vec.try_into().ok()
     }
@@ -113,7 +117,7 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckArray<T, N> {
         let vec: Vec<Option<&T>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
-            .flat_map(|list| list.iter().map(|x| Some(x)))
+            .flat_map(|list| list.iter().map(Some))
             .collect();
 
         let child_writer = T::create_writer_batch(child_vector, &vec);

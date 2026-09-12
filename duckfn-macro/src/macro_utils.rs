@@ -60,13 +60,10 @@ pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
     {
         if let Some(v) = segments.iter().next() {
             if v.ident == name {
-                match &v.arguments {
-                    PathArguments::AngleBracketed(a) => {
-                        if let Some(GenericArgument::Type(t)) = a.args.iter().next() {
-                            return (true, t);
-                        }
+                if let PathArguments::AngleBracketed(a) = &v.arguments {
+                    if let Some(GenericArgument::Type(t)) = a.args.iter().next() {
+                        return (true, t);
                     }
-                    _ => {}
                 }
             }
         }

@@ -7,6 +7,9 @@ use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
+    /// # Safety
+    ///
+    /// 由 DuckDB 回调，`_info`/`input`/`output` 均由 DuckDB 保证有效。
     unsafe extern "C" fn scalar_function_wrapper(
         _info: duckdb_function_info,
         input: duckdb_data_chunk,
@@ -46,6 +49,9 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             .with_params(Self::Args::column_types())
     }
 
+    /// # Safety
+    ///
+    /// `con` 必须是有效的 DuckDB 连接句柄。
     unsafe fn register(con: duckdb_connection) -> DuckResult<()> {
         unsafe { Self::scalar_function_builder().register(con) }
     }

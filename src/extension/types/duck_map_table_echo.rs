@@ -239,11 +239,13 @@ fn dfn_table_echo_map_varchar_decimal_n(
 ///     map(['a'], [map(['x'], [1, NULL])]));
 /// ```
 #[derive(Clone, Debug, Default, DuckStruct)]
+#[allow(clippy::type_complexity)]
 pub struct TableEchoMapNestedNRow {
     pub v: Option<IndexMap<String, Option<IndexMap<String, Option<i32>>>>>,
 }
 
 #[duck_table_function(named_param_from = "count")]
+#[allow(clippy::type_complexity)]
 fn dfn_table_echo_map_nested_n(
     v: Option<IndexMap<String, Option<IndexMap<String, Option<i32>>>>>,
     count: Option<i64>,

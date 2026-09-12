@@ -6,10 +6,13 @@ use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{BindInfo, LogicalType, StructVector, TypeId, Value};
 
+/// (列名, 逻辑类型构造函数)
+pub type DuckNamedColumnType = (&'static str, fn() -> LogicalType);
+
 pub trait DuckStructTrait: DuckValueType {
     // ===== schema =====
     /// duckdb类型声明
-    fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> LogicalType)];
+    fn s_named_columns_type_fn() -> &'static [DuckNamedColumnType];
 
     /// 字段数量
     fn s_fields_count() -> usize {
@@ -31,11 +34,11 @@ pub trait DuckStructTrait: DuckValueType {
 
     // ===== DuckValue =====
     /// 从表函数参数中读取一个struct数据
-    fn s_read_duck_values(values: &Vec<Option<&Value>>) -> crate::DuckResult<Self>;
+    fn s_read_duck_values(values: &[Option<&Value>]) -> crate::DuckResult<Self>;
 
     // ===== writer =====
     /// 表函数批量输出
-    fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>);
+    fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &[Option<&Self>]);
 
     /// 创建子字段写入器
     fn s_create_writer_batch(
@@ -59,6 +62,8 @@ pub trait DuckStructTrait: DuckValueType {
     }
 
     /// 从结构体向量中获取字段向量列表
+    // 裸指针由 DuckDB FFI 提供，此处直接解引用
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn s_duckdb_vector_list_by_struct(
         struct_vector: ::libduckdb_sys::duckdb_vector,
     ) -> Vec<duckdb_vector> {
@@ -105,7 +110,7 @@ pub trait DuckStructTrait: DuckValueType {
     /// 批量写入一个struct数据
     fn s_write_column_batch<F: DuckValueType>(
         chunk: &::quack_rs::prelude::DataChunk,
-        row: &Vec<Option<&Self>>,
+        row: &[Option<&Self>],
         index: usize,
         get_data: fn(&Self) -> Option<&F>,
     ) {
@@ -123,7 +128,7 @@ pub trait DuckStructTrait: DuckValueType {
         get_data: fn(&Self) -> Option<&F>,
     ) -> DuckValueWriter {
         F::struct_field_writer_batch(
-            &struct_writer,
+            struct_writer,
             field_index,
             &output_vec
                 .iter()
@@ -190,7 +195,6 @@ impl<T: DuckStructTrait> DuckValueType for T {
     }
     fn read_by_duck_value_valid(value: &quack_rs::prelude::Value) -> crate::DuckResult<Self> {
         let vec = (0..Self::s_fields_count())
-            .into_iter()
             .map(|i| value.struct_child(i))
             .collect::<Vec<Option<Value>>>();
         Self::s_read_duck_values(&vec_option_to_ref(&vec))
@@ -207,11 +211,11 @@ impl<T: DuckStructTrait> DuckColumns for T {
 
     fn named_column_types() -> Vec<(String, LogicalType)> {
         Self::s_named_columns_type_fn()
-            .into_iter()
+            .iter()
             .map(|(name, ty)| (name.to_string(), ty()))
             .collect()
     }
-    fn write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
+    fn write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &[Option<&Self>]) {
         Self::s_write_columns_batch(chunk, row);
     }
 }
@@ -219,11 +223,11 @@ impl<T: DuckStructTrait> DuckBindArgs for T {
     fn read_bind_args(bind: &BindInfo) -> DuckResult<Self> {
         let is_named = Self::s_is_named_param_vec();
         let vec1: Vec<Option<Value>> = Self::s_named_columns_type_fn()
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(idx, (name, _logical_type))| {
                 Some(if is_named[idx] {
-                    unsafe { bind.get_named_parameter_value(&*name) }
+                    unsafe { bind.get_named_parameter_value(name) }
                 } else {
                     unsafe { bind.get_parameter_value(idx as u64) }
                 })
@@ -236,7 +240,7 @@ impl<T: DuckStructTrait> DuckBindArgs for T {
         let is_named = Self::s_is_named_param_vec();
 
         Self::s_named_columns_type_fn()
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(idx, (name, logical_type))| {
                 let name_option = if is_named[idx] {

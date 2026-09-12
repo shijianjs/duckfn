@@ -73,7 +73,7 @@ pub trait TableFunctionAdapter: Sized + 'static {
                 let option = state.next();
                 if let Some(value) = option {
                     output_vec.push(value?);
-                } else if let None = option {
+                } else if option.is_none() {
                     count = i;
                     break;
                 }

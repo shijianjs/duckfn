@@ -4,6 +4,8 @@ use quack_rs::prelude::{ListVector, LogicalType, TypeId, Value};
 use crate::{duck_error, DuckResult};
 
 
+// 裸指针由 DuckDB FFI 提供，此处直接解引用
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
     fn type_id() -> TypeId {
         TypeId::List
@@ -31,7 +33,7 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
         let mut vec: Vec<Option<T>> = Vec::with_capacity(entry.length as usize);
         for i in 0..entry.length as usize {
             let idx = entry.offset as usize + i;
-            vec.push(T::read(&child_reader, idx));
+            vec.push(T::read(child_reader, idx));
         }
         Some(vec)
     }
@@ -92,6 +94,8 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
     }
 }
 
+// 裸指针由 DuckDB FFI 提供，此处直接解引用
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType> DuckValueType for Vec<T> {
     fn type_id() -> TypeId {
         TypeId::List
@@ -122,7 +126,7 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
             .iter()
             .filter_map(|x| x.as_ref().copied())
             .flat_map(|list| {
-                list.iter().map(|x| Some(x))
+                list.iter().map(Some)
             })
             .collect();
 

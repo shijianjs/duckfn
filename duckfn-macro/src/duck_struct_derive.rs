@@ -33,7 +33,7 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
         if start_named_param {
             wrapper.is_named_param = true;
         } else if let Some(named_param_from) = &macro_args.named_param_from {
-            if wrapper.require_field_name()?.to_string() == *named_param_from {
+            if wrapper.require_field_name()? == named_param_from {
                 start_named_param = true;
                 wrapper.is_named_param = true;
             }
@@ -89,7 +89,7 @@ impl DuckStructContext {
 
         Ok(quote! {
             impl ::duckfn::DuckStructTrait for #struct_name {
-                fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> quack_rs::prelude::LogicalType)] {
+                fn s_named_columns_type_fn() -> &'static [::duckfn::DuckNamedColumnType] {
                     use duckfn::DuckValueType;
                     #(#assert_impl_duck_value_type;)*
                     &[
@@ -119,7 +119,7 @@ impl DuckStructContext {
                 }
 
                 fn s_read_duck_values(
-                    values: &Vec<Option<&quack_rs::value::Value>>,
+                    values: &[Option<&quack_rs::value::Value>],
                 ) -> duckfn::DuckResult<Self> {
                     use duckfn::DuckValueType;
                     Ok(Self {
@@ -127,7 +127,7 @@ impl DuckStructContext {
                     })
                 }
 
-                fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
+                fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &[Option<&Self>]) {
                     #(#write_columns_batch;)*
                 }
 
@@ -181,7 +181,6 @@ impl DuckStructContext {
         self.fields
             .iter()
             .map(x)
-            .into_iter()
             .collect::<syn::Result<Vec<_>>>()
     }
 }
@@ -261,13 +260,12 @@ impl FieldWrapper {
     }
 
     fn new(field: syn::Field, index: usize) -> FieldWrapper {
-        let wrapper = FieldWrapper {
+        // wrapper.init();
+        FieldWrapper {
             field,
             index,
             is_named_param: false,
-        };
-        // wrapper.init();
-        wrapper
+        }
     }
 
     // }

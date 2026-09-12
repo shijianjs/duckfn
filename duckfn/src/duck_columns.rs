@@ -13,7 +13,7 @@ pub trait DuckColumns: Sized {
 
     fn named_column_types() -> Vec<(String, LogicalType)>;
 
-    fn write_columns_batch(_chunk: &DataChunk, _row: &Vec<Option<&Self>>){
+    fn write_columns_batch(_chunk: &DataChunk, _row: &[Option<&Self>]){
         todo!()
     }
 }

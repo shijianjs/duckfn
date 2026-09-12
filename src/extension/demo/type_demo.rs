@@ -19,8 +19,7 @@ pub struct DuckStructDemo1 {
     pub nest_data: Option<Vec<Vec<i64>>>,
 }
 impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
-    fn s_named_columns_type_fn() -> &'static [(&'static str, fn() -> quack_rs::prelude::LogicalType)]
-    {
+    fn s_named_columns_type_fn() -> &'static [::duckfn::DuckNamedColumnType] {
         use duckfn::DuckValueType;
         ::duckfn::assert_impl_duck_value_type::<i64>();
         ::duckfn::assert_impl_duck_value_type::<Vec<i64>>();
@@ -62,7 +61,7 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
     }
 
     fn s_read_duck_values(
-        values: &Vec<Option<&quack_rs::value::Value>>,
+        values: &[Option<&quack_rs::value::Value>],
     ) -> duckfn::DuckResult<Self> {
         Ok(Self {
             count: Self::s_read_by_duck_value_notnull(values[0], "count")?,
@@ -72,7 +71,7 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
         })
     }
 
-    fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
+    fn s_write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &[Option<&Self>]) {
         Self::s_write_column_batch(chunk, row, 0, |v| Some(&v.count));
         Self::s_write_column_batch(chunk, row, 1, |v| Some(&v.data));
         Self::s_write_column_batch(chunk, row, 2, |v| v.age.as_ref());
@@ -278,7 +277,7 @@ impl DuckStructDemo1 {
             ("nest_data".to_string(), Vec::<Vec<i64>>::logical_type()),
         ])
     }
-    fn write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &Vec<Option<&Self>>) {
+    fn write_columns_batch(chunk: &::quack_rs::prelude::DataChunk, row: &[Option<&Self>]) {
         use duckfn::DuckValueType;
         i64::write_batch(
             unsafe { chunk.vector(0usize) },

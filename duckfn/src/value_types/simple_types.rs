@@ -2,7 +2,7 @@ use crate::value_types::duck_value_type::DuckValueType;
 use quack_rs::prelude::{TypeId, Value, VectorReader, VectorWriter};
 use crate::DuckResult;
 
-/// TypeId::Boolean
+// TypeId::Boolean
 
 impl DuckValueType for bool {
     fn type_id() -> TypeId {
@@ -118,9 +118,9 @@ impl DuckValueType for u16 {
     }
 }
 
-/// TypeId::UInteger    // u32
+// TypeId::UInteger    // u32
 
-/// TypeId::UBigInt     // u64
+// TypeId::UBigInt     // u64
 impl DuckValueType for u64 {
     fn type_id() -> TypeId {
         TypeId::UBigInt

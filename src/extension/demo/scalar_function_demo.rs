@@ -167,7 +167,7 @@ fn make_list_scalar_w(v: i64) -> Vec<Option<i64>> {
 fn nest_list_scalar_w(v: i64) -> Vec<Option<Vec<Option<i64>>>> {
     vec![
         Some(vec![Some(v + 1), Some(v * 2), None]),
-        Some((0..v).map(|x| Some(x)).collect()),
+        Some((0..v).map(Some).collect()),
         None,
     ]
 }
@@ -326,16 +326,14 @@ unsafe extern "C" fn make_kv_map_scalar(
 /// ```
 #[duck_scalar_function]
 pub fn create_map_demo(i: i64) -> IndexMap<String, Option<Vec<i64>>> {
-    let map = (0..i)
+    (0..i)
         .map(|x| {
             (
                 format!("key {x}"),
                 if x == 5 { None } else { Some((0..x).collect()) },
             )
         })
-        .collect();
-    // println!("{:?}", map);
-    map
+        .collect()
 }
 /// ```sql
 /// SELECT input_map_demo(MAP {'key1': [10], 'key2': [20], 'key3': null});
@@ -344,8 +342,7 @@ pub fn create_map_demo(i: i64) -> IndexMap<String, Option<Vec<i64>>> {
 pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
     // println!("{:?}", map);
     map.into_iter()
-        .map(|(_, v)| v.unwrap_or(vec![]))
-        .flatten()
+        .flat_map(|(_, v)| v.unwrap_or(vec![]))
         .sum::<i64>()
 }
 /// ```sql
@@ -354,7 +351,7 @@ pub fn input_map_demo(map: IndexMap<String, Option<Vec<i64>>>) -> i64 {
 #[duck_scalar_function]
 pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
     // println!("{:?}", map);
-    map.into_iter().map(|(_, v)| v).flatten().sum::<i64>()
+    map.into_iter().flat_map(|(_, v)| v).sum::<i64>()
 }
 
 /// ```sql
@@ -381,7 +378,7 @@ mod test{
     use super::input_array_notnull_demo;
 
     fn d(){
-        duckfn::DuckFunctionItem {
+        let _ = duckfn::DuckFunctionItem {
             register_fn:|c| unsafe {
                 use quack_rs::prelude::Registrar;
                 c.register_scalar(input_array_notnull_demo::scalar_function_builder()) }

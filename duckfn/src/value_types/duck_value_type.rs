@@ -43,7 +43,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     }
 
     fn write_batch(output: duckdb_vector, output_vec: &[Option<&Self>]) {
-        let mut writer = Self::create_writer_batch(output, &output_vec);
+        let mut writer = Self::create_writer_batch(output, output_vec);
         for (idx, result) in output_vec.iter().enumerate() {
             Self::write(&mut writer, idx, *result);
         }
@@ -87,8 +87,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
         let row_count = struct_reader.vector_reader.row_count();
         let vector = struct_reader.c_duckdb_vector;
         let field_vector = unsafe { StructVector::get_child(vector, field_index) };
-        let field_reader = Self::create_reader_from_vector(field_vector, row_count);
-        field_reader
+        Self::create_reader_from_vector(field_vector, row_count)
     }
 
     fn struct_field_writer_batch(
@@ -98,8 +97,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     ) -> DuckValueWriter {
         let vector = struct_writer.c_duckdb_vector;
         let field_vector = unsafe { StructVector::get_child(vector, field_index) };
-        let field_writer = Self::create_writer_batch(field_vector, output_vec);
-        field_writer
+        Self::create_writer_batch(field_vector, output_vec)
     }
 
     /// 表函数解析参数时使用
@@ -140,6 +138,8 @@ impl DuckValueReader {
         Self::new_from_vector(vector, size)
     }
 
+    // 裸指针由 DuckDB FFI 提供，此处直接解引用
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn new_from_vector(vector: duckdb_vector, size: usize) -> DuckValueReader {
         DuckValueReader {
             vector_reader: unsafe { VectorReader::from_vector(vector, size) },
@@ -157,6 +157,8 @@ pub struct DuckValueWriter {
 }
 
 impl DuckValueWriter {
+    // 裸指针由 DuckDB FFI 提供，此处直接解引用
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn new_from_vector(vector: duckdb_vector) -> Self {
         Self {
             vector_writer: unsafe { VectorWriter::new(vector) },
