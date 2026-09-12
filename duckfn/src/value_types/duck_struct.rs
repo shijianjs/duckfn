@@ -141,6 +141,13 @@ pub trait DuckStructTrait: DuckValueType {
     ) {
         F::write(&mut writer.child_writer[field_idx], row, data)
     }
+
+    /// 写入一个struct的NULL行
+    /// - DuckDB的struct_extract直接重解释子向量、不检查父向量的validity，
+    ///   所以父向量置NULL时必须把子字段也一起置NULL
+    /// - 只递归struct字段：list / map / array的子向量是按元素下标写入的，
+    ///   不能按行下标去置NULL
+    fn s_write_null(writer: &mut crate::DuckValueWriter, row: usize);
 }
 
 impl<T: DuckStructTrait> DuckValueType for T {
@@ -175,6 +182,10 @@ impl<T: DuckStructTrait> DuckValueType for T {
 
     fn write_valid(writer: &mut DuckValueWriter, idx: usize, vo: &Self) {
         Self::s_write_valid(writer, idx, vo);
+    }
+
+    fn write_null(writer: &mut DuckValueWriter, row: usize) {
+        Self::s_write_null(writer, row);
     }
 
     fn write_finish(writer: &mut crate::DuckValueWriter) {

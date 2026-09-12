@@ -96,6 +96,15 @@ impl ::duckfn::DuckStructTrait for DuckStructDemo1 {
         Self::s_write_field(writer, row, 3, v.nest_data.as_ref());
     }
 
+    fn s_write_null(writer: &mut duckfn::DuckValueWriter, row: usize) {
+        use duckfn::DuckValueType;
+        unsafe { writer.vector_writer.set_null(row) };
+        i64::write_null(&mut writer.child_writer[0usize], row);
+        Vec::<i64>::write_null(&mut writer.child_writer[1usize], row);
+        i32::write_null(&mut writer.child_writer[2usize], row);
+        Vec::<Vec<i64>>::write_null(&mut writer.child_writer[3usize], row);
+    }
+
     fn s_write_finish(writer: &mut ::duckfn::DuckValueWriter) {
         use duckfn::DuckValueType;
         i64::write_finish(&mut writer.child_writer[0usize]);

@@ -85,6 +85,7 @@ impl DuckStructContext {
         let write_columns_batch = self.fields_to_code(|f| f.s_write_columns_batch())?;
         let create_writer_batch = self.fields_to_code(|f| f.s_create_writer_batch())?;
         let write_valid = self.fields_to_code(|f| f.s_write_valid())?;
+        let write_null = self.fields_to_code(|f| f.write_null())?;
         let write_finish = self.fields_to_code(|f| f.write_finish())?;
 
         Ok(quote! {
@@ -143,6 +144,12 @@ impl DuckStructContext {
 
                 fn s_write_valid(writer: &mut duckfn::DuckValueWriter, row: usize, v: &Self) {
                     #(#write_valid;)*
+                }
+
+                fn s_write_null(writer: &mut duckfn::DuckValueWriter, row: usize) {
+                    use duckfn::DuckValueType;
+                    unsafe { writer.vector_writer.set_null(row) };
+                    #(#write_null;)*
                 }
 
                 fn s_write_finish(writer: &mut ::duckfn::DuckValueWriter) {
@@ -321,6 +328,14 @@ impl FieldWrapper {
         self.extract_option().is_some()
     }
 
+
+    fn write_null(&self) -> TokenStream2Result {
+        let ty = self.duck_value_type();
+        let index = self.index;
+        Ok(quote! {
+            #ty::write_null(&mut writer.child_writer[#index], row)
+        })
+    }
 
     fn write_finish(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();

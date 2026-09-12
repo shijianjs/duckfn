@@ -49,6 +49,17 @@ SELECT CAST((dfn_echo_struct_simple(x)).id AS VARCHAR) FROM (VALUES
 1
 2
 
+# NULL struct 行的字段提取：struct_extract 直接重解释子向量、不看父向量的 validity，
+# 所以写 NULL 行时必须把子字段也一起置 NULL，否则会读到未初始化内存
+query T
+SELECT CAST((dfn_echo_struct_simple(x)).id AS VARCHAR) FROM (VALUES
+    (NULL::STRUCT(id INTEGER, name VARCHAR)),
+    ({'id': 1, 'name': 'a'})
+) t(x);
+----
+NULL
+1
+
 # ============================================================================
 # STRUCT(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, l BIGINT, f FLOAT, d DOUBLE, v VARCHAR)
 # ============================================================================
@@ -207,6 +218,16 @@ SELECT DISTINCT typeof(dfn_echo_struct_nested(x)) FROM (VALUES
 ----
 STRUCT(id INTEGER, "inner" STRUCT("key" VARCHAR, "value" INTEGER), maybe STRUCT("key" VARCHAR, "value" INTEGER))
 
+# 可空的内层字段为 NULL 时，内层子字段也要一并置 NULL（嵌套递归）
+query T
+SELECT CAST((dfn_echo_struct_nested(x)).maybe.key AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'inner': {'key': 'a', 'value': 2}, 'maybe': NULL::STRUCT(key VARCHAR, value INTEGER)}),
+    ({'id': 2, 'inner': {'key': 'b', 'value': 3}, 'maybe': {'key': 'c', 'value': 4}})
+) t(x);
+----
+NULL
+c
+
 # 不可空的内层字段为 NULL 时，整行降级为 NULL（宏生成代码用 `?` 提前返回）
 query T
 SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM (VALUES
@@ -303,7 +324,7 @@ SELECT sum(s.inner.value) FROM (
 499500
 
 # ============================================================================
-# 已知缺陷（当前未修复，因此不作为断言写入）
+# 已知缺陷
 #
 # 1) 单行 / 常量向量输入 + 嵌套 NULL struct 字段 -> 进程崩溃 (0xC0000005)
 #      SELECT dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)});
@@ -314,10 +335,11 @@ SELECT sum(s.inner.value) FROM (
 #    duck_list_scalar_echo.test 中记录的常量向量问题同源：duckfn 用下标直接读取
 #    嵌套子向量，遇到 DuckDB 的常量向量（常量 struct 没有 children）时读越界。
 #
-# 2) 返回 NULL struct 行时，子字段向量没有一并置 NULL
-#      SELECT (dfn_echo_struct_simple(x)).id FROM (VALUES (NULL::STRUCT(id INTEGER, name VARCHAR)), ({'id': 1, 'name': 'a'})) t(x);
-#      -- 期望 NULL / 1，实际 0 / 1
-#    原生 DuckDB 的 (NULL::STRUCT(id INTEGER, name VARCHAR)).id 返回 NULL；而
-#    DuckDB 的 struct_extract 是直接重解释子向量、不检查父 validity，所以父向量
-#    set_null 之后子向量仍是未初始化内存。
+# 2) 参数为 LIST(STRUCT) 且列表中存在 NULL struct 元素时，整个列表被读成 NULL
+#      SELECT dfn_echo_struct_list(x) IS NULL FROM (VALUES
+#          ([{'id': 1, 'name': 'a'}]),
+#          ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])) t(x);
+#      -- 期望 false / false，实际 false / true
+#    原生 DuckDB 的 [{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)]
+#    是合法的两元素列表；列表元素全非 NULL 时 duckfn 表现正常。
 # ============================================================================

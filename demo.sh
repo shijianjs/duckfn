@@ -82,3 +82,6 @@ just duckdb_ext "  SELECT input_array_demo(a) from (values (ARRAY [1, 2]),(ARRAY
 just duckdb_ext "  SELECT input_array_notnull_demo(a) from (values (ARRAY [1, 2]),(ARRAY [4, null])) t(a);";
 
 just duckdb_ext "  SELECT clamp(range,4, 7) from range(9);";
+
+# 嵌套父struct为null写入错误
+just duckdb_ext "  SELECT (dfn_echo_struct_simple(x)).id FROM (VALUES (NULL::STRUCT(id INTEGER, name VARCHAR)), ({'id': 1, 'name': 'a'})) t(x);";

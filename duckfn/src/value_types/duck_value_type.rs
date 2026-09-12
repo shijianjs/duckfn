@@ -59,10 +59,18 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     fn write(writer: &mut DuckValueWriter, idx: usize, vo: Option<&Self>) {
         // Self::write_to_vector(&mut writer.vector_writer, idx, vo);
         match vo {
-            None => unsafe { writer.vector_writer.set_null(idx) },
+            None => Self::write_null(writer, idx),
 
             Some(v) => Self::write_valid(writer, idx, v),
         }
+    }
+
+    /// 仅处理null：默认只把当前向量置为NULL
+    /// - 子类可重写，用于同步处理子向量
+    /// - 例如struct：DuckDB的struct_extract直接重解释子向量、不检查父向量的validity，
+    ///   父向量置NULL后子向量仍是未初始化内存，所以必须把子字段一起置NULL
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        unsafe { writer.vector_writer.set_null(idx) }
     }
     /// 外部可以调用write_valid
     /// - 只要已经处理了null，就不需要管其他的
