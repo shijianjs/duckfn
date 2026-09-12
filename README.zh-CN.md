@@ -10,6 +10,7 @@
 
 - 仓库地址：<https://github.com/shijianjs/duckfn>
 - 已发布 crate：[`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
+- 基于：[`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
 - 协议：[MIT](LICENSE)
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。
@@ -23,6 +24,23 @@
 | [`duckfn/`](duckfn/) | 运行时框架：trait、类型适配、函数注册。 | 是 |
 | [`duckfn-macro/`](duckfn-macro/) | 过程宏：`#[duck_scalar_function]`、`#[derive(DuckStruct)]` 等。 | 是 |
 | `/`（`rusty_quack`） | 使用 `duckfn` 编写的示例扩展，放在根目录是为了复用官方多平台 CI。 | 否，仅作示例 |
+
+## 安装
+
+```toml
+[dependencies]
+duckfn = "0.0.1"
+
+# duckfn 本身就建立在下面两个 crate 之上；需要直接使用它们的类型或 builder 时显式加上
+# （本仓库的示例扩展就是这么写的）。
+quack-rs = "0.16.0"
+# loadable-extension：走 DuckDB 的 API 函数表分发，而不是链接 libduckdb，
+# 这正是「无需在本地编译 DuckDB」的原因。（仅使用头文件）
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
+```
+
+宏已由 `duckfn` 重新导出；只有想脱离运行时单独使用宏时，才需要直接依赖
+[`duckfn-macro`](https://crates.io/crates/duckfn-macro)。
 
 ## 快速开始
 

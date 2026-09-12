@@ -15,6 +15,7 @@ a single attribute turns an ordinary Rust function into a DuckDB **scalar**, **a
 required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
+- Built on [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
 - No DuckDB build required, no C/C++ code
 - Attribute-driven registration through `inventory`
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
@@ -27,7 +28,19 @@ required.
 ```toml
 [dependencies]
 duckfn = "0.0.1"
+
+# duckfn itself is built on these two crates; add them explicitly when you use
+# their types or builders directly.
+quack-rs = "0.16.0"
+# `loadable-extension` dispatches through DuckDB's API table instead of linking
+# libduckdb, which is what keeps a local DuckDB build unnecessary.
+# (headers only — no linked library)
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
+
+If you prefer the macros without the runtime, depend on
+[`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
+re-exported by `duckfn` and no extra dependency is needed.
 
 ## Quick start
 

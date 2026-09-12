@@ -14,6 +14,7 @@
 代码，也无需在本地编译 DuckDB。
 
 - 仓库地址：<https://github.com/shijianjs/duckfn>
+- 基于 [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
 - 无需编译 DuckDB，无需 C/C++ 代码
 - 属性驱动、基于 `inventory` 的自动注册
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
@@ -26,7 +27,17 @@
 ```toml
 [dependencies]
 duckfn = "0.0.1"
+
+# duckfn 本身就建立在下面两个 crate 之上；需要直接使用它们的类型或 builder 时显式加上。
+quack-rs = "0.16.0"
+# loadable-extension：走 DuckDB 的 API 函数表分发，而不是链接 libduckdb，
+# 这也是「无需在本地编译 DuckDB」的原因。
+# （仅使用头文件，不链接库）
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
+
+如果只想用宏、不要运行时，可以直接依赖
+[`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
 ## 快速开始
 

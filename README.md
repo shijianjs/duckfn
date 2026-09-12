@@ -11,6 +11,7 @@ code, and no local DuckDB build required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
 - Crates: [`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
+- Built on: [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
 - License: [MIT](LICENSE)
 
 > Status: early / experimental. APIs may change before `1.0`.
@@ -24,6 +25,24 @@ This repository is a Cargo workspace:
 | [`duckfn/`](duckfn/) | Runtime framework: traits, type adapters, function registration. | Yes |
 | [`duckfn-macro/`](duckfn-macro/) | Procedural macros: `#[duck_scalar_function]`, `#[derive(DuckStruct)]`, ... | Yes |
 | `/` (`rusty_quack`) | Example extension built with `duckfn`. Kept here to reuse DuckDB's official multi-platform CI. | No, example only |
+
+## Installation
+
+```toml
+[dependencies]
+duckfn = "0.0.1"
+
+# duckfn is built on these two crates; add them explicitly when you use their
+# types or builders directly (the example extension below does).
+quack-rs = "0.16.0"
+# `loadable-extension` dispatches through DuckDB's API table instead of linking
+# libduckdb — that is what keeps a local DuckDB build unnecessary. (headers only)
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
+```
+
+The macros are re-exported by `duckfn`; add
+[`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly only if you want them without the
+runtime.
 
 ## Quick start
 
