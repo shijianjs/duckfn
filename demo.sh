@@ -90,3 +90,6 @@ just duckdb_ext "SELECT dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STR
 # struct列表字面量子字段全NULL读取异常
 just duckdb_ext "SELECT dfn_echo_struct_list_nullable([NULL, NULL, NULL, NULL]::STRUCT(id INTEGER, name VARCHAR)[]);";
 # 异常输出： [NULL, {'id': 657, 'name': ''}, {'id': 1821221984, 'name': ''}, {'id': 657, 'name': ''}]
+# 声明类型就没问题：
+just duckdb_ext "SELECT dfn_echo_struct_list_nullable( [ NULL::STRUCT(id INTEGER, name VARCHAR), NULL::STRUCT(id INTEGER, name VARCHAR) ] )";
+#  [NULL, NULL]

@@ -573,21 +573,30 @@ SELECT sum((dfn_echo_struct_array_nullable(x))[1].id) FROM (
 # ============================================================================
 
 # ============================================================================
-# 已知缺陷（DuckDB 侧）：LIST 的 child 为常量 NULL 向量时按逻辑下标读越界
+# 已知缺陷（DuckDB 侧）：变长容器的 child 为常量向量时按逻辑下标读越界
 #
 # 即 duckdb#25616（C API returns incorrect values when reading Constant NULL list
 # children），与 duck_list_scalar_echo.test 中记录的是同一个问题。
-# 把元素类型换成 STRUCT 同样受影响，而且更容易看出来（垃圾值被解释成 struct）：
+#
+# 触发条件：整个参数被折叠成常量向量（直接写字面量，或与行无关的常量投影）。
+# 此时 LIST / MAP 的 child（数据区）只有 1 个物理元素，而 duckfn 是按逻辑下标
+# 裸读子向量的，于是从第 2 个元素起越界读到未初始化内存 —— 全是 NULL 的元素
+# 不占数据区，DuckDB 就让 child 保持常量表示：
+#   SELECT dfn_echo_list_integer_n([NULL, NULL, NULL, NULL]);            -- [NULL, 477, -1712852624, 477]
+#   SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL])); -- {a=NULL, b=477}
 #   SELECT dfn_echo_struct_list_nullable([NULL, NULL, NULL, NULL]::STRUCT(id INTEGER, name VARCHAR)[]);
-#   -- 期望 [NULL, NULL, NULL, NULL]
-#   -- 实得 [NULL, {'id': 577, 'name': ''}, {'id': 201092432, 'name': ''}, {'id': 577, 'name': ''}]
-#   元素逐个显式指定类型时（[NULL::STRUCT(...), NULL::STRUCT(...)]）不复现。
+#   -- [NULL, {'id': 577, 'name': ''}, {'id': 201092432, 'name': ''}, {'id': 577, 'name': ''}]
+#   SELECT dfn_echo_list_nested_n([[NULL, NULL], NULL]);                 -- [[NULL, 477], NULL]
+# 元素里只要有一个真实值（[1, NULL, 3]）child 就必须展开；把参数写成单行 VALUES
+# 时参数不再是常量向量 —— 两种写法都不复现。
+#
+# 只有变长容器会踩到：ARRAY 的 child 尺寸被强制为 N × 行数、STRUCT 的 children
+# 必须与父向量同尺寸，都不会留下"常量 child"，所以 ARRAY / STRUCT（含
+# ARRAY(STRUCT)、ARRAY(ARRAY)）即使输入同样全 NULL 也读不到垃圾值；struct 的
+# 字段级子向量同理（上面单行 / 跨行全 NULL 的用例都只返回 NULL）。
 #
 # 这是 duckfn 读取路径的既有缺陷，与 echo 函数无关，且垃圾值每次进程都不同，
 # 因此这里只记录、不写成断言。
-#
-# 注意 struct 的字段级子向量不受影响：读字段前先判断 validity，NULL 字段不会去碰
-# 数据缓冲区，所以单行 / 常量 / 跨行全为 NULL 的字段都只返回 NULL（见上面用例）。
 # ============================================================================
 
 # ============================================================================
