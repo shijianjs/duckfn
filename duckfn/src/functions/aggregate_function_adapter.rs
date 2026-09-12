@@ -7,6 +7,7 @@ use libduckdb_sys::{
     duckdb_vector, idx_t,
 };
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
+use quack_rs::aggregate::builder::OverloadBuilder;
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::AggregateFunctionInfo;
 
@@ -121,6 +122,16 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .finalize(Self::c_finalize)
             .destructor(Self::c_state_destroy)
             .returns_logical(Self::Output::logical_type())
+            .with_params(Self::Args::column_types())
+    }
+    fn aggregate_overload_builder(builder:OverloadBuilder) -> OverloadBuilder {
+        builder
+            .state_size(Self::c_state_size)
+            .init(Self::c_state_init)
+            .update(Self::c_update)
+            .combine(Self::c_combine)
+            .finalize(Self::c_finalize)
+            .destructor(Self::c_state_destroy)
             .with_params(Self::Args::column_types())
     }
 

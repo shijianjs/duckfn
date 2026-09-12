@@ -1,4 +1,5 @@
 use quack_rs::aggregate::AggregateFunctionBuilder;
+use quack_rs::aggregate::builder::OverloadBuilder;
 use quack_rs::prelude::{LogicalType, ScalarFunctionBuilder, ScalarOverloadBuilder, TypeId};
 
 pub trait BuilderWithParams: Sized {
@@ -27,6 +28,11 @@ impl BuilderWithParams for ScalarOverloadBuilder {
 }
 
 impl BuilderWithParams for AggregateFunctionBuilder {
+    fn builder_param_logical(self, logical_type: LogicalType) -> Self {
+        self.param_logical(logical_type)
+    }
+}
+impl BuilderWithParams for OverloadBuilder {
     fn builder_param_logical(self, logical_type: LogicalType) -> Self {
         self.param_logical(logical_type)
     }

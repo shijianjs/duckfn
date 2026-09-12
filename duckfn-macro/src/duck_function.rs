@@ -188,6 +188,11 @@ impl ItemFnWrapper {
                 use duckfn::AggregateFunctionAdapter;
                 AggregateFunctionImpl::aggregate_function_builder()
             }
+            
+            pub fn aggregate_overload_builder(builder: quack_rs::aggregate::builder::OverloadBuilder) -> quack_rs::aggregate::builder::OverloadBuilder {
+                use duckfn::AggregateFunctionAdapter;
+                AggregateFunctionImpl::aggregate_overload_builder(builder)
+            }
 
             #function_register
         })
