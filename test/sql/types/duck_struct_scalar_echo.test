@@ -238,6 +238,41 @@ SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM (VALUES
 {'id': 1, 'inner': {'key': a, 'value': 2}}
 NULL
 
+# 单行 / 常量向量输入：不可空字段读到 NULL 时整行变 NULL
+# （这三条曾经直接崩溃 0xC0000005，见文件末尾"已修复"一节）
+query T
+SELECT CAST(dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)}) AS VARCHAR);
+----
+NULL
+
+query T
+SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)})
+) t(x);
+----
+NULL
+
+statement ok
+CREATE OR REPLACE TABLE struct_const_single AS
+SELECT {'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)} AS x;
+
+query T
+SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM struct_const_single;
+----
+NULL
+
+# 对照：单行常量、inner 非 NULL 时正常回显
+query T
+SELECT CAST(dfn_echo_struct_nested_only({'id': 1, 'inner': {'key': 'a', 'value': 2}}) AS VARCHAR);
+----
+{'id': 1, 'inner': {'key': a, 'value': 2}}
+
+# 单行常量、结构体字段全 NULL：同样只是整行变 NULL
+query T
+SELECT CAST(dfn_echo_struct_inner({'key': NULL, 'value': NULL}) AS VARCHAR);
+----
+NULL
+
 query T
 SELECT CAST(dfn_echo_struct_inner(x) AS VARCHAR) FROM (VALUES
     ({'key': 'a', 'value': 2}),
@@ -521,16 +556,38 @@ SELECT sum((dfn_echo_struct_array_nullable(x))[1].id) FROM (
 499500
 
 # ============================================================================
-# 已知缺陷
+# 已修复：单行 / 常量向量输入 + 嵌套 NULL struct 字段不再崩溃
 #
-# 1) 单行 / 常量向量输入 + 嵌套 NULL struct 字段 -> 进程崩溃 (0xC0000005)
-#      SELECT dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)});
-#      SELECT dfn_echo_struct_nested_only(x) FROM (VALUES ({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)})) t(x);
-#      CREATE TABLE t AS SELECT {'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)} AS x;
-#      SELECT dfn_echo_struct_nested_only(x) FROM t;    -- 单行表也崩
-#    2 行以上走 flat 向量时正常（见上面的 nested_only 用例）。根因与
-#    duck_list_scalar_echo.test 中记录的常量向量问题同源：duckfn 用下标直接读取
-#    嵌套子向量，遇到 DuckDB 的常量向量（常量 struct 没有 children）时读越界。
+# 现象（a6a3214 之前）：struct 为 NULL 时只置父向量 validity、子字段向量留着
+# 未初始化内存；DuckDB 的 struct_extract / 结果集输出会直接重解释子向量，
+# 于是读到未初始化内存 —— 单行数据即可触发 ACCESS_VIOLATION (0xC0000005)：
+#   SELECT dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)});
+#   CREATE TABLE t AS SELECT {'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)} AS x;
+#   SELECT dfn_echo_struct_nested_only(x) FROM t;    -- 单行表也崩
+#
+# 根因在写侧，与 duck_list_scalar_echo.test 记录的"常量 NULL 子向量按逻辑下标读"
+# 无关（那个问题现在依然存在，见下）。修法：DuckValueType::write_null 由 struct
+# 重写为递归把子字段一并置 NULL（duck_struct.rs / duck_struct_derive.rs 的 s_write_null）。
+# 回退验证：把 write_null 改回只 set_null，上面的单行用例立刻恢复崩溃。
+# 上面的单行常量 / VALUES 单行 / 单行表用例即回归覆盖。
+# ============================================================================
+
+# ============================================================================
+# 已知缺陷（DuckDB 侧）：LIST 的 child 为常量 NULL 向量时按逻辑下标读越界
+#
+# 即 duckdb#25616（C API returns incorrect values when reading Constant NULL list
+# children），与 duck_list_scalar_echo.test 中记录的是同一个问题。
+# 把元素类型换成 STRUCT 同样受影响，而且更容易看出来（垃圾值被解释成 struct）：
+#   SELECT dfn_echo_struct_list_nullable([NULL, NULL, NULL, NULL]::STRUCT(id INTEGER, name VARCHAR)[]);
+#   -- 期望 [NULL, NULL, NULL, NULL]
+#   -- 实得 [NULL, {'id': 577, 'name': ''}, {'id': 201092432, 'name': ''}, {'id': 577, 'name': ''}]
+#   元素逐个显式指定类型时（[NULL::STRUCT(...), NULL::STRUCT(...)]）不复现。
+#
+# 这是 duckfn 读取路径的既有缺陷，与 echo 函数无关，且垃圾值每次进程都不同，
+# 因此这里只记录、不写成断言。
+#
+# 注意 struct 的字段级子向量不受影响：读字段前先判断 validity，NULL 字段不会去碰
+# 数据缓冲区，所以单行 / 常量 / 跨行全为 NULL 的字段都只返回 NULL（见上面用例）。
 # ============================================================================
 
 # ============================================================================

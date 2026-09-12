@@ -85,3 +85,5 @@ just duckdb_ext "  SELECT clamp(range,4, 7) from range(9);";
 
 # 嵌套父struct为null写入错误
 just duckdb_ext "  SELECT (dfn_echo_struct_simple(x)).id FROM (VALUES (NULL::STRUCT(id INTEGER, name VARCHAR)), ({'id': 1, 'name': 'a'})) t(x);";
+# 单行/常量输入 + 嵌套 NULL struct 字段：写侧子字段未置 NULL 曾崩溃 0xC0000005，已修复（a6a3214）
+just duckdb_ext "SELECT dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)});";
