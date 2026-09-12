@@ -286,6 +286,53 @@ SELECT DISTINCT typeof(dfn_echo_struct_list(x)) FROM (VALUES
 ----
 STRUCT(id INTEGER, "name" VARCHAR)[]
 
+# 元素类型不可空（Vec<T>）时，列表内的 NULL 元素无法用 T 表示，
+# 空值向外传播 -> 整个列表变成 NULL
+query T
+SELECT CAST(dfn_echo_struct_list(x) IS NULL AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+false
+true
+
+# 元素类型为 Vec<Option<T>> 时，NULL 元素被完整保留
+query T
+SELECT CAST(dfn_echo_struct_list_nullable(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+[{'id': 1, 'name': a}]
+[{'id': 2, 'name': b}, NULL]
+
+query T
+SELECT CAST(len(dfn_echo_struct_list_nullable(x)) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([NULL::STRUCT(id INTEGER, name VARCHAR), NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+1
+2
+
+query T
+SELECT CAST((dfn_echo_struct_list_nullable(x))[1].id AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+1
+NULL
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_list_nullable(x)) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+STRUCT(id INTEGER, "name" VARCHAR)[]
+
 query T
 SELECT CAST(dfn_echo_struct_map_value(x) AS VARCHAR) FROM (VALUES
     (map(['k1'], [{'id': 1, 'name': 'a'}])),
@@ -334,12 +381,16 @@ SELECT sum(s.inner.value) FROM (
 #    2 行以上走 flat 向量时正常（见上面的 nested_only 用例）。根因与
 #    duck_list_scalar_echo.test 中记录的常量向量问题同源：duckfn 用下标直接读取
 #    嵌套子向量，遇到 DuckDB 的常量向量（常量 struct 没有 children）时读越界。
+# ============================================================================
+
+# ============================================================================
+# 类型语义：LIST(STRUCT) 内的 NULL 元素由元素类型决定（非缺陷）
 #
-# 2) 参数为 LIST(STRUCT) 且列表中存在 NULL struct 元素时，整个列表被读成 NULL
-#      SELECT dfn_echo_struct_list(x) IS NULL FROM (VALUES
-#          ([{'id': 1, 'name': 'a'}]),
-#          ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])) t(x);
-#      -- 期望 false / false，实际 false / true
-#    原生 DuckDB 的 [{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)]
-#    是合法的两元素列表；列表元素全非 NULL 时 duckfn 表现正常。
+#   - Vec<T>（元素不可空）：NULL 元素无法用 T 表示，Vec<Option<T>>::read_valid
+#     转 Vec<T> 时用 collect::<Option<_>> 让空值向外传播，整个列表变成 NULL
+#       SELECT dfn_echo_struct_list(x) IS NULL FROM (VALUES
+#           ([{'id': 1, 'name': 'a'}]),
+#           ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])) t(x);
+#       -- false / true
+#   - Vec<Option<T>>（元素可空）：NULL 元素被保留，见 dfn_echo_struct_list_nullable
 # ============================================================================

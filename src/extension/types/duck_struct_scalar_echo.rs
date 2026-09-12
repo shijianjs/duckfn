@@ -254,6 +254,19 @@ fn dfn_echo_struct_list(i: Vec<DuckStructSimple>) -> Vec<DuckStructSimple> {
     i
 }
 
+/// LIST(STRUCT(id INTEGER, name VARCHAR))，元素可空
+/// - 元素类型为 Option<T> 时列表可以承载 NULL 元素
+/// ```sql
+/// SELECT dfn_echo_struct_list_nullable(
+///     [{'id': 1, 'name': 'a'}, NULL::STRUCT(id INTEGER, name VARCHAR)]);
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_struct_list_nullable(
+    i: Vec<Option<DuckStructSimple>>,
+) -> Vec<Option<DuckStructSimple>> {
+    i
+}
+
 /// MAP(VARCHAR, STRUCT(id INTEGER, name VARCHAR))
 /// ```sql
 /// SELECT dfn_echo_struct_map_value(map(['k'], [{'id': 1, 'name': 'a'}]));
