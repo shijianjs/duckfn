@@ -32,6 +32,6 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 
 # 对应duckdb的map语义
 indexmap = "2"
-duckfn-macro = { version = "0.0.1", path = "../duckfn-macro" }
+duckfn-macro = { version = "=0.0.1", path = "../duckfn-macro" }
 
 inventory = "0.3"
