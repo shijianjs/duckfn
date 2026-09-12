@@ -1,0 +1,274 @@
+# name: test/sql/functions/scalar_function.test
+# description: duck_scalar_function 的返回值形式、入参可空性、参数个数与顺序、注册控制
+# group: [functions]
+
+require rusty_quack
+
+# ============================================================================
+# 返回值形式 1/3：Plain -> T（宏包一层 Ok(Some(..))）
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_plain(21);
+----
+42
+
+query T
+SELECT typeof(dfn_scalar_ret_plain(1));
+----
+INTEGER
+
+# 入参为 NULL 时整行短路（非 Option 参数由 duckfn 参数读取层拦下），函数体不执行
+query I
+SELECT dfn_scalar_ret_plain(NULL::INTEGER);
+----
+NULL
+
+query I
+SELECT dfn_scalar_ret_plain(i) FROM (VALUES (1), (NULL), (3)) t(i);
+----
+2
+NULL
+6
+
+# ============================================================================
+# 返回值形式 2/3：Option -> Option<T>，None 落成 SQL NULL
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_option(i) FROM (VALUES (4), (0), (2)) t(i);
+----
+25
+NULL
+50
+
+query T
+SELECT typeof(dfn_scalar_ret_option(4));
+----
+INTEGER
+
+# ============================================================================
+# 返回值形式 3/3：DuckOptionResult -> DuckOptionResult<T>，既可返回 NULL 也可报错
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_checked(i) FROM (VALUES (4), (-1), (5)) t(i);
+----
+25
+NULL
+20
+
+query T
+SELECT typeof(dfn_scalar_ret_checked(4));
+----
+INTEGER
+
+statement error
+SELECT dfn_scalar_ret_checked(0);
+----
+dfn_scalar_ret_checked: division by zero
+
+# 批内某一行报错，整条查询失败
+statement error
+SELECT dfn_scalar_ret_checked(i) FROM (VALUES (4), (0)) t(i);
+----
+dfn_scalar_ret_checked: division by zero
+
+# ============================================================================
+# panic 传播：函数体 panic 由 duck_scalar_unwind 捕获成查询错误
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_panic(1);
+----
+1
+
+statement error
+SELECT dfn_scalar_ret_panic(13);
+----
+unlucky input: 13
+
+# ============================================================================
+# 入参可空性：非 Option 参数短路整行，Option 参数收到 None
+# ============================================================================
+
+# 函数体拿到哨兵值就会 panic，这里没有报错即说明 NULL 行没进入函数体
+query I
+SELECT dfn_scalar_null_arg_plain(a, b) FROM (VALUES (1, 2), (NULL, 2), (1, NULL), (3, 4)) t(a, b);
+----
+3
+NULL
+NULL
+7
+
+# Option 入参：NULL 以 None 进入函数体，语义由函数决定（这里返回 -1）
+query I
+SELECT dfn_scalar_null_arg_option(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+7
+-1
+8
+
+# 混合入参：非 Option 参数拦下 NULL，Option 参数放行 NULL
+query I
+SELECT dfn_scalar_null_arg_mixed(a, b) FROM (VALUES (1, 2), (1, NULL), (5, 6)) t(a, b);
+----
+102
+-1
+506
+
+# 非 Option 参数为 NULL 时整行短路，后面的 Option 参数根本没被读
+query I
+SELECT dfn_scalar_null_arg_mixed(a, b) FROM (VALUES (NULL, 2)) t(a, b);
+----
+NULL
+
+# 整列 NULL：每行都短路
+query I
+SELECT dfn_scalar_null_arg_all(a) FROM (VALUES (NULL), (NULL)) t(a);
+----
+NULL
+NULL
+
+query I
+SELECT dfn_scalar_null_arg_all(NULL::INTEGER);
+----
+NULL
+
+# ============================================================================
+# 参数个数与顺序
+# ============================================================================
+
+query I
+SELECT dfn_scalar_arity_zero();
+----
+42
+
+query T
+SELECT typeof(dfn_scalar_arity_zero());
+----
+INTEGER
+
+statement error
+SELECT dfn_scalar_arity_zero(1);
+----
+No function matches
+
+query I
+SELECT dfn_scalar_arity_one(1);
+----
+2
+
+# 多参数：逐个位置匹配类型
+query T
+SELECT dfn_scalar_arity_three(1, 'x', 2.5);
+----
+1|x|2.5
+
+query T
+SELECT dfn_scalar_arity_order(3, 2, 1);
+----
+3-2-1
+
+# 第二个参数类型不符
+statement error
+SELECT dfn_scalar_arity_three(1, 2, 2.5);
+----
+No function matches
+
+# 参数少于签名
+statement error
+SELECT dfn_scalar_arity_three(1, 'x');
+----
+No function matches
+
+# 显式 NULL 不改变签名匹配，只让该行走 NULL
+query T
+SELECT dfn_scalar_arity_three(NULL::INTEGER, NULL::VARCHAR, NULL::DOUBLE);
+----
+NULL
+
+# 有效值与 NULL 混合
+query T
+SELECT dfn_scalar_arity_three(a, b, c) FROM (VALUES (1, 'x', 2.5), (2, NULL, 3.5)) t(a, b, c);
+----
+1|x|2.5
+NULL
+
+# ============================================================================
+# 注册控制 1/3：auto_register = false 只生成 builder，不写 inventory 提交
+# ============================================================================
+
+# 只声明、不手动注册：SQL 层永远看不到这个名字
+statement error
+SELECT dfn_scalar_reg_unregistered(1);
+----
+Scalar Function with name dfn_scalar_reg_unregistered does not exist
+
+# 手动注册（#[duck_custom_register] + scalar_function_builder()）后可用
+query I
+SELECT dfn_scalar_reg_manual(1);
+----
+2
+
+# ============================================================================
+# 注册控制 2/3：函数集重载，一个 SQL 名字挂多个签名
+# ============================================================================
+
+query T
+SELECT dfn_scalar_reg_overload(1);
+----
+integer:1
+
+query T
+SELECT dfn_scalar_reg_overload('x');
+----
+varchar:x
+
+# 两个重载分支的函数名本身没有被自动注册
+statement error
+SELECT dfn_scalar_reg_over_int(1);
+----
+Scalar Function with name dfn_scalar_reg_over_int does not exist
+
+statement error
+SELECT dfn_scalar_reg_over_varchar('x');
+----
+Scalar Function with name dfn_scalar_reg_over_varchar does not exist
+
+# 重载按参数类型分派，匹配不到就报错
+statement error
+SELECT dfn_scalar_reg_overload([1, 2]);
+----
+No function matches
+
+# ============================================================================
+# 注册控制 3/3：named_param_from 透传给参数结构体，但 scalar 只用位置参数
+# ============================================================================
+
+query I
+SELECT dfn_scalar_reg_named_param(1, 2);
+----
+12
+
+query I
+SELECT dfn_scalar_reg_named_param(NULL::INTEGER, 2);
+----
+NULL
+
+# `:=` 的名字对 scalar 没有任何作用：DuckDB 按书写顺序绑定到位置参数，
+# 名字与参数名不一致、甚至完全不存在都不报错
+query I
+SELECT dfn_scalar_reg_named_param(a := 1, b := 2);
+----
+12
+
+query I
+SELECT dfn_scalar_reg_named_param(b := 2, a := 1);
+----
+21
+
+query I
+SELECT dfn_scalar_reg_named_param(x := 1, y := 2);
+----
+12

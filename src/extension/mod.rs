@@ -1,4 +1,5 @@
 mod demo;
+mod functions;
 mod types;
 
 use duckfn::duckfn_entrypoint;
