@@ -1,0 +1,287 @@
+# name: test/sql/types/duck_map_table_echo.test
+# description: duck_map_table_echo.rs 中 MAP 类型（IndexMap<K, V> / IndexMap<K, Option<V>>）的表函数回显测试
+# group: [types]
+
+require rusty_quack
+
+# 参数在 bind 阶段从 Value 读，出参按行走 MapVector 的 key/value 两个子向量分别 set_entry，
+# entry 的 offset 同样只对非 NULL 行累加。行数规则同其它表函数。
+#
+# 与标量版本的语义差异：
+#   IndexMap<K, V>          -> value 出现 NULL 时 bind 报错 "Map value cannot be null"
+#   IndexMap<K, Option<V>>  -> NULL value 原样保留
+# 另外 DuckDB 的 MAP 本身不允许 NULL value，所以「可空 value 的 MAP」是靠
+# DuckOptionArray/子向量里的 validity 表达，而不是真的写 NULL 到 value 列表里。
+
+# ============================================================================
+# MAP(VARCHAR, INTEGER) // IndexMap<String, i32>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_integer(map(['a', 'b'], [1, 2]), count => 3);
+----
+{a=1, b=2}
+NULL
+{a=1, b=2}
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_integer(map(['a'], [1]));
+----
+MAP(VARCHAR, INTEGER)
+
+# 键顺序按输入保持
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_integer(map(['z', 'a', 'm'], [26, 1, 13]), count => 1);
+----
+{z=26, a=1, m=13}
+
+# 空 map
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_integer(map([]::VARCHAR[], []::INTEGER[]), count => 2);
+----
+{}
+NULL
+
+# value 为 NULL：bind 阶段直接失败
+statement error
+SELECT v FROM dfn_table_echo_map_varchar_integer(map(['a', 'b'], [1, NULL::INTEGER]));
+----
+Map value cannot be null
+
+# 下标取值：走 DuckDB 的 map_extract
+query T
+SELECT CAST(v['b'] AS VARCHAR) FROM dfn_table_echo_map_varchar_integer(map(['a', 'b'], [1, 2]), count => 1);
+----
+2
+
+# ============================================================================
+# MAP(INTEGER, VARCHAR) // IndexMap<i32, String>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_integer_varchar(map([1, 2], ['a', 'b']), count => 2);
+----
+{1=a, 2=b}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_integer_varchar(map([1], ['a']));
+----
+MAP(INTEGER, VARCHAR)
+
+# ============================================================================
+# MAP(BIGINT, BIGINT) // IndexMap<i64, i64>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_bigint_bigint(
+    map([1::BIGINT, (-1)::BIGINT], [9223372036854775807::BIGINT, (-9223372036854775808)::BIGINT]),
+    count => 2);
+----
+{1=9223372036854775807, -1=-9223372036854775808}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_bigint_bigint(map([1::BIGINT], [2::BIGINT]));
+----
+MAP(BIGINT, BIGINT)
+
+# ============================================================================
+# MAP(INTEGER, DOUBLE) // IndexMap<i32, f64>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_integer_double(map([1, 2], [1.5, -2.25]), count => 2);
+----
+{1=1.5, 2=-2.25}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_integer_double(map([1], [1.5]));
+----
+MAP(INTEGER, DOUBLE)
+
+# ============================================================================
+# MAP(VARCHAR, DATE) // IndexMap<String, DuckDate>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_date(
+    map(['d1', 'd2'], [DATE '2024-01-02', DATE '1969-12-31']), count => 2);
+----
+{d1=2024-01-02, d2=1969-12-31}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_date(map(['d1'], [DATE '2024-01-02']));
+----
+MAP(VARCHAR, DATE)
+
+# ============================================================================
+# MAP(VARCHAR, DECIMAL(18,3)) // IndexMap<String, DuckDecimal<18, 3>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_decimal(
+    map(['d1', 'd2'], [1.234::DECIMAL(18,3), (-1.234)::DECIMAL(18,3)]), count => 2);
+----
+{d1=1.234, d2=-1.234}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_decimal(map(['d1'], [1.234::DECIMAL(18,3)]));
+----
+MAP(VARCHAR, DECIMAL(18,3))
+
+# ============================================================================
+# MAP(VARCHAR, BLOB) // IndexMap<String, DuckBlob>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_blob(
+    map(['b1', 'b2'], ['\xAA\xBB'::BLOB, ''::BLOB]), count => 2);
+----
+{b1=\xAA\xBB, b2=''}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_blob(map(['b1'], ['\xAA'::BLOB]));
+----
+MAP(VARCHAR, BLOB)
+
+# ============================================================================
+# MAP(VARCHAR, MAP(VARCHAR, INTEGER)) // IndexMap<String, IndexMap<String, i32>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_nested(
+    map(['o1', 'o2'], [map(['a', 'b'], [1, 2]), map(['c'], [3])]), count => 2);
+----
+{o1={a=1, b=2}, o2={c=3}}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_nested(map(['o1'], [map(['a'], [1])]));
+----
+MAP(VARCHAR, MAP(VARCHAR, INTEGER))
+
+# ============================================================================
+# MAP(VARCHAR, INTEGER) // IndexMap<String, Option<i32>>，value 可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_integer_n(map(['a', 'b'], [1, NULL::INTEGER]), count => 3);
+----
+{a=1, b=NULL}
+NULL
+{a=1, b=NULL}
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_integer_n(map(['a'], [1]));
+----
+MAP(VARCHAR, INTEGER)
+
+# ============================================================================
+# MAP(INTEGER, VARCHAR) // IndexMap<i32, Option<String>>，value 可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_integer_varchar_n(map([1, 2, 3], ['a', NULL, '']), count => 2);
+----
+{1=a, 2=NULL, 3=''}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_integer_varchar_n(map([1], ['a']));
+----
+MAP(INTEGER, VARCHAR)
+
+# ============================================================================
+# MAP(VARCHAR, DATE) // IndexMap<String, Option<DuckDate>>，value 可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_date_n(
+    map(['d1', 'd2'], [DATE '2024-01-02', NULL::DATE]), count => 2);
+----
+{d1=2024-01-02, d2=NULL}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_date_n(map(['d1'], [DATE '2024-01-02']));
+----
+MAP(VARCHAR, DATE)
+
+# ============================================================================
+# MAP(VARCHAR, DECIMAL(18,3)) // IndexMap<String, Option<DuckDecimal<18, 3>>>，value 可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_decimal_n(
+    map(['d1', 'd2'], [1.234::DECIMAL(18,3), NULL::DECIMAL(18,3)]), count => 2);
+----
+{d1=1.234, d2=NULL}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_varchar_decimal_n(map(['d1'], [1.234::DECIMAL(18,3)]));
+----
+MAP(VARCHAR, DECIMAL(18,3))
+
+# ============================================================================
+# MAP(VARCHAR, MAP(VARCHAR, INTEGER)) // IndexMap<String, Option<IndexMap<String, Option<i32>>>>
+# 外层 value 可为 NULL、内层 value 也可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_nested_n(
+    map(['o1', 'o2'], [map(['a', 'b'], [1, NULL::INTEGER]), NULL::MAP(VARCHAR, INTEGER)]),
+    count => 2);
+----
+{o1={a=1, b=NULL}, o2=NULL}
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_map_nested_n(map(['o1'], [map(['a'], [1])]));
+----
+MAP(VARCHAR, MAP(VARCHAR, INTEGER))
+
+# ============================================================================
+# 跨 chunk：key/value 两个子向量的偏移在 2048 行之后必须保持一致
+# ============================================================================
+
+query TT
+SELECT CAST(count(*) AS VARCHAR), CAST(count(v) AS VARCHAR)
+FROM dfn_table_echo_map_varchar_integer(map(['a', 'b'], [1, 2]), count => 3000);
+----
+3000	1500
+
+query T
+SELECT CAST(sum(cardinality(v)) AS VARCHAR)
+FROM dfn_table_echo_map_varchar_integer(map(['a', 'b'], [1, 2]), count => 1000);
+----
+1000
+
+# 逐键取值校验 key/value 子向量没有错位
+query T
+SELECT CAST(sum(v['a']) AS VARCHAR)
+FROM dfn_table_echo_map_varchar_integer(map(['a', 'b'], [1, 2]), count => 1000);
+----
+500
+
+# ============================================================================
+# NULL 处理：参数为 NULL 时（值行）回显 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_map_varchar_integer(NULL, count => 2);
+----
+NULL
+NULL
+
+# NULL 行上取键得到 NULL
+query T
+SELECT CAST(v['a'] AS VARCHAR) FROM dfn_table_echo_map_varchar_integer(map(['a'], [1]), count => 2);
+----
+1
+NULL

@@ -1,0 +1,289 @@
+# name: test/sql/types/duck_list_table_echo.test
+# description: duck_list_table_echo.rs 中 LIST 类型（Vec<T> / Vec<Option<T>>）的表函数回显测试
+# group: [types]
+
+require rusty_quack
+
+# 参数在 bind 阶段从 Value 读，出参按行走 ListVector 的 reserve/set_entry + write_finish。
+# 一批里混着「有值 / NULL」行时，entry 的 offset 只能对非 NULL 行累加；
+# count => N 的奇偶行规则正好一次覆盖「写值 / 写 NULL / offset 累加」。
+#
+# 与标量版本的语义差异（bind 读数没有 Option 可用）：
+#   Vec<T>                 -> 元素出现 NULL 时直接 bind 报错 "Vec<T> value is None"
+#   Vec<Option<T>>         -> NULL 元素原样保留
+# 标量版本里 Vec<T> 遇到 NULL 元素是整个值变 NULL，这里改成报错，两条路径都会固化。
+#
+# 所有取值都用 CAST(... AS VARCHAR) 包一层，避免驱动层对 LIST 的二次转换影响比对。
+
+# ============================================================================
+# LIST(INTEGER) // Vec<i32>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_integer([1, 2, 3], count => 4);
+----
+[1, 2, 3]
+NULL
+[1, 2, 3]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_integer([1]);
+----
+INTEGER[]
+
+# 不同长度：入口/空列表
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_integer([5, 6, 7, 8, 9], count => 1);
+----
+[5, 6, 7, 8, 9]
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_integer([]::INTEGER[], count => 2);
+----
+[]
+NULL
+
+# 元素出现 NULL：bind 阶段直接失败（标量版本是整个值变 NULL）
+statement error
+SELECT v FROM dfn_table_echo_list_integer([1, NULL, 3]);
+----
+Vec<T> value is None
+
+# ============================================================================
+# LIST(BIGINT) // Vec<i64>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_bigint(
+    [9223372036854775807, (-9223372036854775808)], count => 2);
+----
+[9223372036854775807, -9223372036854775808]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_bigint([1::BIGINT]);
+----
+BIGINT[]
+
+# ============================================================================
+# LIST(DOUBLE) // Vec<f64>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_double([1.5, -2.25], count => 2);
+----
+[1.5, -2.25]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_double([1.5]);
+----
+DOUBLE[]
+
+# ============================================================================
+# LIST(BOOLEAN) // Vec<bool>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_bool([true, false, true], count => 2);
+----
+[true, false, true]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_bool([true]);
+----
+BOOLEAN[]
+
+# ============================================================================
+# LIST(VARCHAR) // Vec<String>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_varchar(['a', 'bb', ''], count => 2);
+----
+[a, bb, '']
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_varchar(['a']);
+----
+VARCHAR[]
+
+# ============================================================================
+# LIST(DATE) // Vec<DuckDate>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_date(
+    [DATE '2024-01-02', DATE '1969-12-31'], count => 2);
+----
+[2024-01-02, 1969-12-31]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_date([DATE '2024-01-02']);
+----
+DATE[]
+
+# ============================================================================
+# LIST(DECIMAL(18,3)) // Vec<DuckDecimal<18, 3>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_decimal([1.234, -1.234, 0::DECIMAL(18,3)], count => 2);
+----
+[1.234, -1.234, 0.000]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_decimal([1.234::DECIMAL(18,3)]);
+----
+DECIMAL(18,3)[]
+
+# ============================================================================
+# LIST(BLOB) // Vec<DuckBlob>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_blob(['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB, ''::BLOB], count => 2);
+----
+[\xAA\xBB, \x00\x01\xFF, '']
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_blob(['\xAA'::BLOB]);
+----
+BLOB[]
+
+# ============================================================================
+# LIST(LIST(INTEGER)) // Vec<Vec<i32>>，嵌套 LIST
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_nested([[1, 2], [3]], count => 2);
+----
+[[1, 2], [3]]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_nested([[1]]);
+----
+INTEGER[][]
+
+# 内层列表出现 NULL：同样在 bind 阶段失败
+statement error
+SELECT v FROM dfn_table_echo_list_nested([NULL, [1]]);
+----
+Vec<T> value is None
+
+# ============================================================================
+# LIST(INTEGER) // Vec<Option<i32>>，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_integer_n([1, NULL, 3], count => 3);
+----
+[1, NULL, 3]
+NULL
+[1, NULL, 3]
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_integer_n([1]);
+----
+INTEGER[]
+
+# 全 NULL 元素：表函数从 Value 读列表，逐元素判断 validity，不会踩到
+# 标量读取路径里那种「常量 NULL 子向量」的坑
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_integer_n([NULL, NULL]::INTEGER[], count => 1);
+----
+[NULL, NULL]
+
+# ============================================================================
+# LIST(VARCHAR) // Vec<Option<String>>，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_varchar_n(['a', NULL, ''], count => 2);
+----
+[a, NULL, '']
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_varchar_n(['a']);
+----
+VARCHAR[]
+
+# ============================================================================
+# LIST(DATE) // Vec<Option<DuckDate>>，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_date_n([DATE '2024-01-02', NULL], count => 2);
+----
+[2024-01-02, NULL]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_date_n([DATE '2024-01-02']);
+----
+DATE[]
+
+# ============================================================================
+# LIST(LIST(INTEGER)) // Vec<Option<Vec<Option<i32>>>>，内外层均可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_nested_n([[1, NULL], NULL, []], count => 2);
+----
+[[1, NULL], NULL, []]
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_list_nested_n([[1]]);
+----
+INTEGER[][]
+
+# ============================================================================
+# 跨 chunk：验证出参子向量的容量与 offset 在 2048 行之后仍然正确
+# ============================================================================
+
+query TT
+SELECT CAST(count(*) AS VARCHAR), CAST(count(v) AS VARCHAR)
+FROM dfn_table_echo_list_integer([1, 2, 3], count => 3000);
+----
+3000	1500
+
+query T
+SELECT CAST(sum(x) AS VARCHAR)
+FROM (SELECT unnest(v) AS x FROM dfn_table_echo_list_integer([1, 2, 3], count => 1000)) s;
+----
+3000
+
+# 嵌套列表按行展开后求和，验证多层子向量偏移
+query T
+SELECT CAST(sum(x) AS VARCHAR)
+FROM (
+    SELECT unnest(flatten(v)) AS x
+    FROM dfn_table_echo_list_nested([[1, 2], [3]], count => 1000)
+) s;
+----
+3000
+
+# ============================================================================
+# NULL 处理：参数为 NULL 时（值行）回显 NULL
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_integer(NULL, count => 2);
+----
+NULL
+NULL
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_list_nested_n(NULL, count => 2);
+----
+NULL
+NULL
