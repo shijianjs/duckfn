@@ -20,7 +20,7 @@ proc-macro = true
 # 官方wasm ci报错：
 # error: rustc 1.86.0 is not supported by the following packages:
 # darling@0.23.0 requires rustc 1.88.0
-darling = "0.21.3"
-proc-macro2 = "1.0.107"
-quote = "1.0.47"
-syn = "2.0.119"
+darling = "0.21"
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
