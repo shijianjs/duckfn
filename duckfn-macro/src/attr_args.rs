@@ -1,9 +1,22 @@
+//! 属性宏的参数解析与公共调度逻辑。
+//!
+//! Argument parsing and common dispatch logic for the attribute macros.
+
 use proc_macro::TokenStream;
 use darling::FromMeta;
 use syn::{parse_macro_input, ItemFn};
 use crate::duck_function::ItemFnWrapper;
 use crate::macro_utils::{handle_token_stream2_result, TokenStream2Result};
 
+/// 所有 `#[duck_*]` 属性宏的公共入口。
+///
+/// 流程：把被标注的函数解析成 [`ItemFn`]、把属性参数解析成 [`DuckArgs`]，组装
+/// [`ItemFnWrapper`] 后交给 `run` 做各宏特有的代码生成；解析错误会直接变成编译错误。
+///
+/// Common entry point of every `#[duck_*]` attribute macro. It parses the annotated function
+/// into an [`ItemFn`] and the attribute arguments into [`DuckArgs`], assembles an
+/// [`ItemFnWrapper`] and hands it to `run` for macro-specific code generation; parse errors
+/// become compile errors directly.
 pub fn handle_duck_function(
     _attr: TokenStream,
     item: TokenStream,
@@ -26,20 +39,40 @@ pub fn handle_duck_function(
     handle_token_stream2_result(result)
 }
 
+/// `#[duck(...)]` / `#[duck_*(...)]` 里可用的全部参数。
+///
+/// All arguments accepted by `#[duck(...)]` / `#[duck_*(...)]`.
 #[derive(Debug, FromMeta)]
 #[darling(derive_syn_parse)]
 pub(crate) struct DuckArgs {
     /// 表函数的命名参数从哪个开始
+    ///
+    /// The field name from which table-function named parameters start.
     #[allow(dead_code)]
     pub named_param_from: Option<String>,
 
     /// Whether to auto register the function
     /// - Default to true
+    ///
+    /// 是否自动注册，默认 `true`；设为 `false` 时只生成 builder，交给
+    /// `#[duck_custom_register]` 手动注册。
+    ///
+    /// Whether to auto-register the function; defaults to `true`. When set to `false` only the
+    /// builders are generated and registration is left to `#[duck_custom_register]`.
     pub auto_register: Option<bool>,
+
     /// SpecialNullHandling
+    ///
+    /// 是否开启 DuckDB 的 `SpecialNullHandling`（NULL 行也进入回调）。
+    ///
+    /// Whether to enable DuckDB's `SpecialNullHandling` (NULL rows also reach the callback).
     pub special_null_handling: Option<bool>,
+
     /// `#[duck_cast_function(implicit_cost = 100)]`
     /// 隐式转换代价：设置后 DuckDB 可能自动插入该 cast，值越小优先级越高
+    ///
+    /// `#[duck_cast_function(implicit_cost = 100)]`. Implicit-cast cost: once set, DuckDB may
+    /// insert this cast automatically, and a smaller value means higher priority.
     pub implicit_cost: Option<i64>,
 
     /// `#[duck_scalar_function(overloads_name = "my_overloads")]` /
@@ -48,5 +81,11 @@ pub(crate) struct DuckArgs {
     /// - 重载函数不注册自身的函数名，只注册重载
     /// - 同名（overloads_name 相同）的多个签名会被合并成一个函数集，
     ///   每个重载保留自己的返回类型
+    ///
+    /// `#[duck_scalar_function(overloads_name = "my_overloads")]` /
+    /// `#[duck_aggregate_function(overloads_name = "my_overloads")]`: sets the name of the
+    /// overload set. The function is then not registered under its own name but as an overload.
+    /// Several signatures sharing the same `overloads_name` are merged into one function set,
+    /// each overload keeping its own return type.
     pub overloads_name: Option<String>,
 }

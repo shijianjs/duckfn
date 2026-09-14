@@ -1,9 +1,24 @@
+//! `IndexMap<K, V>` 与 DuckDB `MAP` 的映射（保留键的插入顺序）。
+//!
+//! Mappings between `IndexMap<K, V>` and DuckDB `MAP` (preserving key insertion order).
+
 use crate::{DuckResult, DuckValueReader, DuckValueType, DuckValueWriter, duck_error};
 use indexmap::IndexMap;
 use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, MapVector, TypeId, Value};
 use std::hash::Hash;
 
+/// `IndexMap<K, Option<V>>` ↔ `MAP(K, V)`：值可以为 SQL NULL（键不允许为 NULL）。
+///
+/// DuckDB 的 MAP 物理上是 `LIST(STRUCT(key, value))`：外层 entry 决定每行的键值对数量，
+/// 键/值分别存放在两个子向量里（用 [`MapVector::keys`] / [`MapVector::values`] 取出）。
+/// 用 `IndexMap` 是因为 DuckDB 的 map 语义要求键唯一且保持插入顺序。
+///
+/// `IndexMap<K, Option<V>>` ↔ `MAP(K, V)` where values may be SQL NULL (keys must not be).
+/// DuckDB's MAP is physically `LIST(STRUCT(key, value))`: the outer entry gives the number of
+/// pairs in each row, and keys/values live in two child vectors (obtained via
+/// [`MapVector::keys`] / [`MapVector::values`]). `IndexMap` is used because DuckDB's map
+/// semantics require unique keys with a stable insertion order.
 // 裸指针由 DuckDB FFI 提供，此处直接解引用
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<K, Option<V>> {
@@ -116,6 +131,9 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
     }
 }
 
+// 用于把 `IndexMap<K, V>` 复用 `IndexMap<K, Option<V>>` 的实现。
+//
+// Helper that lets `IndexMap<K, V>` reuse the `IndexMap<K, Option<V>>` implementation.
 trait Helper {
     type H;
 }
@@ -123,6 +141,15 @@ trait Helper {
 impl<K: DuckValueType + Hash + Eq, V: DuckValueType> Helper for IndexMap<K, V> {
     type H = IndexMap<K, Option<V>>;
 }
+
+/// `IndexMap<K, V>` ↔ `MAP(K, V)`：键和值都不允许为 SQL NULL。
+///
+/// 读写复用 `IndexMap<K, Option<V>>` 的实现：读时键或值为 NULL 会直接报错，
+/// 写时把值包成 `Some`。
+///
+/// `IndexMap<K, V>` ↔ `MAP(K, V)` where neither keys nor values may be SQL NULL. Both
+/// directions reuse the `IndexMap<K, Option<V>>` implementation: on read a NULL key or value
+/// is an error, and on write values are wrapped in `Some`.
 // 裸指针由 DuckDB FFI 提供，此处直接解引用
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<K, V> {

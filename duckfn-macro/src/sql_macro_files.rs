@@ -1,3 +1,8 @@
+//! `duck_sql_macro_files!` 的实现：编译期内联若干 `.sql` 文件并注册。
+//!
+//! Implementation of `duck_sql_macro_files!`: inlines several `.sql` files at compile time and
+//! registers them.
+
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
@@ -15,6 +20,15 @@ use syn::{LitStr, Token};
 ///   - 相对「调用本宏的 .rs 文件」定位（`Span::call_site()` 指向调用处）；
 ///   - 编译期内联进二进制，扩展包运行时不依赖 .sql 文件；
 ///   - 文件缺失 / 路径写错会在编译期直接报错。
+///
+/// Implementation of `duck_sql_macro_files!("a.sql", "b.sql", ...)`. The input is a
+/// comma-separated list of string literals (file paths) with an optional trailing comma and at
+/// least one entry. It emits a single inventory registration that runs
+/// `duckfn::register_sql_macro_str(c, include_str!(path))` for every file in order. Paths are
+/// resolved by `include_str!`, so they are relative to the `.rs` file that invokes the macro
+/// (`Span::call_site()` points at the call site), the files are inlined into the binary at
+/// compile time (so the packaged extension does not need the `.sql` files at runtime), and a
+/// missing file or a wrong path fails at compile time.
 pub fn duck_sql_macro_files(input: TokenStream) -> TokenStream {
     let parser = Punctuated::<LitStr, Token![,]>::parse_terminated;
     let files = match parser.parse(input) {

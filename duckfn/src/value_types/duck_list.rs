@@ -1,9 +1,21 @@
+//! `Vec<T>` / `Vec<Option<T>>` 与 DuckDB `LIST` 的映射。
+//!
+//! Mappings between `Vec<T>` / `Vec<Option<T>>` and DuckDB `LIST`.
+
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, TypeId, Value};
 use crate::{duck_error, DuckResult};
 
-
+/// `Vec<Option<T>>` ↔ `LIST(T)`：元素可以是 SQL NULL。
+///
+/// 读写都围绕 `ListVector` 的「子向量 + entry(offset, length)」结构进行：
+/// 读取时按 entry 逐元素读子向量；写入时先 `reserve` 出总元素数，再按 offset 追加。
+///
+/// `Vec<Option<T>>` ↔ `LIST(T)` where elements may be SQL NULL. Both directions work around
+/// the `ListVector` "child vector + entry(offset, length)" layout: reading walks each entry's
+/// slice of the child vector, while writing reserves the total element count first and then
+/// appends at the running offset.
 // 裸指针由 DuckDB FFI 提供，此处直接解引用
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
@@ -94,6 +106,14 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
     }
 }
 
+/// `Vec<T>` ↔ `LIST(T)`：元素不允许为 SQL NULL。
+///
+/// 读写完全复用 `Vec<Option<T>>` 的实现，只在转换时收紧类型：
+/// 读出来若有 NULL 元素则整体视为 NULL，写出去时把元素包成 `Some`。
+///
+/// `Vec<T>` ↔ `LIST(T)` where elements must not be SQL NULL. Both directions reuse the
+/// `Vec<Option<T>>` implementation and only tighten the type on conversion: reading yields
+/// NULL for the whole row if any element is NULL, and writing wraps elements in `Some`.
 // 裸指针由 DuckDB FFI 提供，此处直接解引用
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType> DuckValueType for Vec<T> {

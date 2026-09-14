@@ -1,8 +1,39 @@
+//! `duckfn-macro`：`duckfn` 的过程宏实现。
+//!
+//! 本 crate 提供属性宏、derive 宏和函数式宏，把一个普通的 Rust 函数/结构体包装成
+//! 可注册到 DuckDB 的扩展对象；运行时依赖在 `duckfn` crate 中。
+//!
+//! `duckfn-macro`: the procedural macros behind `duckfn`. This crate provides the attribute,
+//! derive and function-like macros that wrap an ordinary Rust function or struct into an object
+//! registerable with DuckDB; the runtime lives in the `duckfn` crate.
+
+/// `#[duck_scalar_function]` / `#[duck_aggregate_function]` / `#[duck_table_function]` 等
+/// 属性宏共同使用的代码生成逻辑。
+///
+/// Shared code generation for the `#[duck_scalar_function]` / `#[duck_aggregate_function]` /
+/// `#[duck_table_function]` and other attribute macros.
 mod duck_function;
+/// `#[derive(DuckStruct)]` 的实现：把具名结构体映射为 DuckDB `STRUCT`。
+///
+/// Implementation of `#[derive(DuckStruct)]`: maps a named struct onto a DuckDB `STRUCT`.
 mod duck_struct_derive;
+/// 过程宏内部的 token/类型解析工具。
+///
+/// Token and type parsing helpers used inside the procedural macros.
 pub(crate) mod macro_utils;
+/// `duckfn_entrypoint!` 的实现：生成扩展入口符号。
+///
+/// Implementation of `duckfn_entrypoint!`: generates the extension entry-point symbol.
 mod entrypoint;
+/// 各属性宏共用的参数解析（`auto_register`、`named_param_from`、`overloads_name` 等）。
+///
+/// Argument parsing shared by the attribute macros (`auto_register`, `named_param_from`,
+/// `overloads_name`, ...).
 mod attr_args;
+/// `duck_sql_macro_files!` 的实现：把若干 `.sql` 文件编译期内联并注册。
+///
+/// Implementation of `duck_sql_macro_files!`: inlines several `.sql` files at compile time and
+/// registers them.
 mod sql_macro_files;
 
 use crate::macro_utils::handle_token_stream2_result;
@@ -10,28 +41,119 @@ use proc_macro::TokenStream;
 use syn::{DeriveInput, parse_macro_input};
 use crate::attr_args::handle_duck_function;
 
+/// 把一个具名结构体映射成 DuckDB `STRUCT`（嵌套 LIST / MAP / ARRAY / STRUCT 均支持）。
+///
+/// 生成的实现同时让该结构体可用于：
+///
+/// - 标量函数的参数（作为一行多列）；
+/// - 表函数的输出行；
+/// - 表函数的 bind 参数（用 `#[duck(named_param_from = "字段名")]` 指定命名参数起点）；
+/// - 单独作为一个 STRUCT 列值读写。
+///
+/// Maps a named struct onto a DuckDB `STRUCT` (nested LIST / MAP / ARRAY / STRUCT are
+/// supported). The generated implementations let the struct be used as scalar-function
+/// arguments (a row of columns), as table-function output rows, as table-function bind
+/// parameters (use `#[duck(named_param_from = "field")]` to mark where named parameters start)
+/// and as a standalone STRUCT column value.
 #[proc_macro_derive(DuckStruct, attributes(duck))]
 pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
     let result = duck_struct_derive::duck_struct_derive(derive_input);
     handle_token_stream2_result(result)
 }
+
+/// 把普通 Rust 函数注册成 DuckDB 标量函数。
+///
+/// 参数与返回值的映射规则：
+///
+/// - 每个参数对应一个 SQL 参数，参数类型决定 DuckDB 逻辑类型（`Option<T>` 表示可空）；
+/// - 返回类型可以是 `T`（永不为 NULL）、`Option<T>`（`None` -> SQL NULL）或
+///   `DuckOptionResult<T>`（可失败、可为 NULL）；
+/// - 参数写成 `T` 时，输入为 NULL 会直接短路输出 NULL（函数体不执行）；写成 `Option<T>`
+///   时以 `None` 进入函数体，语义由函数自己决定；
+/// - 函数体里的 panic 会被捕获并转成查询错误。
+///
+/// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`，
+/// 便于手动注册重载或函数集。
+///
+/// Registers an ordinary Rust function as a DuckDB scalar function. Each parameter maps to one
+/// SQL parameter whose type determines the DuckDB logical type (`Option<T>` means nullable).
+/// The return type may be `T` (never NULL), `Option<T>` (`None` maps to SQL NULL) or
+/// `DuckOptionResult<T>` (fallible and nullable). A `T` parameter short-circuits NULL input to
+/// NULL output without running the body, whereas an `Option<T>` parameter receives `None` and
+/// decides the semantics itself; panics in the body are caught and turned into query errors.
+/// A module named after the function is generated, exporting `scalar_function_builder()` and
+/// `scalar_overload_builder()` for manual overload / function-set registration.
 #[proc_macro_attribute]
 pub fn duck_scalar_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_scalar_function())
 }
+
+/// 把普通 Rust 函数注册成 DuckDB 聚合函数。
+///
+/// 函数需带一个 `&mut XxxState` 参数用于跨行累积状态（`XxxState` 需实现
+/// `duckfn::DuckAggregateState`，其 `Output` 即聚合的返回类型）；其余参数是每行的输入。
+/// 返回值规则与标量函数一致，通常直接返回 `()`。
+///
+/// 宏生成同名模块并导出 `aggregate_function_builder()` / `aggregate_overload_builder()` /
+/// `aggregate_function_guard()`。
+///
+/// Registers an ordinary Rust function as a DuckDB aggregate function. The function takes one
+/// `&mut XxxState` parameter that accumulates state across rows (`XxxState` must implement
+/// `duckfn::DuckAggregateState`, whose `Output` is the aggregate's return type); the remaining
+/// parameters are the per-row inputs. Return-type rules match scalar functions, though in
+/// practice `()` is returned. A module named after the function is generated, exporting
+/// `aggregate_function_builder()`, `aggregate_overload_builder()` and
+/// `aggregate_function_guard()`.
 #[proc_macro_attribute]
 pub fn duck_aggregate_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_aggregate_function())
 }
+
+/// 把返回迭代器的 Rust 函数注册成 DuckDB 表函数。
+///
+/// 函数参数即表函数的 bind 参数；返回类型支持三种形式：
+///
+/// - `impl Iterator<Item = Row>`：最简单，不支持出错；
+/// - `DuckResult<impl Iterator<Item = Row>>`：支持构建迭代器时出错；
+/// - `DuckFullIteratorResult<Row>`（即 `DuckResult<Box<dyn Iterator<Item = DuckOptionResult<Row>>>>`）：
+///   构建与逐行产出都可出错、行也可为 NULL。
+///
+/// `Row` 需实现 `DuckColumns`（一般用 `#[derive(DuckStruct)]`），其列即结果列。
+///
+/// Registers a Rust function returning an iterator as a DuckDB table function. The parameters
+/// are the bind parameters and three return shapes are supported: `impl Iterator<Item = Row>`
+/// (simplest, no error handling), `DuckResult<impl Iterator<Item = Row>>` (construction may
+/// fail), and `DuckFullIteratorResult<Row>` (both construction and per-row production may fail,
+/// and a row may be NULL). `Row` must implement `DuckColumns` (typically via
+/// `#[derive(DuckStruct)]`) and its columns become the result columns.
 #[proc_macro_attribute]
 pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_table_function())
 }
+
+/// 手动注册入口：把 `fn(&Connection) -> DuckResult<()>` 交给扩展初始化时调用。
+///
+/// 用于 `auto_register = false` 的场景：宏生成的各种 `*_builder()` 需要自己注册，
+/// 这里是最方便的挂载点。
+///
+/// Manual registration entry point: makes a `fn(&Connection) -> DuckResult<()>` run during
+/// extension initialisation. It suits the `auto_register = false` case, where the generated
+/// `*_builder()` functions must be registered by hand.
+///
+/// # 示例 / Example
+///
+/// ```ignore
+/// #[duck_custom_register]
+/// fn register_my_stuff(c: &Connection) -> DuckResult<()> {
+///     unsafe { my_scalar::scalar_function_builder().register(c) }
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_custom_register())
 }
+
 /// 把 `fn(源值) -> 目标值` 注册成 DuckDB 的 cast 函数，覆盖 `CAST(源 AS 目标)`。
 ///
 /// 源类型来自唯一参数，目标类型来自返回类型；返回形式与 `duck_scalar_function` 一致：
@@ -55,11 +177,32 @@ pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStrea
 /// - `TRY_CAST(x AS T)` 出错 -> 该行输出 NULL 并记录行级错误（`set_row_error`）；
 /// - 属性支持 `auto_register = false` / `implicit_cost = N`，生成模块里导出
 ///   `cast_function_builder()` 和 `cast_function_register()` 供手动注册。
+///
+/// Registers `fn(source) -> target` as a DuckDB cast function covering `CAST(source AS target)`.
+/// The source type comes from the single argument and the target type from the return type, with
+/// the same return shapes as `duck_scalar_function`. An error fails the whole query for
+/// `CAST(x AS T)` (`set_error`) but writes NULL and records a row-level error for
+/// `TRY_CAST(x AS T)` (`set_row_error`). The attribute accepts `auto_register = false` and
+/// `implicit_cost = N`, and the generated module exports `cast_function_builder()` and
+/// `cast_function_register()` for manual registration.
 #[proc_macro_attribute]
 pub fn duck_cast_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_cast_function())
 }
 
+/// 注册一个 SQL 宏：函数返回 SQL 文本（或 builder），扩展初始化时执行/注册。
+///
+/// 支持的返回形式：
+///
+/// - `SqlMacro` / `DuckResult<SqlMacro>`：交给 quack-rs 直接注册；
+/// - `String` / `&'static str` / `DuckResult<...>`：作为 SQL 文本执行，
+///   一段文本里可以有多条 `CREATE OR REPLACE MACRO` 语句。
+///
+/// Registers a SQL macro: the function returns SQL text (or a builder) that is executed or
+/// registered when the extension initialises. Supported return shapes are `SqlMacro` /
+/// `DuckResult<SqlMacro>` (registered through quack-rs) and `String` / `&'static str` /
+/// `DuckResult<...>` (executed as SQL text, which may contain several
+/// `CREATE OR REPLACE MACRO` statements).
 #[proc_macro_attribute]
 pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_sql_macro())
@@ -85,20 +228,25 @@ pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// 返回值可以是 `Option<String>` / `Option<&'static str>` /
 /// `DuckOptionResult<String>` / `DuckOptionResult<&'static str>`。
+///
+/// Redirects "unknown table names / file paths" such as `SELECT * FROM 'data.myformat'` to a
+/// table function. The signature takes exactly one table-name (path) argument and returns the
+/// name of the target table function: `Ok(Some(table_function))` takes over and passes the path
+/// as the first VARCHAR argument; `Ok(None)` declines so DuckDB tries the next replacement scan;
+/// `Err(..)` or a panic fails the whole query. The return type may be `Option<String>` /
+/// `Option<&'static str>` / `DuckOptionResult<String>` / `DuckOptionResult<&'static str>`.
 #[proc_macro_attribute]
 pub fn duck_replacement_scan(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_replacement_scan())
 }
 
-
-
-
-
 /// Generate DuckDB extension entry point.
 ///
-/// ```ignore
-/// duckfn_entrypoint!("rusty_quack");
-/// ```
+/// 生成 DuckDB 扩展入口：`duckfn_entrypoint!("rusty_quack");`
+/// 扩展名必须全小写、只含字母/数字/下划线。
+///
+/// Generates the DuckDB extension entry point: `duckfn_entrypoint!("rusty_quack");`. The
+/// extension name must be lowercase and contain only letters, digits and underscores.
 ///
 /// Expands to:
 ///
@@ -126,6 +274,14 @@ pub fn duckfn_entrypoint(input: TokenStream) -> TokenStream {
 ///
 /// 与 `#[duck_sql_macro]` 的关系：后者作用在函数上，由函数返回 SQL；
 /// 本宏不需要写函数，直接把若干 .sql 文件注册出去。
+///
+/// Registers several SQL script files at once (a shortcut). The arguments are one or more
+/// string literals (file paths) with an optional trailing comma; at least one is required.
+/// Each file is inlined at compile time with `include_str!` (paths are resolved relative to the
+/// `.rs` file that invokes the macro) and the whole script is executed in written order when the
+/// extension initialises — one script may contain several semicolon-separated
+/// `CREATE OR REPLACE MACRO` statements. Unlike `#[duck_sql_macro]`, which annotates a function
+/// returning SQL, this macro needs no function and simply registers the `.sql` files.
 #[proc_macro]
 pub fn duck_sql_macro_files(input: TokenStream) -> TokenStream {
     sql_macro_files::duck_sql_macro_files(input)
