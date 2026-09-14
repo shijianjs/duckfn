@@ -410,9 +410,30 @@ impl ItemFnWrapper {
         if !self.auto_register() {
             return Ok(quote! {});
         }
+        // overloads_name：不注册自身函数名，改为提交重载项
+        if let Some(set_name) = self.overloads_name() {
+            return self.scalar_overload_submit(set_name);
+        }
         self.common_inventory_submit(quote! {
             let builder = scalar_function_builder();
             unsafe { c.register_scalar(builder)}
+        })
+    }
+
+    /// `overloads_name = "xxx"`：提交 `DuckScalarOverloadItem`，
+    /// 由 `duckfn::register_all_scalar_overload` 按名字分组、用
+    /// `ScalarFunctionSetBuilder` 注册成一个函数集（每个重载自带返回类型）。
+    fn scalar_overload_submit(&self, set_name: &str) -> TokenStream2Result {
+        Ok(quote! {
+            duckfn::inventory_submit! {
+                duckfn::DuckScalarOverloadItem{
+                    name: #set_name,
+                    register_fn:|| {
+                        use duckfn::ScalarFunctionAdapter;
+                        ScalarFunctionImpl::scalar_overload_builder()
+                    }
+                }
+            }
         })
     }
 
@@ -505,9 +526,29 @@ impl ItemFnWrapper {
         if !self.auto_register() {
             return Ok(quote! {});
         }
+        // overloads_name：不注册自身函数名，改为提交重载项
+        if let Some(set_name) = self.overloads_name() {
+            return self.aggregate_overload_submit(set_name);
+        }
         self.common_inventory_submit(quote! {
             let builder = aggregate_function_builder();
             unsafe { c.register_aggregate(builder)}
+        })
+    }
+
+    /// `overloads_name = "xxx"`：提交 `DuckAggregateOverloadItem`，
+    /// 由 `duckfn::register_all_aggregate_overload` 按名字分组注册成函数集。
+    fn aggregate_overload_submit(&self, set_name: &str) -> TokenStream2Result {
+        Ok(quote! {
+            duckfn::inventory_submit! {
+                duckfn::DuckAggregateOverloadItem{
+                    name: #set_name,
+                    register_fn:|name: &std::ffi::CString| -> duckfn::AggregateFunctionGuard {
+                        use duckfn::AggregateFunctionAdapter;
+                        AggregateFunctionImpl::create_aggregate_function_guard(name)
+                    }
+                }
+            }
         })
     }
 
@@ -568,6 +609,16 @@ impl ItemFnWrapper {
 
     fn auto_register(&self) -> bool {
         self.duck_args.auto_register.unwrap_or(true)
+    }
+
+    /// `#[duck_scalar_function(overloads_name = "xxx")]` /
+    /// `#[duck_aggregate_function(overloads_name = "xxx")]`
+    ///
+    /// 设置后不再注册自身的函数名，而是把本签名作为重载挂到 `xxx` 这个函数集上
+    /// （同名重载由 `duckfn::register_all_*_overload` 分组注册）。
+    /// 仍然受 `auto_register` 控制：`auto_register = false` 时完全不提交。
+    fn overloads_name(&self) -> Option<&str> {
+        self.duck_args.overloads_name.as_deref()
     }
 
     /// `#[duck_scalar_function(special_null_handling = true)]` /

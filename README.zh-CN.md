@@ -97,6 +97,9 @@ duckfn_entrypoint!("my_ext");
 - `auto_register = false` —— 只生成 builder（`scalar_function_builder()`、
   `scalar_overload_builder()` 等）不自动注册，配合 `#[duck_custom_register]` 使用。
 - `named_param_from = "field"` —— 表函数命名参数从哪个字段开始。
+- `overloads_name = "函数集名"`（`#[duck_scalar_function]` / `#[duck_aggregate_function]`）——
+  不注册函数自己的名字，而是把本签名作为重载挂到该函数集上；`overloads_name` 相同的签名
+  会被合并成一个函数集（各自保留自己的返回类型），无需手写 `#[duck_custom_register]`。
 
 ## 类型映射
 

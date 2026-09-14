@@ -1,5 +1,5 @@
 # name: test/sql/functions/scalar_function.test
-# description: duck_scalar_function 的返回值形式、入参可空性、参数个数与顺序、注册控制、special_null_handling
+# description: duck_scalar_function 的返回值形式、入参可空性、参数个数与顺序、注册控制（auto_register / 函数集重载 / overloads_name）、special_null_handling
 # group: [functions]
 
 require rusty_quack
@@ -239,6 +239,64 @@ Scalar Function with name dfn_scalar_reg_over_varchar does not exist
 # 重载按参数类型分派，匹配不到就报错
 statement error
 SELECT dfn_scalar_reg_overload([1, 2]);
+----
+No function matches
+
+# ============================================================================
+# 注册控制：overloads_name —— 宏直接管理函数集重载
+#
+# 属性写 overloads_name = "函数集名" 的函数不注册自己的名字，而是由宏提交
+# duckfn::DuckScalarOverloadItem，register_all_scalar_overload 把
+# 同名（函数集名相同）的重载合并成一个函数集。无需手写 #[duck_custom_register]。
+# ============================================================================
+
+# 分支 1：INTEGER -> VARCHAR
+query T
+SELECT dfn_scalar_ovl_set(1);
+----
+int:1
+
+query T
+SELECT typeof(dfn_scalar_ovl_set(1));
+----
+VARCHAR
+
+# 分支 2：VARCHAR -> BIGINT（返回类型与分支 1 不同）
+query I
+SELECT dfn_scalar_ovl_set('abcd');
+----
+4
+
+query T
+SELECT typeof(dfn_scalar_ovl_set('abcd'));
+----
+BIGINT
+
+# 分支 3：INTEGER, INTEGER -> BIGINT（参数个数不同）
+query I
+SELECT dfn_scalar_ovl_set(3, 4);
+----
+12
+
+# 三个分支的函数名本身都没有被注册
+statement error
+SELECT dfn_scalar_ovl_int(1);
+----
+Scalar Function with name dfn_scalar_ovl_int does not exist
+
+statement error
+SELECT dfn_scalar_ovl_varchar('x');
+----
+Scalar Function with name dfn_scalar_ovl_varchar does not exist
+
+statement error
+SELECT dfn_scalar_ovl_int_int(1, 2);
+----
+Scalar Function with name dfn_scalar_ovl_int_int does not exist
+
+# 参数类型匹配不到就报错
+statement error
+SELECT dfn_scalar_ovl_set([1, 2]);
 ----
 No function matches
 

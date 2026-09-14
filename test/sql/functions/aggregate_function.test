@@ -1,5 +1,5 @@
 # name: test/sql/functions/aggregate_function.test
-# description: duck_aggregate_function 的参数/状态拆分、入参可空性、返回形式、输出类型、注册控制（含新版不同返回类型的函数集重载）与 special_null_handling
+# description: duck_aggregate_function 的参数/状态拆分、入参可空性、返回形式、输出类型、注册控制（auto_register / 函数集重载 / overloads_name）与 special_null_handling
 # group: [functions]
 
 require rusty_quack
@@ -306,6 +306,64 @@ Scalar Function with name dfn_agg_set_over_varchar does not exist
 # 重载匹配不到参数类型就报错
 statement error
 SELECT dfn_agg_set_overload(1.5);
+----
+No function matches
+
+# ============================================================================
+# 宏属性 overloads_name：宏直接管理函数集重载
+#
+# 属性写 overloads_name = "函数集名" 的函数不注册自己的名字，而是由宏提交
+# duckfn::DuckAggregateOverloadItem，register_all_aggregate_overload
+# 把同名（函数集名相同）的重载合并成一个函数集。无需手写 #[duck_custom_register]。
+# ============================================================================
+
+# INTEGER 分支：求和，返回 BIGINT
+query I
+SELECT dfn_agg_ovl_set(x) FROM (VALUES (1), (2), (3)) t(x);
+----
+6
+
+query T
+SELECT typeof(dfn_agg_ovl_set(x)) FROM (VALUES (1)) t(x);
+----
+BIGINT
+
+# VARCHAR 分支：拼接，返回 VARCHAR（返回类型与 INTEGER 分支不同）
+query T
+SELECT dfn_agg_ovl_set(x) FROM (VALUES ('a'), ('b')) t(x);
+----
+str(a);str(b);
+
+query T
+SELECT typeof(dfn_agg_ovl_set(x)) FROM (VALUES ('a')) t(x);
+----
+VARCHAR
+
+# 空输入：各分支自己 result() 的语义（SumState -> 0，TextState -> NULL）
+query I
+SELECT dfn_agg_ovl_set(x) FROM (SELECT 1 AS x WHERE false) t(x);
+----
+0
+
+query T
+SELECT dfn_agg_ovl_set(x) FROM (SELECT 'a' AS x WHERE false) t(x);
+----
+NULL
+
+# 两个分支的函数名本身都没有被注册
+statement error
+SELECT dfn_agg_ovl_int(1);
+----
+Scalar Function with name dfn_agg_ovl_int does not exist
+
+statement error
+SELECT dfn_agg_ovl_varchar('x');
+----
+Scalar Function with name dfn_agg_ovl_varchar does not exist
+
+# 参数类型匹配不到就报错
+statement error
+SELECT dfn_agg_ovl_set(1.5);
 ----
 No function matches
 

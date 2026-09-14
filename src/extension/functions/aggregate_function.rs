@@ -444,6 +444,37 @@ fn dfn_agg_set_over_register(c: &Connection) -> DuckResult<()> {
     }
 }
 
+// ============================================================================
+// duck_aggregate_function：overloads_name —— 宏直接管理函数集重载
+//
+//   属性写 overloads_name = "函数集名" 时（不再需要手写 #[duck_custom_register]）：
+//     - 不注册自身的函数名；
+//     - 宏把本签名提交成 duckfn::DuckAggregateOverloadItem，
+//       register_all_duckfn -> register_all_aggregate_overload 把同名（函数集名相同）
+//       的重载分组，用 DuckfnAggregateFunctionSetBuilder 注册成一个函数集；
+//     - 每个重载的返回类型各取各的 Output，因此同一函数集里可以有不同返回类型。
+//   仍受 auto_register 控制：auto_register = false 时完全不提交。
+// ============================================================================
+
+/// 重载分支 1：INTEGER -> BIGINT（求和）
+/// ```sql
+/// SELECT dfn_agg_ovl_set(x) FROM (VALUES (1), (2), (3)) t(x);
+/// ```
+#[duck_aggregate_function(overloads_name = "dfn_agg_ovl_set")]
+fn dfn_agg_ovl_int(input: i32, state: &mut SumState) {
+    state.total += i64::from(input);
+    state.rows += 1;
+}
+
+/// 重载分支 2：VARCHAR -> VARCHAR（拼接，返回类型与分支 1 不同）
+/// ```sql
+/// SELECT dfn_agg_ovl_set(x) FROM (VALUES ('a'), ('b')) t(x);
+/// ```
+#[duck_aggregate_function(overloads_name = "dfn_agg_ovl_set")]
+fn dfn_agg_ovl_varchar(input: String, state: &mut TextState) {
+    state.text.push_str(&format!("str({input});"));
+}
+
 /// 重载分支共用的文本状态，空输入返回 NULL
 #[derive(Default, Debug, Clone)]
 struct TextState {

@@ -14,6 +14,12 @@ struct DuckMacroArgs {
     pub auto_register: Option<bool>,
     ///SpecialNullHandling
     pub special_null_handling: Option<bool>,
+    /// `overloads_name = "xxx"`：函数集重载的名字。
+    ///
+    /// 生成结构体本身用不到它，但属性会被原样写到
+    /// `#[duck(...)] struct DuckArgsImpl` 上，derive 必须认识这个字段。
+    #[allow(dead_code)]
+    pub overloads_name: Option<String>,
 }
 
 pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {

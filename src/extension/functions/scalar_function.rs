@@ -252,6 +252,46 @@ fn dfn_scalar_reg_over_register(c: &Connection) -> DuckResult<()> {
     }
 }
 
+// ============================================================================
+// duck_scalar_function：overloads_name —— 宏直接管理函数集重载
+//
+//   属性写 overloads_name = "函数集名" 时：
+//     - 不注册自身的函数名；
+//     - 宏把本签名提交成 duckfn::DuckScalarOverloadItem，
+//       register_all_duckfn -> register_all_scalar_overload 再把同名（函数集名相同）
+//       的重载分组，用 DuckfnScalarFunctionSetBuilder 注册成一个函数集；
+//     - 每个重载的返回类型各取各的 Output（对比上面 ScalarFunctionSetBuilder 的
+//       统一返回类型），因此同一函数集里可以有不同返回类型。
+//   仍受 auto_register 控制：auto_register = false 时完全不提交。
+// ============================================================================
+
+/// 重载分支 1：INTEGER -> VARCHAR
+/// ```sql
+/// SELECT dfn_scalar_ovl_set(1);
+/// ```
+#[duck_scalar_function(overloads_name = "dfn_scalar_ovl_set")]
+fn dfn_scalar_ovl_int(i: i32) -> String {
+    format!("int:{i}")
+}
+
+/// 重载分支 2：VARCHAR -> BIGINT（返回类型与分支 1 不同）
+/// ```sql
+/// SELECT dfn_scalar_ovl_set('abcd');
+/// ```
+#[duck_scalar_function(overloads_name = "dfn_scalar_ovl_set")]
+fn dfn_scalar_ovl_varchar(s: String) -> i64 {
+    s.len() as i64
+}
+
+/// 重载分支 3：INTEGER, INTEGER -> BIGINT（参数个数不同）
+/// ```sql
+/// SELECT dfn_scalar_ovl_set(3, 4);
+/// ```
+#[duck_scalar_function(overloads_name = "dfn_scalar_ovl_set")]
+fn dfn_scalar_ovl_int_int(a: i32, b: i32) -> i64 {
+    i64::from(a) * i64::from(b)
+}
+
 /// `named_param_from = "b"` 会被写进生成结构体的 `s_named_param_from()`（表函数用它
 /// 划命名参数区），而 scalar 的注册只用 `column_types()` 的位置参数列表，因此该属性对
 /// scalar function 没有可观察效果：`:=` 里的名字会被 DuckDB 直接忽略，参数按书写顺序

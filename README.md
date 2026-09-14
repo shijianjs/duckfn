@@ -100,6 +100,10 @@ Common macro arguments:
 - `auto_register = false` — only generate builders (`scalar_function_builder()`,
   `scalar_overload_builder()`, ...), don't auto-register; pair it with `#[duck_custom_register]`.
 - `named_param_from = "field"` — where named arguments start for table functions.
+- `overloads_name = "set_name"` (`#[duck_scalar_function]` / `#[duck_aggregate_function]`) —
+  don't register the function's own name; register this signature as an overload of the
+  `set_name` function set instead. Signatures sharing the same `overloads_name` are merged
+  into one set (each keeps its own return type), so no `#[duck_custom_register]` is needed.
 
 ## Type mapping
 
