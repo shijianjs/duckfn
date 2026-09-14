@@ -37,6 +37,31 @@ pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_sql_macro())
 }
 
+/// 把 `SELECT * FROM 'data.myformat'` 这类「未知表名/文件路径」重定向到某个表函数。
+///
+/// 函数签名只接受一个「表名（路径）」参数，返回目标表函数的名字：
+///
+/// ```ignore
+/// #[duck_replacement_scan]
+/// fn dfn_scan_points(path: &str) -> DuckOptionResult<String> {
+///     if path.ends_with(".points") {
+///         return Ok(Some("dfn_read_points".to_string()));
+///     }
+///     Ok(None)
+/// }
+/// ```
+///
+/// - `Ok(Some(table_function))`：接管，并把路径作为第一个 VARCHAR 参数传给该表函数；
+/// - `Ok(None)`：不接管，DuckDB 继续尝试其他 replacement scan；
+/// - `Err(..)` / panic：整条查询以该错误结束。
+///
+/// 返回值可以是 `Option<String>` / `Option<&'static str>` /
+/// `DuckOptionResult<String>` / `DuckOptionResult<&'static str>`。
+#[proc_macro_attribute]
+pub fn duck_replacement_scan(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    handle_duck_function(_attr, item, |wrapper| wrapper.build_replacement_scan())
+}
+
 
 
 

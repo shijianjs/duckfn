@@ -19,6 +19,7 @@
 | `#[duck_scalar_function]` | 由 Rust 函数生成 DuckDB 标量函数。 |
 | `#[duck_aggregate_function]` | 生成 DuckDB 聚合函数。 |
 | `#[duck_table_function]` | 生成 DuckDB 表函数。 |
+| `#[duck_replacement_scan]` | 把「DuckDB 不认识的表名（通常是文件路径）」重定向到表函数，即 `SELECT * FROM 'data.points'`。返回 `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`；路径作为第一个 VARCHAR 参数传给目标表函数。 |
 | `#[duck_sql_macro]` | 把 Rust 函数暴露为 DuckDB SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
 | `#[duck_custom_register]` | 手动注册函数，签名为 `fn(&Connection) -> DuckResult<()>`。 |
 | `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`（支持嵌套 struct 和 list）。 |

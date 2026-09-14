@@ -11,8 +11,8 @@
 
 `duckfn` is a Rust framework for building [DuckDB](https://duckdb.org) extensions on top of
 DuckDB's C Extension API. A single attribute turns an ordinary Rust function into a DuckDB
-**scalar**, **aggregate** or **table function**, a SQL macro, or a nested type — no C/C++ glue
-code, and no local DuckDB build required.
+**scalar**, **aggregate** or **table function**, a SQL macro, a replacement scan, or a nested type
+— no C/C++ glue code, and no local DuckDB build required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
 - Crates: [`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
@@ -88,6 +88,7 @@ still shows up is manual registration, where `#[duck_custom_register]` calls qua
 | `#[duck_scalar_function]` | Register a scalar function. |
 | `#[duck_aggregate_function]` | Register an aggregate function. |
 | `#[duck_table_function]` | Register a table function. |
+| `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function, i.e. `SELECT * FROM 'data.points'`. Return `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`; the path is passed as the first VARCHAR parameter. |
 | `#[duck_sql_macro]` | Register a SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
 | `#[duck_custom_register]` | Manually register builders, signature `fn(&Connection) -> DuckResult<()>`. |
 | `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |

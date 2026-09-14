@@ -11,8 +11,8 @@
 
 `duckfn` 是一个基于 DuckDB C Extension API 的运行时框架。配合
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)，借助一个属性宏就能把普通的 Rust 函数
-变成 DuckDB 的**标量函数**、**聚合函数**、**表函数**、SQL 宏，或嵌套类型 —— 无需 C/C++ 胶水
-代码，也无需在本地编译 DuckDB。
+变成 DuckDB 的**标量函数**、**聚合函数**、**表函数**、SQL 宏、replacement scan，或嵌套类型
+—— 无需 C/C++ 胶水代码，也无需在本地编译 DuckDB。
 
 - 仓库地址：<https://github.com/shijianjs/duckfn>
 - 基于 [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
@@ -75,6 +75,7 @@ duckfn_entrypoint!("my_ext");
 | `#[duck_scalar_function]` | 注册标量函数。 |
 | `#[duck_aggregate_function]` | 注册聚合函数。 |
 | `#[duck_table_function]` | 注册表函数。 |
+| `#[duck_replacement_scan]` | 把「DuckDB 不认识的表名（通常是文件路径）」重定向到表函数，即 `SELECT * FROM 'data.points'`。返回 `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`；路径作为第一个 VARCHAR 参数传给目标表函数。 |
 | `#[duck_sql_macro]` | 注册 SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
 | `#[duck_custom_register]` | 手动注册 builder，签名为 `fn(&Connection) -> DuckResult<()>`。 |
 | `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`。 |
