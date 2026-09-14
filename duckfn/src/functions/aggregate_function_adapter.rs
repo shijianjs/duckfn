@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
@@ -9,7 +10,7 @@ use libduckdb_sys::{
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::aggregate::builder::OverloadBuilder;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{AggregateFunctionInfo, NullHandling};
+use quack_rs::prelude::{AggregateFunctionInfo, LogicalType, NullHandling, TypeId};
 
 pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     /// # Safety
@@ -199,4 +200,10 @@ pub trait DuckAggregateState {
     fn simple_result(&self) -> Self::Output {
         todo!("simple_result is not implemented")
     }
+}
+
+
+pub struct DuckfnAggregateFunctionSetBuilder {
+    pub name: String,
+    pub overloads: Vec<AggregateFunctionBuilder>,
 }
