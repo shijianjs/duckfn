@@ -114,6 +114,7 @@ impl ItemFnWrapper {
         let return_clause = self.build_scalar_return_clause()?;
         let get_data = self.args_to_code(|x| x.build_get_data())?;
         let function_register = self.scalar_function_register()?;
+        let null_handling = self.null_handling_override();
 
         Ok(quote! {
 
@@ -123,6 +124,8 @@ impl ItemFnWrapper {
                 const NAME: &'static str = stringify!(#name);
                 type Args = DuckArgsImpl;
                 type Output = #return_type;
+
+                #null_handling
 
                 fn apply(args: Self::Args) -> duckfn::DuckOptionResult<Self::Output> {
                     let result = #name(
@@ -174,6 +177,7 @@ impl ItemFnWrapper {
         let agg_state_type = agg_state_arg.resolve_state_type()?;
         let agg_row_return = self.build_agg_row_return()?;
         let function_register = self.aggregate_function_register()?;
+        let null_handling = self.null_handling_override();
 
         Ok(quote! {
             #[derive(Default, Debug, Clone)]
@@ -187,6 +191,8 @@ impl ItemFnWrapper {
                 const NAME: &'static str = stringify!(#name);
                 type Args = DuckArgsImpl;
                 type Output = <#agg_state_type as duckfn::DuckAggregateState>::Output;
+
+                #null_handling
 
                 // #[duckdb_aggregate_function]
                 fn handle_row(&mut self, args: Self::Args) -> duckfn::DuckResult<()> {
@@ -289,6 +295,30 @@ impl ItemFnWrapper {
 
     fn auto_register(&self) -> bool {
         self.duck_args.auto_register.unwrap_or(true)
+    }
+
+    /// `#[duck_scalar_function(special_null_handling = true)]` /
+    /// `#[duck_aggregate_function(special_null_handling = true)]`
+    fn special_null_handling(&self) -> bool {
+        self.duck_args.special_null_handling.unwrap_or(false)
+    }
+
+    /// 生成 `null_handling()` 覆盖：只有显式开启时才覆盖适配层默认值。
+    ///
+    /// 适配层的默认实现返回 `DefaultNullHandling`；开启后改成
+    /// `SpecialNullHandling`，quack-rs 注册时会调用
+    /// `duckdb_{scalar,aggregate}_function_set_special_handling`，
+    /// 于是 NULL 行会进入回调（标量函数体是否真的看到 NULL，仍由参数是否
+    /// 写成 `Option<T>` 决定）。
+    fn null_handling_override(&self) -> TokenStream2 {
+        if !self.special_null_handling() {
+            return quote! {};
+        }
+        quote! {
+            fn null_handling() -> quack_rs::prelude::NullHandling {
+                quack_rs::prelude::NullHandling::SpecialNullHandling
+            }
+        }
     }
 
     fn args(&self) -> Vec<FnArgWrapper> {

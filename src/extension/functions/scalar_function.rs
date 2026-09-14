@@ -263,3 +263,51 @@ fn dfn_scalar_reg_over_register(c: &Connection) -> DuckResult<()> {
 fn dfn_scalar_reg_named_param(a: i32, b: i32) -> i32 {
     a * 10 + b
 }
+
+// ============================================================================
+// duck_scalar_function：special_null_handling
+//
+// 适配层（duckfn/src/functions/scalar_function_adapter.rs::null_handling）默认
+// 返回 DefaultNullHandling，即注册时不调用
+// duckdb_scalar_function_set_special_handling。
+// 属性里显式写 special_null_handling = true 时，宏在 impl 块里覆盖
+// null_handling()，改成 SpecialNullHandling，quack-rs 注册时会调用上面那个
+// FFI 设置函数，告诉 DuckDB「NULL 输入也交给回调」。
+//
+// 注意两点，测试正是围绕它们设计的：
+//   1. 覆盖只影响监听 DuckDB 的 NULL 语义，函数体能否真的看到 NULL 仍取决于
+//      参数是否写成 Option<T> —— 写 T 时读取层会先把 NULL 行短路成 NULL；
+//   2. 无论哪种设置，duckfn 自己都不会改变输出：读不到参数就是 Ok(None)。
+// ============================================================================
+
+/// 默认 null handling：NULL 参数交给回调处理
+/// ```sql
+/// SELECT dfn_scalar_null_handling_default(a) FROM (VALUES (7), (NULL), (8)) t(a);
+/// ```
+#[duck_scalar_function]
+fn dfn_scalar_null_handling_default(a: Option<i32>) -> i64 {
+    // None 来自 NULL；-1 用来证明函数体确实被调用了
+    a.map(i64::from).unwrap_or(-1)
+}
+
+/// special_null_handling = true：与上面唯一的差别就是注册时开了 special handling
+/// ```sql
+/// SELECT dfn_scalar_null_handling_special(a) FROM (VALUES (7), (NULL), (8)) t(a);
+/// ```
+#[duck_scalar_function(special_null_handling = true)]
+fn dfn_scalar_null_handling_special(a: Option<i32>) -> i64 {
+    a.map(i64::from).unwrap_or(-1)
+}
+
+/// special_null_handling = true + 非 Option 入参：
+/// 即使 DuckDB 把 NULL 放进来，读取层仍会短路，函数体不执行
+/// ```sql
+/// SELECT dfn_scalar_null_handling_special_plain(a) FROM (VALUES (7), (NULL), (8)) t(a);
+/// ```
+#[duck_scalar_function(special_null_handling = true)]
+fn dfn_scalar_null_handling_special_plain(a: i32) -> i32 {
+    if a == -1 {
+        panic!("dfn_scalar_null_handling_special_plain: body reached with NULL argument");
+    }
+    a * 2
+}

@@ -434,3 +434,73 @@ impl DuckAggregateState for TextState {
         }
     }
 }
+
+// ============================================================================
+// duck_aggregate_function：special_null_handling
+//
+// 与标量同一套机制：适配层默认 DefaultNullHandling，属性写
+// special_null_handling = true 时才覆盖 null_handling() 为 SpecialNullHandling，
+// quack-rs 注册时调用 duckdb_aggregate_function_set_special_handling。
+//
+// 对聚合来说这个开关的语义是「NULL 行要不要送进 update」：
+//   - 关闭（默认）：DuckDB 可以在扫描阶段跳过 NULL 行，update 看不到它；
+//   - 打开：NULL 行也送进 update，参数是 Option<T> 时读到 None。
+// 下面用「进入 update 的行数 / 其中 NULL 行数」把两种设置对照出来。
+// ============================================================================
+
+/// 统计 update 看到的总行数与其中 NULL 的行数
+#[derive(Default, Debug, Clone)]
+struct SeenState {
+    rows: i64,
+    nulls: i64,
+}
+
+impl DuckAggregateState for SeenState {
+    type Output = String;
+
+    fn simple_combine(&mut self, other: &Self) {
+        self.rows += other.rows;
+        self.nulls += other.nulls;
+    }
+
+    fn simple_result(&self) -> Self::Output {
+        format!("rows:{}|nulls:{}", self.rows, self.nulls)
+    }
+}
+
+/// 默认 null handling + Option 入参
+/// ```sql
+/// SELECT dfn_agg_seen_default(x) FROM (VALUES (1), (NULL), (3)) t(x);
+/// ```
+#[duck_aggregate_function]
+fn dfn_agg_seen_default(x: Option<i64>, state: &mut SeenState) {
+    state.rows += 1;
+    if x.is_none() {
+        state.nulls += 1;
+    }
+}
+
+/// special_null_handling = true + Option 入参
+/// ```sql
+/// SELECT dfn_agg_seen_special(x) FROM (VALUES (1), (NULL), (3)) t(x);
+/// ```
+#[duck_aggregate_function(special_null_handling = true)]
+fn dfn_agg_seen_special(x: Option<i64>, state: &mut SeenState) {
+    state.rows += 1;
+    if x.is_none() {
+        state.nulls += 1;
+    }
+}
+
+/// special_null_handling = true + 非 Option 入参：
+/// NULL 行即使被送进来，读取层短路后 update 不执行
+/// ```sql
+/// SELECT dfn_agg_seen_special_plain(x) FROM (VALUES (1), (NULL), (3)) t(x);
+/// ```
+#[duck_aggregate_function(special_null_handling = true)]
+fn dfn_agg_seen_special_plain(x: i64, state: &mut SeenState) {
+    if x == i64::MIN {
+        panic!("dfn_agg_seen_special_plain: body reached with NULL argument");
+    }
+    state.rows += 1;
+}

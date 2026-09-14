@@ -1,5 +1,5 @@
 # name: test/sql/functions/scalar_function.test
-# description: duck_scalar_function 的返回值形式、入参可空性、参数个数与顺序、注册控制
+# description: duck_scalar_function 的返回值形式、入参可空性、参数个数与顺序、注册控制、special_null_handling
 # group: [functions]
 
 require rusty_quack
@@ -272,3 +272,86 @@ query I
 SELECT dfn_scalar_reg_named_param(x := 1, y := 2);
 ----
 12
+
+# ============================================================================
+# special_null_handling：常量 NULL 是否被 DuckDB 折叠
+#
+# 这是适配层 null_handling() 覆盖唯一能观察到的差异：
+#   - 默认（DefaultNullHandling）：入参是常量 NULL 时，DuckDB 在 bind 阶段就把
+#     结果折叠成常量 NULL，回调不执行 —— 所以拿不到哨兵值 -1；
+#   - special_null_handling = true：不折叠，NULL 以 None 进回调。
+# 列里的 NULL 两者都会进回调，见下面「列 NULL」一段。
+# ============================================================================
+
+# 默认：常量 NULL 直接折叠成 NULL
+query I
+SELECT dfn_scalar_null_handling_default(NULL::INTEGER);
+----
+NULL
+
+query I
+SELECT dfn_scalar_null_handling_default(NULL::INTEGER) FROM range(3);
+----
+NULL
+NULL
+NULL
+
+# special：常量 NULL 不折叠，函数体拿到 None（返回哨兵值 -1）
+query I
+SELECT dfn_scalar_null_handling_special(NULL::INTEGER);
+----
+-1
+
+query I
+SELECT dfn_scalar_null_handling_special(NULL::INTEGER) FROM range(3);
+----
+-1
+-1
+-1
+
+# 判定的是「参数是不是 NULL 常量」，表达式折叠出来的 NULL 也算
+query I
+SELECT dfn_scalar_null_handling_default(NULL::INTEGER + 0);
+----
+NULL
+
+query I
+SELECT dfn_scalar_null_handling_special(NULL::INTEGER + 0);
+----
+-1
+
+# 列里的 NULL：两种设置都进函数体（差异只出现在常量折叠这条路径上）
+query I
+SELECT dfn_scalar_null_handling_default(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+7
+-1
+8
+
+query I
+SELECT dfn_scalar_null_handling_special(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+7
+-1
+8
+
+# 整列 NULL 同理
+query I
+SELECT dfn_scalar_null_handling_default(a) FROM (VALUES (NULL::INTEGER), (NULL::INTEGER)) t(a);
+----
+-1
+-1
+
+# special_null_handling 只改 DuckDB 的交参策略；入参写 T 时读取层仍会把
+# NULL 短路成 NULL，函数体不执行（哨兵值不会触发 panic）
+query I
+SELECT dfn_scalar_null_handling_special_plain(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+14
+NULL
+16
+
+query I
+SELECT dfn_scalar_null_handling_special_plain(NULL::INTEGER);
+----
+NULL
