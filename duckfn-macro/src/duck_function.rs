@@ -42,13 +42,37 @@ impl ItemFnWrapper {
         let name = self.name();
         let item_fn = &self.item_fn;
 
-        let result = self.common_inventory_submit(quote! {
-            let builder: duckfn::DuckResult<quack_rs::prelude::SqlMacro> = #name();
-            unsafe { c.register_sql_macro(builder?)}
-        })?;
+        let register_body = match self.sql_macro_return_type()? {
+            DuckSqlMacroResult::SqlMacro => quote! {
+                let builder: quack_rs::prelude::SqlMacro = #name();
+                use quack_rs::prelude::Registrar;
+                unsafe { c.register_sql_macro(builder) }
+            },
+            DuckSqlMacroResult::ResultSqlMacro => quote! {
+                let builder: duckfn::DuckResult<quack_rs::prelude::SqlMacro> = #name();
+                use quack_rs::prelude::Registrar;
+                unsafe { c.register_sql_macro(builder?) }
+            },
+            // 直接返回 SQL 字符串，经 duckfn::register_sql_macro_str 执行
+            DuckSqlMacroResult::Str => quote! {
+                let sql = #name();
+                duckfn::register_sql_macro_str(c, &sql)
+            },
+            DuckSqlMacroResult::ResultStr => quote! {
+                let sql = #name();
+                duckfn::register_sql_macro_str(c, &sql?)
+            },
+        };
+
         Ok(quote! {
             #item_fn
-            #result
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionItem{
+                    register_fn: |c| {
+                        #register_body
+                    }
+                }
+            }
         })
     }
 
@@ -379,6 +403,61 @@ impl ItemFnWrapper {
         }
     }
 
+    fn sql_macro_return_type(&self) -> syn::Result<DuckSqlMacroResult> {
+        let ReturnType::Type(_, ty) = &self.item_fn.sig.output else {
+            return Err(syn::Error::new_spanned(
+                self.item_fn.sig.output.to_owned(),
+                SQL_MACRO_RETURN_TYPE_HINT,
+            ));
+        };
+
+        if Self::is_str_type(ty) {
+            return Ok(DuckSqlMacroResult::Str);
+        }
+
+        if let Type::Path(type_path) = &**ty {
+            if let Some(segment) = type_path.path.segments.last() {
+                if segment.ident == "SqlMacro" {
+                    return Ok(DuckSqlMacroResult::SqlMacro);
+                }
+                if segment.ident == "DuckResult" {
+                    if let Some(inner) = extract_generic_arg_type(segment) {
+                        if Self::is_str_type(inner) {
+                            return Ok(DuckSqlMacroResult::ResultStr);
+                        }
+                        if Self::is_sql_macro_type(inner) {
+                            return Ok(DuckSqlMacroResult::ResultSqlMacro);
+                        }
+                    }
+                }
+            }
+        }
+
+        Err(syn::Error::new_spanned(
+            self.item_fn.sig.output.to_owned(),
+            SQL_MACRO_RETURN_TYPE_HINT,
+        ))
+    }
+
+    fn is_str_type(ty: &Type) -> bool {
+        match ty {
+            Type::Path(type_path) => type_path
+                .path
+                .segments
+                .last()
+                .is_some_and(|s| s.ident == "String" || s.ident == "str"),
+            Type::Reference(type_ref) => Self::is_str_type(&type_ref.elem),
+            _ => false,
+        }
+    }
+
+    fn is_sql_macro_type(ty: &Type) -> bool {
+        matches!(
+            ty,
+            Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "SqlMacro")
+        )
+    }
+
     fn agg_state_arg(&self) -> syn::Result<FnArgWrapper> {
         for x in self.args() {
             if x.is_agg_state() {
@@ -482,6 +561,25 @@ enum DuckScalarResult {
     Option,
     DuckOptionResult,
 }
+
+#[derive(Clone, Copy)]
+enum DuckSqlMacroResult {
+    /// `-> SqlMacro`
+    SqlMacro,
+    /// `-> DuckResult<SqlMacro>`
+    ResultSqlMacro,
+    /// `-> String` / `-> &'static str`
+    Str,
+    /// `-> DuckResult<String>` / `-> DuckResult<&'static str>`
+    ResultStr,
+}
+
+const SQL_MACRO_RETURN_TYPE_HINT: &str = r#"Only like
+    `-> SqlMacro`: plain sql macro;
+    `-> DuckResult<SqlMacro>`: handle input err;
+    `-> String` / `-> &'static str`: plain sql string, executed directly;
+    `-> DuckResult<String>` / `-> DuckResult<&'static str>`;
+is supported"#;
 
 #[derive(Clone, Copy)]
 enum DuckTableResult {

@@ -85,7 +85,7 @@ duckfn_entrypoint!("my_ext");
 | `#[duck_scalar_function]` | 注册标量函数。 |
 | `#[duck_aggregate_function]` | 注册聚合函数。 |
 | `#[duck_table_function]` | 注册表函数。 |
-| `#[duck_sql_macro]` | 注册 SQL 宏。 |
+| `#[duck_sql_macro]` | 注册 SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
 | `#[duck_custom_register]` | 手动注册 builder，签名为 `fn(&Connection) -> DuckResult<()>`。 |
 | `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`。 |
 | `duckfn_entrypoint!("name")` | 生成扩展入口。 |

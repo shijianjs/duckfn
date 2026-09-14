@@ -88,7 +88,7 @@ still shows up is manual registration, where `#[duck_custom_register]` calls qua
 | `#[duck_scalar_function]` | Register a scalar function. |
 | `#[duck_aggregate_function]` | Register an aggregate function. |
 | `#[duck_table_function]` | Register a table function. |
-| `#[duck_sql_macro]` | Register a SQL macro. |
+| `#[duck_sql_macro]` | Register a SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
 | `#[duck_custom_register]` | Manually register builders, signature `fn(&Connection) -> DuckResult<()>`. |
 | `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |
 | `duckfn_entrypoint!("name")` | Generate the extension entry point. |

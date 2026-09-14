@@ -57,3 +57,44 @@ pub fn sql_macro_demo()->DuckResult<SqlMacro>{
     quack_rs::prelude::SqlMacro::scalar("clamp", &["x", "lo", "hi"],
                                         "greatest(lo, least(hi, x))")
 }
+
+/// ```sql
+/// SELECT add_two_v1(1);
+/// ```
+///
+/// 直接返回 SQL 字符串（`DuckResult<String>`），
+/// 注册时通过 `duckfn::register_sql_macro_str` 直接执行。
+#[duck_sql_macro]
+pub fn sql_macro_str_demo() -> DuckResult<String> {
+    Ok("CREATE MACRO add_two_v1(x) AS x + 2".to_string())
+}
+
+/// ```sql
+/// SELECT add_two_v2(2);
+/// ```
+///
+/// 直接返回静态 SQL 字符串。
+#[duck_sql_macro]
+pub fn sql_macro_static_str_demo() -> DuckResult<&'static str> {
+    Ok("CREATE MACRO add_two_v2(x) AS x + 2")
+}
+
+/// ```sql
+/// SELECT add_two_v3(3);
+/// ```
+///
+/// 直接返回 `String`。
+#[duck_sql_macro]
+pub fn sql_macro_plain_str_demo() -> String {
+    "CREATE MACRO add_two_v3(x) AS x + 2".to_string()
+}
+
+/// ```sql
+/// SELECT add_two_v4(4);
+/// ```
+///
+/// 直接返回 `&'static str`。
+#[duck_sql_macro]
+pub fn sql_macro_plain_static_str_demo() -> &'static str {
+    "CREATE MACRO add_two_v4(x) AS x + 2"
+}

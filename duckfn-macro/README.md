@@ -21,7 +21,7 @@ runtime.
 | `#[duck_scalar_function]` | Generate a DuckDB scalar function from a Rust function. |
 | `#[duck_aggregate_function]` | Generate a DuckDB aggregate function. |
 | `#[duck_table_function]` | Generate a DuckDB table function. |
-| `#[duck_sql_macro]` | Expose a Rust function as a DuckDB SQL macro. |
+| `#[duck_sql_macro]` | Expose a Rust function as a DuckDB SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
 | `#[duck_custom_register]` | Register a function manually with signature `fn(&Connection) -> DuckResult<()>`. |
 | `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT` (nested structs and lists supported). |
 | `duckfn_entrypoint!("name")` | Generate the extension entry point symbol. |
@@ -50,6 +50,12 @@ pub struct CountDownOutput {
 #[duck_sql_macro]
 pub fn clamp_macro() -> duckfn::DuckResult<SqlMacro> {
     SqlMacro::scalar("clamp", &["x", "lo", "hi"], "greatest(lo, least(hi, x))")
+}
+
+// Or just return the raw SQL string, executed on registration.
+#[duck_sql_macro]
+pub fn add_two_macro() -> duckfn::DuckResult<String> {
+    Ok("CREATE MACRO add_two(x) AS x + 2".to_string())
 }
 ```
 

@@ -15,6 +15,11 @@ SELECT clamp(range,4, 7) from range(9);
 7
 7
 
+query IIII
+SELECT add_two_v1(1), add_two_v2(2), add_two_v3(3), add_two_v4(4);
+----
+3	4	5	6
+
 
 
 

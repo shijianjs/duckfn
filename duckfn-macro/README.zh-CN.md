@@ -19,7 +19,7 @@
 | `#[duck_scalar_function]` | 由 Rust 函数生成 DuckDB 标量函数。 |
 | `#[duck_aggregate_function]` | 生成 DuckDB 聚合函数。 |
 | `#[duck_table_function]` | 生成 DuckDB 表函数。 |
-| `#[duck_sql_macro]` | 把 Rust 函数暴露为 DuckDB SQL 宏。 |
+| `#[duck_sql_macro]` | 把 Rust 函数暴露为 DuckDB SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
 | `#[duck_custom_register]` | 手动注册函数，签名为 `fn(&Connection) -> DuckResult<()>`。 |
 | `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`（支持嵌套 struct 和 list）。 |
 | `duckfn_entrypoint!("name")` | 生成扩展入口符号。 |
@@ -48,6 +48,12 @@ pub struct CountDownOutput {
 #[duck_sql_macro]
 pub fn clamp_macro() -> duckfn::DuckResult<SqlMacro> {
     SqlMacro::scalar("clamp", &["x", "lo", "hi"], "greatest(lo, least(hi, x))")
+}
+
+// 也可以直接返回 SQL 字符串，注册时直接执行
+#[duck_sql_macro]
+pub fn add_two_macro() -> duckfn::DuckResult<String> {
+    Ok("CREATE MACRO add_two(x) AS x + 2".to_string())
 }
 ```
 
