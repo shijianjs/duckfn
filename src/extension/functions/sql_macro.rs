@@ -1,4 +1,4 @@
-use duckfn::{duck_sql_macro, DuckResult};
+use duckfn::{duck_sql_macro, duck_sql_macro_files, DuckResult};
 use quack_rs::prelude::SqlMacro;
 
 // ============================================================================
@@ -23,7 +23,11 @@ use quack_rs::prelude::SqlMacro;
 // [A-Za-z_][A-Za-z0-9_]*（大小写不敏感、允许下划线开头、最长 256），
 // 因此 SQL 里不需要引号；宏体（expr/query）由扩展作者书写，不做转义。
 //
-// 下面按「返回类型 / 参数形态 / 表达式类型 / 宏组合 / 表宏 / 命名」分组覆盖各场景。
+// 除了「一函数一宏」的 `#[duck_sql_macro]`，还有函数式宏
+// `duck_sql_macro_files!("a.sql", "b.sql", ...)`：直接给若干 .sql 文件路径一次注册，
+// 不用写函数（见文末「duck_sql_macro_files!」一节）。
+//
+// 下面按「返回类型 / 参数形态 / 表达式类型 / 宏组合 / 表宏 / 脚本文件导入 / 命名」分组覆盖各场景。
 // ============================================================================
 
 // ============================================================================
@@ -221,6 +225,26 @@ pub fn dfn_macro_inc_script() -> &'static str {
 pub fn dfn_macro_inc_script_checked() -> DuckResult<&'static str> {
     Ok(include_str!("sql/macro_inc_checked.sql"))
 }
+
+// ============================================================================
+// duck_sql_macro_files!：一次注册多个 .sql 文件（快捷方式）
+//
+// 上面两种写法都要先写一个 `#[duck_sql_macro]` 函数，再用 include_str! 返回脚本。
+// `duck_sql_macro_files!` 把这层样板去掉：直接给出若干文件路径，宏展开成一次
+// inventory 注册，按书写顺序对每个文件执行 register_sql_macro_str(include_str!(..))。
+//
+//   - 参数是可变多个字符串字面量（文件路径），支持尾随逗号，至少一个；
+//   - 路径相对「调用本宏的 .rs 文件」，编译期内联；
+//   - 单个文件里仍可含多条分号分隔的语句。
+//
+// 下面一次导入 3 个文件：a 里两个标量宏、b 里一个表宏、c 里一个标量宏。
+// ============================================================================
+
+duck_sql_macro_files!(
+    "sql/macro_files_a.sql",
+    "sql/macro_files_b.sql",
+    "sql/macro_files_c.sql"
+);
 
 // ============================================================================
 // 表达式类型：STRUCT / LIST 也可以在宏体里直接构造
