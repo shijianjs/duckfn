@@ -3,6 +3,7 @@ use itertools::Itertools;
 use quack_rs::connection::Connection;
 use std::collections::HashMap;
 use std::ffi::CString;
+use quack_rs::prelude::{Registrar, ScalarFunctionSetBuilder, ScalarOverloadBuilder};
 
 pub type DuckRegisterFn = fn(connection: &Connection) -> DuckResult<()>;
 
@@ -16,6 +17,7 @@ pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
         (item.register_fn)(connection)?;
     }
     register_all_aggregate_overload(connection)?;
+    register_all_scalar_overload(connection)?;
     Ok(())
 }
 
@@ -40,6 +42,28 @@ pub fn register_all_aggregate_overload(connection: &Connection) -> DuckResult<()
             .collect();
         let builder = DuckfnAggregateFunctionSetBuilder::new(&name, map1);
         unsafe { builder.register(connection.as_raw_connection()) }?;
+    }
+    Ok(())
+}
+pub struct DuckScalarOverloadItem {
+    pub name: String,
+    pub register_fn: fn() -> ScalarOverloadBuilder,
+}
+
+inventory::collect!(DuckScalarOverloadItem);
+
+pub fn register_all_scalar_overload(connection: &Connection) -> DuckResult<()> {
+    let map: HashMap<String, Vec<&DuckScalarOverloadItem>> =
+        inventory::iter::<DuckScalarOverloadItem>()
+            .into_iter()
+            .into_grouping_map_by(|item| item.name.clone())
+            .collect();
+    for (name, items) in map {
+        let mut builder = ScalarFunctionSetBuilder::new(&name);
+        for x in items {
+            builder =  builder.overload((x.register_fn)());
+        }
+        unsafe { connection.register_scalar_set(builder) }?;
     }
     Ok(())
 }
