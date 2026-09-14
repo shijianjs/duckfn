@@ -12,8 +12,8 @@
 `duckfn` is a runtime framework for building [DuckDB](https://duckdb.org) extensions on top of
 DuckDB's C Extension API. Together with [`duckfn-macro`](https://crates.io/crates/duckfn-macro),
 a single attribute turns an ordinary Rust function into a DuckDB **scalar**, **aggregate** or
-**table function**, a SQL macro, a replacement scan, or a nested type — no C/C++ glue code, and no
-local DuckDB build required.
+**table function**, a SQL macro, a replacement scan, a type cast, or a nested type — no C/C++ glue
+code, and no local DuckDB build required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
 - Built on [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
@@ -77,6 +77,7 @@ shows up is manual registration: `#[duck_custom_register]` calls quack-rs'
 | --- | --- |
 | `#[duck_scalar_function]` | Register a scalar function. |
 | `#[duck_aggregate_function]` | Register an aggregate function. |
+| `#[duck_cast_function]` | Register a type cast (`CAST(x AS T)` / `TRY_CAST`). The single argument is the source value and the return type is the target type; supports `Option<T>` input, `implicit_cost = N` and `auto_register = false`. |
 | `#[duck_table_function]` | Register a table function. |
 | `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function, i.e. `SELECT * FROM 'data.points'`. Return `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`; the path is passed as the first VARCHAR parameter. |
 | `#[duck_sql_macro]` | Register a SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |

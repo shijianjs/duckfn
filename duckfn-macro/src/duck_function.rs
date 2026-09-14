@@ -1,5 +1,7 @@
 use crate::attr_args::DuckArgs;
-use crate::macro_utils::{TokenStream2Result, extract_generic_arg_type, iterator_item_type};
+use crate::macro_utils::{
+    TokenStream2Result, extract_generic_arg_type, extract_option, iterator_item_type,
+};
 use quote::quote;
 use syn::__private::TokenStream2;
 use syn::{GenericArgument, ItemFn, PathArguments, ReturnType, Type};
@@ -217,6 +219,119 @@ impl ItemFnWrapper {
                 _ => None,
             },
             _ => None,
+        }
+    }
+
+    /// `#[duck_cast_function]`：把 `fn(源值) -> 目标值` 变成一个 DuckDB cast 回调。
+    ///
+    /// 源类型来自唯一参数的 Rust 类型，目标类型来自返回类型（与 `duck_scalar_function`
+    /// 的返回形式一致），注册成 `CAST(源 AS 目标)`：
+    ///
+    /// ```ignore
+    /// #[duck_cast_function]
+    /// fn my_cast(s: String) -> DuckOptionResult<i32> { s.parse().map_err(...) }
+    /// ```
+    pub(crate) fn build_cast_function(&self) -> TokenStream2Result {
+        let name = self.name();
+        let vis = self.visibility();
+        let item_fn = &self.item_fn;
+        let (input_type, input_is_option) = self.cast_input_type()?;
+        let (_, output_type) = self.scalar_return_type()?;
+        let return_clause = self.build_scalar_return_clause()?;
+        let implicit_cost = self.implicit_cost_override();
+        let function_register = self.cast_function_register()?;
+
+        // 入参写成 T 时 NULL 直接短路成 NULL（函数体不执行）；
+        // 写成 Option<T> 时 NULL 以 None 进入函数体，语义由函数自己决定。
+        let body = if input_is_option {
+            quote! {
+                let result = #name(value);
+                #return_clause
+            }
+        } else {
+            quote! {
+                let Some(value) = value else {
+                    return Ok(None);
+                };
+                let result = #name(value);
+                #return_clause
+            }
+        };
+
+        Ok(quote! {
+            #item_fn
+
+            #vis mod #name{
+                use super::*;
+
+                pub struct CastFunctionImpl;
+
+                impl duckfn::CastFunctionAdapter for CastFunctionImpl{
+                    const NAME: &'static str = stringify!(#name);
+                    type Input = #input_type;
+                    type Output = #output_type;
+
+                    #implicit_cost
+
+                    fn apply_with_null(
+                        value: Option<Self::Input>,
+                    ) -> duckfn::DuckOptionResult<Self::Output> {
+                        #body
+                    }
+                }
+
+                pub fn cast_function_builder() -> quack_rs::prelude::CastFunctionBuilder {
+                    use duckfn::CastFunctionAdapter;
+                    CastFunctionImpl::cast_function_builder()
+                }
+
+                /// 手动注册入口：在 `#[duck_custom_register]` 里调用。
+                pub fn cast_function_register(
+                    c: &quack_rs::prelude::Connection,
+                ) -> duckfn::DuckResult<()> {
+                    use duckfn::CastFunctionAdapter;
+                    unsafe { CastFunctionImpl::register(c) }
+                }
+
+                #function_register
+            }
+        })
+    }
+
+    fn cast_function_register(&self) -> TokenStream2Result {
+        if !self.auto_register() {
+            return Ok(quote! {});
+        }
+        self.inventory_submit(quote! {
+            use duckfn::CastFunctionAdapter;
+            unsafe { CastFunctionImpl::register(c) }
+        })
+    }
+
+    /// 唯一参数就是「源类型的值」，`Option<T>` 表示允许把 NULL 带进函数体。
+    fn cast_input_type(&self) -> syn::Result<(Type, bool)> {
+        let args = self.args();
+        if args.len() != 1 {
+            return Err(syn::Error::new_spanned(
+                &self.item_fn.sig.inputs,
+                CAST_SIGNATURE_HINT,
+            ));
+        }
+        let ty = args[0].resolve_type()?;
+        if let Some(inner) = extract_option(ty) {
+            return Ok((inner.clone(), true));
+        }
+        Ok((ty.clone(), false))
+    }
+
+    fn implicit_cost_override(&self) -> TokenStream2 {
+        match self.duck_args.implicit_cost {
+            Some(cost) => quote! {
+                fn implicit_cost() -> Option<i64> {
+                    Some(#cost)
+                }
+            },
+            None => quote! {},
         }
     }
 
@@ -793,5 +908,10 @@ is supported"#;
 
 const REPLACEMENT_SCAN_SIGNATURE_HINT: &str = r#"Only like
     `fn my_scan(path: &str) -> DuckOptionResult<String>`: takes the unresolved table name (usually a file path) and returns the table function to use;
+is supported"#;
+
+const CAST_SIGNATURE_HINT: &str = r#"Only like
+    `fn my_cast(from: SourceType) -> TargetType`: the single argument is the source value, the return type is the target type;
+    `fn my_cast(from: Option<SourceType>) -> TargetType`: NULL is passed in as None;
 is supported"#;
 

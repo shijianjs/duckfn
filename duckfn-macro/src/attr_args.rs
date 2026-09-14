@@ -38,4 +38,7 @@ pub(crate) struct DuckArgs {
     pub auto_register: Option<bool>,
     /// SpecialNullHandling
     pub special_null_handling: Option<bool>,
+    /// `#[duck_cast_function(implicit_cost = 100)]`
+    /// 隐式转换代价：设置后 DuckDB 可能自动插入该 cast，值越小优先级越高
+    pub implicit_cost: Option<i64>,
 }

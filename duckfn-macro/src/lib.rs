@@ -32,6 +32,34 @@ pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream
 pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_custom_register())
 }
+/// 把 `fn(源值) -> 目标值` 注册成 DuckDB 的 cast 函数，覆盖 `CAST(源 AS 目标)`。
+///
+/// 源类型来自唯一参数，目标类型来自返回类型；返回形式与 `duck_scalar_function` 一致：
+///
+/// ```ignore
+/// #[duck_cast_function]
+/// fn dfn_cast_str_to_int(s: String) -> DuckOptionResult<i32> {
+///     s.parse().map_err(|_| duck_error("not an integer"))
+/// }
+///
+/// // 允许把 NULL 带进函数体：入参写 Option<T>
+/// #[duck_cast_function]
+/// fn dfn_cast_bigint_to_double(v: Option<i64>) -> Option<f64> { ... }
+///
+/// // 允许 DuckDB 自动插入该转换
+/// #[duck_cast_function(implicit_cost = 100)]
+/// fn dfn_cast_str_to_bigint(s: String) -> i64 { ... }
+/// ```
+///
+/// - `CAST(x AS T)` 出错 -> 整条查询失败（`set_error`）；
+/// - `TRY_CAST(x AS T)` 出错 -> 该行输出 NULL 并记录行级错误（`set_row_error`）；
+/// - 属性支持 `auto_register = false` / `implicit_cost = N`，生成模块里导出
+///   `cast_function_builder()` 和 `cast_function_register()` 供手动注册。
+#[proc_macro_attribute]
+pub fn duck_cast_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    handle_duck_function(_attr, item, |wrapper| wrapper.build_cast_function())
+}
+
 #[proc_macro_attribute]
 pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_sql_macro())

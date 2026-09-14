@@ -20,6 +20,7 @@ runtime.
 | --- | --- |
 | `#[duck_scalar_function]` | Generate a DuckDB scalar function from a Rust function. |
 | `#[duck_aggregate_function]` | Generate a DuckDB aggregate function. |
+| `#[duck_cast_function]` | Generate a DuckDB cast function (`CAST(x AS T)` / `TRY_CAST`). The single argument is the source value and the return type is the target type; supports `Option<T>` input and `implicit_cost = N`. |
 | `#[duck_table_function]` | Generate a DuckDB table function. |
 | `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function, i.e. `SELECT * FROM 'data.points'`. Return `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`; the path is passed as the first VARCHAR parameter. |
 | `#[duck_sql_macro]` | Expose a Rust function as a DuckDB SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
