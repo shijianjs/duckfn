@@ -36,3 +36,6 @@ publish_dry:
 publish:
 	cargo publish -p duckfn-macro --registry crates-io
 	cargo publish -p duckfn --registry crates-io
+
+doc:
+	cargo doc -p duckfn
