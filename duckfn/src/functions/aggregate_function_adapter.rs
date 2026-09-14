@@ -5,7 +5,7 @@
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{duck_aggregate_unwind, duck_error, vec_option_to_ref, DuckAggregateOverloadItem, DuckOptionResult, DuckResult};
+use crate::{duck_aggregate_unwind, duck_error, vec_option_to_ref, DuckOptionResult, DuckResult};
 use libduckdb_sys::{
     DuckDBSuccess, duckdb_add_aggregate_function_to_set, duckdb_aggregate_function,
     duckdb_aggregate_function_add_parameter, duckdb_aggregate_function_set,
@@ -20,7 +20,7 @@ use quack_rs::aggregate::builder::OverloadBuilder;
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::error::ExtensionError;
-use quack_rs::prelude::{AggregateFunctionInfo, LogicalType, NullHandling, TypeId};
+use quack_rs::prelude::{AggregateFunctionInfo, NullHandling};
 use std::ffi::CString;
 
 /// 把「参数结构体 -> 聚合状态」的有状态 Rust 类型注册成 DuckDB 聚合函数。

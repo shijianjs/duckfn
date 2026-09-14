@@ -33,6 +33,7 @@ struct DuckMacroArgs {
     /// 同 `auto_register`：仅为兼容转写过来的属性而保留。
     ///
     /// Same as `auto_register`: kept only so the written-through attribute parses.
+    #[allow(dead_code)]
     pub special_null_handling: Option<bool>,
     /// `overloads_name = "xxx"`：函数集重载的名字。
     ///

@@ -287,7 +287,3 @@ pub fn duck_sql_macro_files(input: TokenStream) -> TokenStream {
     sql_macro_files::duck_sql_macro_files(input)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-}
