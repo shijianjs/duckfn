@@ -35,3 +35,4 @@ indexmap = "2"
 duckfn-macro = { version = "=0.0.1", path = "../duckfn-macro" }
 
 inventory = "0.3"
+itertools = "0.15"

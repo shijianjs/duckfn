@@ -1,7 +1,7 @@
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{DuckOptionResult, DuckResult, duck_aggregate_unwind, duck_error, vec_option_to_ref};
+use crate::{duck_aggregate_unwind, duck_error, vec_option_to_ref, DuckAggregateOverloadItem, DuckOptionResult, DuckResult};
 use libduckdb_sys::{
     DuckDBSuccess, duckdb_add_aggregate_function_to_set, duckdb_aggregate_function,
     duckdb_aggregate_function_add_parameter, duckdb_aggregate_function_set,
