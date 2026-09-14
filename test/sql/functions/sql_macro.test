@@ -1,5 +1,5 @@
 # name: test/sql/functions/sql_macro.test
-# description: duck_sql_macro 的返回类型形式、标量/表宏、参数形态、表达式类型、宏组合与命名
+# description: duck_sql_macro 的返回类型形式、标量/表宏、参数形态、表达式类型、宏组合、include_str! 脚本导入与命名
 # group: [functions]
 
 require rusty_quack
@@ -10,6 +10,7 @@ require rusty_quack
 #     String / &'static str 组合）—— 用同名风格的宏一一覆盖；
 #   - 标量宏 vs 表宏（AS TABLE）；
 #   - 宏体的类型推导（多态、STRUCT、LIST）；
+#   - 字符串返回路径可以直接 include_str! 内联外部 .sql 脚本，一份脚本多条语句；
 #   - 名字校验规则（大小写不敏感、大小写混合可注册）。
 #
 # 宏体里引用另一个宏时 DuckDB 会在 CREATE 时解析，故 dfn_macro_quad 用一条 String
@@ -232,6 +233,75 @@ SELECT dfn_macro_double(5);
 10
 
 # ============================================================================
+# include_str!：字符串返回形式直接内联外部 .sql 脚本
+#
+# 脚本 src/extension/functions/sql/macro_inc.sql 在编译期被读成 &'static str，
+# 一份脚本里有注释和三条语句（分号分隔），注册出三个宏。
+# ============================================================================
+
+# 脚本里的标量宏
+query I
+SELECT dfn_macro_inc_add(2, 3);
+----
+5
+
+query T
+SELECT typeof(dfn_macro_inc_add(2, 3));
+----
+INTEGER
+
+query I
+SELECT dfn_macro_inc_triple(4);
+----
+12
+
+# 脚本里的表宏
+query I
+SELECT * FROM dfn_macro_inc_gen(3);
+----
+0
+1
+2
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dfn_macro_inc_gen(1));
+----
+range	BIGINT
+
+# 另一个脚本经 DuckResult<&'static str> 路径导入
+query I
+SELECT dfn_macro_inc_negate(7);
+----
+-7
+
+# 两个脚本一共注册出 4 个宏，类型与参数名都按脚本书写保留
+query TT
+SELECT function_name, function_type FROM duckdb_functions()
+WHERE function_name LIKE 'dfn_macro_inc%'
+ORDER BY function_name;
+----
+dfn_macro_inc_add	macro
+dfn_macro_inc_gen	table_macro
+dfn_macro_inc_negate	macro
+dfn_macro_inc_triple	macro
+
+query TT
+SELECT function_name, parameters FROM duckdb_functions()
+WHERE function_name LIKE 'dfn_macro_inc%'
+ORDER BY function_name;
+----
+dfn_macro_inc_add	[a, b]
+dfn_macro_inc_gen	[n]
+dfn_macro_inc_negate	[x]
+dfn_macro_inc_triple	[x]
+
+# 脚本里注册的宏和 Rust 里注册的宏可以互相组合
+query I
+SELECT dfn_macro_inc_triple(dfn_macro_inc_add(1, 1));
+----
+6
+
+# ============================================================================
 # 表宏：在 FROM / JOIN / CTE / WHERE 中使用
 # ============================================================================
 
@@ -347,7 +417,7 @@ SELECT dfnMacroCamel(3);
 query I
 SELECT count(*) FROM duckdb_functions() WHERE function_name ILIKE 'dfn%macro%';
 ----
-19
+23
 
 query TT
 SELECT function_name, function_type FROM duckdb_functions()

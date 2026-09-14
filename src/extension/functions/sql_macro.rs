@@ -11,6 +11,7 @@ use quack_rs::prelude::SqlMacro;
 //   -> SqlMacro                    直接构造 SqlMacro，register_sql_macro(builder)
 //   -> DuckResult<SqlMacro>        同上，构造失败会中止注册并冒泡错误
 //   -> String / &'static str       当成完整 SQL 语句，由 register_sql_macro_str 执行
+//                                  （可以 include_str! 内联外部 .sql 脚本，见文末「include_str!」一节）
 //   -> DuckResult<String> / <&'static str>
 //                                  同上，Err 时冒泡错误
 //
@@ -186,6 +187,39 @@ pub fn dfn_macro_static_gen() -> &'static str {
 #[duck_sql_macro]
 pub fn dfn_macro_bounds() -> DuckResult<&'static str> {
     Ok("CREATE OR REPLACE MACRO dfn_macro_bounds(lo, hi) AS TABLE SELECT * FROM range(lo, hi)")
+}
+
+// ============================================================================
+// include_str!：直接内联外部 .sql 脚本
+//
+// 字符串返回形式并不要求把 SQL 写进 Rust 源码字面量，也可以用 include_str!
+// 在编译期把一个 .sql 文件读成 &'static str 再交给 register_sql_macro_str。
+// 好处：
+//   - SQL 单独成文件，编辑器有方言高亮、可被 SQL linter / 测试工具直接复用；
+//   - 一份脚本里可以放多条语句（分号分隔），一次注册多个宏 —— 相当于
+//     「导入脚本」而不是「写死一条 CREATE MACRO」；
+//   - 注释用 SQL 的 `--`，不需要转义。
+// 脚本路径相对当前 .rs 文件（src/extension/functions/sql/）。
+// ============================================================================
+
+/// 一个脚本文件注册三个宏（两个标量 + 一个表宏），注释与分号都在脚本里
+/// ```sql
+/// SELECT dfn_macro_inc_add(2, 3);
+/// SELECT dfn_macro_inc_triple(4);
+/// SELECT * FROM dfn_macro_inc_gen(3);
+/// ```
+#[duck_sql_macro]
+pub fn dfn_macro_inc_script() -> &'static str {
+    include_str!("sql/macro_inc.sql")
+}
+
+/// `DuckResult<&'static str>` + include_str!：同一个脚本文件也能走可冒泡错误路径
+/// ```sql
+/// SELECT dfn_macro_inc_negate(7);
+/// ```
+#[duck_sql_macro]
+pub fn dfn_macro_inc_script_checked() -> DuckResult<&'static str> {
+    Ok(include_str!("sql/macro_inc_checked.sql"))
 }
 
 // ============================================================================
