@@ -41,4 +41,9 @@ pub(crate) struct DuckArgs {
     /// `#[duck_cast_function(implicit_cost = 100)]`
     /// 隐式转换代价：设置后 DuckDB 可能自动插入该 cast，值越小优先级越高
     pub implicit_cost: Option<i64>,
+
+    /// `#[duck_cast_function(overloads_name = "my_overloads")]`
+    /// 指定重载函数的名称
+    /// - 重载函数不注册自身的函数名，只注册重载
+    pub overloads_name: Option<String>,
 }
