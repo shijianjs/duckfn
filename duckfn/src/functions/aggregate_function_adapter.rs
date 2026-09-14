@@ -175,7 +175,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     }
 
     fn create_aggregate_function_guard(name: &CString) -> AggregateFunctionGuard {
-        let mut func = unsafe { duckdb_create_aggregate_function() };
+        let func = unsafe { duckdb_create_aggregate_function() };
         unsafe { duckdb_aggregate_function_set_name(func, name.as_ptr()) };
         for lt in Self::Args::column_types() {
             unsafe { duckdb_aggregate_function_add_parameter(func, lt.as_raw()) };
@@ -200,14 +200,20 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             unsafe { duckdb_aggregate_function_set_special_handling(func) };
         }
 
-        // unsafe { duckdb_add_aggregate_function_to_set(c_set, func) };
-
-        unsafe { duckdb_destroy_aggregate_function(&raw mut func) };
-
         AggregateFunctionGuard {
             name: Self::NAME.to_string(),
             c_agg: func,
         }
+    }
+
+    /// 为该签名创建一个可挂进函数集（DuckfnAggregateFunctionSetBuilder）的聚合函数句柄。
+    ///
+    /// 返回类型取自 `Self::Output`，每个重载各自设置，因此同一函数集里
+    /// 的不同重载可以有不同的返回类型（quack_rs 的 AggregateFunctionSetBuilder
+    /// 只能在函数集层面设一个统一的返回类型）。
+    fn aggregate_function_guard() -> AggregateFunctionGuard {
+        let name = CString::new(Self::NAME).expect("function name must not contain null bytes");
+        Self::create_aggregate_function_guard(&name)
     }
 
     const NAME: &'static str;

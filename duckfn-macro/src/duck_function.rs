@@ -490,6 +490,13 @@ impl ItemFnWrapper {
                 AggregateFunctionImpl::aggregate_overload_builder(builder)
             }
 
+            /// 创建可挂进 DuckfnAggregateFunctionSetBuilder 的重载句柄，
+            /// 返回类型由本签名的 Output 决定，因此函数集内各重载可有不同返回类型
+            pub fn aggregate_function_guard() -> duckfn::AggregateFunctionGuard {
+                use duckfn::AggregateFunctionAdapter;
+                AggregateFunctionImpl::aggregate_function_guard()
+            }
+
             #function_register
         })
     }

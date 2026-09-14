@@ -1,6 +1,6 @@
 use duckfn::{
-    duck_aggregate_function, duck_custom_register, duck_error, DuckAggregateState, DuckOptionResult,
-    DuckResult,
+    duck_aggregate_function, duck_custom_register, duck_error, DuckAggregateState,
+    DuckfnAggregateFunctionSetBuilder, DuckOptionResult, DuckResult,
 };
 use quack_rs::prelude::{AggregateFunctionSetBuilder, Connection, LogicalType, Registrar, TypeId};
 
@@ -410,6 +410,37 @@ fn dfn_agg_reg_over_register(c: &Connection) -> DuckResult<()> {
                     dfn_agg_reg_over_varchar::aggregate_overload_builder(b)
                 }),
         )
+    }
+}
+
+/// 新版函数集重载分支 1：INTEGER -> BIGINT（求和，返回类型来自 SumState::Output）
+#[duck_aggregate_function(auto_register = false)]
+fn dfn_agg_set_over_int(input: i32, state: &mut SumState) {
+    state.total += input as i64;
+    state.rows += 1;
+}
+
+/// 新版函数集重载分支 2：VARCHAR -> VARCHAR（拼接，返回类型来自 TextState::Output）
+#[duck_aggregate_function(auto_register = false)]
+fn dfn_agg_set_over_varchar(input: String, state: &mut TextState) {
+    state.text.push_str(&format!("str({input});"));
+}
+
+/// 用 duckfn::DuckfnAggregateFunctionSetBuilder + aggregate_function_guard() 注册
+/// 同名重载：每个重载是独立的 duckdb_aggregate_function，返回类型各取各的 Output，
+/// 因此同一个函数集里可以有不同返回类型（quack_rs 的 AggregateFunctionSetBuilder
+/// 只能在函数集上设一个统一的 returns_logical，见上面的 dfn_agg_reg_overload）
+#[duck_custom_register]
+fn dfn_agg_set_over_register(c: &Connection) -> DuckResult<()> {
+    unsafe {
+        DuckfnAggregateFunctionSetBuilder::new(
+            "dfn_agg_set_overload",
+            vec![
+                dfn_agg_set_over_int::aggregate_function_guard(),
+                dfn_agg_set_over_varchar::aggregate_function_guard(),
+            ],
+        )
+        .register(c.as_raw_connection())
     }
 }
 
