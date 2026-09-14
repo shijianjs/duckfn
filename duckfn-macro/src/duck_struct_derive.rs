@@ -12,6 +12,8 @@ struct DuckMacroArgs {
     pub named_param_from: Option<String>,
     #[allow(dead_code)]
     pub auto_register: Option<bool>,
+    ///SpecialNullHandling
+    pub special_null_handling: Option<bool>,
 }
 
 pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {

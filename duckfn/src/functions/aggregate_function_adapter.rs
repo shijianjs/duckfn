@@ -9,7 +9,7 @@ use libduckdb_sys::{
 use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateState, FfiState};
 use quack_rs::aggregate::builder::OverloadBuilder;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::AggregateFunctionInfo;
+use quack_rs::prelude::{AggregateFunctionInfo, NullHandling};
 
 pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     /// # Safety
@@ -131,6 +131,10 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         unsafe { FfiState::<Self>::destroy_callback(states, count) };
     }
 
+    fn null_handling() -> NullHandling {
+        NullHandling::DefaultNullHandling
+    }
+
     fn aggregate_function_builder() -> AggregateFunctionBuilder {
         AggregateFunctionBuilder::new(Self::NAME)
             .state_size(Self::c_state_size)
@@ -139,6 +143,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .combine(Self::c_combine)
             .finalize(Self::c_finalize)
             .destructor(Self::c_state_destroy)
+            .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types())
     }
@@ -150,6 +155,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .combine(Self::c_combine)
             .finalize(Self::c_finalize)
             .destructor(Self::c_state_destroy)
+            .null_handling(Self::null_handling())
             .with_params(Self::Args::column_types())
     }
 

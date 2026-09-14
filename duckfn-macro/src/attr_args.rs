@@ -36,4 +36,6 @@ pub(crate) struct DuckArgs {
     /// Whether to auto register the function
     /// - Default to true
     pub auto_register: Option<bool>,
+    /// SpecialNullHandling
+    pub special_null_handling: Option<bool>,
 }

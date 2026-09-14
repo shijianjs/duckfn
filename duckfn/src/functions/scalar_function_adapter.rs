@@ -4,7 +4,7 @@ use crate::value_types::duck_value_type::DuckValueType;
 use crate::{DuckOptionResult, DuckResult, duck_scalar_unwind, vec_option_to_ref};
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
+use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
 
 pub trait ScalarFunctionAdapter: Sized + 'static {
     /// # Safety
@@ -36,15 +36,20 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             Self::Output::write_batch(output, &vec_option_to_ref(&output_vec));
         });
     }
+    fn null_handling() -> NullHandling {
+        NullHandling::DefaultNullHandling
+    }
     fn scalar_function_builder() -> ScalarFunctionBuilder {
         ScalarFunctionBuilder::new(Self::NAME)
             .function(Self::scalar_function_wrapper)
+            .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types())
     }
     fn scalar_overload_builder() -> ScalarOverloadBuilder {
         ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
+            .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types())
     }
