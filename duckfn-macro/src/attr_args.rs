@@ -10,11 +10,11 @@ use crate::macro_utils::{handle_token_stream2_result, TokenStream2Result};
 
 /// 所有 `#[duck_*]` 属性宏的公共入口。
 ///
-/// 流程：把被标注的函数解析成 [`ItemFn`]、把属性参数解析成 [`DuckArgs`]，组装
+/// 流程：把被标注的函数解析成 [`ItemFn`]、把属性参数解析成 [`DuckFunctionMacroArgs`]，组装
 /// [`ItemFnWrapper`] 后交给 `run` 做各宏特有的代码生成；解析错误会直接变成编译错误。
 ///
 /// Common entry point of every `#[duck_*]` attribute macro. It parses the annotated function
-/// into an [`ItemFn`] and the attribute arguments into [`DuckArgs`], assembles an
+/// into an [`ItemFn`] and the attribute arguments into [`DuckFunctionMacroArgs`], assembles an
 /// [`ItemFnWrapper`] and hands it to `run` for macro-specific code generation; parse errors
 /// become compile errors directly.
 pub fn handle_duck_function(
@@ -23,7 +23,7 @@ pub fn handle_duck_function(
     run: fn(ItemFnWrapper) -> TokenStream2Result,
 ) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
-    let duck_args: DuckArgs = match syn::parse(_attr.clone()) {
+    let duck_args: DuckFunctionMacroArgs = match syn::parse(_attr.clone()) {
         Ok(v) => v,
         Err(e) => {
             return e.to_compile_error().into();
@@ -52,7 +52,7 @@ pub fn handle_duck_function(
 /// argument only has to be declared once.
 #[derive(Debug, FromMeta)]
 #[darling(derive_syn_parse)]
-pub(crate) struct DuckArgs {
+pub(crate) struct DuckFunctionMacroArgs {
     /// 表函数的命名参数从哪个开始
     ///
     /// The field name from which table-function named parameters start.

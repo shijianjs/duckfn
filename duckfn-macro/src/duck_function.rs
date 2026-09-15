@@ -6,7 +6,7 @@
 //! `#[duck_table_function]`, `#[duck_cast_function]`, `#[duck_sql_macro]`,
 //! `#[duck_replacement_scan]` and `#[duck_custom_register]`.
 
-use crate::attr_args::DuckArgs;
+use crate::attr_args::DuckFunctionMacroArgs;
 use crate::macro_utils::{
     TokenStream2Result, extract_generic_arg_type, extract_option, iterator_item_type,
 };
@@ -14,12 +14,12 @@ use quote::quote;
 use syn::__private::TokenStream2;
 use syn::{GenericArgument, ItemFn, PathArguments, ReturnType, Type};
 
-/// 被标注函数的包装：原始函数 + 原始属性参数 + 解析后的 [`DuckArgs`]。
+/// 被标注函数的包装：原始函数 + 原始属性参数 + 解析后的 [`DuckFunctionMacroArgs`]。
 ///
 /// 各属性宏的方法都基于它生成代码，最终产出的模块名与函数名相同。
 ///
 /// Wrapper around the annotated function: the original item, the raw attribute tokens and the
-/// parsed [`DuckArgs`]. All attribute-macro methods generate code from it, and the resulting
+/// parsed [`DuckFunctionMacroArgs`]. All attribute-macro methods generate code from it, and the resulting
 /// module is named after the function.
 pub struct ItemFnWrapper {
     /// 被 `#[duck_*]` 标注的原始函数（会原样输出到生成代码里）。
@@ -33,7 +33,7 @@ pub struct ItemFnWrapper {
     /// 解析后的属性参数。
     ///
     /// The parsed attribute arguments.
-    pub duck_args: DuckArgs,
+    pub duck_args: DuckFunctionMacroArgs,
 }
 
 impl ItemFnWrapper {

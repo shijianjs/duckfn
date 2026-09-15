@@ -3,7 +3,7 @@
 //! Implementation of `#[derive(DuckStruct)]`: maps every field of a named struct onto a column /
 //! a STRUCT child field.
 
-use crate::attr_args::DuckArgs;
+use crate::attr_args::DuckFunctionMacroArgs;
 use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
@@ -15,22 +15,22 @@ use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
 /// `#[duck(...)]` 属性的解析结果。
 ///
 /// 这里只提供 `FromDeriveInput` 的「外壳」，真正的字段配置全部通过
-/// `#[darling(flatten)]` 委托给 [`DuckArgs`]（[`darling::FromMeta`]）——被函数属性宏
+/// `#[darling(flatten)]` 委托给 [`DuckFunctionMacroArgs`]（[`darling::FromMeta`]）——被函数属性宏
 /// 写穿到 `DuckArgsImpl` 上的 `#[duck(...)]` 属性因此在 `DuckArgs` 中只定义一次。
 ///
 /// Parse result of the `#[duck(...)]` attribute. This only provides the `FromDeriveInput`
-/// shell; every field configuration is delegated to [`DuckArgs`] ([`darling::FromMeta`])
+/// shell; every field configuration is delegated to [`DuckFunctionMacroArgs`] ([`darling::FromMeta`])
 /// through `#[darling(flatten)]`, so the `#[duck(...)]` written through onto `DuckArgsImpl` by
 /// the attribute macros is declared only once, in `DuckArgs`.
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(duck))]
-struct DuckMacroArgs {
+struct DuckDeriveMacroArgs {
     /// `#[duck(...)]` 的字段配置，复用属性宏侧的唯一配置源。
     ///
     /// The field configuration of `#[duck(...)]`, reusing the single source of truth shared with
     /// the attribute macros.
     #[darling(flatten)]
-    args: DuckArgs,
+    args: DuckFunctionMacroArgs,
 }
 
 /// `#[derive(DuckStruct)]` 的入口。
@@ -59,7 +59,7 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
             "Only named fields are allowed",
         ));
     };
-    let macro_args = DuckMacroArgs::from_derive_input(&input)?;
+    let macro_args = DuckDeriveMacroArgs::from_derive_input(&input)?;
     let mut start_named_param = false;
     let mut fields: Vec<FieldWrapper> = Vec::new();
     for (index, f) in named.into_iter().enumerate() {
@@ -106,7 +106,7 @@ struct DuckStructContext {
     /// 解析后的 `#[duck(...)]` 参数。
     ///
     /// The parsed `#[duck(...)]` arguments.
-    macro_args: DuckMacroArgs,
+    macro_args: DuckDeriveMacroArgs,
 }
 
 impl DuckStructContext {
