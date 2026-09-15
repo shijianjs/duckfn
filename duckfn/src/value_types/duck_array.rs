@@ -78,6 +78,30 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckOptionArray<T, N> {
         }
     }
 
+    /// NULL 行：父向量置 NULL 之外，还要把子向量的 `N` 个槽一并置 NULL。
+    ///
+    /// ARRAY 的子向量按 `row * N` **稠密**索引，NULL 行同样占着这 `N` 个槽。
+    /// 如果只置父向量的 validity，这些槽就是未初始化内存；DuckDB 的部分操作
+    /// （典型的是 `ARRAY(BLOB)` / `ARRAY(VARCHAR)` 的 `CAST(... AS VARCHAR)`）
+    /// 会整段转换子向量而不先看父向量 validity，于是把未初始化的 `string_t`
+    /// 当成指针解引用 → 偶发/必现的访问违例。
+    ///
+    /// NULL rows: besides marking the parent NULL, also mark the `N` child slots
+    /// NULL. ARRAY's child vector is densely indexed by `row * N`, so a NULL row still
+    /// owns those `N` slots; leaving them uninitialised makes DuckDB treat garbage
+    /// `string_t`s as pointers when it casts the whole child vector (e.g.
+    /// `ARRAY(BLOB)` -> `VARCHAR`).
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        unsafe { writer.vector_writer.set_null(idx) };
+        let child_writer = &mut writer.child_writer[0];
+        let offset = idx * N;
+        for i in 0..N {
+            // 走 T::write_null 而不是直接 set_null：嵌套 ARRAY / STRUCT 会继续
+            // 递归到更深一层，保证整棵子向量树里没有未初始化槽。
+            T::write_null(child_writer, offset + i);
+        }
+    }
+
     fn write_finish(writer: &mut DuckValueWriter) {
         T::write_finish(&mut writer.child_writer[0]);
     }
@@ -164,6 +188,10 @@ impl<T: DuckValueType, const N: usize> DuckValueType for DuckArray<T, N> {
         for (i, value) in v.iter().enumerate() {
             T::write_valid(child_writer, offset + i, value);
         }
+    }
+
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        <Self as Helper>::H::write_null(writer, idx)
     }
 
     fn write_finish(writer: &mut DuckValueWriter) {

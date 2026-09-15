@@ -170,6 +170,27 @@ SELECT typeof(v) FROM dfn_table_echo_array_blob(['\xAA'::BLOB, ''::BLOB]);
 ----
 BLOB[2]
 
+# 回归：ARRAY 的子向量按 row*N 稠密索引，NULL 行也占着 N 个槽。
+# 只置父向量 validity 的话这些槽是未初始化内存，DuckDB 把 ARRAY(BLOB) 转成
+# VARCHAR 时会整段转换子向量、把未初始化的 string_t 当指针解引用 —— 全 NULL
+# 参数 100% 崩，混 NULL 行约 30%~50% 崩（duckfn/src/value_types/duck_array.rs
+# 的 write_null 现在会把子槽一并置 NULL）。
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_array_blob(NULL, count => 3);
+----
+NULL
+NULL
+NULL
+
+# 值行 + NULL 行交替，同样不能崩
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_array_blob(['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB], count => 4);
+----
+[\xAA\xBB, \x00\x01\xFF]
+NULL
+[\xAA\xBB, \x00\x01\xFF]
+NULL
+
 # ============================================================================
 # ARRAY(ARRAY(INTEGER, 2), 2) // DuckArray<DuckArray<i32, 2>, 2>，嵌套定长数组
 # ============================================================================

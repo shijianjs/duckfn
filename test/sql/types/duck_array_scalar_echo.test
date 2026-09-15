@@ -171,6 +171,20 @@ SELECT CAST(octet_length(dfn_echo_array_blob(['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[
 ----
 0
 
+# 回归：ARRAY 的 NULL 行要把子向量的 N 个槽一并置 NULL（见
+# duckfn/src/value_types/duck_array.rs 的 write_null），否则 ARRAY(BLOB) 转
+# VARCHAR 时会解引用未初始化的 string_t。
+# 注意必须用「列里的 NULL」：常量 NULL 入参会被 DuckDB 在 bind 阶段折叠成常量
+# NULL，根本不会走到写出路径（上面的 NULL 处理一节就是这种情况）。
+query T
+SELECT CAST(dfn_echo_array_blob(i) AS VARCHAR) FROM (VALUES
+    (['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB]::BLOB[2]),
+    (NULL::BLOB[2])
+) t(i);
+----
+[\xAA\xBB, \x00\x01\xFF]
+NULL
+
 # ============================================================================
 # ARRAY(ARRAY(INTEGER, 2), 2) // [[i32; 2]; 2]，嵌套定长数组
 # ============================================================================
