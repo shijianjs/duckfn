@@ -55,8 +55,10 @@ jobs:
         # instead of relying on the local-development fallbacks in docusaurus.config.ts.
         run: |
           set -euo pipefail
+          # `base_url` is "https://<host>/<path>" and Docusaurus rejects it: `url` must be a bare
+          # origin, the sub-path belongs in `baseUrl` ("" -> "/" when the site sits at the root).
           base_path='${{ steps.pages.outputs.base_path }}'
-          export DOCS_URL='${{ steps.pages.outputs.base_url }}'
+          export DOCS_URL='${{ steps.pages.outputs.origin }}'
           export DOCS_BASE_URL="${base_path%/}/"
           echo "Building for DOCS_URL=$DOCS_URL DOCS_BASE_URL=$DOCS_BASE_URL"
           npm run build
