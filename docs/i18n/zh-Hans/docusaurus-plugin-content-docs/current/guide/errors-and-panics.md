@@ -76,7 +76,7 @@ SELECT dfn_scalar_ret_panic(13);   -- 报错：unlucky input: 13
 | 表函数 | 迭代器以及 bind 阶段 | `SELECT * FROM dfn_table_full(5);` → `dfn_table_full: bad row 2` |
 | 替换扫描 | 回调 | `SELECT * FROM 'boom.panic';` → `dfn_scan_points: panic while handling boom.panic` |
 
-:::caution panic 是安全网，不是控制流
+:::caution[panic 是安全网，不是控制流]
 被捕获只能保证进程不崩，它仍然会终止整条查询，而且丢失了你本可以自行选择的错误类型。
 请优先使用 `Ok(None)` 与 `Err(duck_error(…))`。
 :::

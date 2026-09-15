@@ -79,7 +79,7 @@ The same holds for every registration kind:
 | Table function | The iterator, and the bind step | `SELECT * FROM dfn_table_full(5);` → `dfn_table_full: bad row 2` |
 | Replacement scan | The callback | `SELECT * FROM 'boom.panic';` → `dfn_scan_points: panic while handling boom.panic` |
 
-:::caution Panics are a safety net, not a control-flow tool
+:::caution[Panics are a safety net, not a control-flow tool]
 Being caught keeps the query, not the developer, in charge: a panic aborts the whole query and loses
 the error type you would otherwise choose. Prefer `Ok(None)` and `Err(duck_error(…))`.
 :::

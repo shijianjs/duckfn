@@ -59,7 +59,8 @@ SELECT * FROM 'nope.txt';                        -- error: Table with name nope.
 
 An `Err` fails the query, and a panic inside the callback is caught and reported as a query error too.
 
-:::caution Two rules
+:::caution[Two rules]
+
 1. The callback runs for **every** unresolved table name, so anything it does not handle must return
    `Ok(None)`. Never take over a name you do not own.
 2. Matching is your own code: the example is case-sensitive, so `'3.POINTS'` is left to DuckDB and

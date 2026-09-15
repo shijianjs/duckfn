@@ -129,7 +129,7 @@ SELECT dfn_echo_array_integer([1, 2, 3]);          -- [1, 2, 3]
 SELECT dfn_echo_array_integer([1, 2]);             -- 报错：No function matches
 ```
 
-:::warning 数组不能作为 bind 参数
+:::warning[数组不能作为 bind 参数]
 DuckDB 无法把 `Value` 绑定到 `ARRAY` 参数上，因此数组类型不能出现在表函数签名里。数组作为标量函数参数、
 作为列表元素、作为结构体字段都没有问题。
 :::

@@ -8,7 +8,7 @@ description: duckfn 如何把一个加了属性的函数变成已注册的 DuckD
 
 本页沿着一个加了属性的函数，从源码一路看到它被注册进 DuckDB。
 
-:::info 架构图与更细的讲解
+:::info[架构图与更细的讲解]
 [Zread](https://zread.ai/shijianjs/duckfn) 用生成的架构图梳理了这个仓库 —— 模块分层、注册流程等等，
 内容非常详细丰富。本页不够用的时候，从那里入手。
 :::

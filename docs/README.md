@@ -35,6 +35,25 @@ npm run typecheck    # tsc
 `npm run build` is the check that matters: `onBrokenLinks` is set to `throw`, so a link to a page
 that does not exist fails the build for both locales.
 
+## Markdown conventions
+
+**Admonitions.** The opening directive goes on a line of its own and takes an optional title in
+square brackets — a bare `:::note Title` does not render. The content always starts on the next line:
+
+```md
+:::note[Limitations]
+
+- the first point
+:::
+```
+
+Nesting works by using more colons for each level: `:::::info[Parent]` → `::::danger[Child]` →
+`:::tip[Deep Child]`.
+
+Two more things worth knowing: `onBrokenLinks` is `throw`, so every internal link and anchor has to
+resolve (in both locales), and code fences should use one of the languages enabled for Prism in
+`docusaurus.config.ts` — `bash`, `rust`, `sql` or `toml`.
+
 ## Translations
 
 The site ships in English (`en`, default) and Simplified Chinese (`zh-Hans`). Routes are prefixed per

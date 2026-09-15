@@ -58,7 +58,8 @@ SELECT * FROM 'nope.txt';                        -- 报错：Table with name nop
 
 返回 `Err` 会让查询失败；回调里的 panic 同样会被捕获并转成查询错误。
 
-:::caution 两条规则
+:::caution[两条规则]
+
 1. 回调会对**每一个**未解析的表名执行，所以不处理的输入必须返回 `Ok(None)`，不要接管不属于自己的名字。
 2. 匹配逻辑由你自己写：示例是大小写敏感的，`'3.POINTS'` 会留给 DuckDB 并报
    `Table with name 3.POINTS does not exist`。非 UTF-8 的表名会原样放行。

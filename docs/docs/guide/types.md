@@ -130,7 +130,7 @@ SELECT dfn_echo_array_integer([1, 2, 3]);          -- [1, 2, 3]
 SELECT dfn_echo_array_integer([1, 2]);             -- error: No function matches
 ```
 
-:::warning Arrays are not bind parameters
+:::warning[Arrays are not bind parameters]
 DuckDB cannot bind a `Value` to an `ARRAY` argument, so an array type cannot appear in a table
 function's signature. Arrays are fine as scalar function arguments, as list elements, and as struct
 fields.

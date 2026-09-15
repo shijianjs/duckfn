@@ -191,7 +191,8 @@ SELECT * FROM dfn_table_from_list([3, 1, 2]);           -- 3 9 / 1 1 / 2 4
 SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
 ```
 
-:::note 限制
+:::note[限制]
+
 - 参数是 *bind* 参数，因此 `Vec<T>`（元素不可空）里出现 `NULL` 会报错，而不是跳过该元素。
 - `ARRAY` 类型不能作为 bind 参数：
   `SELECT * FROM dfn_table_echo_array_integer_param([1,2,3]::INTEGER[3])` 会报
