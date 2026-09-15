@@ -2,7 +2,6 @@
 make debug;
 duckdb -unsigned -c "
 LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
-SELECT double_it3(21);
 ";
 
 # cargo-duckdb-ext-tools 构建方式，任意命令环境都行
@@ -11,9 +10,6 @@ just duckdb_ext "  SELECT double_it5(21);";
 
 
 just duckdb_ext "  SELECT first_word_tuple(sentence) FROM (
-      VALUES ('hello world'), ('  padded  '), (''), (NULL)
-  ) t(sentence);";
-just duckdb_ext "  SELECT word_count(sentence) FROM (
       VALUES ('hello world'), ('  padded  '), (''), (NULL)
   ) t(sentence);";
 just duckdb_ext "  SELECT word_count_w(sentence) FROM (
@@ -28,13 +24,8 @@ just duckdb_ext "  SELECT add_it_tuple(3,5);  ";
 
 just duckdb_ext "  SELECT double_it5(3);  ";
 
-just duckdb_ext "  SELECT sum_list([1,2,3,4]);";
-just duckdb_ext "  SELECT sum_list(v) from (values ([1,2,3,4]),([1,2])) t(v);";
-just duckdb_ext "  SELECT make_list_scalar() from (values ([1,2,3,4]),([1,2])) t(v);";
-just duckdb_ext "  SELECT make_list_scalar(range) from range(10);";
 just duckdb_ext "  SELECT make_list_scalar_w(range) from range(10);";
 just duckdb_ext "  SELECT nest_list_scalar_w(range) from range(10);  ";
-
 
 
 just duckdb_ext "  SELECT nest_vec_no_null_scalar_w(range) from range(10);  ";
@@ -45,19 +36,12 @@ just duckdb_ext "  SELECT sum_list_nest([[1,2],[3,4]]);";
 just duckdb_ext "  SELECT sum_list_nest([[1,2],[3,null,4],null]);";
 
 just duckdb_ext "  SELECT sum_list_nest(v) from (values ([[1,2],[3,null,4],null]),([[1],[3,null]])) t(v);";
-just duckdb_ext "  SELECT make_pair('hello', 42);";
-just duckdb_ext "  SELECT make_kv_map('hello', 42);";
-
-just duckdb_ext "  from count_down(12);";
 
 just duckdb_ext "  SELECT struct_scalar_w({hello_count:15});";
 
 just duckdb_ext "  SELECT struct_nest_scalar_w({structf:{hello_count:15},list:[1,null,2]});";
 
 just duckdb_ext "  SELECT struct_nest_output_scalar_w(range::int) from range(9);";
-  
-just duckdb_ext "  SELECT nest_struct_macro_output_scalar_w(range::int) from range(9);";
-
 
 just duckdb_ext "  SELECT agg_list_w(range) from range(9) group by range;";
 
@@ -70,8 +54,6 @@ just duckdb_ext "  SELECT error_scalar_demo(20);";
 just duckdb_ext "  SELECT error_scalar_demo(30);";
 
 
-just duckdb_ext "  from count_down_it(start=12);";
-just duckdb_ext "  from count_down_s(12);";
 just duckdb_ext "  from count_down_m_simple(start=12);";
 just duckdb_ext "  SELECT create_map_demo(range) from range(10);";
 just duckdb_ext "  SELECT input_map_demo(MAP {'key1': [10], 'key2': [20,5], 'key3': null});";
