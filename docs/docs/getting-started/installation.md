@@ -25,10 +25,18 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 the snippet above is enough. Depend on `duckfn-macro = "0.0.2"` directly only if you want the
 macros without the runtime.
 
-:::note
-`duckfn` itself has no Cargo features. `loadable-extension` is a feature of `libduckdb-sys`, and it
-has to be enabled by you.
-:::
+## Cargo features
+
+| Feature | Enables | Requires |
+| --- | --- | --- |
+| `duckdb-1-5` | Logical types added in DuckDB 1.5 — today `TIME_NS` (`DuckTimeNs`). | `libduckdb-sys` headers from DuckDB 1.5 or newer. |
+
+```toml
+duckfn = { version = "0.0.2", features = ["duckdb-1-5"] }
+```
+
+`loadable-extension` is a feature of `libduckdb-sys`, not of `duckfn`, and it has to be enabled by
+you.
 
 ## The crate must build a `cdylib`
 

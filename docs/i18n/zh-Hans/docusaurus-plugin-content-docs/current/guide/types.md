@@ -39,6 +39,7 @@ SELECT dfn_echo_varchar('你好 🦆');                       -- 你好 🦆
 | `TIMESTAMPTZ` | `DuckTimestampTz` | `millis_since_epoch: i64` |
 | `TIMESTAMP_S` / `TIMESTAMP_MS` / `TIMESTAMP_NS` | `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` | `seconds_since_epoch` / `millis_since_epoch` / `nanos_since_epoch` |
 | `TIME` | `DuckTime` | `micros_since_midnight: i64` |
+| `TIME_NS` | `DuckTimeNs` | `nanos_since_midnight: i64` |
 | `TIMETZ` | `DuckTimeTz` | `bits: u64` |
 | `DATE` | `DuckDate` | `days_since_epoch: i32` |
 | `DECIMAL(W, S)` | `DuckDecimal<W, S>` | `unscaled: i128` |
@@ -59,8 +60,12 @@ fn dfn_echo_decimal(i: DuckDecimal<18, 3>) -> DuckDecimal<18, 3> {
 SET TimeZone = 'UTC';  -- 让 TIMESTAMPTZ 的输出稳定
 SELECT dfn_echo_date(DATE '2024-01-02');                -- 2024-01-02
 SELECT typeof(dfn_echo_decimal(1.234::DECIMAL(18,3)));  -- DECIMAL(18,3)
+SELECT CAST(dfn_echo_time_ns(TIME_NS '03:04:05.123456789') AS VARCHAR);  -- 03:04:05.123456789
 SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCHAR);
 ```
+
+`TIME_NS` 是 DuckDB 1.5 新增的类型，因此需要开启
+[`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。
 
 ## 列表
 
@@ -179,7 +184,9 @@ pub struct DuckStructWithList {
 
 | 缺口 | 说明 |
 | --- | --- |
-| 不支持逻辑类型 | `ENUM`、`UNION`、`BIT`、`TIME_NS`、`ANY`、`VARINT`、`SQLNULL`、整数/字符串字面量、`GEOMETRY`、`VARIANT`。 |
+| 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。 |
+| 未映射，但可以自己实现 | `ENUM`、`UNION`、`BIT`、`VARINT`、`GEOMETRY`、`VARIANT`：quack-rs 没有它们的读写方法，但你可以[自己实现 `DuckValueType`](./custom-types.md)，通过裸向量句柄直接调用 DuckDB 的 C API。 |
+| 不可存储类型 | `ANY`、`SQLNULL` 以及整数/字符串字面量类型只存在于 DuckDB 自身的函数签名与字面量中，不能作为扩展的参数或返回类型。 |
 | 没有 `DuckList` / `DuckMap` | 列表与映射就是 `Vec` 与 `IndexMap`，没有专用包装类型。 |
 | `ARRAY` 作为 bind 参数 | 不支持（见上文）。 |
 | `MAP` 的键 | 永远不可为空。 |
@@ -188,5 +195,6 @@ pub struct DuckStructWithList {
 
 ## 接下来
 
+- [自定义类型](./custom-types.md) —— 自己实现类型映射。
 - [错误与 panic](./errors-and-panics.md)
 - [表函数](./table-functions.md) —— 这些类型作为输出列的用法。

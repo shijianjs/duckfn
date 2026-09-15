@@ -53,6 +53,6 @@ quack-rs = "0.16.0"
 #libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 libduckdb-sys = { version = "1.10505.0", features = ["loadable-extension"] }
 tuple-transpose = "0.1.0"
-duckfn = { path = "duckfn" }
+duckfn = { path = "duckfn", features = ["duckdb-1-5"] }
 indexmap = "2"
 

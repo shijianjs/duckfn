@@ -127,6 +127,31 @@ SELECT CAST(dfn_echo_time(i) AS VARCHAR) FROM (VALUES
 00:00:00
 
 # ============================================================================
+# TIME_NS (DuckTimeNs, nanos since midnight)
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_time_ns(TIME_NS '03:04:05.123456789'));
+----
+TIME_NS
+
+query T
+SELECT CAST(dfn_echo_time_ns(i) AS VARCHAR) FROM (VALUES
+    (TIME_NS '03:04:05.123456789'),
+    (TIME_NS '23:59:59.999999999'),
+    (TIME_NS '00:00:00')
+) t(i);
+----
+03:04:05.123456789
+23:59:59.999999999
+00:00:00
+
+query T
+SELECT CAST(dfn_echo_time_ns(NULL::TIME_NS) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
 # TIMETZ (DuckTimeTz, packed u64)
 # ============================================================================
 

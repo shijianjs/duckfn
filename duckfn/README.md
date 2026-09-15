@@ -48,6 +48,13 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
+`duckfn` has a single feature, `duckdb-1-5`, which enables the logical types DuckDB added in 1.5
+(currently `TIME_NS`):
+
+```toml
+duckfn = { version = "0.0.2", features = ["duckdb-1-5"] }
+```
+
 ## Quick start
 
 ```rust

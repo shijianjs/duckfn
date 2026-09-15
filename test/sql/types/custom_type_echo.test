@@ -1,0 +1,71 @@
+# name: test/sql/types/custom_type_echo.test
+# description: 用户自定义 DuckValueType：newtype（Celsius）、它作为 STRUCT 字段，以及容器/表函数用法
+# group: [types]
+
+require rusty_quack
+
+# ============================================================================
+# Celsius：自定义 newtype，物理表示是 DOUBLE
+# ============================================================================
+
+query R
+SELECT dfn_echo_celsius(i) FROM (VALUES
+    (1.5::DOUBLE), (-2.25::DOUBLE), (0.0::DOUBLE)
+) t(i);
+----
+1.5
+-2.25
+0.0
+
+query T
+SELECT typeof(dfn_echo_celsius(21.5::DOUBLE));
+----
+DOUBLE
+
+# 非 Option 入参：NULL 整行短路
+query T
+SELECT CAST(dfn_echo_celsius(NULL::DOUBLE) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
+# 自定义类型作为 STRUCT 字段
+# ============================================================================
+
+query T
+SELECT (dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).place;
+----
+oslo
+
+query T
+SELECT typeof((dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).celsius);
+----
+DOUBLE
+
+query T
+SELECT (dfn_echo_temperature_reading(x)).place
+FROM (VALUES ({'place': 'cairo', 'celsius': 31.0::DOUBLE})) t(x);
+----
+cairo
+
+# ============================================================================
+# 表函数参数 / 输出（走 bind 阶段的 Value 读取）
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
+----
+1.5
+NULL
+1.5
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_celsius(1.5::DOUBLE);
+----
+DOUBLE
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(NULL::DOUBLE, count => 2);
+----
+NULL
+NULL

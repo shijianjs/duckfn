@@ -341,6 +341,50 @@ impl DuckValueType for DuckTime {
     }
 }
 
+/// DuckDB `TIME_NS`（自 00:00:00 起的纳秒数）。
+///
+/// 需要开启 `duckdb-1-5` feature：`TIME_NS` 是 DuckDB 1.5 新增的类型，
+/// quack-rs 里对应的 `TypeId::TimeNs` 由该 feature 门控。
+///
+/// DuckDB `TIME_NS` (nanoseconds since midnight). Requires the `duckdb-1-5` feature:
+/// `TIME_NS` was added in DuckDB 1.5, and quack-rs gates `TypeId::TimeNs` behind that feature.
+#[cfg(feature = "duckdb-1-5")]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DuckTimeNs {
+    /// 自 00:00:00 起的纳秒数。
+    ///
+    /// Nanoseconds since 00:00:00.
+    pub nanos_since_midnight: i64,
+}
+
+/// `DuckValueType` 实现：按 `TIME_NS` 读写。
+///
+/// `DuckValueType` implementation: reads and writes as `TIME_NS`.
+#[cfg(feature = "duckdb-1-5")]
+impl DuckValueType for DuckTimeNs {
+    fn type_id() -> TypeId {
+        TypeId::TimeNs
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        // TIME_NS 在向量里就是一个 i64（纳秒）。quack-rs 0.16 还没有 read_time_ns，
+        // 因此直接读底层槽位。
+        //
+        // A TIME_NS slot is a plain i64 (nanoseconds). quack-rs 0.16 has no `read_time_ns`
+        // yet, so the underlying slot is read directly.
+        Self {
+            nanos_since_midnight: unsafe { reader.read_i64(row) },
+        }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i64(idx, v.nanos_since_midnight) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        Self {
+            nanos_since_midnight: value.as_time_ns(),
+        }
+    }
+}
+
 /// DuckDB `BLOB`（任意字节串）。
 ///
 /// DuckDB `BLOB` (an arbitrary byte string).

@@ -106,6 +106,21 @@ SELECT typeof(v) FROM dfn_table_echo_time(TIME '03:04:05');
 TIME
 
 # ============================================================================
+# TIME_NS (DuckTimeNs)
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_time_ns(TIME_NS '03:04:05.123456789', count => 2);
+----
+03:04:05.123456789
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_time_ns(TIME_NS '03:04:05.123456789');
+----
+TIME_NS
+
+# ============================================================================
 # TIME WITH TIME ZONE (DuckTimeTz)
 # ============================================================================
 

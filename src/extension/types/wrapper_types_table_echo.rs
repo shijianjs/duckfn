@@ -1,6 +1,6 @@
 use duckfn::duck_table_function;
 use duckfn::{
-    DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTime, DuckTimeTz, DuckTimestamp,
+    DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTime, DuckTimeNs, DuckTimeTz, DuckTimestamp,
     DuckTimestampMs, DuckTimestampNs, DuckTimestampS, DuckTimestampTz, DuckUuid,
 };
 use quack_rs::interval::DuckInterval;
@@ -116,6 +116,23 @@ fn dfn_table_echo_time(
     count: Option<i64>,
 ) -> impl Iterator<Item = TableEchoTimeRow> {
     echo_rows(v, count, |v| TableEchoTimeRow { v })
+}
+
+/// TIME_NS // DuckTimeNs
+/// ```sql
+/// SELECT v FROM dfn_table_echo_time_ns(TIME_NS '03:04:05.123456789');
+/// ```
+#[derive(Clone, Debug, Default, DuckStruct)]
+pub struct TableEchoTimeNsRow {
+    pub v: Option<DuckTimeNs>,
+}
+
+#[duck_table_function(named_param_from = "count")]
+fn dfn_table_echo_time_ns(
+    v: Option<DuckTimeNs>,
+    count: Option<i64>,
+) -> impl Iterator<Item = TableEchoTimeNsRow> {
+    echo_rows(v, count, |v| TableEchoTimeNsRow { v })
 }
 
 /// TIME WITH TIME ZONE // DuckTimeTz

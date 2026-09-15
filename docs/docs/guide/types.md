@@ -39,6 +39,7 @@ Types that share a physical representation but mean different things get a wrapp
 | `TIMESTAMPTZ` | `DuckTimestampTz` | `millis_since_epoch: i64` |
 | `TIMESTAMP_S` / `TIMESTAMP_MS` / `TIMESTAMP_NS` | `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` | `seconds_since_epoch` / `millis_since_epoch` / `nanos_since_epoch` |
 | `TIME` | `DuckTime` | `micros_since_midnight: i64` |
+| `TIME_NS` | `DuckTimeNs` | `nanos_since_midnight: i64` |
 | `TIMETZ` | `DuckTimeTz` | `bits: u64` |
 | `DATE` | `DuckDate` | `days_since_epoch: i32` |
 | `DECIMAL(W, S)` | `DuckDecimal<W, S>` | `unscaled: i128` |
@@ -59,8 +60,12 @@ fn dfn_echo_decimal(i: DuckDecimal<18, 3>) -> DuckDecimal<18, 3> {
 SET TimeZone = 'UTC';  -- keep TIMESTAMPTZ output stable
 SELECT dfn_echo_date(DATE '2024-01-02');                        -- 2024-01-02
 SELECT typeof(dfn_echo_decimal(1.234::DECIMAL(18,3)));          -- DECIMAL(18,3)
+SELECT CAST(dfn_echo_time_ns(TIME_NS '03:04:05.123456789') AS VARCHAR);  -- 03:04:05.123456789
 SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCHAR);
 ```
+
+`TIME_NS` was added in DuckDB 1.5, so it needs the
+[`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled.
 
 ## Lists
 
@@ -185,7 +190,9 @@ pub struct DuckStructWithList {
 
 | Gap | Detail |
 | --- | --- |
-| Unsupported logical types | `ENUM`, `UNION`, `BIT`, `TIME_NS`, `ANY`, `VARINT`, `SQLNULL`, integer/string literals, `GEOMETRY`, `VARIANT`. |
+| Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled. |
+| Not mapped, but implementable | `ENUM`, `UNION`, `BIT`, `VARINT`, `GEOMETRY`, `VARIANT`: quack-rs has no read/write for them, but a [`DuckValueType` implementation of your own](./custom-types.md) can call the DuckDB C API through the raw vector handle. |
+| Not storable types | `ANY`, `SQLNULL` and the integer/string literal types exist only in DuckDB's own signatures and literals; they cannot be an extension's argument or return type. |
 | No `DuckList` / `DuckMap` | Lists and maps *are* `Vec` and `IndexMap`; there are no dedicated wrapper types. |
 | `ARRAY` bind parameters | Not supported (see above). |
 | `MAP` keys | Never nullable. |
@@ -194,5 +201,6 @@ pub struct DuckStructWithList {
 
 ## Next
 
+- [Custom types](./custom-types.md) — implementing your own type mapping.
 - [Errors and panics](./errors-and-panics.md)
 - [Table functions](./table-functions.md) — these types as output columns.

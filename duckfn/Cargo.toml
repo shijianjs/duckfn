@@ -16,6 +16,17 @@ categories = ["database", "api-bindings", "development-tools::ffi"]
 [lib]
 crate-type = ["rlib"]
 
+[features]
+default = []
+
+# DuckDB 1.5 新增逻辑类型（TIME_NS 等）的支持：开启 quack-rs 的 duckdb-1-5，
+# 从而拿到 TypeId::TimeNs / Value::as_time_ns。要求 libduckdb-sys 使用 >= 1.5 的头文件。
+#
+# Support for logical types added in DuckDB 1.5 (TIME_NS and friends): forwards to quack-rs'
+# `duckdb-1-5` feature, which exposes `TypeId::TimeNs` / `Value::as_time_ns`. Requires
+# libduckdb-sys with >= 1.5 headers.
+duckdb-1-5 = ["quack-rs/duckdb-1-5"]
+
 [dependencies]
 quack-rs = "0.16.0"
 

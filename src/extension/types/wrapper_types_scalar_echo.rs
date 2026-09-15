@@ -1,7 +1,7 @@
 use duckfn::duck_scalar_function;
 use duckfn::{
-    DuckBlob, DuckDate, DuckDecimal, DuckTime, DuckTimeTz, DuckTimestamp, DuckTimestampMs,
-    DuckTimestampNs, DuckTimestampS, DuckTimestampTz, DuckUuid,
+    DuckBlob, DuckDate, DuckDecimal, DuckTime, DuckTimeNs, DuckTimeTz, DuckTimestamp,
+    DuckTimestampMs, DuckTimestampNs, DuckTimestampS, DuckTimestampTz, DuckUuid,
 };
 use quack_rs::interval::DuckInterval;
 
@@ -10,7 +10,7 @@ use quack_rs::interval::DuckInterval;
 //
 // 覆盖 wrapper_types.rs 中已实现的全部 DuckValueType：
 // Timestamp / TimestampTz / TimestampS / TimestampMs / TimestampNs /
-// Time / TimeTz / Date / Decimal / Blob / Uuid / Interval
+// Time / TimeNs / TimeTz / Date / Decimal / Blob / Uuid / Interval
 //
 // 每个函数同时验证：
 //   - 入参：VectorReader.read_* -> DuckValueType::read
@@ -69,6 +69,15 @@ fn dfn_echo_timestamp_ns(i: DuckTimestampNs) -> DuckTimestampNs {
 /// ```
 #[duck_scalar_function]
 fn dfn_echo_time(i: DuckTime) -> DuckTime {
+    i
+}
+
+/// TypeId::TimeNs // nanos since midnight
+/// ```sql
+/// SELECT dfn_echo_time_ns(TIME_NS '03:04:05.123456789');
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_time_ns(i: DuckTimeNs) -> DuckTimeNs {
     i
 }
 

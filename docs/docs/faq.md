@@ -80,6 +80,15 @@ pub struct Point {
 
 Its fields become the struct's fields at every level, including inside lists, maps and arrays.
 
+### Can I add a logical type duckfn does not support?
+
+Yes. `DuckValueType` is a public, unsealed trait, so you implement it for your own type outside
+`duckfn`: three methods are enough for a type that reuses an existing physical representation, and
+`DuckValueReader` / `DuckValueWriter` expose the raw DuckDB vector for the cases quack-rs has no
+accessor for. See [Custom types](./guide/custom-types.md).
+
+Some DuckDB 1.5 types only need a Cargo feature instead — `TIME_NS` ships behind `duckdb-1-5`.
+
 ### Why are named arguments ignored on scalar functions?
 
 duckfn registers scalar functions by position, so DuckDB binds the values in the order written and

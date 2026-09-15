@@ -45,6 +45,12 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 如果只想用宏、不要运行时，可以直接依赖
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
+`duckfn` 只有一个 feature：`duckdb-1-5`，用于开启 DuckDB 1.5 新增的逻辑类型（目前是 `TIME_NS`）：
+
+```toml
+duckfn = { version = "0.0.2", features = ["duckdb-1-5"] }
+```
+
 ## 快速开始
 
 ```rust

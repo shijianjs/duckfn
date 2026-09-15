@@ -73,6 +73,14 @@ pub struct Point {
 
 它的字段在任意层级都会成为结构体字段，包括位于列表、映射、数组内部时。
 
+### duckfn 不支持的类型，我能自己加上吗？
+
+可以。`DuckValueType` 是公开且未封闭的 trait，在 `duckfn` 之外为自己的类型实现它即可 —— 如果只是复用已有的物理表示，
+三个方法就够了；quack-rs 没有访问器的类型，`DuckValueReader` / `DuckValueWriter` 里也暴露了裸的 DuckDB 向量。
+见[自定义类型](./guide/custom-types.md)。
+
+另外，有些 DuckDB 1.5 的类型只需要开启一个 feature：`TIME_NS` 就由 `duckdb-1-5` 提供。
+
 ### 为什么标量函数的命名参数不生效？
 
 duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、忽略名字 —— `f(b := 2, a := 1)` 会把 `2` 传给第一个参数。

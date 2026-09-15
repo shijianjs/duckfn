@@ -23,9 +23,17 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 `duckfn` 已重新导出 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) 的全部宏，因此上面的片段就够了。
 只有想脱离运行时单独使用宏时，才需要直接依赖 `duckfn-macro = "0.0.2"`。
 
-:::note
-`duckfn` 本身没有 Cargo feature。`loadable-extension` 是 `libduckdb-sys` 的 feature，需要你自己开启。
-:::
+## Cargo feature
+
+| feature | 作用 | 要求 |
+| --- | --- | --- |
+| `duckdb-1-5` | 支持 DuckDB 1.5 新增的逻辑类型 —— 目前是 `TIME_NS`（`DuckTimeNs`）。 | `libduckdb-sys` 使用 DuckDB 1.5 及以上的头文件。 |
+
+```toml
+duckfn = { version = "0.0.2", features = ["duckdb-1-5"] }
+```
+
+`loadable-extension` 是 `libduckdb-sys` 的 feature，不是 `duckfn` 的，需要你自己开启。
 
 ## crate 必须产出 `cdylib`
 
