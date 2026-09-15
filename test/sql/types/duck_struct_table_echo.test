@@ -176,12 +176,12 @@ STRUCT(id INTEGER, arr INTEGER[3])
 statement error
 SELECT v FROM dfn_table_echo_struct_with_array({'id': 1, 'arr': [1, 2]});
 ----
-dfn_table_echo_struct_with_array: 需要 3 个元素，收到 2 个
+dfn_table_echo_struct_with_array: expected 3 elements, got 2
 
 statement error
 SELECT v FROM dfn_table_echo_struct_with_array({'id': 1, 'arr': [1, 2, 3, 4]});
 ----
-dfn_table_echo_struct_with_array: 需要 3 个元素，收到 4 个
+dfn_table_echo_struct_with_array: expected 3 elements, got 4
 
 # 非 Option 的 arr 字段为 NULL
 statement error
@@ -317,7 +317,7 @@ STRUCT(id INTEGER, "name" VARCHAR)[2]
 statement error
 SELECT v FROM dfn_table_echo_struct_array([{'id': 1, 'name': 'a'}]);
 ----
-dfn_table_echo_struct_array: 需要 2 个元素，收到 1 个
+dfn_table_echo_struct_array: expected 2 elements, got 1
 
 # ============================================================================
 # ARRAY(STRUCT(...), 2)，元素可空 // DuckOptionArray<DuckStructSimple, 2>
@@ -339,7 +339,7 @@ STRUCT(id INTEGER, "name" VARCHAR)[2]
 statement error
 SELECT v FROM dfn_table_echo_struct_array_nullable([{'id': 1, 'name': 'a'}]);
 ----
-dfn_table_echo_struct_array_nullable: 需要 2 个元素，收到 1 个
+dfn_table_echo_struct_array_nullable: expected 2 elements, got 1
 
 # ============================================================================
 # 跨 chunk：STRUCT 出参逐行写字段，2048 行之后子字段偏移必须仍然对齐

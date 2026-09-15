@@ -85,7 +85,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     ///
     /// Reads one valid value from the raw [`VectorReader`] (implemented by subclasses).
     fn read_valid_by_vector_reader(_reader: &VectorReader, _row: usize) -> Self {
-        todo!("子类需要实现read_valid_by_vector_reader")
+        todo!("subclass must implement read_valid_by_vector_reader")
     }
 
     /// 把一批（可为 NULL 的）值写入输出向量。
@@ -154,7 +154,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     ///
     /// Writes one valid value into the raw [`VectorWriter`] (implemented by subclasses).
     fn write_valid_to_vector_writer(_writer: &mut VectorWriter, _idx: usize, _v: &Self) {
-        todo!("子类需要实现write_valid")
+        todo!("subclass must implement write_valid")
     }
 
     /// 批量写入收尾：默认什么都不做。
@@ -214,7 +214,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     ///
     /// Extracts the value from a non-NULL [`Value`] (implemented by subclasses; no NULL check).
     fn read_by_duck_value_valid_simple(_value: &Value) -> Self {
-        todo!("sub class need to implement read_by_duck_value_valid_simple")
+        todo!("subclass must implement read_by_duck_value_valid_simple")
     }
 }
 

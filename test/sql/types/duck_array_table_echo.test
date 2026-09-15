@@ -47,17 +47,17 @@ INTEGER[3]
 statement error
 SELECT v FROM dfn_table_echo_array_integer([1, 2]);
 ----
-dfn_table_echo_array_integer: 需要 3 个元素，收到 2 个
+dfn_table_echo_array_integer: expected 3 elements, got 2
 
 statement error
 SELECT v FROM dfn_table_echo_array_integer([1, 2, 3, 4]);
 ----
-dfn_table_echo_array_integer: 需要 3 个元素，收到 4 个
+dfn_table_echo_array_integer: expected 3 elements, got 4
 
 statement error
 SELECT v FROM dfn_table_echo_array_integer([]::INTEGER[]);
 ----
-dfn_table_echo_array_integer: 需要 3 个元素，收到 0 个
+dfn_table_echo_array_integer: expected 3 elements, got 0
 
 # ============================================================================
 # ARRAY(BIGINT, 2) // DuckArray<i64, 2>
@@ -77,7 +77,7 @@ BIGINT[2]
 statement error
 SELECT v FROM dfn_table_echo_array_bigint([1]);
 ----
-dfn_table_echo_array_bigint: 需要 2 个元素，收到 1 个
+dfn_table_echo_array_bigint: expected 2 elements, got 1
 
 # ============================================================================
 # ARRAY(DOUBLE, 3) // DuckArray<f64, 3>
@@ -210,7 +210,7 @@ INTEGER[2][2]
 statement error
 SELECT v FROM dfn_table_echo_array_nested([[1, 2]]);
 ----
-dfn_table_echo_array_nested: 需要 2 个元素，收到 1 个
+dfn_table_echo_array_nested: expected 2 elements, got 1
 
 # ============================================================================
 # ARRAY(INTEGER, 3) // DuckOptionArray<i32, 3>，元素可为 NULL

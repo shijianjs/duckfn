@@ -52,7 +52,7 @@ where
 pub fn to_array<T, const N: usize>(fn_name: &str, v: Vec<T>) -> DuckResult<[T; N]> {
     let len = v.len();
     v.try_into()
-        .map_err(|_| duck_error(format!("{fn_name}: 需要 {N} 个元素，收到 {len} 个")))
+        .map_err(|_| duck_error(format!("{fn_name}: expected {N} elements, got {len}")))
 }
 
 /// Option<LIST> -> Option<ARRAY(N)>：NULL 入参回显 NULL，其余交给 to_array
@@ -80,6 +80,6 @@ where
     let items: Vec<U> = v.into_iter().map(convert).collect::<DuckResult<Vec<U>>>()?;
     let items: [U; N] = items
         .try_into()
-        .map_err(|_| duck_error(format!("{fn_name}: 需要 {N} 个元素，收到 {len} 个")))?;
+        .map_err(|_| duck_error(format!("{fn_name}: expected {N} elements, got {len}")))?;
     Ok(Some(items))
 }

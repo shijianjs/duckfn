@@ -1135,14 +1135,14 @@ impl FnArgWrapper {
         let syn::Type::Reference(type_ref) = ty else {
             return Err(syn::Error::new_spanned(
                 ty,
-                "State must be like `&mut WcAggState`",
+                "The aggregate state parameter must be a mutable reference like `&mut MyState`",
             ));
         };
 
         if type_ref.mutability.is_none() {
             return Err(syn::Error::new_spanned(
                 ty,
-                "State must be mutable: `&mut WcAggState`",
+                "The aggregate state parameter must be mutable: `&mut MyState`",
             ));
         }
 
