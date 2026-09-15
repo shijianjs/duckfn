@@ -151,6 +151,23 @@ fn dfn_table_echo_usmallint(
     echo_rows(v, count, |v| TableEchoUsmallintRow { v })
 }
 
+/// UINTEGER // u32
+/// ```sql
+/// SELECT v FROM dfn_table_echo_uinteger(4294967295::UINTEGER);
+/// ```
+#[derive(Clone, Debug, Default, DuckStruct)]
+pub struct TableEchoUintegerRow {
+    pub v: Option<u32>,
+}
+
+#[duck_table_function(named_param_from = "count")]
+fn dfn_table_echo_uinteger(
+    v: Option<u32>,
+    count: Option<i64>,
+) -> impl Iterator<Item = TableEchoUintegerRow> {
+    echo_rows(v, count, |v| TableEchoUintegerRow { v })
+}
+
 /// UBIGINT // u64
 /// ```sql
 /// SELECT v FROM dfn_table_echo_ubigint(18446744073709551615::UBIGINT);

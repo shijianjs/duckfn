@@ -3,6 +3,6 @@
   "position": 2,
   "link": {
     "type": "generated-index",
-    "description": "Add duckfn to a crate, build the extension, and call it from SQL."
+    "description": "Start from a template, add duckfn, then call your first function from SQL."
   }
 }

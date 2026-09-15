@@ -9,7 +9,7 @@ Static site for <https://shijianjs.github.io/duckfn/>, built with
 | Path | Description |
 | --- | --- |
 | `docs/intro.md` | Introduction. The only page with a `slug`, so `/docs/intro` stays stable. |
-| `docs/getting-started/` | Installation and quick start. |
+| `docs/getting-started/` | Creating a project, installation and quick start. |
 | `docs/guide/` | The feature guide: attributes, each registration kind, type mapping, errors. |
 | `docs/examples/rusty-quack.md` | The repository's example extension, feature by feature. |
 | `docs/internals/architecture.md` | How duckfn works internally. |

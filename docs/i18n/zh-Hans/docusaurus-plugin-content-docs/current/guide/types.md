@@ -15,23 +15,19 @@ description: DuckDB 类型与 Rust 类型的对应关系，涵盖 LIST、MAP、A
 | `BOOLEAN` | `bool` |
 | `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
 | `HUGEINT` | `i128` |
-| `UTINYINT` / `USMALLINT` / `UBIGINT` | `u8` / `u16` / `u64` |
+| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
 | `UHUGEINT` | `u128` |
 | `FLOAT` / `DOUBLE` | `f32` / `f64` |
 | `VARCHAR` | `String` |
 | `NULL` | `Option<T>` |
 
 ```sql
-SELECT dfn_echo_integer(42);            -- 42
-SELECT typeof(dfn_echo_integer(42));    -- INTEGER
-SELECT dfn_echo_hugeint(9223372036854775808::HUGEINT);  -- 9223372036854775808
-SELECT dfn_echo_varchar('你好 🦆');      -- 你好 🦆
+SELECT dfn_echo_integer(42);                             -- 42
+SELECT typeof(dfn_echo_integer(42));                     -- INTEGER
+SELECT dfn_echo_uinteger(4294967295::UINTEGER);          -- 4294967295
+SELECT dfn_echo_hugeint(9223372036854775808::HUGEINT);   -- 9223372036854775808
+SELECT dfn_echo_varchar('你好 🦆');                       -- 你好 🦆
 ```
-
-:::warning 缺少 `UINTEGER`
-`u32` 目前没有 `DuckValueType` 实现，因此 `UINTEGER` 不能作为参数或返回类型。请改用 `BIGINT` 与 `i64`，
-或在 SQL 侧转换。
-:::
 
 ## 包装类型
 
@@ -183,7 +179,6 @@ pub struct DuckStructWithList {
 
 | 缺口 | 说明 |
 | --- | --- |
-| `UINTEGER` | `u32` 未映射。 |
 | 不支持逻辑类型 | `ENUM`、`UNION`、`BIT`、`TIME_NS`、`ANY`、`VARINT`、`SQLNULL`、整数/字符串字面量、`GEOMETRY`、`VARIANT`。 |
 | 没有 `DuckList` / `DuckMap` | 列表与映射就是 `Vec` 与 `IndexMap`，没有专用包装类型。 |
 | `ARRAY` 作为 bind 参数 | 不支持（见上文）。 |

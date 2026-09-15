@@ -1,6 +1,6 @@
 ---
 title: Installation
-sidebar_position: 1
+sidebar_position: 2
 description: Add duckfn to a crate, declare the cdylib crate type, and why a local DuckDB build is not needed.
 ---
 

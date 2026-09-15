@@ -43,11 +43,6 @@ DuckDB 会在 bind 阶段折叠常量表达式，所以 `NULL::INTEGER` 与 `NUL
 需要让函数体看到它们就设置 `special_null_handling = true`；列里的值本来就会以 `None` 传入。
 详见[标量函数](./guide/scalar-functions.md#special_null_handling)。
 
-### 为什么不支持 `UINTEGER`（`u32`）？
-
-`u32` 目前没有 `DuckValueType` 实现，因为底层 API 没有对应的 read/write 方法。请改用 `i64` 与 `BIGINT`，
-或在 SQL 侧转换。完整缺口列表见[类型映射](./guide/types.md#已知缺口)。
-
 ### 为什么 `Vec<i32>` 里出现 `NULL`，标量函数和表函数表现不一样？
 
 标量函数逐行读取参数，`NULL` 元素会让整行变成 `NULL` —— 想保留元素级 `NULL` 就声明 `Vec<Option<i32>>`。

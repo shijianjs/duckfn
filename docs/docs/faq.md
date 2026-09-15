@@ -49,12 +49,6 @@ DuckDB folds constant expressions at bind time, so `NULL::INTEGER` and `NULL::IN
 reach the callback. Set `special_null_handling = true` if the body needs to see them; column values
 already arrive as `None`. See [Scalar functions](./guide/scalar-functions.md#special_null_handling).
 
-### Why is `UINTEGER` (`u32`) not supported?
-
-`u32` has no `DuckValueType` implementation yet, because the underlying API had no matching reader or
-writer. Use `i64` and `BIGINT`, or cast on the SQL side. The full list of gaps is in
-[Type mapping](./guide/types.md#known-gaps).
-
 ### Why does a `NULL` inside `Vec<i32>` behave differently in a scalar and a table function?
 
 A scalar function reads arguments row by row, so a `NULL` element makes the whole row `NULL` — unless

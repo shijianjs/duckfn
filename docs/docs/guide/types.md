@@ -15,23 +15,19 @@ An argument or return type is written as the Rust type you want; the DuckDB type
 | `BOOLEAN` | `bool` |
 | `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
 | `HUGEINT` | `i128` |
-| `UTINYINT` / `USMALLINT` / `UBIGINT` | `u8` / `u16` / `u64` |
+| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
 | `UHUGEINT` | `u128` |
 | `FLOAT` / `DOUBLE` | `f32` / `f64` |
 | `VARCHAR` | `String` |
 | `NULL` | `Option<T>` |
 
 ```sql
-SELECT dfn_echo_integer(42);            -- 42
-SELECT typeof(dfn_echo_integer(42));    -- INTEGER
-SELECT dfn_echo_hugeint(9223372036854775808::HUGEINT);  -- 9223372036854775808
-SELECT dfn_echo_varchar('你好 🦆');      -- 你好 🦆
+SELECT dfn_echo_integer(42);                             -- 42
+SELECT typeof(dfn_echo_integer(42));                     -- INTEGER
+SELECT dfn_echo_uinteger(4294967295::UINTEGER);          -- 4294967295
+SELECT dfn_echo_hugeint(9223372036854775808::HUGEINT);   -- 9223372036854775808
+SELECT dfn_echo_varchar('你好 🦆');                       -- 你好 🦆
 ```
-
-:::warning `UINTEGER` is missing
-`u32` has no `DuckValueType` implementation yet, so `UINTEGER` cannot be used as an argument or a
-return type. Use `BIGINT` and `i64` instead, or convert on the SQL side.
-:::
 
 ## Wrapper types
 
@@ -189,7 +185,6 @@ pub struct DuckStructWithList {
 
 | Gap | Detail |
 | --- | --- |
-| `UINTEGER` | `u32` is not mapped. |
 | Unsupported logical types | `ENUM`, `UNION`, `BIT`, `TIME_NS`, `ANY`, `VARINT`, `SQLNULL`, integer/string literals, `GEOMETRY`, `VARIANT`. |
 | No `DuckList` / `DuckMap` | Lists and maps *are* `Vec` and `IndexMap`; there are no dedicated wrapper types. |
 | `ARRAY` bind parameters | Not supported (see above). |

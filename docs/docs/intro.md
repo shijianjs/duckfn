@@ -63,6 +63,7 @@ so everything above is safe Rust.
 
 ## Where to go next
 
+- [Create a project](./getting-started/create-a-project.md) — start from DuckDB's official Rust extension template.
 - [Installation](./getting-started/installation.md) — dependencies, MSRV, and why no DuckDB build is needed.
 - [Quick start](./getting-started/quick-start.md) — build and load your first extension.
 - [Attributes](./guide/attributes.md) — the full attribute and argument reference.

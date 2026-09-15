@@ -160,12 +160,12 @@ impl DuckValueType for u16 {
     }
 }
 
-/// `u32` ↔ `UINT`。
+/// `u32` ↔ `UINTEGER`。
 ///
-/// `u32` ↔ `UINT`.
+/// `u32` ↔ `UINTEGER`.
 impl DuckValueType for u32 {
     fn type_id() -> TypeId {
-        TypeId::USmallInt
+        TypeId::UInteger
     }
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         unsafe { reader.read_u32(row) }

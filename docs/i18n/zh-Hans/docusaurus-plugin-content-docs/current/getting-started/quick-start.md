@@ -1,6 +1,6 @@
 ---
 title: 快速开始
-sidebar_position: 2
+sidebar_position: 3
 description: 编写、构建并加载一个最小的 duckfn 扩展，然后在 SQL 中调用它。
 ---
 
@@ -8,6 +8,8 @@ description: 编写、构建并加载一个最小的 duckfn 扩展，然后在 S
 
 本页从零构建一个名为 `my_ext` 的最小扩展。本仓库自带的示例扩展是 `rusty_quack`，覆盖了全部功能，
 见[示例扩展](../examples/rusty-quack.md)。
+
+如果想直接从带 CI 的可用骨架起步，见[创建项目](./create-a-project.md)。
 
 ## 1. 创建 crate
 

@@ -90,6 +90,7 @@ duckfn_entrypoint!("my_ext");
 | 页面 | 内容 |
 | --- | --- |
 | [简介](https://shijianjs.github.io/duckfn/zh-Hans/docs/intro) | duckfn 是什么，各 crate 如何配合。 |
+| [创建项目](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/create-a-project) | 从 DuckDB 官方 Rust 扩展模板起步。 |
 | [安装](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/installation) | 依赖、MSRV，以及为什么不需要编译 DuckDB。 |
 | [快速开始](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/quick-start) | 编写、构建并加载第一个扩展。 |
 | [指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 属性参考、标量/聚合/表函数、类型转换、replacement scan、SQL 宏。 |

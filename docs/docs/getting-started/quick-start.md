@@ -1,6 +1,6 @@
 ---
 title: Quick start
-sidebar_position: 2
+sidebar_position: 3
 description: Write, build and load a minimal duckfn extension, then call it from SQL.
 ---
 
@@ -9,6 +9,9 @@ description: Write, build and load a minimal duckfn extension, then call it from
 This page builds a minimal extension called `my_ext`. The repository's own example extension is
 `rusty_quack` — see [the example extension](../examples/rusty-quack.md) for one that covers every
 feature.
+
+To start from a working skeleton with CI already in place instead, see
+[Create a project](./create-a-project.md).
 
 ## 1. Create the crate
 

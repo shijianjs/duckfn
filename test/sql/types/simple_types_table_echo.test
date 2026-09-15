@@ -140,6 +140,21 @@ SELECT typeof(v) FROM dfn_table_echo_usmallint(0::USMALLINT);
 USMALLINT
 
 # ============================================================================
+# UINTEGER (u32)
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_uinteger(4294967295::UINTEGER, count => 2);
+----
+4294967295
+NULL
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_uinteger(0::UINTEGER);
+----
+UINTEGER
+
+# ============================================================================
 # UBIGINT (u64)
 # ============================================================================
 

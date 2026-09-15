@@ -8,7 +8,7 @@
     "description": "The label for category 'Getting started' in sidebar 'docsSidebar'"
   },
   "sidebar.docsSidebar.category.Getting started.link.generated-index.description": {
-    "message": "把 duckfn 加进 crate、构建扩展，然后在 SQL 中调用它。",
+    "message": "从模板起步、加入 duckfn，然后在 SQL 中调用第一个函数。",
     "description": "The generated-index page description for category 'Getting started' in sidebar 'docsSidebar'"
   },
   "sidebar.docsSidebar.category.Guide": {

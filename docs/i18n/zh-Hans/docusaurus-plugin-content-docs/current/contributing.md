@@ -14,7 +14,8 @@ description: 环境准备、日常命令、测试组织方式，以及需要遵�
 | Python 3 + 网络 | 仅 `make configure` 需要，用于创建 sqllogictest 运行器的虚拟环境。 |
 | `make` | 驱动 DuckDB 的 `extension-ci-tools` makefile。 |
 | [`just`](https://github.com/casey/just) *（可选）* | `Justfile` 封装了常用命令。 |
-| DuckDB CLI | 手动加载扩展时使用。 |
+| [`cargo-duckdb-ext-tools`](https://github.com/redraiment/cargo-duckdb-ext-tools) *（可选）* | `cargo install cargo-duckdb-ext-tools` 后可用 `cargo duckdb-ext build`，既不需要 `make` 也不需要 checkout submodule。 |
+| DuckDB CLI | 手动加载扩展时使用，调试时也用得上。 |
 
 `extension-ci-tools/` 是一个 git submodule，而 `Makefile` 会 include 它的 makefile，因此新克隆之后需要：
 
@@ -22,6 +23,18 @@ description: 环境准备、日常命令、测试组织方式，以及需要遵�
 git submodule update --init --recursive
 make configure
 ```
+
+## Windows
+
+`make` 要在 **Git Bash** 里运行，而不是 PowerShell 或 `cmd`：makefile 及其辅助脚本假定存在 POSIX shell。
+`make` 报缺的包大多可以用 [Scoop](https://scoop.sh/) 安装：
+
+```shell
+scoop install make python
+```
+
+Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `make` 那几条目标（`make configure`、
+`make test` 以及 CI 等价命令）需要 Git Bash。
 
 ## workspace 结构
 
@@ -46,7 +59,24 @@ just doc                                 # 生成 duckfn 的 rustdoc
 
 `.cargo/config.toml` 在 `x86_64-pc-windows-msvc` 上静态链接 C 运行时，除此之外不需要任何按平台的额外配置。
 
+## 调试
+
+扩展代码运行在 **`duckdb` 进程内**，所以调试器要附加到那个进程，而不是由 IDE 自己启动一个程序：
+
+1. 用带调试符号的方式构建 —— `make debug`，或 `cargo duckdb-ext build`。
+2. 启动 DuckDB 并保持会话存活，例如 `duckdb -unsigned`。
+3. 在该会话里执行 `LOAD '/path/to/my_ext.duckdb_extension';`。
+4. 在 IDE 里附加到正在运行的 `duckdb` 进程 —— RustRover 见
+   [附加到进程](https://www.jetbrains.com/zh-cn/help/rust/2026.2/attach-to-process.html)。
+5. 在函数里打断点，然后执行调用它的 SQL，例如 `SELECT double_it(21);`。
+
+动态库是在 `LOAD` 那一刻才进入进程的，所以更早设置的断点会从那一刻起才开始解析。调试器已附加时，
+`just duckdb_ext "<SQL>"` 是手动执行一条语句的快捷方式。
+
 ## 测试
+
+用 DuckDB 官方的 sqllogictest 最实用：它通过 SQL 来验证扩展，也就是 DuckDB 真正调用扩展的方式，
+而且 CI 跑的就是这一套。它需要先跑通 `make` 流程（`make configure` 做一次，之后用 `make test`）。
 
 测试是 `test/sql/` 下的 sqllogictest 文件，与源码目录一一对应：
 
@@ -94,7 +124,8 @@ npm run build            # 两种语言都必须通过；断链会直接让构�
 
 ## 约定
 
-- 跑 `cargo fmt`，并保持 `cargo clippy` 无告警。
+- 与周围代码保持一致风格。当前 workspace 并不满足 `cargo fmt --check`，对整个仓库跑 `cargo fmt` 会连带改写
+  与你改动无关的文件 —— 只格式化你碰过的那部分。并保持 `cargo clippy` 无告警。
 - 错误信息以产生它的函数名开头，例如 `dfn_table_checked: n must be >= 0`。
 - 面向使用者的代码保持无 `unsafe`；唯一接受的例外是显式注册路径，那里需要
   `unsafe { c.register_scalar(…) }` 这类调用。

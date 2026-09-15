@@ -94,6 +94,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | Page | Contents |
 | --- | --- |
 | [Introduction](https://shijianjs.github.io/duckfn/docs/intro) | What duckfn is, and how the crates fit together. |
+| [Create a project](https://shijianjs.github.io/duckfn/docs/getting-started/create-a-project) | Start from DuckDB's official Rust extension template. |
 | [Installation](https://shijianjs.github.io/duckfn/docs/getting-started/installation) | Dependencies, MSRV, and why no DuckDB build is needed. |
 | [Quick start](https://shijianjs.github.io/duckfn/docs/getting-started/quick-start) | Write, build and load your first extension. |
 | [Guide](https://shijianjs.github.io/duckfn/docs/guide/attributes) | Attributes, scalar/aggregate/table functions, casts, replacement scans, SQL macros. |

@@ -14,7 +14,8 @@ description: Setting up the repository, the day-to-day commands, how the tests a
 | Python 3 + network | Only for `make configure`, which builds the sqllogictest runner's virtualenv. |
 | `make` | Drives the DuckDB `extension-ci-tools` makefiles. |
 | [`just`](https://github.com/casey/just) *(optional)* | The `Justfile` wraps the common commands. |
-| DuckDB CLI | For loading the extension by hand. |
+| [`cargo-duckdb-ext-tools`](https://github.com/redraiment/cargo-duckdb-ext-tools) *(optional)* | `cargo install cargo-duckdb-ext-tools` gives you `cargo duckdb-ext build`, which needs neither `make` nor a submodule checkout. |
+| DuckDB CLI | For loading the extension by hand, and for debugging. |
 
 `extension-ci-tools/` is a git submodule and the `Makefile` includes makefiles from it, so after a
 fresh clone:
@@ -23,6 +24,19 @@ fresh clone:
 git submodule update --init --recursive
 make configure
 ```
+
+## Windows
+
+Run `make` from **Git Bash**, not PowerShell or `cmd`: the makefiles and their helper scripts assume
+a POSIX shell. Anything `make` reports as missing can usually be installed with
+[Scoop](https://scoop.sh/):
+
+```shell
+scoop install make python
+```
+
+Cargo and `cargo duckdb-ext build` work in any shell, so Git Bash is only needed for the `make`
+targets — `make configure`, `make test`, and the CI-equivalent commands.
 
 ## The workspace
 
@@ -48,7 +62,27 @@ just doc                                # build the rustdoc for duckfn
 `.cargo/config.toml` statically links the C runtime on `x86_64-pc-windows-msvc`; nothing else needs
 to be configured per platform.
 
+## Debugging
+
+The extension code runs **inside the `duckdb` process**, so attach the debugger to that process
+instead of launching something yourself:
+
+1. Build with debug symbols — `make debug`, or `cargo duckdb-ext build`.
+2. Start DuckDB and keep the session alive, for example `duckdb -unsigned`.
+3. `LOAD '/path/to/my_ext.duckdb_extension';` in that session.
+4. In the IDE, attach to the running `duckdb` process — in RustRover that is
+   [Attach to process](https://www.jetbrains.com/help/rust/attach-to-process.html).
+5. Set a breakpoint in your function and run the SQL that calls it, e.g. `SELECT double_it(21);`.
+
+The shared library only enters the process at `LOAD`, so a breakpoint set earlier starts resolving
+from that point on. `just duckdb_ext "<SQL>"` is a quick way to run one statement by hand while the
+debugger is attached.
+
 ## Tests
+
+DuckDB's own sqllogictest runner is the practical choice: it exercises the extension through SQL,
+exactly the way DuckDB calls it, and it is what CI runs. It needs the `make` flow to be set up
+(`make configure` once, then `make test`).
 
 Tests are sqllogictest files under `test/sql/`, mirroring the source layout:
 
@@ -99,7 +133,9 @@ npm run build            # must pass for both locales; broken links fail the bui
 
 ## Conventions
 
-- `cargo fmt`, and keep `cargo clippy` quiet.
+- Match the style of the surrounding code. The workspace is not `rustfmt`-clean today, so running
+  `cargo fmt` across the tree would rewrite files unrelated to your change — format only what you
+  touched. Keep `cargo clippy` quiet.
 - Error messages start with the name of the function that produced them, e.g.
   `dfn_table_checked: n must be >= 0`.
 - User-facing code stays free of `unsafe`; the only accepted exceptions are the explicit

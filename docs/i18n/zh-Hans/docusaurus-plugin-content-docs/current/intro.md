@@ -61,6 +61,7 @@ FFI 包装、列读写与注册代码都由属性宏生成，所以上面这段�
 
 ## 接下来
 
+- [创建项目](./getting-started/create-a-project.md) —— 从 DuckDB 官方 Rust 扩展模板起步。
 - [安装](./getting-started/installation.md) —— 依赖、MSRV，以及为什么不需要编译 DuckDB。
 - [快速开始](./getting-started/quick-start.md) —— 构建并加载第一个扩展。
 - [属性参考](./guide/attributes.md) —— 完整的属性与参数说明。

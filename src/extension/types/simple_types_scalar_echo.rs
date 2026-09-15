@@ -4,7 +4,7 @@ use duckfn::duck_scalar_function;
 // 简单类型 echo 函数
 //
 // 覆盖 simple_types.rs 中已实现的全部 DuckValueType：
-// bool / i8 / i16 / i32 / i64 / i128 / u8 / u16 / u64 / u128 / f32 / f64 / String
+// bool / i8 / i16 / i32 / i64 / i128 / u8 / u16 / u32 / u64 / u128 / f32 / f64 / String
 //
 // 每个函数同时验证：
 //   - 入参：VectorReader.read_* -> DuckValueType::read
@@ -81,6 +81,15 @@ fn dfn_echo_utinyint(i: u8) -> u8 {
 /// ```
 #[duck_scalar_function]
 fn dfn_echo_usmallint(i: u16) -> u16 {
+    i
+}
+
+/// TypeId::UInteger // u32
+/// ```sql
+/// SELECT dfn_echo_uinteger(i) FROM (VALUES (0::UINTEGER), (4294967295::UINTEGER)) t(i);
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_uinteger(i: u32) -> u32 {
     i
 }
 
