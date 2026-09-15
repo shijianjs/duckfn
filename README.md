@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="https://raw.githubusercontent.com/shijianjs/duckfn/main/docs/static/img/duckfn-logo.svg" alt="duckfn logo" width="180" />
+</div>
+
 # duckfn
 
 [English](README.md) | [简体中文](README.zh-CN.md)
