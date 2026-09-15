@@ -29,7 +29,7 @@ code, and no local DuckDB build required.
 
 ```toml
 [dependencies]
-duckfn = "0.0.1"
+duckfn = "0.0.2"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
