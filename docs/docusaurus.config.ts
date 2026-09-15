@@ -13,7 +13,7 @@ const baseUrl = process.env.DOCS_BASE_URL ?? '/';
 const config: Config = {
   title: 'duckfn',
   tagline: 'Write DuckDB extensions in plain Rust',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/duckfn-logo.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -75,7 +75,7 @@ const config: Config = {
       title: 'duckfn',
       logo: {
         alt: 'duckfn logo',
-        src: 'img/logo.svg',
+        src: 'img/duckfn-logo.svg',
       },
       items: [
         {
