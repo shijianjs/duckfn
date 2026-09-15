@@ -1,0 +1,82 @@
+#
+# Builds the Docusaurus site in docs/ and publishes it to GitHub Pages.
+#
+# Pushing a version tag (e.g. v0.0.3) triggers the build; the workflow can also be started
+# manually from the Actions tab. Deploying on every push to main would mean adding
+#   push: { branches: [main] }
+# to the trigger below.
+#
+# One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+#
+name: Deploy Docs
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+# Required by actions/deploy-pages: it exchanges the OIDC token for a Pages deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two Pages deployments race; the later one wins.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      # Resolves the Pages base URL, honouring a custom domain when one is configured.
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        working-directory: docs
+        run: npm ci
+
+      - name: Build site
+        working-directory: docs
+        # A project site is served from /<repo>/, so Docusaurus is told the real url/baseUrl
+        # instead of relying on the local-development fallbacks in docusaurus.config.ts.
+        run: |
+          set -euo pipefail
+          base_path='${{ steps.pages.outputs.base_path }}'
+          export DOCS_URL='${{ steps.pages.outputs.base_url }}'
+          export DOCS_BASE_URL="${base_path%/}/"
+          echo "Building for DOCS_URL=$DOCS_URL DOCS_BASE_URL=$DOCS_BASE_URL"
+          npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build
+
+  # The `github-pages` environment is protected by default. If this job is rejected by
+  # environment protection rules (e.g. "Branch \"v0.0.3\" is not allowed to deploy"),
+  # open Settings -> Environments -> github-pages and allow the tag pattern `v*.*.*`.
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
