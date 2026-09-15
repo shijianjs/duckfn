@@ -1,6 +1,6 @@
 ---
 title: 自定义类型
-sidebar_position: 9
+sidebar_position: 10
 description: 为自己的类型实现 DuckValueType，以及如何触达 duckfn 尚未映射的逻辑类型。
 ---
 
@@ -127,6 +127,12 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 
 **DuckDB 1.5 新增的逻辑类型。** 其中一些只需要开启一个 feature 就能用：`TIME_NS` 已经内置在 duckfn 里，
 由 `duckdb-1-5` 控制，该 feature 转发到 quack-rs 的同名 feature —— 见[安装](../getting-started/installation.md#cargo-feature)。
+
+## 源码与测试
+
+- [`src/extension/types/custom_type_echo.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/types/custom_type_echo.rs) —— `Celsius`，在 duckfn 之外实现
+- [`test/sql/types/custom_type_echo.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/types/custom_type_echo.test) —— 期望结果
+- [`duckfn/src/value_types/duck_value_type.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/value_types/duck_value_type.rs) —— trait 本身
 
 ## 接下来
 

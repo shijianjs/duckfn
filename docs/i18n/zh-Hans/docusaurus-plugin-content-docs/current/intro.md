@@ -2,7 +2,7 @@
 title: 简介
 sidebar_position: 1
 slug: /intro
-description: duckfn 可以把普通的 Rust 函数变成 DuckDB 的标量函数、聚合函数、表函数、SQL 宏、类型转换与 replacement scan，无需 C/C++ 胶水代码，也无需本地编译 DuckDB。
+description: duckfn 可以把普通的 Rust 函数变成 DuckDB 的标量函数、聚合函数、表函数、SQL 宏、类型转换与替换扫描，无需 C/C++ 胶水代码，也无需本地编译 DuckDB。
 ---
 
 # 简介
@@ -10,7 +10,7 @@ description: duckfn 可以把普通的 Rust 函数变成 DuckDB 的标量函数�
 **用纯 Rust 编写 DuckDB 扩展。**
 
 `duckfn` 是一个基于 DuckDB C Extension API 的框架。加一个属性，普通的 Rust 函数就变成 DuckDB 的
-**标量函数**、**聚合函数**、**表函数**、SQL 宏、replacement scan 或类型转换。
+**标量函数**、**聚合函数**、**表函数**、SQL 宏、替换扫描（replacement scan）或类型转换。
 
 ```rust
 use duckfn::{duck_error, duck_scalar_function, duckfn_entrypoint, DuckOptionResult};

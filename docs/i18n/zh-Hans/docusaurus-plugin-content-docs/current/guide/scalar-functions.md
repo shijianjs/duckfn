@@ -178,6 +178,12 @@ SELECT dfn_scalar_reg_named_param(x := 1, y := 2); -- 12（不存在的名字也
 
 `named_param_from` 只对表函数有意义，对标量函数没有可观察效果。
 
+## 源码与测试
+
+- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) —— 示例函数
+- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 期望结果
+- [`duckfn/src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/scalar_function_adapter.rs) —— 运行时侧
+
 ## 接下来
 
 - [聚合函数](./aggregate-functions.md)

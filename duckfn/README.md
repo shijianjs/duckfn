@@ -97,7 +97,8 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [Scalar functions](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) | Return shapes, `NULL` handling, overloads. |
 | [Aggregate functions](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) | Row handlers, state types, parallel aggregation. |
 | [Table functions](https://shijianjs.github.io/duckfn/docs/guide/table-functions) | Row structs, named parameters, streaming. |
-| [Casts and replacement scans](https://shijianjs.github.io/duckfn/docs/guide/casts-and-scans) | `CAST` overrides and `SELECT * FROM 'data.points'`. |
+| [Type casts](https://shijianjs.github.io/duckfn/docs/guide/casts) | Overriding `CAST` for one source/target pair. |
+| [Replacement scans](https://shijianjs.github.io/duckfn/docs/guide/replacement-scans) | Making `SELECT * FROM 'data.points'` work. |
 | [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) | Macros from Rust or from `.sql` files. |
 | [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability and known gaps. |
 | [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) · [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) | Error handling, expansion, registration and adapters. |

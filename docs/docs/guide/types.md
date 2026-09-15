@@ -1,6 +1,6 @@
 ---
 title: Type mapping
-sidebar_position: 7
+sidebar_position: 8
 description: How DuckDB types map to Rust types, including LIST, MAP, ARRAY and STRUCT, plus the nullability rules and the gaps.
 ---
 
@@ -198,6 +198,12 @@ pub struct DuckStructWithList {
 | `MAP` keys | Never nullable. |
 | `Vec<T>` / `[T; N]` elements | Never nullable — use the `Option` variants. |
 | `DECIMAL` | DuckDB requires `WIDTH < 39`. |
+
+## Source and tests
+
+- [`src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/types) — the echo functions for every type
+- [`test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/test/sql/types) — the expected results
+- [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) — the type implementations themselves
 
 ## Next
 

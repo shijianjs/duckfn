@@ -72,7 +72,7 @@ Every macro, its arguments and the items it generates are documented at
 
 - [Attributes](https://shijianjs.github.io/duckfn/docs/guide/attributes) — the full attribute and argument reference.
 - [Scalar](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) · [Aggregate](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) · [Table](https://shijianjs.github.io/duckfn/docs/guide/table-functions) functions
-- [Casts and replacement scans](https://shijianjs.github.io/duckfn/docs/guide/casts-and-scans) · [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros)
+- [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) · [Type casts](https://shijianjs.github.io/duckfn/docs/guide/casts) · [Replacement scans](https://shijianjs.github.io/duckfn/docs/guide/replacement-scans)
 - [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) — what each macro expands to.
 
 中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>

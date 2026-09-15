@@ -8,6 +8,11 @@ description: How duckfn turns an annotated function into a registered DuckDB fun
 
 This page follows one annotated function from source to a registered DuckDB function.
 
+:::info Diagrams and a deeper walkthrough
+[Zread](https://zread.ai/shijianjs/duckfn) documents this repository with generated diagrams — module
+layering, the registration flow and much more. When this page is not enough, start there.
+:::
+
 ## The pieces
 
 | Crate | Responsibility |

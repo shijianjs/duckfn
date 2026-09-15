@@ -1,6 +1,6 @@
 ---
 title: Custom types
-sidebar_position: 9
+sidebar_position: 10
 description: Implement DuckValueType for your own types, and how to reach logical types duckfn does not map yet.
 ---
 
@@ -137,6 +137,12 @@ the children. `duckfn/src/value_types/duck_list.rs`, `duck_map.rs`, `duck_array.
 **A DuckDB 1.5 logical type.** Some of them only need a Cargo feature to become available:
 `TIME_NS` ships in duckfn behind `duckdb-1-5`, which forwards to the same feature on quack-rs — see
 [Installation](../getting-started/installation.md#cargo-features).
+
+## Source and tests
+
+- [`src/extension/types/custom_type_echo.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/types/custom_type_echo.rs) — the `Celsius` type, implemented outside duckfn
+- [`test/sql/types/custom_type_echo.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/types/custom_type_echo.test) — the expected results
+- [`duckfn/src/value_types/duck_value_type.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/value_types/duck_value_type.rs) — the trait itself
 
 ## Next
 

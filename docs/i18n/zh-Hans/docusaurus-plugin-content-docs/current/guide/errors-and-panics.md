@@ -1,6 +1,6 @@
 ---
 title: 错误与 panic
-sidebar_position: 8
+sidebar_position: 9
 description: 如何报告查询错误、如何返回 NULL，以及 Rust panic 如何变成 DuckDB 错误。
 ---
 
@@ -74,7 +74,7 @@ SELECT dfn_scalar_ret_panic(13);   -- 报错：unlucky input: 13
 | 聚合函数 | 行处理函数 | `SELECT dfn_agg_panic(x) FROM (VALUES (13)) t(x);` |
 | 类型转换 | 函数体 | `SELECT CAST('NaN'::DOUBLE AS BIGINT);` → `dfn_cast_double_to_bigint: not a finite number: NaN` |
 | 表函数 | 迭代器以及 bind 阶段 | `SELECT * FROM dfn_table_full(5);` → `dfn_table_full: bad row 2` |
-| replacement scan | 回调 | `SELECT * FROM 'boom.panic';` → `dfn_scan_points: panic while handling boom.panic` |
+| 替换扫描 | 回调 | `SELECT * FROM 'boom.panic';` → `dfn_scan_points: panic while handling boom.panic` |
 
 :::caution panic 是安全网，不是控制流
 被捕获只能保证进程不崩，它仍然会终止整条查询，而且丢失了你本可以自行选择的错误类型。
@@ -99,6 +99,13 @@ SELECT dfn_scalar_ret_panic(13);   -- 报错：unlucky input: 13
 | `TRY_CAST('abc' AS INTEGER)` | 该行为 `NULL`，查询继续。 |
 
 **聚合函数**：行处理函数返回的 `Err` 会让查询失败；这里没有逐行的 `NULL` 通道，因为一行只是更新状态。
+
+## 源码与测试
+
+- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— `duck_error`、`Ok(None)` 与 panic 用例
+- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 聚合函数的同类用例
+- [`test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/cast_function.test) —— `CAST` 与 `TRY_CAST` 的差别
+- [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) —— bind 与 scan 里捕获 panic 的位置
 
 ## 接下来
 

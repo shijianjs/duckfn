@@ -181,6 +181,12 @@ FROM (VALUES (1, 2), (NULL, 5), (3, NULL), (4, 6)) t(a, b);
 `duckfn::DuckfnAggregateFunctionSetBuilder` 配合宏生成的 `aggregate_function_guard()`，它把每个重载注册成
 独立的 DuckDB 函数，因此各自保留自己的 `Output`。
 
+## 源码与测试
+
+- [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
+- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 期望结果
+- [`duckfn/src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/aggregate_function_adapter.rs) —— 运行时侧
+
 ## 接下来
 
 - [表函数](./table-functions.md)

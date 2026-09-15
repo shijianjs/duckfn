@@ -204,7 +204,14 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
 行是惰性产出的，一次一个 DuckDB vector，因此大结果集不必整体物化。
 `SELECT count(*) FROM dfn_table_range(2048)` 返回 `2048`，再大一号的规模也一样 —— 迭代器被一直拉到穷尽为止。
 
+## 源码与测试
+
+- [`src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/table_function.rs) —— 示例表函数及其行结构体
+- [`test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/table_function.test) —— 期望结果
+- [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) —— 运行时侧
+
 ## 接下来
 
-- [类型转换与 replacement scan](./casts-and-scans.md)
+- [类型转换](./casts.md)
+- [替换扫描](./replacement-scans.md)
 - [类型映射](./types.md)

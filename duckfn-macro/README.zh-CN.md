@@ -68,7 +68,7 @@ pub fn add_two_macro() -> duckfn::DuckResult<String> {
 
 - [属性参考](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) —— 完整的属性与参数说明。
 - [标量](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) · [聚合](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/aggregate-functions) · [表函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/table-functions)
-- [类型转换与 replacement scan](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts-and-scans) · [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros)
+- [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros) · [类型转换](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts) · [替换扫描](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/replacement-scans)
 - [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) —— 每个宏展开了什么。
 
 English docs: <https://shijianjs.github.io/duckfn/>

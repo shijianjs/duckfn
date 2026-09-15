@@ -134,6 +134,10 @@ const config: Config = {
               label: 'docs.rs',
               href: 'https://docs.rs/duckfn',
             },
+            {
+              label: 'Zread',
+              href: 'https://zread.ai/shijianjs/duckfn',
+            },
           ],
         },
       ],

@@ -210,7 +210,14 @@ Rows are produced lazily, one DuckDB vector at a time, so large result sets do n
 materialised. `SELECT count(*) FROM dfn_table_range(2048)` returns `2048`, and so does the next
 matching size — the iterator is simply pulled until it is exhausted.
 
+## Source and tests
+
+- [`src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/table_function.rs) — the example table functions and their row structs
+- [`test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/table_function.test) — the expected results
+- [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) — the runtime side
+
 ## Next
 
-- [Casts and replacement scans](./casts-and-scans.md)
+- [Type casts](./casts.md)
+- [Replacement scans](./replacement-scans.md)
 - [Type mapping](./types.md)

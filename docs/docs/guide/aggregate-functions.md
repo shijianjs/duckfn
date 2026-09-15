@@ -191,6 +191,12 @@ only set one return type for the whole set — use `duckfn::DuckfnAggregateFunct
 generated `aggregate_function_guard()` instead, which registers each overload as a standalone DuckDB
 function and therefore keeps each `Output`.
 
+## Source and tests
+
+- [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) — the example aggregates and their state types
+- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the expected results
+- [`duckfn/src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/aggregate_function_adapter.rs) — the runtime side
+
 ## Next
 
 - [Table functions](./table-functions.md)

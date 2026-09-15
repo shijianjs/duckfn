@@ -183,6 +183,12 @@ SELECT dfn_scalar_reg_named_param(x := 1, y := 2); -- 12  (unknown names are not
 
 `named_param_from` only affects table functions; on a scalar function it has no observable effect.
 
+## Source and tests
+
+- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) — the example functions
+- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the expected results
+- [`duckfn/src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/scalar_function_adapter.rs) — the runtime side
+
 ## Next
 
 - [Aggregate functions](./aggregate-functions.md)

@@ -16,7 +16,7 @@
     "description": "The label for category 'Guide' in sidebar 'docsSidebar'"
   },
   "sidebar.docsSidebar.category.Guide.link.generated-index.description": {
-    "message": "duckfn 能注册的一切：函数、宏、类型转换与 replacement scan。",
+    "message": "duckfn 能注册的一切：函数、宏、类型转换与替换扫描。",
     "description": "The generated-index page description for category 'Guide' in sidebar 'docsSidebar'"
   },
   "sidebar.docsSidebar.category.Examples": {

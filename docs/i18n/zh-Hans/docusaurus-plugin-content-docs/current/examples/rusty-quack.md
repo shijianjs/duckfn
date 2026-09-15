@@ -31,7 +31,7 @@ SELECT rusty_echo('Jane');
 | --- | --- |
 | `src/extension/mod.rs` | `duckfn_entrypoint!("rusty_quack")` 与模块树。 |
 | `src/extension/demo/` | 每个功能域一个文件，另有若干手写 FFI 版本用于对照。 |
-| `src/extension/functions/` | 每种注册方式一个文件：标量、聚合、表函数、类型转换、replacement scan、SQL 宏。 |
+| `src/extension/functions/` | 每种注册方式一个文件：标量、聚合、表函数、类型转换、替换扫描、SQL 宏。 |
 | `src/extension/functions/sql/` | 通过 `include_str!` 与 `duck_sql_macro_files!` 注册的 `.sql` 文件。 |
 | `src/extension/types/` | 每种受支持类型的 echo 函数，标量与表函数两种形式。 |
 | `test/sql/` | 25 个 sqllogictest 文件，与源码目录一一对应。 |
@@ -124,7 +124,7 @@ SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 --  0
 ```
 
-## 类型转换与 replacement scan
+## 类型转换与替换扫描
 
 ```sql
 SELECT CAST('42' AS INTEGER);        -- 42

@@ -1,6 +1,6 @@
 ---
 title: SQL macros
-sidebar_position: 6
+sidebar_position: 5
 description: Register scalar and table SQL macros — preferably from .sql files that are inlined at compile time.
 ---
 
@@ -161,6 +161,13 @@ Macro names are looked up case-insensitively, and mistakes surface as ordinary D
 | Wrong number of arguments | `dfn_macro_add does not support the supplied arguments` |
 | A table macro used as a scalar | `dfn_macro_gen is a table function but it was used as a scalar function` |
 | A scalar macro used with `FROM` | `Table Function with name dfn_macro_add does not exist` |
+
+## Source and tests
+
+- [`src/extension/functions/sql_macro.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/sql_macro.rs) — the macros built in Rust
+- [`src/extension/functions/sql/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/functions/sql) — the `.sql` files
+- [`test/sql/functions/sql_macro.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/sql_macro.test) — the expected results
+- [`duckfn/src/functions/sql_macro_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/sql_macro_adapter.rs) — the runtime side
 
 ## Next
 

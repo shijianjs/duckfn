@@ -179,3 +179,9 @@ duck_sql_macro_files!(
 Paths are resolved relative to the `.rs` file that invokes the macro, inlined with `include_str!`
 at compile time, and executed in the order written. A single file may define any number of macros;
 see [SQL macros](./sql-macros.md).
+
+## Source and tests
+
+- [`duckfn-macro/src/attr_args.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/attr_args.rs) — the argument list every attribute shares
+- [`duckfn-macro/src/duck_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/duck_function.rs) — what each macro expands to
+- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) and [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the manual-registration examples

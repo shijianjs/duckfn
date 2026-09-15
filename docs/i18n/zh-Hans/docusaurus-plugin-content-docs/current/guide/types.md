@@ -1,6 +1,6 @@
 ---
 title: 类型映射
-sidebar_position: 7
+sidebar_position: 8
 description: DuckDB 类型与 Rust 类型的对应关系，涵盖 LIST、MAP、ARRAY、STRUCT，以及可空性规则与暂不支持的部分。
 ---
 
@@ -192,6 +192,12 @@ pub struct DuckStructWithList {
 | `MAP` 的键 | 永远不可为空。 |
 | `Vec<T>` / `[T; N]` 的元素 | 永远不可为空，需要可空请用 `Option` 版本。 |
 | `DECIMAL` | DuckDB 要求 `WIDTH < 39`。 |
+
+## 源码与测试
+
+- [`src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/types) —— 每种类型的 echo 函数
+- [`test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/test/sql/types) —— 期望结果
+- [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) —— 类型实现本身
 
 ## 接下来
 

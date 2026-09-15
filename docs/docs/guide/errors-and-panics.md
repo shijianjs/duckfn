@@ -1,6 +1,6 @@
 ---
 title: Errors and panics
-sidebar_position: 8
+sidebar_position: 9
 description: Reporting a query error, returning NULL, and how Rust panics become DuckDB errors.
 ---
 
@@ -103,6 +103,13 @@ the error type you would otherwise choose. Prefer `Ok(None)` and `Err(duck_error
 
 **Aggregates.** An `Err` returned from the row handler fails the query; there is no per-row `NULL`
 channel any more, because a row only updates the state.
+
+## Source and tests
+
+- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — `duck_error`, `Ok(None)` and panic cases
+- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the same for aggregates
+- [`test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/cast_function.test) — `CAST` versus `TRY_CAST`
+- [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) — where bind and scan catch panics
 
 ## Next
 

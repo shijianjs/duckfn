@@ -14,7 +14,7 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 | `#[duck_aggregate_function]` | 聚合函数 | 行处理函数返回 `()` 或 `DuckResult<()>`；输出由状态给出 |
 | `#[duck_table_function]` | 表函数 | `impl Iterator<Item = Row>`、`DuckResult<impl Iterator<Item = Row>>`、`DuckFullIteratorResult<Row>` |
 | `#[duck_cast_function]` | 类型转换 | `T`、`Option<T>`、`DuckOptionResult<T>` |
-| `#[duck_replacement_scan]` | replacement scan | `Option<String>`、`Option<&'static str>`、`DuckOptionResult<String>`、`DuckOptionResult<&'static str>` |
+| `#[duck_replacement_scan]` | 替换扫描 | `Option<String>`、`Option<&'static str>`、`DuckOptionResult<String>`、`DuckOptionResult<&'static str>` |
 | `#[duck_sql_macro]` | SQL 宏 | `SqlMacro`、`DuckResult<SqlMacro>`、`String`、`&'static str`，或它们的 `DuckResult` |
 | `#[duck_custom_register]` | 函数自己注册的内容 | `fn(&Connection) -> DuckResult<()>` |
 | `#[derive(DuckStruct)]` | — | 把结构体映射为 DuckDB 的 `STRUCT` |
@@ -123,10 +123,10 @@ fn dfn_scalar_reg_manual_register(c: &Connection) -> DuckResult<()> {
 unsafe { c.register_aggregate(dfn_agg_reg_manual::aggregate_function_builder()) }  // 聚合函数
 unsafe { c.register_table(dfn_table_reg_manual::table_function_builder()?) }      // 表函数
 dfn_cast_manual::cast_function_register(c)                                        // 类型转换
-dfn_scan_manual::replacement_scan_register(c)                                     // replacement scan
+dfn_scan_manual::replacement_scan_register(c)                                     // 替换扫描
 ```
 
-注意表函数的 builder 返回 `DuckResult`，所以要加 `?`；类型转换与 replacement scan 的辅助函数直接接收连接。
+注意表函数的 builder 返回 `DuckResult`，所以要加 `?`；类型转换与替换扫描的辅助函数直接接收连接。
 
 手动注册也是自己拼装函数集的方式：
 
@@ -169,3 +169,9 @@ duck_sql_macro_files!(
 
 路径相对调用宏的 `.rs` 文件解析，编译期由 `include_str!` 内联，并按书写顺序执行。一个文件里可以定义任意多个宏，
 详见 [SQL 宏](./sql-macros.md)。
+
+## 源码与测试
+
+- [`duckfn-macro/src/attr_args.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/attr_args.rs) —— 所有属性共用的参数定义
+- [`duckfn-macro/src/duck_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/duck_function.rs) —— 各宏展开成什么
+- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) 与 [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 手动注册的示例

@@ -1,6 +1,6 @@
 ---
 title: SQL 宏
-sidebar_position: 6
+sidebar_position: 5
 description: 注册标量宏与表宏 —— 推荐把 SQL 写进 .sql 文件，编译期自动内联。
 ---
 
@@ -156,6 +156,13 @@ SELECT dfn_macro_quad(3);  -- 12
 | 参数个数不对 | `dfn_macro_add does not support the supplied arguments` |
 | 把表宏当标量函数用 | `dfn_macro_gen is a table function but it was used as a scalar function` |
 | 把标量宏用在 `FROM` 后 | `Table Function with name dfn_macro_add does not exist` |
+
+## 源码与测试
+
+- [`src/extension/functions/sql_macro.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/sql_macro.rs) —— 用 Rust 构造的宏
+- [`src/extension/functions/sql/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/functions/sql) —— 那批 `.sql` 文件
+- [`test/sql/functions/sql_macro.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/sql_macro.test) —— 期望结果
+- [`duckfn/src/functions/sql_macro_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/sql_macro_adapter.rs) —— 运行时侧
 
 ## 接下来
 

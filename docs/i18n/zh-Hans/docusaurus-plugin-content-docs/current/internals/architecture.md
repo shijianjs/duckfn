@@ -8,6 +8,11 @@ description: duckfn 如何把一个加了属性的函数变成已注册的 DuckD
 
 本页沿着一个加了属性的函数，从源码一路看到它被注册进 DuckDB。
 
+:::info 架构图与更细的讲解
+[Zread](https://zread.ai/shijianjs/duckfn) 用生成的架构图梳理了这个仓库 —— 模块分层、注册流程等等，
+内容非常详细丰富。本页不够用的时候，从那里入手。
+:::
+
 ## 组成
 
 | Crate | 职责 |
@@ -131,7 +136,7 @@ DuckDB 的六个回调都实现在状态类型上：
 包装函数拿到 `count`、输入 vector 与输出 vector，逐行调用函数。出错时按转换路径处理：
 `CastMode::Normal`（`CAST`）让整条查询失败，`CastMode::Try`（`TRY_CAST`）记录行级错误并写入 `NULL`。
 
-### Replacement scan
+### 替换扫描
 
 `scan_callback` 收到未解析的表名。`handle_info` 调用用户的 `handle_path`，在 `Some(table_fn)` 时设置要转调的函数，
 并把路径作为第一个 VARCHAR 参数传入。非 UTF-8 的名字会被跳过，`Err` 通过

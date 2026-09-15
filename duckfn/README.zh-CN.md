@@ -15,7 +15,7 @@
 
 `duckfn` 是一个基于 DuckDB C Extension API 的运行时框架。配合
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)，借助一个属性宏就能把普通的 Rust 函数
-变成 DuckDB 的**标量函数**、**聚合函数**、**表函数**、SQL 宏、replacement scan、类型转换，或
+变成 DuckDB 的**标量函数**、**聚合函数**、**表函数**、SQL 宏、替换扫描（replacement scan）、类型转换，或
 嵌套类型 —— 无需 C/C++ 胶水代码，也无需在本地编译 DuckDB。
 
 - 仓库地址：<https://github.com/shijianjs/duckfn>
@@ -91,7 +91,8 @@ duckfn_entrypoint!("my_ext");
 | [标量函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) | 返回形态、`NULL` 处理、重载。 |
 | [聚合函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/aggregate-functions) | 行处理函数、状态类型、并行聚合。 |
 | [表函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/table-functions) | 行结构体、命名参数、流式输出。 |
-| [类型转换与 replacement scan](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts-and-scans) | 覆盖 `CAST`，以及 `SELECT * FROM 'data.points'`。 |
+| [类型转换](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts) | 覆盖某一对源类型/目标类型的 `CAST`。 |
+| [替换扫描](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/replacement-scans) | 让 `SELECT * FROM 'data.points'` 生效。 |
 | [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros) | 用 Rust 或 `.sql` 文件注册宏。 |
 | [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
 | [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) · [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) | 错误处理、宏展开、注册与适配器。 |
