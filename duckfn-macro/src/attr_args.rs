@@ -41,14 +41,21 @@ pub fn handle_duck_function(
 
 /// `#[duck(...)]` / `#[duck_*(...)]` 里可用的全部参数。
 ///
-/// All arguments accepted by `#[duck(...)]` / `#[duck_*(...)]`.
+/// 这是 `#[duck(...)]` 参数的**唯一配置来源**：属性宏直接用它解析函数上的属性；
+/// `#[derive(DuckStruct)]` 则通过 `#[darling(flatten)]` 复用同一个结构体，解析被
+/// 写穿到 `DuckArgsImpl` 上的 `#[duck(...)]`，因此新增参数只需在这里写一次。
+///
+/// All arguments accepted by `#[duck(...)]` / `#[duck_*(...)]`. This is the **single source of
+/// truth** for `#[duck(...)]` arguments: the attribute macros parse the function attributes with
+/// it directly, while `#[derive(DuckStruct)]` reuses the very same struct through
+/// `#[darling(flatten)]` to parse the `#[duck(...)]` written through onto `DuckArgsImpl`, so a new
+/// argument only has to be declared once.
 #[derive(Debug, FromMeta)]
 #[darling(derive_syn_parse)]
 pub(crate) struct DuckArgs {
     /// 表函数的命名参数从哪个开始
     ///
     /// The field name from which table-function named parameters start.
-    #[allow(dead_code)]
     pub named_param_from: Option<String>,
 
     /// Whether to auto register the function

@@ -3,6 +3,7 @@
 //! Implementation of `#[derive(DuckStruct)]`: maps every field of a named struct onto a column /
 //! a STRUCT child field.
 
+use crate::attr_args::DuckArgs;
 use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
@@ -13,38 +14,23 @@ use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
 
 /// `#[duck(...)]` 属性的解析结果。
 ///
-/// Parse result of the `#[duck(...)]` attribute.
+/// 这里只提供 `FromDeriveInput` 的「外壳」，真正的字段配置全部通过
+/// `#[darling(flatten)]` 委托给 [`DuckArgs`]（[`darling::FromMeta`]）——被函数属性宏
+/// 写穿到 `DuckArgsImpl` 上的 `#[duck(...)]` 属性因此在 `DuckArgs` 中只定义一次。
+///
+/// Parse result of the `#[duck(...)]` attribute. This only provides the `FromDeriveInput`
+/// shell; every field configuration is delegated to [`DuckArgs`] ([`darling::FromMeta`])
+/// through `#[darling(flatten)]`, so the `#[duck(...)]` written through onto `DuckArgsImpl` by
+/// the attribute macros is declared only once, in `DuckArgs`.
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(duck))]
 struct DuckMacroArgs {
-    /// 表函数的命名参数从哪个字段开始。
+    /// `#[duck(...)]` 的字段配置，复用属性宏侧的唯一配置源。
     ///
-    /// The field from which table-function named parameters start.
-    pub named_param_from: Option<String>,
-    /// 是否自动注册；derive 本身用不到，但属性会被转写到生成的 `DuckArgsImpl` 上，
-    /// 因此必须能解析。
-    ///
-    /// Whether to auto-register. The derive itself does not use it, but the attribute is written
-    /// through to the generated `DuckArgsImpl`, so it must still be parseable.
-    #[allow(dead_code)]
-    pub auto_register: Option<bool>,
-    ///SpecialNullHandling
-    ///
-    /// 同 `auto_register`：仅为兼容转写过来的属性而保留。
-    ///
-    /// Same as `auto_register`: kept only so the written-through attribute parses.
-    #[allow(dead_code)]
-    pub special_null_handling: Option<bool>,
-    /// `overloads_name = "xxx"`：函数集重载的名字。
-    ///
-    /// 生成结构体本身用不到它，但属性会被原样写到
-    /// `#[duck(...)] struct DuckArgsImpl` 上，derive 必须认识这个字段。
-    ///
-    /// `overloads_name = "xxx"`: the name of the function-set overload. The derive itself does not
-    /// need it, but the attribute is written through to `#[duck(...)] struct DuckArgsImpl`, so the
-    /// derive must recognise the field.
-    #[allow(dead_code)]
-    pub overloads_name: Option<String>,
+    /// The field configuration of `#[duck(...)]`, reusing the single source of truth shared with
+    /// the attribute macros.
+    #[darling(flatten)]
+    args: DuckArgs,
 }
 
 /// `#[derive(DuckStruct)]` 的入口。
@@ -80,7 +66,7 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
         let mut wrapper = FieldWrapper::new(f, index);
         if start_named_param {
             wrapper.is_named_param = true;
-        } else if let Some(named_param_from) = &macro_args.named_param_from {
+        } else if let Some(named_param_from) = &macro_args.args.named_param_from {
             if wrapper.require_field_name()? == named_param_from {
                 start_named_param = true;
                 wrapper.is_named_param = true;
@@ -88,12 +74,12 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
         }
         fields.push(wrapper)
     }
-    if macro_args.named_param_from.is_some() && !start_named_param {
+    if macro_args.args.named_param_from.is_some() && !start_named_param {
         return Err(syn::Error::new(
             input.span(),
             format!(
                 "named_param_from field `{}` not found",
-                macro_args.named_param_from.as_ref().unwrap()
+                macro_args.args.named_param_from.as_ref().unwrap()
             ),
         ));
     }
@@ -235,7 +221,7 @@ impl DuckStructContext {
     ///
     /// Generates the `s_named_param_from` body: `Some("field")` when configured, otherwise `None`.
     fn s_named_param_from(&self) -> TokenStream2Result {
-        if let Some(name) = self.macro_args.named_param_from.as_ref() {
+        if let Some(name) = self.macro_args.args.named_param_from.as_ref() {
             Ok(quote! {
                 Some(#name.to_string())
             })

@@ -36,13 +36,6 @@ pub struct ItemFnWrapper {
     pub duck_args: DuckArgs,
 }
 
-// 预留的空 impl，方便后续把 `ItemFnWrapper` 的构造逻辑单独放在这里。
-//
-// Empty impl reserved for future constructors of `ItemFnWrapper`.
-impl ItemFnWrapper {
-
-}
-
 impl ItemFnWrapper {
 
     /// 生成标量函数：同名模块 + `ScalarFunctionImpl` + 自动注册（可按参数关闭）。
