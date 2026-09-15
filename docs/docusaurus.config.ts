@@ -25,6 +25,13 @@ const config: Config = {
 
   onBrokenLinks: 'throw',
 
+  // GitHub Pages serves `<path>/index.html` at `<path>/`, and 301-redirects `<path>` to `<path>/`.
+  // Keeping the slash in Docusaurus' own output means the sitemap, the canonical tags and every
+  // internal link advertise the URL that answers 200 instead of a redirect hop — which is also what
+  // crawlers (Algolia DocSearch) index. It only changes how URLs are written; the files on disk and
+  // the client-side router behave the same, and slash-less links keep working through the redirect.
+  trailingSlash: true,
+
   // English is the source language; every page under docs/ can be translated under
   // docs/i18n/zh-Hans/. Add more locales here when needed.
   i18n: {
