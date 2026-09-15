@@ -95,3 +95,8 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 扩展针对特定的 DuckDB 版本编译（`TARGET_DUCKDB_VERSION`，当前为 v1.5.5），且使用 unstable C API，
 因此只能与兼容版本配合使用。请用匹配的版本加载，或针对你手上的版本重新构建。
+
+### 工具链层面的问题去哪看？
+
+IDE 对 `src/wasm_lib.rs` 标红、嵌套模块后的 `error[E0583]`、官方 CI 的 WebAssembly 作业锁定 Rust 1.86，
+以及几个值得知道的上游 bug，都汇总在[问题排查](./troubleshooting.md)。

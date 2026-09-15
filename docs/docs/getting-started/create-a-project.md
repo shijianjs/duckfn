@@ -31,6 +31,11 @@ cd my_ext
 Then rename what the template hard-codes: `EXTENSION_NAME` in the `Makefile`, the `[[example]]`
 target if you also build for WebAssembly, and the name passed to `duckfn_entrypoint!`.
 
+While you do it, keep the two crate roots mirrored: `src/lib.rs` and `src/wasm_lib.rs` have to declare
+the same modules, and the official template's `mod lib;` re-export starts failing with
+`error[E0583]` as soon as you nest modules — see
+[Troubleshooting](../troubleshooting.md#nested-modules-fail-with-e0583).
+
 ## Write with quack-rs
 
 `duckfn` sits on top of [`quack-rs`](https://github.com/tomtom215/quack-rs), the DuckDB C API binding

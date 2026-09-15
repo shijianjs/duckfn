@@ -106,3 +106,9 @@ extension with `require rusty_quack`, then pairs statements with their expected 
 The extension is compiled against a specific DuckDB version (`TARGET_DUCKDB_VERSION`, currently
 v1.5.5) and uses the unstable C API, so it only works with a compatible DuckDB. Load it into the
 matching version, or rebuild against the version you are running.
+
+### Where do tooling problems go?
+
+The IDE flagging `src/wasm_lib.rs`, `error[E0583]` once you nest modules, the Rust 1.86 pin in the
+official CI's WebAssembly job, and the upstream bugs worth knowing about are all collected in
+[Troubleshooting](./troubleshooting.md).
