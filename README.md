@@ -22,7 +22,10 @@ nested type — no C/C++ glue code, and no local DuckDB build required.
 - Crates: [`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
 - Built on: [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
 - No `unsafe` to write: no `unsafe fn`, no raw pointers in your function bodies
-- License: [MIT](LICENSE)
+- No DuckDB build required, no C/C++ code
+- Attribute-driven registration through `inventory`
+- Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
+- Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.
 
@@ -76,80 +79,32 @@ pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
 duckfn_entrypoint!("my_ext");
 ```
 
-`#[duck_scalar_function]` generates the DuckDB wrapper, the logical types, and — by default —
-registers the function through `inventory`. `duckfn_entrypoint!` emits the `*_init_c_api` symbol
-DuckDB looks for when loading the extension.
+`#[duck_scalar_function]` generates the DuckDB wrapper, the logical types and — by default —
+registration through `inventory`. `duckfn_entrypoint!` emits the `*_init_c_api` symbol DuckDB looks
+for when loading the extension.
 
 Everything in that snippet is safe Rust: you never write an `unsafe fn`, dereference a raw pointer,
-or name a DuckDB C type — the generated wrapper does that work for you. The only place `unsafe`
-still shows up is manual registration, where `#[duck_custom_register]` calls quack-rs'
-`unsafe fn register_scalar` / `register_aggregate` / `register_table`.
+or name a DuckDB C type.
 
-## Attributes
+## Documentation
 
-| Attribute | Purpose |
+The full documentation — installation, every attribute, type mapping, the error model and a
+runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>**:
+
+| Page | Contents |
 | --- | --- |
-| `#[duck_scalar_function]` | Register a scalar function. |
-| `#[duck_aggregate_function]` | Register an aggregate function. |
-| `#[duck_cast_function]` | Register a type cast (`CAST(x AS T)` / `TRY_CAST`). The single argument is the source value and the return type is the target type; supports `Option<T>` input, `implicit_cost = N` and `auto_register = false`. |
-| `#[duck_table_function]` | Register a table function. |
-| `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function, i.e. `SELECT * FROM 'data.points'`. Return `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`; the path is passed as the first VARCHAR parameter. |
-| `#[duck_sql_macro]` | Register a SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
-| `#[duck_custom_register]` | Manually register builders, signature `fn(&Connection) -> DuckResult<()>`. |
-| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |
-| `duckfn_entrypoint!("name")` | Generate the extension entry point. |
+| [Introduction](https://shijianjs.github.io/duckfn/docs/intro) | What duckfn is, and how the crates fit together. |
+| [Installation](https://shijianjs.github.io/duckfn/docs/getting-started/installation) | Dependencies, MSRV, and why no DuckDB build is needed. |
+| [Quick start](https://shijianjs.github.io/duckfn/docs/getting-started/quick-start) | Write, build and load your first extension. |
+| [Guide](https://shijianjs.github.io/duckfn/docs/guide/attributes) | Attributes, scalar/aggregate/table functions, casts, replacement scans, SQL macros. |
+| [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability rules and known gaps. |
+| [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) | `duck_error`, `DuckOptionResult`, and panic handling. |
+| [Example extension](https://shijianjs.github.io/duckfn/docs/examples/rusty-quack) | `rusty_quack`, with runnable SQL for every feature. |
+| [Build and release](https://shijianjs.github.io/duckfn/docs/build-and-release) · [Contributing](https://shijianjs.github.io/duckfn/docs/contributing) · [FAQ](https://shijianjs.github.io/duckfn/docs/faq) | Local builds, CI, and troubleshooting. |
 
-Common macro arguments:
+中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>
 
-- `auto_register = false` — only generate builders (`scalar_function_builder()`,
-  `scalar_overload_builder()`, ...), don't auto-register; pair it with `#[duck_custom_register]`.
-- `named_param_from = "field"` — where named arguments start for table functions.
-- `overloads_name = "set_name"` (`#[duck_scalar_function]` / `#[duck_aggregate_function]`) —
-  don't register the function's own name; register this signature as an overload of the
-  `set_name` function set instead. Signatures sharing the same `overloads_name` are merged
-  into one set (each keeps its own return type), so no `#[duck_custom_register]` is needed.
-
-## Type mapping
-
-| DuckDB | Rust |
-| --- | --- |
-| `BOOLEAN` | `bool` |
-| `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
-| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
-| `HUGEINT` / `UHUGEINT` | `i128` / `u128` |
-| `FLOAT` / `DOUBLE` | `f32` / `f64` |
-| `VARCHAR` | `String` |
-| `NULL` | `Option<T>` |
-| `LIST(T)` | `Vec<T>`, nestable (`Vec<Option<Vec<Option<T>>>>` ...) |
-| `MAP(K, V)` | `IndexMap<K, V>` |
-| `ARRAY(T, N)` | `[T; N]` (`DuckArray`) / `[Option<T>; N]` (`DuckOptionArray`) |
-| `STRUCT(...)` | `#[derive(DuckStruct)]`, nested structs and lists supported |
-
-Nullability follows the Rust signature: a non-`Option` argument short-circuits the row to `NULL`
-when the input is `NULL` (the body is not called), while an `Option<T>` argument receives `None`
-and decides the semantics itself.
-
-## Error handling and panics
-
-Return `DuckOptionResult<T>` (i.e. `Result<Option<T>, ExtensionError>`) to emit `NULL` or fail the
-query via `duck_error("...")`. Panics inside a function body are caught and converted into a
-DuckDB error instead of unwinding across the FFI boundary.
-
-## Running the example extension
-
-The workspace root contains a full example extension (`rusty_quack`) covering every feature:
-
-```shell
-make configure
-make debug
-duckdb -unsigned -c "
-LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
-SELECT rusty_echo('Jane');
-"
-```
-
-See [`demo.sh`](demo.sh) for a long list of runnable SQL examples, and
-[`duckfn/README.md`](duckfn/README.md) for the full library documentation.
+API reference: <https://docs.rs/duckfn> · Library guide: [`duckfn/README.md`](duckfn/README.md)
 
 ## License
 

@@ -71,75 +71,33 @@ duckfn_entrypoint!("my_ext");
 ```
 
 The wrapper, the logical types and the registration are all generated, so the snippet above is
-entirely safe Rust — no `unsafe fn`, no raw pointers, no DuckDB C types. The only place `unsafe`
-shows up is manual registration: `#[duck_custom_register]` calls quack-rs'
-`unsafe fn register_scalar` / `register_aggregate` / `register_table`.
+entirely safe Rust. The only place `unsafe` shows up is manual registration:
+`#[duck_custom_register]` calls quack-rs' `unsafe fn register_scalar` / `register_aggregate` /
+`register_table`.
 
-## Attributes
+Calling the generated module of a `#[duck_scalar_function]` exposes builders such as
+`scalar_function_builder()` and `scalar_overload_builder()`, so you can register overloads or
+function sets yourself.
 
-| Attribute | Purpose |
+## Documentation
+
+The full guide — every attribute and its arguments, the type mapping, the error model, and a
+runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>**:
+
+| Page | Contents |
 | --- | --- |
-| `#[duck_scalar_function]` | Register a scalar function. |
-| `#[duck_aggregate_function]` | Register an aggregate function. |
-| `#[duck_cast_function]` | Register a type cast (`CAST(x AS T)` / `TRY_CAST`). The single argument is the source value and the return type is the target type; supports `Option<T>` input, `implicit_cost = N` and `auto_register = false`. |
-| `#[duck_table_function]` | Register a table function. |
-| `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function, i.e. `SELECT * FROM 'data.points'`. Return `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`; the path is passed as the first VARCHAR parameter. |
-| `#[duck_sql_macro]` | Register a SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
-| `#[duck_custom_register]` | Manually register builders, signature `fn(&Connection) -> DuckResult<()>`. |
-| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |
-| `duckfn_entrypoint!("name")` | Generate the extension entry point. |
+| [Attributes](https://shijianjs.github.io/duckfn/docs/guide/attributes) | All attributes, shared arguments, and manual registration. |
+| [Scalar functions](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) | Return shapes, `NULL` handling, overloads. |
+| [Aggregate functions](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) | Row handlers, state types, parallel aggregation. |
+| [Table functions](https://shijianjs.github.io/duckfn/docs/guide/table-functions) | Row structs, named parameters, streaming. |
+| [Casts and replacement scans](https://shijianjs.github.io/duckfn/docs/guide/casts-and-scans) | `CAST` overrides and `SELECT * FROM 'data.points'`. |
+| [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) | Macros from Rust or from `.sql` files. |
+| [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability and known gaps. |
+| [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) · [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) | Error handling, expansion, registration and adapters. |
 
-Common macro arguments:
+中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>
 
-- `auto_register = false` — only generate builders (`scalar_function_builder()`,
-  `scalar_overload_builder()`, ...) instead of auto-registering; pair it with
-  `#[duck_custom_register]`.
-- `named_param_from = "field"` — where named arguments start for table functions.
-
-`#[duck_scalar_function]` makes the function available as a module of the same name, exposing the
-generated builders so you can register overloads or function sets yourself.
-
-## Type mapping
-
-| DuckDB | Rust |
-| --- | --- |
-| `BOOLEAN` | `bool` |
-| `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
-| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
-| `HUGEINT` / `UHUGEINT` | `i128` / `u128` |
-| `FLOAT` / `DOUBLE` | `f32` / `f64` |
-| `VARCHAR` | `String` |
-| `NULL` | `Option<T>` |
-| `LIST(T)` | `Vec<T>`, nestable (`Vec<Option<Vec<Option<T>>>>` ...) |
-| `MAP(K, V)` | `IndexMap<K, V>` |
-| `ARRAY(T, N)` | `[T; N]` (`DuckArray`) / `[Option<T>; N]` (`DuckOptionArray`) |
-| `STRUCT(...)` | `#[derive(DuckStruct)]`, nested structs and lists supported |
-
-Nullability follows the Rust signature:
-
-- a non-`Option` argument short-circuits the row to `NULL` when the input is `NULL` — the function
-  body is not called;
-- an `Option<T>` argument receives `None` and decides the semantics itself.
-
-## Error handling and panics
-
-Return `DuckOptionResult<T>` (i.e. `Result<Option<T>, ExtensionError>`) to emit `NULL` or fail the
-query with `duck_error("...")`. Panics inside a function body are caught and converted into a
-DuckDB error rather than unwinding across the FFI boundary.
-
-A scalar function may use any of these return shapes:
-
-```rust
-#[duck_scalar_function] fn plain(i: i32) -> i32 { i * 2 }                 // never NULL
-#[duck_scalar_function] fn maybe(i: i32) -> Option<i32> { Some(i) }       // None -> SQL NULL
-#[duck_scalar_function] fn checked(i: i32) -> duckfn::DuckOptionResult<i32> { Ok(Some(i)) }
-```
-
-## Example extension
-
-A complete example extension (`rusty_quack`) covering every feature lives in the repository:
-
-<https://github.com/shijianjs/duckfn>
+Rust API reference: <https://docs.rs/duckfn>
 
 ## License
 

@@ -67,74 +67,32 @@ pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
 duckfn_entrypoint!("my_ext");
 ```
 
-包装层、逻辑类型和注册都由宏生成，所以上面这段全是安全 Rust —— 不需要 `unsafe fn`，不碰裸
-指针，也不接触 DuckDB 的 C 类型。唯一会出现 `unsafe` 的地方是手动注册：
+包装层、逻辑类型和注册都由宏生成，所以上面这段全是安全 Rust。唯一会出现 `unsafe` 的地方是手动注册：
 `#[duck_custom_register]` 中调用 quack-rs 的 `unsafe fn register_scalar` /
 `register_aggregate` / `register_table`。
 
-## 可用宏
+`#[duck_scalar_function]` 会生成一个与函数同名的模块，里面暴露 `scalar_function_builder()`、
+`scalar_overload_builder()` 等 builder，方便自行注册重载或函数集。
 
-| 宏 | 作用 |
+## 文档
+
+完整指南 —— 每个属性及其参数、类型映射、错误模型以及可运行的示例扩展 —— 见
+**<https://shijianjs.github.io/duckfn/zh-Hans/>**：
+
+| 页面 | 内容 |
 | --- | --- |
-| `#[duck_scalar_function]` | 注册标量函数。 |
-| `#[duck_aggregate_function]` | 注册聚合函数。 |
-| `#[duck_cast_function]` | 注册类型转换（`CAST(x AS T)` / `TRY_CAST`）。唯一参数是源值、返回类型是目标类型；支持 `Option<T>` 入参、`implicit_cost = N` 与 `auto_register = false`。 |
-| `#[duck_table_function]` | 注册表函数。 |
-| `#[duck_replacement_scan]` | 把「DuckDB 不认识的表名（通常是文件路径）」重定向到表函数，即 `SELECT * FROM 'data.points'`。返回 `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`；路径作为第一个 VARCHAR 参数传给目标表函数。 |
-| `#[duck_sql_macro]` | 注册 SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
-| `#[duck_custom_register]` | 手动注册 builder，签名为 `fn(&Connection) -> DuckResult<()>`。 |
-| `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`。 |
-| `duckfn_entrypoint!("name")` | 生成扩展入口。 |
+| [属性参考](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 全部属性、公共参数与手动注册。 |
+| [标量函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) | 返回形态、`NULL` 处理、重载。 |
+| [聚合函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/aggregate-functions) | 行处理函数、状态类型、并行聚合。 |
+| [表函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/table-functions) | 行结构体、命名参数、流式输出。 |
+| [类型转换与 replacement scan](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts-and-scans) | 覆盖 `CAST`，以及 `SELECT * FROM 'data.points'`。 |
+| [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros) | 用 Rust 或 `.sql` 文件注册宏。 |
+| [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
+| [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) · [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) | 错误处理、宏展开、注册与适配器。 |
 
-常用参数：
+English docs: <https://shijianjs.github.io/duckfn/>
 
-- `auto_register = false` —— 只生成 builder（`scalar_function_builder()`、
-  `scalar_overload_builder()` 等）不自动注册，配合 `#[duck_custom_register]` 使用。
-- `named_param_from = "field"` —— 表函数命名参数从哪个字段开始。
-
-`#[duck_scalar_function]` 会生成一个与函数同名的模块，里面暴露生成的 builder，方便自行注册重载
-或函数集。
-
-## 类型映射
-
-| DuckDB | Rust |
-| --- | --- |
-| `BOOLEAN` | `bool` |
-| `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
-| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
-| `HUGEINT` / `UHUGEINT` | `i128` / `u128` |
-| `FLOAT` / `DOUBLE` | `f32` / `f64` |
-| `VARCHAR` | `String` |
-| `NULL` | `Option<T>` |
-| `LIST(T)` | `Vec<T>`，支持嵌套（`Vec<Option<Vec<Option<T>>>>` 等） |
-| `MAP(K, V)` | `IndexMap<K, V>` |
-| `ARRAY(T, N)` | `[T; N]`（`DuckArray`）/ `[Option<T>; N]`（`DuckOptionArray`） |
-| `STRUCT(...)` | `#[derive(DuckStruct)]`，支持嵌套 struct 和 list |
-
-可空性由 Rust 签名决定：
-
-- 非 `Option` 参数遇到 `NULL` 输入时整行短路为 `NULL`，函数体不会执行；
-- `Option<T>` 参数把 `NULL` 读成 `None`，由函数自己决定语义。
-
-## 错误处理与 panic
-
-返回 `DuckOptionResult<T>`（即 `Result<Option<T>, ExtensionError>`）可以输出 `NULL`，或用
-`duck_error("...")` 让整条查询失败。函数体内的 panic 会被捕获并转换成 DuckDB 错误，而不会跨
-FFI 边界展开。
-
-标量函数支持三种返回形式：
-
-```rust
-#[duck_scalar_function] fn plain(i: i32) -> i32 { i * 2 }                 // 永不为 NULL
-#[duck_scalar_function] fn maybe(i: i32) -> Option<i32> { Some(i) }       // None -> SQL NULL
-#[duck_scalar_function] fn checked(i: i32) -> duckfn::DuckOptionResult<i32> { Ok(Some(i)) }
-```
-
-## 示例扩展
-
-仓库中有一个覆盖全部能力的示例扩展（`rusty_quack`）：
-
-<https://github.com/shijianjs/duckfn>
+Rust API 文档：<https://docs.rs/duckfn>
 
 ## 协议
 

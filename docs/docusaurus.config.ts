@@ -105,6 +105,18 @@ const config: Config = {
               label: 'Introduction',
               to: '/docs/intro',
             },
+            {
+              label: 'Quick start',
+              to: '/docs/getting-started/quick-start',
+            },
+            {
+              label: 'Guide',
+              to: '/docs/guide/attributes',
+            },
+            {
+              label: 'Examples',
+              to: '/docs/examples/rusty-quack',
+            },
           ],
         },
         {

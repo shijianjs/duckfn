@@ -20,20 +20,19 @@
 
 | 宏 | 作用 |
 | --- | --- |
-| `#[duck_scalar_function]` | 由 Rust 函数生成 DuckDB 标量函数。 |
-| `#[duck_aggregate_function]` | 生成 DuckDB 聚合函数。 |
-| `#[duck_cast_function]` | 生成 DuckDB 类型转换（`CAST(x AS T)` / `TRY_CAST`）。唯一参数是源值、返回类型是目标类型；支持 `Option<T>` 入参与 `implicit_cost = N`。 |
-| `#[duck_table_function]` | 生成 DuckDB 表函数。 |
-| `#[duck_replacement_scan]` | 把「DuckDB 不认识的表名（通常是文件路径）」重定向到表函数，即 `SELECT * FROM 'data.points'`。返回 `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`；路径作为第一个 VARCHAR 参数传给目标表函数。 |
-| `#[duck_sql_macro]` | 把 Rust 函数暴露为 DuckDB SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
-| `#[duck_custom_register]` | 手动注册函数，签名为 `fn(&Connection) -> DuckResult<()>`。 |
-| `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`（支持嵌套 struct 和 list）。 |
-| `duckfn_entrypoint!("name")` | 生成扩展入口符号。 |
+| `#[duck_scalar_function]` | DuckDB 标量函数。 |
+| `#[duck_aggregate_function]` | DuckDB 聚合函数。 |
+| `#[duck_cast_function]` | 类型转换（`CAST(x AS T)` / `TRY_CAST`）；参数是源值，返回类型是目标类型。 |
+| `#[duck_table_function]` | DuckDB 表函数。 |
+| `#[duck_replacement_scan]` | 把「DuckDB 不认识的表名（通常是文件路径）」重定向到表函数。 |
+| `#[duck_sql_macro]` | SQL 宏，返回 `SqlMacro` 或直接返回待执行的 SQL 字符串。 |
+| `#[duck_custom_register]` | 手动注册，签名为 `fn(&Connection) -> DuckResult<()>`。 |
+| `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`。 |
+| `duckfn_entrypoint!("name")` | 扩展入口符号。 |
+| `duck_sql_macro_files!("a.sql", …)` | 注册写在 `.sql` 文件里的 SQL 宏。 |
 
-常用参数：
-
-- `auto_register = false` —— 只生成 builder，不自动注册。
-- `named_param_from = "field"` —— 表函数命名参数从哪个字段开始。
+常用参数：`auto_register = false`（只生成 builder 不注册）、`named_param_from = "field"`
+（表函数命名参数的起点）、`special_null_handling`、`implicit_cost` 与 `overloads_name`。
 
 ## 示例
 
@@ -63,11 +62,16 @@ pub fn add_two_macro() -> duckfn::DuckResult<String> {
 }
 ```
 
-## 参见
+## 文档
 
-完整文档、类型映射和示例扩展见主 crate：
+每个宏、它的参数以及生成的 item 都记录在 **<https://shijianjs.github.io/duckfn/zh-Hans/>**：
 
-<https://github.com/shijianjs/duckfn>
+- [属性参考](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) —— 完整的属性与参数说明。
+- [标量](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) · [聚合](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/aggregate-functions) · [表函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/table-functions)
+- [类型转换与 replacement scan](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts-and-scans) · [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros)
+- [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) —— 每个宏展开了什么。
+
+English docs: <https://shijianjs.github.io/duckfn/>
 
 ## 协议
 

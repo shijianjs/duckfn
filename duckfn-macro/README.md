@@ -22,20 +22,20 @@ runtime.
 
 | Macro | Purpose |
 | --- | --- |
-| `#[duck_scalar_function]` | Generate a DuckDB scalar function from a Rust function. |
-| `#[duck_aggregate_function]` | Generate a DuckDB aggregate function. |
-| `#[duck_cast_function]` | Generate a DuckDB cast function (`CAST(x AS T)` / `TRY_CAST`). The single argument is the source value and the return type is the target type; supports `Option<T>` input and `implicit_cost = N`. |
-| `#[duck_table_function]` | Generate a DuckDB table function. |
-| `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function, i.e. `SELECT * FROM 'data.points'`. Return `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`; the path is passed as the first VARCHAR parameter. |
-| `#[duck_sql_macro]` | Expose a Rust function as a DuckDB SQL macro. Return `SqlMacro` / `DuckResult<SqlMacro>`, or a SQL string (`String` / `&'static str` / `DuckResult<...>`) which is executed directly. |
-| `#[duck_custom_register]` | Register a function manually with signature `fn(&Connection) -> DuckResult<()>`. |
-| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT` (nested structs and lists supported). |
-| `duckfn_entrypoint!("name")` | Generate the extension entry point symbol. |
+| `#[duck_scalar_function]` | A DuckDB scalar function. |
+| `#[duck_aggregate_function]` | A DuckDB aggregate function. |
+| `#[duck_cast_function]` | A cast (`CAST(x AS T)` / `TRY_CAST`); the argument is the source, the return type the target. |
+| `#[duck_table_function]` | A DuckDB table function. |
+| `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function. |
+| `#[duck_sql_macro]` | A SQL macro, either as a `SqlMacro` or as raw SQL to execute. |
+| `#[duck_custom_register]` | Manual registration, signature `fn(&Connection) -> DuckResult<()>`. |
+| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |
+| `duckfn_entrypoint!("name")` | The extension entry point symbol. |
+| `duck_sql_macro_files!("a.sql", …)` | Register SQL macros kept in `.sql` files. |
 
-Common macro arguments:
-
-- `auto_register = false` — only generate builders instead of registering automatically.
-- `named_param_from = "field"` — where named arguments start for table functions.
+Common arguments: `auto_register = false` (generate the builders without registering),
+`named_param_from = "field"` (where named parameters start in a table function),
+`special_null_handling`, `implicit_cost` and `overloads_name`.
 
 ## Example
 
@@ -65,11 +65,17 @@ pub fn add_two_macro() -> duckfn::DuckResult<String> {
 }
 ```
 
-## See also
+## Documentation
 
-Full documentation, type mapping and a complete example extension live in the main crate:
+Every macro, its arguments and the items it generates are documented at
+**<https://shijianjs.github.io/duckfn/>**:
 
-<https://github.com/shijianjs/duckfn>
+- [Attributes](https://shijianjs.github.io/duckfn/docs/guide/attributes) — the full attribute and argument reference.
+- [Scalar](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) · [Aggregate](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) · [Table](https://shijianjs.github.io/duckfn/docs/guide/table-functions) functions
+- [Casts and replacement scans](https://shijianjs.github.io/duckfn/docs/guide/casts-and-scans) · [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros)
+- [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) — what each macro expands to.
+
+中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>
 
 ## License
 

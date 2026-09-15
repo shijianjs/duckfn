@@ -2,5 +2,37 @@
   "version.label": {
     "message": "下一版",
     "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.Getting started": {
+    "message": "入门",
+    "description": "The label for category 'Getting started' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Getting started.link.generated-index.description": {
+    "message": "把 duckfn 加进 crate、构建扩展，然后在 SQL 中调用它。",
+    "description": "The generated-index page description for category 'Getting started' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Guide": {
+    "message": "指南",
+    "description": "The label for category 'Guide' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Guide.link.generated-index.description": {
+    "message": "duckfn 能注册的一切：函数、宏、类型转换与 replacement scan。",
+    "description": "The generated-index page description for category 'Guide' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Examples": {
+    "message": "示例",
+    "description": "The label for category 'Examples' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Examples.link.generated-index.description": {
+    "message": "本仓库的示例扩展，逐个功能配可运行的 SQL。",
+    "description": "The generated-index page description for category 'Examples' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Internals": {
+    "message": "进阶",
+    "description": "The label for category 'Internals' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Internals.link.generated-index.description": {
+    "message": "duckfn 的内部实现：宏展开、注册机制、适配器与值类型。",
+    "description": "The generated-index page description for category 'Internals' in sidebar 'docsSidebar'"
   }
 }

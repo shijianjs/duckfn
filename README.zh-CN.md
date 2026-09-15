@@ -21,7 +21,10 @@
 - 已发布 crate：[`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
 - 基于：[`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
 - 无需手写 `unsafe`：不需要 `unsafe fn`，函数体里也碰不到裸指针
-- 协议：[MIT](LICENSE)
+- 无需编译 DuckDB，无需 C/C++ 代码
+- 属性驱动、基于 `inventory` 的自动注册
+- panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
+- 可直接复用 DuckDB 官方多平台扩展 CI
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。
 
@@ -77,74 +80,27 @@ duckfn_entrypoint!("my_ext");
 `#[duck_scalar_function]` 会自动生成 DuckDB 包装层、逻辑类型，并默认通过 `inventory` 完成注册。
 `duckfn_entrypoint!` 负责导出 DuckDB 加载扩展时查找的 `*_init_c_api` 符号。
 
-上面这段全是安全 Rust：不需要写 `unsafe fn`，不需要解引用裸指针，也不需要接触 DuckDB 的 C
-类型 —— 这些都由生成的包装层完成。唯一会出现 `unsafe` 的地方是手动注册：
-`#[duck_custom_register]` 中调用 quack-rs 的 `unsafe fn register_scalar` /
-`register_aggregate` / `register_table`。
+上面这段全是安全 Rust：不需要写 `unsafe fn`，不需要解引用裸指针，也不需要接触 DuckDB 的 C 类型。
 
-## 可用宏
+## 文档
 
-| 宏 | 作用 |
+完整文档 —— 安装、每个属性的用法、类型映射、错误模型以及可运行的示例扩展 —— 见
+**<https://shijianjs.github.io/duckfn/zh-Hans/>**：
+
+| 页面 | 内容 |
 | --- | --- |
-| `#[duck_scalar_function]` | 注册标量函数。 |
-| `#[duck_aggregate_function]` | 注册聚合函数。 |
-| `#[duck_cast_function]` | 注册类型转换（`CAST(x AS T)` / `TRY_CAST`）。唯一参数是源值、返回类型是目标类型；支持 `Option<T>` 入参、`implicit_cost = N` 与 `auto_register = false`。 |
-| `#[duck_table_function]` | 注册表函数。 |
-| `#[duck_replacement_scan]` | 把「DuckDB 不认识的表名（通常是文件路径）」重定向到表函数，即 `SELECT * FROM 'data.points'`。返回 `Option<String>` / `Option<&'static str>` / `DuckOptionResult<...>`；路径作为第一个 VARCHAR 参数传给目标表函数。 |
-| `#[duck_sql_macro]` | 注册 SQL 宏。返回 `SqlMacro` / `DuckResult<SqlMacro>`，也可直接返回 SQL 字符串（`String` / `&'static str` / `DuckResult<...>`），注册时直接执行。 |
-| `#[duck_custom_register]` | 手动注册 builder，签名为 `fn(&Connection) -> DuckResult<()>`。 |
-| `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`。 |
-| `duckfn_entrypoint!("name")` | 生成扩展入口。 |
+| [简介](https://shijianjs.github.io/duckfn/zh-Hans/docs/intro) | duckfn 是什么，各 crate 如何配合。 |
+| [安装](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/installation) | 依赖、MSRV，以及为什么不需要编译 DuckDB。 |
+| [快速开始](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/quick-start) | 编写、构建并加载第一个扩展。 |
+| [指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 属性参考、标量/聚合/表函数、类型转换、replacement scan、SQL 宏。 |
+| [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
+| [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) | `duck_error`、`DuckOptionResult` 与 panic 的处理。 |
+| [示例扩展](https://shijianjs.github.io/duckfn/zh-Hans/docs/examples/rusty-quack) | `rusty_quack`，每个功能都配可运行的 SQL。 |
+| [构建与发布](https://shijianjs.github.io/duckfn/zh-Hans/docs/build-and-release) · [贡献指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/contributing) · [常见问题](https://shijianjs.github.io/duckfn/zh-Hans/docs/faq) | 本地构建、CI 与排错。 |
 
-常用参数：
+English docs: <https://shijianjs.github.io/duckfn/>
 
-- `auto_register = false` —— 只生成 builder（`scalar_function_builder()`、
-  `scalar_overload_builder()` 等）不自动注册，配合 `#[duck_custom_register]` 使用。
-- `named_param_from = "field"` —— 表函数命名参数从哪个字段开始。
-- `overloads_name = "函数集名"`（`#[duck_scalar_function]` / `#[duck_aggregate_function]`）——
-  不注册函数自己的名字，而是把本签名作为重载挂到该函数集上；`overloads_name` 相同的签名
-  会被合并成一个函数集（各自保留自己的返回类型），无需手写 `#[duck_custom_register]`。
-
-## 类型映射
-
-| DuckDB | Rust |
-| --- | --- |
-| `BOOLEAN` | `bool` |
-| `TINYINT` / `SMALLINT` / `INTEGER` / `BIGINT` | `i8` / `i16` / `i32` / `i64` |
-| `UTINYINT` / `USMALLINT` / `UINTEGER` / `UBIGINT` | `u8` / `u16` / `u32` / `u64` |
-| `HUGEINT` / `UHUGEINT` | `i128` / `u128` |
-| `FLOAT` / `DOUBLE` | `f32` / `f64` |
-| `VARCHAR` | `String` |
-| `NULL` | `Option<T>` |
-| `LIST(T)` | `Vec<T>`，支持嵌套（`Vec<Option<Vec<Option<T>>>>` 等） |
-| `MAP(K, V)` | `IndexMap<K, V>` |
-| `ARRAY(T, N)` | `[T; N]`（`DuckArray`）/ `[Option<T>; N]`（`DuckOptionArray`） |
-| `STRUCT(...)` | `#[derive(DuckStruct)]`，支持嵌套 struct 和 list |
-
-可空性由 Rust 签名决定：非 `Option` 参数遇到 `NULL` 输入时整行短路为 `NULL`（函数体不执行）；
-`Option<T>` 参数则把 `NULL` 读成 `None` 交给函数自己决定语义。
-
-## 错误处理与 panic
-
-返回 `DuckOptionResult<T>`（即 `Result<Option<T>, ExtensionError>`）可以输出 `NULL`，或用
-`duck_error("...")` 让整条查询失败。函数体内的 panic 会被捕获并转换成 DuckDB 错误，而不会跨
-FFI 边界展开。
-
-## 运行示例扩展
-
-仓库根目录是一个功能完整的示例扩展（`rusty_quack`），覆盖了全部能力：
-
-```shell
-make configure
-make debug
-duckdb -unsigned -c "
-LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
-SELECT rusty_echo('Jane');
-"
-```
-
-大量可运行的 SQL 示例见 [`demo.sh`](demo.sh)，完整库文档见
-[`duckfn/README.zh-CN.md`](duckfn/README.zh-CN.md)。
+API 文档：<https://docs.rs/duckfn> · 库使用说明：[`duckfn/README.zh-CN.md`](duckfn/README.zh-CN.md)
 
 ## 协议
 

@@ -1,7 +1,6 @@
 {
   "homepage.getStarted": {
-    "message": "开始使用",
-    "description": "The homepage call-to-action button label"
+    "message": "开始使用"
   },
   "homepage.tagline": {
     "message": "用纯 Rust 编写 DuckDB 扩展",
