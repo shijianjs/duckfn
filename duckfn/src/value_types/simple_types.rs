@@ -28,25 +28,6 @@ impl DuckValueType for bool {
     
 }
 
-/// `i64` ↔ `BIGINT`。
-///
-/// `i64` ↔ `BIGINT`.
-// TypeId::BigInt      // i64
-impl DuckValueType for i64 {
-    fn type_id() -> TypeId {
-        TypeId::BigInt
-    }
-    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
-        unsafe { reader.read_i64(row) }
-    }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
-        unsafe { writer.write_i64(idx, *v) }
-    }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i64()
-    }
-}
-
 /// `i8` ↔ `TINYINT`。
 ///
 /// `i8` ↔ `TINYINT`.
@@ -105,6 +86,42 @@ impl DuckValueType for i32 {
     }
 }
 
+/// `i64` ↔ `BIGINT`。
+///
+/// `i64` ↔ `BIGINT`.
+impl DuckValueType for i64 {
+    fn type_id() -> TypeId {
+        TypeId::BigInt
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i64(row) }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i64(idx, *v) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        value.as_i64()
+    }
+}
+
+/// `i128` ↔ `HUGEINT`。
+///
+/// `i128` ↔ `HUGEINT`.
+impl DuckValueType for i128 {
+    fn type_id() -> TypeId {
+        TypeId::HugeInt
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_i128(row) }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_i128(idx, *v) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        value.as_i128()
+    }
+}
+
 /// `u8` ↔ `UTINYINT`。
 ///
 /// `u8` ↔ `UTINYINT`.
@@ -143,8 +160,23 @@ impl DuckValueType for u16 {
     }
 }
 
-// TypeId::UInteger    // u32：quack-rs 目前没有对应的 read/write 方法，暂未映射。
-// TypeId::UInteger    // u32: quack-rs has no matching read/write method yet, so it is unmapped.
+/// `u32` ↔ `UINT`。
+///
+/// `u32` ↔ `UINT`.
+impl DuckValueType for u32 {
+    fn type_id() -> TypeId {
+        TypeId::USmallInt
+    }
+    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
+        unsafe { reader.read_u32(row) }
+    }
+    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
+        unsafe { writer.write_u32(idx, *v) }
+    }
+    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
+        value.as_u32()
+    }
+}
 
 /// `u64` ↔ `UBIGINT`。
 ///
@@ -162,25 +194,6 @@ impl DuckValueType for u64 {
     }
     fn read_by_duck_value_valid_simple(value: &Value) -> Self {
         value.as_u64()
-    }
-}
-
-/// `i128` ↔ `HUGEINT`。
-///
-/// `i128` ↔ `HUGEINT`.
-// TypeId::HugeInt     // i128
-impl DuckValueType for i128 {
-    fn type_id() -> TypeId {
-        TypeId::HugeInt
-    }
-    fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
-        unsafe { reader.read_i128(row) }
-    }
-    fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
-        unsafe { writer.write_i128(idx, *v) }
-    }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i128()
     }
 }
 
