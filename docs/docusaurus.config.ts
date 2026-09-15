@@ -64,9 +64,11 @@ const config: Config = {
       } satisfies Preset.Options,
     ],
   ],
-  themes: ['@docusaurus/theme-search-algolia'],
 
-
+  // No `themes` entry for the search UI: the classic preset already registers
+  // `docusaurus-theme-search-algolia`, and it turns itself on as soon as `themeConfig.algolia`
+  // below is filled in. Listing it again fails the build with
+  // `Plugin "docusaurus-theme-search-algolia" is used 2 times with ID "default"`.
   themeConfig: {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
