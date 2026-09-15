@@ -89,6 +89,24 @@ impl<T: DuckValueType> DuckValueType for Vec<Option<T>> {
         writer.offset += len;
     }
 
+    /// NULL 行：父向量置 NULL 之外，把 entry 显式写成空区间 `(0, 0)`。
+    ///
+    /// NULL 行的 `list_entry_t` 本来不会被写，留着未初始化的 offset/length。
+    /// 实测 DuckDB 的 list 算子都会先查父向量 validity（子向量长度也被
+    /// `write_finish` 的 `set_size` 收窄到已写范围），所以不写 entry 也安全；
+    /// 这里补上是为了让 duckfn 不依赖这一前提 —— ARRAY 的教训正是
+    /// 「不要假设对方一定先查父 validity」。
+    ///
+    /// NULL rows: besides marking the parent NULL, write an explicit empty entry
+    /// `(0, 0)`. DuckDB's list operators do check the parent validity (and the child
+    /// length is clamped by `set_size`), so this is defensive rather than a fix.
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        unsafe {
+            writer.vector_writer.set_null(idx);
+            ListVector::set_entry(writer.c_duckdb_vector, idx, 0, 0);
+        }
+    }
+
     fn write_finish(writer: &mut DuckValueWriter) {
         T::write_finish(&mut writer.child_writer[0]);
 
@@ -171,6 +189,10 @@ impl<T: DuckValueType> DuckValueType for Vec<T> {
             T::write_valid(child_writer, offset + i, value);
         }
         writer.offset += len;
+    }
+
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        Vec::<Option<T>>::write_null(writer, idx)
     }
 
     fn write_finish(writer: &mut DuckValueWriter) {

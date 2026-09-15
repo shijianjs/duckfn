@@ -100,6 +100,22 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
         }
         writer.offset += len;
     }
+
+    /// NULL 行：父向量置 NULL 之外，把 entry 显式写成空区间 `(0, 0)`。
+    ///
+    /// MAP 物理上是 `LIST(STRUCT(key, value))`，与 LIST 同理：entry 不写也安全
+    /// （DuckDB 先查父 validity，子向量长度由 `set_size` 收窄），这里补上只是
+    /// 让 duckfn 不依赖那个前提，与 LIST / ARRAY 的处理保持一致。
+    ///
+    /// NULL rows: besides marking the parent NULL, write an explicit empty entry
+    /// `(0, 0)`. MAP is physically `LIST(STRUCT(key, value))`, so this mirrors LIST.
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        unsafe {
+            writer.vector_writer.set_null(idx);
+            ListVector::set_entry(writer.c_duckdb_vector, idx, 0, 0);
+        }
+    }
+
     fn write_finish(writer: &mut DuckValueWriter) {
         K::write_finish(&mut writer.child_writer[0]);
         V::write_finish(&mut writer.child_writer[1]);
@@ -225,6 +241,11 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
         }
         writer.offset += len;
     }
+
+    fn write_null(writer: &mut DuckValueWriter, idx: usize) {
+        <Self as Helper>::H::write_null(writer, idx)
+    }
+
     fn write_finish(writer: &mut DuckValueWriter) {
         <Self as Helper>::H::write_finish(writer)
     }
