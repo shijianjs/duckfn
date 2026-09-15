@@ -1,11 +1,16 @@
 #
 # This workflow calls the main distribution pipeline from DuckDB to build, test and (optionally) release the extension
 #
+# Pushing a version tag (e.g. v0.0.2) builds the extension for every supported platform and then publishes a
+# GitHub Release for that tag, with all built extension binaries attached as release assets.
+#
 name: Main Extension Distribution Pipeline
 on:
 #  push:
 #    branches: [main]
 #  pull_request:
+  push:
+    tags: ['v*.*.*']
   workflow_dispatch:
 
 concurrency:
@@ -22,3 +27,59 @@ jobs:
       extension_name: rusty_quack
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
+
+  # Publishes a GitHub Release for the pushed version tag and attaches every extension binary built above.
+  # Runs on version tags only; a `workflow_dispatch` started from a tag ref also matches.
+  github-release:
+    name: Publish GitHub Release
+    needs: duckdb-stable-build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      EXTENSION_NAME: rusty_quack
+      DUCKDB_VERSION: v1.5.5
+    steps:
+      - name: Download extension artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: 'rusty_quack-*-extension-*'
+          path: artifacts
+
+      - name: Collect extension binaries
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          prefix="${EXTENSION_NAME}-${DUCKDB_VERSION}-extension-"
+          found=0
+          while IFS= read -r file; do
+            case "$file" in
+              *.duckdb_extension.wasm) suffix=".duckdb_extension.wasm" ;;
+              *.duckdb_extension)      suffix=".duckdb_extension" ;;
+              *) continue ;;
+            esac
+            artifact="${file#artifacts/}"
+            artifact="${artifact%%/*}"
+            arch="${artifact#"$prefix"}"
+            arch="${arch%.wasm}"
+            cp "$file" "release-assets/${EXTENSION_NAME}-${arch}${suffix}"
+            found=$((found + 1))
+          done < <(find artifacts -type f \( -name '*.duckdb_extension' -o -name '*.duckdb_extension.wasm' \) | sort)
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no extension binaries found in the downloaded artifacts"
+            exit 1
+          fi
+          ls -l release-assets
+
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            gh release create "$TAG" release-assets/* --title "$TAG" --generate-notes
+          fi
