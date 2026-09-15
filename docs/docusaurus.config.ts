@@ -52,6 +52,9 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/shijianjs/duckfn/tree/main/docs/',
+          // Without this, translated pages link back to the English source in docs/docs/;
+          // with it they point at the translated file under docs/i18n/<locale>/.
+          editLocalizedFiles: true,
         },
         // No blog for now; switch this to an options object to enable one.
         blog: false,
