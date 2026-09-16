@@ -1,16 +1,23 @@
 #
 # Builds the Docusaurus site in docs/ and publishes it to GitHub Pages.
 #
-# Pushing a version tag (e.g. v0.0.3) triggers the build; the workflow can also be started
-# manually from the Actions tab. Deploying on every push to main would mean adding
-#   push: { branches: [main] }
-# to the trigger below.
+# The `github-pages` environment is protected: it only accepts deployments from the refs listed in
+# Settings -> Environments -> github-pages -> Deployment branches and tags (here: `main`). A tag
+# push therefore still builds the site — a broken release tag shows up immediately — but skips the
+# deploy job instead of failing with
+#   Tag "vX.Y.Z" is not allowed to deploy to github-pages due to environment protection rules.
+# The docs of a release reach Pages through the push of its version-bump commit to main, which
+# happens right before the tag is pushed.
+#
+# To let a tag deploy directly, add the tag pattern `v*.*.*` in the environment settings and widen
+# the deploy job's `if` to `github.ref_type == 'tag'` as well.
 #
 # One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 #
 name: Deploy Docs
 on:
   push:
+    branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
 
@@ -31,10 +38,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -43,7 +50,7 @@ jobs:
       # Resolves the Pages base URL, honouring a custom domain when one is configured.
       - name: Configure Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Install dependencies
         working-directory: docs
@@ -64,16 +71,16 @@ jobs:
           npm run build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs/build
 
-  # The `github-pages` environment is protected by default. If this job is rejected by
-  # environment protection rules (e.g. "Branch \"v0.0.3\" is not allowed to deploy"),
-  # open Settings -> Environments -> github-pages and allow the tag pattern `v*.*.*`.
+  # The `github-pages` environment rejects every ref that is not in its deployment branch policy,
+  # so only the default branch deploys; tag runs stop after the build job above.
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -81,4 +88,4 @@ jobs:
     steps:
       - name: Deploy
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
