@@ -19,6 +19,10 @@ description: rusty_echo、rusty_quack、word_count、first_word 分别用原始 
 
 函数签名：`rusty_echo(varchar) -> varchar`
 
+```sql
+SELECT rusty_echo('Hello');  -- 🐤 Hello 🦀 Hello
+```
+
 <div className="code-compare">
 <div>
 
@@ -79,13 +83,13 @@ fn rusty_echo(s: String) -> String {
 </div>
 </div>
 
-```sql
-SELECT rusty_echo('Hello');  -- 🐤 Hello 🦀 Hello
-```
-
 ## 对比 duckdb 表函数
 
 函数签名：`rusty_quack(varchar) -> table(column0 varchar)`
+
+```sql
+SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
+```
 
 <div className="code-compare">
 <div>
@@ -170,13 +174,14 @@ fn rusty_quack(name: String) -> impl Iterator<Item = RustyQuackResult> {
 </div>
 </div>
 
-```sql
-SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
-```
-
 ## 对比 quack-rs 聚合函数
 
 函数签名：`word_count(varchar) -> bigint`
+
+```sql
+SELECT word_count(s)
+FROM (VALUES ('hello world'), ('one two three'), (NULL)) t(s);  -- 5
+```
 
 <div className="code-compare">
 <div>
@@ -312,14 +317,18 @@ impl DuckAggregateState for WordCountState {
 </div>
 </div>
 
-```sql
-SELECT word_count(s)
-FROM (VALUES ('hello world'), ('one two three'), (NULL)) t(s);  -- 5
-```
-
 ## 对比 quack-rs 标量函数
 
 函数签名：`first_word(varchar) -> varchar`
+
+```sql
+SELECT first_word(s)
+FROM (VALUES ('hello world'), ('  padded  '), (''), (NULL)) t(s);
+-- hello
+-- padded
+-- （空串）
+-- NULL
+```
 
 <div className="code-compare">
 <div>
@@ -372,15 +381,6 @@ fn first_word(input: Option<String>) -> Option<String> {
 
 </div>
 </div>
-
-```sql
-SELECT first_word(s)
-FROM (VALUES ('hello world'), ('  padded  '), (''), (NULL)) t(s);
--- hello
--- padded
--- （空串）
--- NULL
-```
 
 ## 这组对比说明了什么
 
