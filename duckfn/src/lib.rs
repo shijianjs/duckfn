@@ -1,5 +1,8 @@
 //! `duckfn`：用普通 Rust 编写 DuckDB 扩展。
 //!
+//! [![GitHub](https://img.shields.io/badge/GitHub-shijianjs%2Fduckfn-181717?logo=github&logoColor=white)](https://github.com/shijianjs/duckfn)
+//! [![Docs](https://img.shields.io/badge/docs-shijianjs.github.io%2Fduckfn-2e8555?logo=readthedocs&logoColor=white)](https://shijianjs.github.io/duckfn/)
+//!
 //! 本 crate 提供一组过程宏（`#[duck_scalar_function]`、`#[duck_aggregate_function]`、
 //! `#[duck_table_function]`、`#[duck_cast_function]`、`#[duck_sql_macro]`、
 //! `#[duck_replacement_scan]`、`#[duck_custom_register]`、`#[derive(DuckStruct)]`、

@@ -7,6 +7,9 @@ description: duckfn 可以把普通的 Rust 函数变成 DuckDB 的标量函数�
 
 # 简介
 
+[![GitHub](https://img.shields.io/badge/GitHub-shijianjs%2Fduckfn-181717?logo=github&logoColor=white)](https://github.com/shijianjs/duckfn)
+[![Docs](https://img.shields.io/badge/docs-shijianjs.github.io%2Fduckfn-2e8555?logo=readthedocs&logoColor=white)](https://shijianjs.github.io/duckfn/)
+
 **用纯 Rust 编写 DuckDB 扩展。**
 
 `duckfn` 是一个基于 DuckDB C Extension API 的框架。加一个属性，普通的 Rust 函数就变成 DuckDB 的

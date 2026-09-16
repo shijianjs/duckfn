@@ -9,7 +9,8 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 readme = "README.md"
-documentation = "https://docs.rs/duckfn"
+# crates.io's "Documentation" link should land on the user guide rather than on docs.rs.
+documentation = "https://shijianjs.github.io/duckfn/"
 keywords = ["duckdb", "extension", "ffi", "database", "macro"]
 categories = ["database", "api-bindings", "development-tools::ffi"]
 

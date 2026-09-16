@@ -6,6 +6,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[![GitHub](https://img.shields.io/badge/GitHub-shijianjs%2Fduckfn-181717?logo=github&logoColor=white)](https://github.com/shijianjs/duckfn)
+[![Docs](https://img.shields.io/badge/docs-shijianjs.github.io%2Fduckfn-2e8555?logo=readthedocs&logoColor=white)](https://shijianjs.github.io/duckfn/)
 [![crates.io](https://img.shields.io/crates/v/duckfn.svg)](https://crates.io/crates/duckfn)
 [![docs.rs](https://docs.rs/duckfn/badge.svg)](https://docs.rs/duckfn)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/shijianjs/duckfn/blob/main/LICENSE)

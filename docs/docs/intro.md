@@ -7,6 +7,9 @@ description: duckfn turns plain Rust functions into DuckDB scalar, aggregate and
 
 # Introduction
 
+[![GitHub](https://img.shields.io/badge/GitHub-shijianjs%2Fduckfn-181717?logo=github&logoColor=white)](https://github.com/shijianjs/duckfn)
+[![Docs](https://img.shields.io/badge/docs-shijianjs.github.io%2Fduckfn-2e8555?logo=readthedocs&logoColor=white)](https://shijianjs.github.io/duckfn/)
+
 **Write DuckDB extensions in plain Rust.**
 
 `duckfn` is a framework for building [DuckDB](https://duckdb.org) extensions on top of DuckDB's

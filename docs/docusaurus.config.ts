@@ -77,6 +77,12 @@ const config: Config = {
   // below is filled in. Listing it again fails the build with
   // `Plugin "docusaurus-theme-search-algolia" is used 2 times with ID "default"`.
   themeConfig: {
+    // Readers can collapse the docs sidebar away; the toggle button appears next to it.
+    docs: {
+      sidebar: {
+        hideable: true,
+      },
+    },
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     colorMode: {
@@ -100,9 +106,17 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/shijianjs/duckfn',
-          label: 'GitHub',
+          // All the project's external links live behind one dropdown, so the navbar keeps a
+          // single slot no matter how many of them there are.
+          type: 'dropdown',
+          label: 'Links',
           position: 'right',
+          items: [
+            {label: 'GitHub', href: 'https://github.com/shijianjs/duckfn'},
+            {label: 'crates.io', href: 'https://crates.io/crates/duckfn'},
+            {label: 'docs.rs', href: 'https://docs.rs/duckfn'},
+            {label: 'Zread', href: 'https://zread.ai/shijianjs/duckfn'},
+          ],
         },
       ],
     },
