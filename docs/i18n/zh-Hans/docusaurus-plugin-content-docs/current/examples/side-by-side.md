@@ -2,7 +2,6 @@
 title: 同样功能的两种写法
 sidebar_position: 2
 description: rusty_echo、rusty_quack、word_count、first_word 分别用原始 duckdb / quack-rs 绑定与 duckfn 写一遍的对照。
-hide_table_of_contents: true
 ---
 
 # 同样功能的两种写法
@@ -15,10 +14,6 @@ hide_table_of_contents: true
 每个函数出现两次：左边用原始绑定写 —— 前两个是 `duckdb` crate，后两个是 `quack-rs`；右边是用
 `duckfn` 写出的同一个函数。左栏省去了 import 与扩展入口点，因为每个函数这部分都一样；真正的差别在
 函数体，也正是值得对照的地方。
-
-import TOCInline from '@theme/TOCInline';
-
-<TOCInline toc={toc} />
 
 ## 对比 duckdb 标量函数
 
