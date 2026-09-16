@@ -44,3 +44,70 @@
   /* Without this, the code blocks keep their intrinsic width and overflow. */
   min-width: 0;
 }
+
+/* Table-of-contents toggle.
+   Docusaurus has no `hideable` option for the right-hand TOC, so the control and
+   the layout switch are provided by src/clientModules/tocToggle.ts: the button is
+   injected above the TOC, and the `toc-collapsed` class on <body> drives the
+   rules below. */
+
+.toc-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  /* Right edge of the TOC column, next to the list it controls. */
+  margin-left: auto;
+  margin-bottom: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-800);
+  transition: background-color var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+.toc-toggle:hover {
+  background-color: var(--ifm-color-emphasis-300);
+}
+
+.toc-toggle::after {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  background-color: currentColor;
+  /* chevron-right: "push the TOC away"; it is flipped when collapsed. */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transition: transform var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+body.toc-collapsed .toc-toggle::after {
+  transform: rotate(180deg);
+}
+
+/* Collapsed: the column shrinks to a strip that keeps the button reachable, the
+   list is hidden, and the article takes the freed width. Infima sizes columns
+   through --ifm-col-width, so overriding that one property covers the width.
+
+   These rules go into the theme's own cascade layer on purpose: `future.v4`
+   makes Docusaurus emit layered CSS, and for `!important` declarations layer
+   order wins over specificity — an unlayered `!important` loses to a layered
+   one, so the `max-width` below would silently do nothing outside this layer. */
+@layer docusaurus.theme-classic {
+  body.toc-collapsed .toc-column {
+    --ifm-col-width: 2.5rem;
+    padding: 0;
+  }
+
+  body.toc-collapsed .toc-column .theme-doc-toc-desktop {
+    display: none;
+  }
+
+  body.toc-collapsed [class*='docItemCol'] {
+    max-width: 100% !important;
+  }
+}

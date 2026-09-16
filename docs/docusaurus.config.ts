@@ -32,6 +32,10 @@ const config: Config = {
   // the client-side router behave the same, and slash-less links keep working through the redirect.
   trailingSlash: true,
 
+  // Small client-side enhancements the theme has no option for; each file under
+  // src/clientModules/ documents what it does. Paths resolve from this directory.
+  clientModules: ['./src/clientModules/tocToggle.ts'],
+
   // English is the source language; every page under docs/ can be translated under
   // docs/i18n/zh-Hans/. Add more locales here when needed.
   i18n: {
