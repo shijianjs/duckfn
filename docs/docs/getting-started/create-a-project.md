@@ -1,7 +1,7 @@
 ---
 title: Create a project
 sidebar_position: 1
-description: Start from DuckDB's official Rust extension template, write with quack-rs, and build with cargo-duckdb-ext-tools.
+description: Start from DuckDB's official Rust extension template, write with duckfn and quack-rs, and build with cargo-duckdb-ext-tools.
 ---
 
 # Create a project
@@ -36,12 +36,34 @@ the same modules, and the official template's `mod lib;` re-export starts failin
 `error[E0583]` as soon as you nest modules — see
 [Troubleshooting](../troubleshooting.md#nested-modules-fail-with-e0583).
 
-## Write with quack-rs
+## Write with duckfn and quack-rs
 
-`duckfn` sits on top of [`quack-rs`](https://github.com/tomtom215/quack-rs), the DuckDB C API binding
-with the widest coverage and the most complete documentation. When you need something the attributes
-do not expose — a hand-built `LogicalType`, a vector-level operation, a corner of the C API — that is
-the crate to reach for. It is already in your dependency list.
+`duckfn` is the layer this repository provides. It sits on top of
+[`quack-rs`](https://github.com/tomtom215/quack-rs) and turns an ordinary Rust function into an
+extension function with a single attribute:
+
+```rust
+#[duck_scalar_function]
+pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
+    Ok(v.map(|x| x * 2))
+}
+```
+
+Why not use the official `duckdb` crate directly? Because its extension API only covers two kinds of
+functions — scalar functions behind the `vscalar` feature and table functions behind `vtab`, which is
+the entire surface of this line:
+
+```toml
+duckdb = { version = "~1.10505.0", features = ["loadable-extension", "vscalar"] }
+```
+
+Aggregate functions, SQL macros, replacement scans, casts and nested types have no registration API
+at all. That gap is what `duckfn` fills: one attribute system covering scalar functions, aggregate
+functions, table functions, SQL macros, replacement scans and casts.
+
+Reach for `quack-rs` directly when you need something the attributes do not expose — a hand-built
+`LogicalType`, a vector-level operation, a corner of the C API. It is already in your dependency
+list.
 
 ## Build with cargo-duckdb-ext-tools
 

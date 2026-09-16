@@ -1,7 +1,7 @@
 ---
 title: 创建项目
 sidebar_position: 1
-description: 从 DuckDB 官方 Rust 扩展模板起步，用 quack-rs 写逻辑，用 cargo-duckdb-ext-tools 构建。
+description: 从 DuckDB 官方 Rust 扩展模板起步，用 duckfn、quack-rs 写逻辑，用 cargo-duckdb-ext-tools 构建。
 ---
 
 # 创建项目
@@ -33,11 +33,30 @@ cd my_ext
 改的时候让两个 crate root 保持一致：`src/lib.rs` 与 `src/wasm_lib.rs` 必须声明同样的模块，官方模板那种
 `mod lib;` 再导出一旦遇到嵌套模块就会报 `error[E0583]` —— 见[问题排查](../troubleshooting.md#嵌套模块时报-e0583)。
 
-## 用 quack-rs 写逻辑
+## 用 duckfn、quack-rs 写逻辑
 
-`duckfn` 建立在 [`quack-rs`](https://github.com/tomtom215/quack-rs) 之上 —— 它是对 DuckDB C API
-覆盖最全、文档最完整的绑定。当属性宏没有暴露的能力（手写 `LogicalType`、向量级操作、C API 的某个角落）
-成为必需时，要用的就是它；它本来就在你的依赖列表里。
+`duckfn` 是本仓库提供的那一层：它建立在 [`quack-rs`](https://github.com/tomtom215/quack-rs) 之上，
+用属性宏把普通 Rust 函数变成扩展函数。日常写法就是给函数加一个属性：
+
+```rust
+#[duck_scalar_function]
+pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
+    Ok(v.map(|x| x * 2))
+}
+```
+
+为什么不直接用官方的 `duckdb` crate？因为它的扩展 API 只覆盖两类函数 —— 标量函数走 `vscalar`
+feature，表函数走 `vtab` feature，也就是这一行的全部能力：
+
+```toml
+duckdb = { version = "~1.10505.0", features = ["loadable-extension", "vscalar"] }
+```
+
+聚合函数、SQL 宏、replacement scan、类型转换、嵌套类型都没有对应的注册接口。`duckfn` 补上的正是
+这部分：同一套属性宏同时覆盖标量函数、聚合函数、表函数、SQL 宏、replacement scan 与类型转换。
+
+需要宏没有暴露的能力（手写 `LogicalType`、向量级操作、C API 的某个角落）时再落到 `quack-rs`
+—— 它是对 DuckDB C API 覆盖最全、文档最完整的绑定；它本来就在你的依赖列表里。
 
 ## 用 cargo-duckdb-ext-tools 构建
 
