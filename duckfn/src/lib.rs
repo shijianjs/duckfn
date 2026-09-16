@@ -10,19 +10,19 @@
 //! 本 crate 提供一组过程宏（`#[duck_scalar_function]`、`#[duck_aggregate_function]`、
 //! `#[duck_table_function]`、`#[duck_cast_function]`、`#[duck_sql_macro]`、
 //! `#[duck_replacement_scan]`、`#[duck_custom_register]`、`#[derive(DuckStruct)]`、
-//! `duckfn_entrypoint!`、`duck_sql_macro_files!`）以及配套的适配层和值类型工具，
-//! 把普通的 Rust 函数/结构体直接变成可注册到 DuckDB 的标量函数、聚合函数、表函数、
-//! cast 函数、SQL 宏，以及可映射到 LIST / MAP / ARRAY / STRUCT 的嵌套值类型。
+//! `#[derive(DuckEnum)]`、`duckfn_entrypoint!`、`duck_sql_macro_files!`）以及配套的适配层和
+//! 值类型工具，把普通的 Rust 函数/结构体/枚举直接变成可注册到 DuckDB 的标量函数、聚合函数、
+//! 表函数、cast 函数、SQL 宏，以及可映射到 LIST / MAP / ARRAY / STRUCT / ENUM 的值类型。
 //!
 //! `duckfn`: write DuckDB extensions in plain Rust.
 //!
 //! This crate ships a set of procedural macros (`#[duck_scalar_function]`,
 //! `#[duck_aggregate_function]`, `#[duck_table_function]`, `#[duck_cast_function]`,
 //! `#[duck_sql_macro]`, `#[duck_replacement_scan]`, `#[duck_custom_register]`,
-//! `#[derive(DuckStruct)]`, `duckfn_entrypoint!`, `duck_sql_macro_files!`) together with
-//! the runtime adapter layer and value-type helpers that turn ordinary Rust functions and
-//! structs into DuckDB scalar/aggregate/table functions, casts, SQL macros and nested
-//! LIST / MAP / ARRAY / STRUCT types.
+//! `#[derive(DuckStruct)]`, `#[derive(DuckEnum)]`, `duckfn_entrypoint!`,
+//! `duck_sql_macro_files!`) together with the runtime adapter layer and value-type helpers that
+//! turn ordinary Rust functions, structs and enums into DuckDB scalar/aggregate/table functions,
+//! casts, SQL macros and LIST / MAP / ARRAY / STRUCT / ENUM value types.
 
 /// 列集合读写抽象：`DuckColumns`。
 ///
@@ -76,3 +76,10 @@ pub use register::*;
 //
 // Re-export of `inventory::submit!` so that macro-generated code can call it.
 pub use inventory::submit as inventory_submit;
+// quack-rs 的类型再导出：自定义 `DuckValueType` 实现与宏生成的代码都要用到它们，
+// 从这里走可以不必直接依赖 quack-rs。
+//
+// Re-exported quack-rs types: custom `DuckValueType` implementations and macro-generated code both
+// need them, and going through `duckfn` means not having to depend on quack-rs directly.
+pub use quack_rs::connection::Connection;
+pub use quack_rs::prelude::{LogicalType, TypeId, Value};

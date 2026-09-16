@@ -38,7 +38,7 @@ This repository is a Cargo workspace:
 | Path | Description | Published to crates.io |
 | --- | --- | --- |
 | [`duckfn/`](duckfn/) | Runtime framework: traits, type adapters, function registration. | Yes |
-| [`duckfn-macro/`](duckfn-macro/) | Procedural macros: `#[duck_scalar_function]`, `#[derive(DuckStruct)]`, ... | Yes |
+| [`duckfn-macro/`](duckfn-macro/) | Procedural macros: `#[duck_scalar_function]`, `#[derive(DuckStruct)]`, `#[derive(DuckEnum)]`, ... | Yes |
 | `/` (`rusty_quack`) | Example extension built with `duckfn`. Kept here to reuse DuckDB's official multi-platform CI. | No, example only |
 
 ## Installation

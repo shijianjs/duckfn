@@ -54,6 +54,36 @@ pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {
     }
 }
 
+/// 把 `PascalCase` / `camelCase` 标识符转成小写蛇形：`PriorityLevel` -> `priority_level`、
+/// `HTTPCode` -> `http_code`。
+///
+/// 用于 `#[derive(DuckEnum)]` 的默认 SQL 类型名与内部辅助模块名。
+///
+/// Converts a `PascalCase` / `camelCase` identifier into lowercase snake_case
+/// (`PriorityLevel` -> `priority_level`, `HTTPCode` -> `http_code`). Used by
+/// `#[derive(DuckEnum)]` for the default SQL type name and the internal helper module.
+#[must_use]
+pub fn to_snake_case(name: &str) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    let mut out = String::with_capacity(name.len() + 4);
+    for (index, ch) in chars.iter().enumerate() {
+        if ch.is_uppercase() {
+            let prev_is_lower_or_digit =
+                index > 0 && (chars[index - 1].is_lowercase() || chars[index - 1].is_ascii_digit());
+            let next_is_lower = chars
+                .get(index + 1)
+                .is_some_and(|next| next.is_lowercase());
+            if index > 0 && (prev_is_lower_or_digit || next_is_lower) {
+                out.push('_');
+            }
+            out.extend(ch.to_lowercase());
+        } else {
+            out.push(*ch);
+        }
+    }
+    out
+}
+
 /// 获取迭代器`impl Iterator<Item=T>`的`Item`类型
 ///
 /// Extracts the `Item` type of an `impl Iterator<Item = T>` trait object.

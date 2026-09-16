@@ -45,7 +45,7 @@ FFI 包装、列读写与注册代码都由属性宏生成，所以上面这段�
 
 | | |
 | --- | --- |
-| **没有 C/C++ 胶水代码** | 代码里不会出现 DuckDB 的 C 类型，写的是 `Option<i64>`、`Vec<String>` 和 `#[derive(DuckStruct)]` 结构体。 |
+| **没有 C/C++ 胶水代码** | 代码里不会出现 DuckDB 的 C 类型，写的是 `Option<i64>`、`Vec<String>`、`#[derive(DuckStruct)]` 结构体和 `#[derive(DuckEnum)]` 枚举。 |
 | **不需要本地编译 DuckDB** | 只依赖头文件编译，加载时通过 DuckDB 的 API table 分发。 |
 | **默认安全** | 函数体里没有 `unsafe fn`，也没有裸指针。仅手动注册处还留有 `unsafe`。 |
 | **属性驱动注册** | 函数加上属性即可，注册项用 `inventory` 收集，扩展加载时统一注册。 |

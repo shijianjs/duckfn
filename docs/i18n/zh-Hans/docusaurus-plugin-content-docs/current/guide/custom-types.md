@@ -126,6 +126,8 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 `src/extension/types/custom_type_echo.rs` 里的 `Color` 就是这个例子的完整实现：字典用
 `LogicalType::enum_type(&[...])` 声明，读写覆盖带裸向量的 `read_valid` / `write_valid` 来搬运下标，
 bind 阶段的标签用 `Value::as_str()` 从 `duckdb_value` 取。
+具体到 `ENUM`，通常不必手写：`#[derive(DuckEnum)]` 生成的就是这份实现，配上 `create_type = true`
+还会在加载期执行 `CREATE TYPE ... AS ENUM (...)` —— 手写版本的意义是把机制讲清楚，而不是日常用法。
 
 **容器类型。** 容器需要子读写器，并且要把 NULL 传播进子向量。
 `duckfn/src/value_types/duck_list.rs`、`duck_map.rs`、`duck_array.rs`、`duck_struct.rs` 就是参考实现。

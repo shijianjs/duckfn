@@ -48,7 +48,7 @@ so everything above is safe Rust.
 
 | | |
 | --- | --- |
-| **No C/C++ glue code** | DuckDB C types never appear in your code. You write `Option<i64>`, `Vec<String>` and `#[derive(DuckStruct)]` structs. |
+| **No C/C++ glue code** | DuckDB C types never appear in your code. You write `Option<i64>`, `Vec<String>`, `#[derive(DuckStruct)]` structs and `#[derive(DuckEnum)]` enums. |
 | **No local DuckDB build** | The extension is compiled against headers only and dispatches through DuckDB's API table at load time. |
 | **Safe by default** | No `unsafe fn` and no raw pointers in your function bodies. The only `unsafe` left is in explicit manual registration. |
 | **Attribute-driven registration** | Annotating a function is enough; registration items are collected with `inventory` and applied when DuckDB loads the extension. |

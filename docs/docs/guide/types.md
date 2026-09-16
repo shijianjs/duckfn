@@ -237,12 +237,42 @@ Rules worth knowing:
 - A `NULL` cell reads as `None` like everywhere else — write `Option<DuckLazy<T>>` when the argument
   may be `NULL`.
 
+## Enums
+
+DuckDB's `ENUM` is not one of the value types duckfn maps, but the mapping is completely mechanical, so
+`#[derive(DuckEnum)]` generates it from an ordinary Rust enum:
+
+```rust
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+#[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+pub enum Priority {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+```
+
+- the **dictionary is the declaration order**, and `rename_all` / a variant's `#[duck(rename = "...")]`
+  decide the labels (`['low', 'medium', 'high']` above);
+- the logical type is that `ENUM(...)`, so the enum can be an argument, a return value, a `STRUCT`
+  field or a container element, and `Option<Priority>` makes it nullable;
+- `create_type = true` additionally runs `CREATE TYPE IF NOT EXISTS "priority" AS ENUM (...) ` when the
+  extension loads — idempotent, and it leaves an existing type of that name alone — so SQL can write
+  `'high'::priority` and use `priority` as a column type;
+- as with any argument, a **non-nullable** enum parameter needs `Default` (the generated argument
+  struct derives it), hence the `#[derive(Default)]` + `#[default]` in the example.
+
+Note that DuckDB only inserts the implicit `VARCHAR → ENUM` cast for *constant* strings; a column or an
+expression has to be cast explicitly (`'low'::priority`). See [Attributes](./attributes.md) for the
+`#[duck(...)]` arguments.
+
 ## Known gaps
 
 | Gap | Detail |
 | --- | --- |
 | Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled. |
-| Not mapped, but implementable | `ENUM`, `UNION`, `BIT`, `VARINT`, `GEOMETRY`, `VARIANT`: quack-rs has no read/write for them, but a [`DuckValueType` implementation of your own](./custom-types.md) can call the DuckDB C API through the raw vector handle. |
+| Not mapped, but implementable | `UNION`, `BIT`, `VARINT`, `GEOMETRY`, `VARIANT`: quack-rs has no read/write for them, but a [`DuckValueType` implementation of your own](./custom-types.md) can call the DuckDB C API through the raw vector handle. `ENUM` is generated for you by [`#[derive(DuckEnum)]`](#enums). |
 | Not storable types | `ANY`, `SQLNULL` and the integer/string literal types exist only in DuckDB's own signatures and literals; they cannot be an extension's argument or return type. |
 | No dedicated `DuckList` / `DuckMap` wrappers | `DuckList<T>` / `DuckMap<K, V>` are only aliases for `Vec<T>` / `IndexMap<K, V>`; the real types are the standard library / `indexmap` ones. |
 | `ARRAY` bind parameters | Not supported (see above). |

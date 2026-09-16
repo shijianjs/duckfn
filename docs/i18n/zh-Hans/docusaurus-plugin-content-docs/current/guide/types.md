@@ -224,12 +224,39 @@ fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> 
 - bind/`Value` 路径（表函数参数）显式拒绝：那类值只在 bind 回调内有效。
 - 单元格为 `NULL` 时和其它类型一样读到 `None` —— 参数可能为 `NULL` 就写 `Option<DuckLazy<T>>`。
 
+## 枚举
+
+DuckDB 的 `ENUM` 不在 duckfn 内建映射的值类型里，但它的映射规则完全是机械的，所以
+`#[derive(DuckEnum)]` 可以直接从普通 Rust 枚举生成：
+
+```rust
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+#[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+pub enum Priority {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+```
+
+- **字典就是声明顺序**，标签由 `rename_all` / 变体上的 `#[duck(rename = "...")]` 决定（上面是 `['low', 'medium', 'high']`）；
+- 逻辑类型就是那个 `ENUM(...)`，因此枚举可以直接作为参数、返回值、`STRUCT` 字段或容器元素，
+  `Option<Priority>` 表示可空；
+- `create_type = true` 还会在扩展加载时执行 `CREATE TYPE IF NOT EXISTS "priority" AS ENUM (...)` ——
+  幂等，且不会覆盖已存在的同名类型 —— 之后 SQL 里可以直接写 `'high'::priority`，也能把列声明成 `priority`；
+- 与其它参数一样，**非可空**的枚举参数需要 `Default`（宏生成的参数结构体会 `derive(Default)`），
+  所以例子里有 `#[derive(Default)]` + `#[default]`。
+
+注意 DuckDB 只对**常量**字符串做隐式 `VARCHAR → ENUM` 转换；列或表达式需要显式写 `'low'::priority`。
+`#[duck(...)]` 的完整参数见[属性参考](./attributes.md)。
+
 ## 已知缺口
 
 | 缺口 | 说明 |
 | --- | --- |
 | 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。 |
-| 未映射，但可以自己实现 | `ENUM`、`UNION`、`BIT`、`VARINT`、`GEOMETRY`、`VARIANT`：quack-rs 没有它们的读写方法，但你可以[自己实现 `DuckValueType`](./custom-types.md)，通过裸向量句柄直接调用 DuckDB 的 C API。 |
+| 未映射，但可以自己实现 | `UNION`、`BIT`、`VARINT`、`GEOMETRY`、`VARIANT`：quack-rs 没有它们的读写方法，但你可以[自己实现 `DuckValueType`](./custom-types.md)，通过裸向量句柄直接调用 DuckDB 的 C API。`ENUM` 则由 [`#[derive(DuckEnum)]`](#枚举) 生成。 |
 | 不可存储类型 | `ANY`、`SQLNULL` 以及整数/字符串字面量类型只存在于 DuckDB 自身的函数签名与字面量中，不能作为扩展的参数或返回类型。 |
 | 没有专用的 `DuckList` / `DuckMap` 包装类型 | `DuckList<T>` / `DuckMap<K, V>` 只是 `Vec<T>` / `IndexMap<K, V>` 的别名，真正的类型是标准库 / `indexmap` 的那个。 |
 | `ARRAY` 作为 bind 参数 | 不支持（见上文）。 |

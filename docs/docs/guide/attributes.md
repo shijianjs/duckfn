@@ -18,6 +18,7 @@ description: Every duckfn attribute, the arguments they share, the items they ge
 | `#[duck_sql_macro]` | a SQL macro | `SqlMacro`, `DuckResult<SqlMacro>`, `String`, `&'static str`, or `DuckResult` of those |
 | `#[duck_custom_register]` | whatever the function registers itself | `fn(&Connection) -> DuckResult<()>` |
 | `#[derive(DuckStruct)]` | — | maps a struct to a DuckDB `STRUCT` |
+| `#[derive(DuckEnum)]` | — | maps a unit-variant enum to a DuckDB `ENUM` (optionally creates the type at load time) |
 | `duckfn_entrypoint!("name")` | the extension entry point | — |
 | `duck_sql_macro_files!("a.sql", …)` | macros defined in SQL files | — |
 
@@ -46,6 +47,34 @@ struct CountDownS {
     start: i64,
 }
 ```
+
+`#[derive(DuckEnum)]` maps a unit-variant-only enum onto a DuckDB `ENUM` (dictionary = declaration
+order) and takes its own arguments:
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `rename_all` | `verbatim` | Variant name → SQL label: `lowercase`, `UPPERCASE`, `snake_case`, `SCREAMING_SNAKE_CASE`, `camelCase`, `PascalCase`, `kebab-case`, `SCREAMING-KEBAB-CASE`. |
+| `sql_name` | the type name in snake_case | The SQL-side type name (`Priority` → `priority`). |
+| `create_type` | `false` | Run `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)` when the extension loads — idempotent, and an existing type of that name is left untouched. |
+| `#[duck(rename = "...")]` on a variant | — | Overrides the label of that single variant. |
+
+```rust
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+#[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+pub enum Priority {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+```
+
+The enum is then usable anywhere a value type is expected — function arguments, return values,
+`STRUCT` fields, container elements — and `Option<Priority>` makes it nullable. A **non-nullable**
+argument additionally needs `Default` (the generated argument struct derives it), which is why the
+example derives `Default` and marks a `#[default]` variant; with `Option<Priority>` it is not needed.
+`create_type` reuses the SQL-macro execution path, so the statement is issued with `duckdb_query`
+at load time. See [Types → Enums](./types.md#enums).
 
 ## What a macro generates
 

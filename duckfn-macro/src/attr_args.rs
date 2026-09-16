@@ -2,11 +2,11 @@
 //!
 //! Argument parsing and common dispatch logic for the attribute macros.
 
-use proc_macro::TokenStream;
-use darling::FromMeta;
-use syn::{parse_macro_input, ItemFn};
 use crate::duck_function::ItemFnWrapper;
-use crate::macro_utils::{handle_token_stream2_result, TokenStream2Result};
+use crate::macro_utils::{TokenStream2Result, handle_token_stream2_result, to_snake_case};
+use darling::FromMeta;
+use proc_macro::TokenStream;
+use syn::{ItemFn, parse_macro_input};
 
 /// 所有 `#[duck_*]` 属性宏的公共入口。
 ///
@@ -95,4 +95,128 @@ pub(crate) struct DuckFunctionMacroArgs {
     /// Several signatures sharing the same `overloads_name` are merged into one function set,
     /// each overload keeping its own return type.
     pub overloads_name: Option<String>,
+}
+
+/// 变体名 → SQL 字典标签的命名规则（`#[duck(rename_all = "...")]`）。
+///
+/// `#[derive(DuckEnum)]` 用它把 Rust 变体名（`HttpError` 这种 PascalCase）映射成 SQL 侧的
+/// ENUM 标签；单个变体可以用 `#[duck(rename = "...")]` 覆盖。
+///
+/// The naming rule mapping a variant name onto its SQL dictionary label. `#[derive(DuckEnum)]`
+/// uses it to turn a PascalCase variant name into the SQL-side ENUM label, and a single variant
+/// can override it with `#[duck(rename = "...")]`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum RenameRule {
+    /// 原样使用变体名（默认）。/ The variant name as written (the default).
+    #[default]
+    Verbatim,
+    /// `Red` -> `red`；选 `"lowercase"`。
+    ///
+    /// `Red` -> `red`; written as `"lowercase"`.
+    Lower,
+    /// `Red` -> `RED`；选 `"UPPERCASE"`。
+    ///
+    /// `Red` -> `RED`; written as `"UPPERCASE"`.
+    Upper,
+    /// `HttpError` -> `http_error`；选 `"snake_case"`。
+    ///
+    /// `HttpError` -> `http_error`; written as `"snake_case"`.
+    Snake,
+    /// `HttpError` -> `HTTP_ERROR`；选 `"SCREAMING_SNAKE_CASE"`。
+    ///
+    /// `HttpError` -> `HTTP_ERROR`; written as `"SCREAMING_SNAKE_CASE"`.
+    ScreamingSnake,
+    /// `HttpError` -> `httpError`（只把首字母小写）；选 `"camelCase"`。
+    ///
+    /// `HttpError` -> `httpError` (only the first letter is lowered); written as `"camelCase"`.
+    Camel,
+    /// 保持 PascalCase；选 `"PascalCase"`。
+    ///
+    /// Keeps PascalCase; written as `"PascalCase"`.
+    Pascal,
+    /// `HttpError` -> `http-error`；选 `"kebab-case"`。
+    ///
+    /// `HttpError` -> `http-error`; written as `"kebab-case"`.
+    Kebab,
+    /// `HttpError` -> `HTTP-ERROR`；选 `"SCREAMING-KEBAB-CASE"`。
+    ///
+    /// `HttpError` -> `HTTP-ERROR`; written as `"SCREAMING-KEBAB-CASE"`.
+    ScreamingKebab,
+}
+
+impl RenameRule {
+    /// 把一个变体名按规则转成标签。
+    ///
+    /// Applies the rule to a variant name.
+    #[must_use]
+    pub(crate) fn apply(self, variant: &str) -> String {
+        match self {
+            RenameRule::Verbatim | RenameRule::Pascal => variant.to_owned(),
+            RenameRule::Lower => variant.to_lowercase(),
+            RenameRule::Upper => variant.to_uppercase(),
+            RenameRule::Snake => to_snake_case(variant),
+            RenameRule::ScreamingSnake => to_snake_case(variant).to_uppercase(),
+            RenameRule::Camel => {
+                let mut chars = variant.chars();
+                match chars.next() {
+                    Some(first) => first.to_lowercase().chain(chars).collect(),
+                    None => String::new(),
+                }
+            }
+            RenameRule::Kebab => to_snake_case(variant).replace('_', "-"),
+            RenameRule::ScreamingKebab => to_snake_case(variant).to_uppercase().replace('_', "-"),
+        }
+    }
+}
+
+impl FromMeta for RenameRule {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        Ok(match value {
+            "verbatim" => RenameRule::Verbatim,
+            "lowercase" => RenameRule::Lower,
+            "UPPERCASE" => RenameRule::Upper,
+            "snake_case" => RenameRule::Snake,
+            "SCREAMING_SNAKE_CASE" => RenameRule::ScreamingSnake,
+            "camelCase" => RenameRule::Camel,
+            "PascalCase" => RenameRule::Pascal,
+            "kebab-case" => RenameRule::Kebab,
+            "SCREAMING-KEBAB-CASE" => RenameRule::ScreamingKebab,
+            other => return Err(darling::Error::unknown_value(other)),
+        })
+    }
+}
+
+/// `#[derive(DuckEnum)]` 在枚举上 `#[duck(...)]` 可用的参数。
+///
+/// 变体级只支持 `#[duck(rename = "...")]`（在 derive 里就地解析）。
+///
+/// The `#[duck(...)]` arguments `#[derive(DuckEnum)]` accepts on the enum. At variant level only
+/// `#[duck(rename = "...")]` is supported (parsed in the derive itself).
+#[derive(Debug, FromMeta)]
+#[darling(derive_syn_parse)]
+pub(crate) struct DuckEnumMacroArgs {
+    /// `#[duck(rename_all = "snake_case")]`：变体名 → SQL 字典标签的命名规则，默认原样使用。
+    ///
+    /// `#[duck(rename_all = "snake_case")]`: how variant names map onto SQL dictionary labels;
+    /// by default the variant name is used verbatim.
+    pub rename_all: Option<RenameRule>,
+
+    /// `#[duck(sql_name = "priority")]`：SQL 侧的类型名，默认用类型名的小写蛇形
+    /// （`Priority` -> `priority`）。配合 `create_type` 建类型，也用于报错信息。
+    ///
+    /// `#[duck(sql_name = "priority")]`: the SQL-side type name; defaults to the type name in
+    /// lowercase snake_case. It is used by `create_type` and in error messages.
+    pub sql_name: Option<String>,
+
+    /// `#[duck(create_type = true)]`：加载期执行
+    /// `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`，默认 `false`。
+    ///
+    /// 语句是幂等的（`LOAD` 多次也不会报错），且不会覆盖已存在的同名类型。
+    /// 执行路径与 SQL 宏相同（`duckdb_query`）。
+    ///
+    /// `#[duck(create_type = true)]`: run `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`
+    /// at load time; defaults to `false`. The statement is idempotent (loading the extension
+    /// twice is fine) and leaves a pre-existing type untouched. It goes through the SQL-macro
+    /// execution path (`duckdb_query`).
+    pub create_type: Option<bool>,
 }

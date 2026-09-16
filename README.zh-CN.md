@@ -37,7 +37,7 @@
 | 路径 | 说明 | 是否发布到 crates.io |
 | --- | --- | --- |
 | [`duckfn/`](duckfn/) | 运行时框架：trait、类型适配、函数注册。 | 是 |
-| [`duckfn-macro/`](duckfn-macro/) | 过程宏：`#[duck_scalar_function]`、`#[derive(DuckStruct)]` 等。 | 是 |
+| [`duckfn-macro/`](duckfn-macro/) | 过程宏：`#[duck_scalar_function]`、`#[derive(DuckStruct)]`、`#[derive(DuckEnum)]` 等。 | 是 |
 | `/`（`rusty_quack`） | 使用 `duckfn` 编写的示例扩展，放在根目录是为了复用官方多平台 CI。 | 否，仅作示例 |
 
 ## 安装

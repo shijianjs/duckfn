@@ -43,6 +43,11 @@ pub(crate) mod duck_struct;
 /// `DuckLazy<T>`: a deferred read scoped to one row (read-only), for cases such as a complex
 /// configuration argument that stays constant across rows.
 pub(crate) mod duck_lazy;
+/// `#[derive(DuckEnum)]` 生成的 ENUM 读写工具，以及可选的「加载期建类型」。
+///
+/// ENUM read/write helpers used by `#[derive(DuckEnum)]`-generated code, plus the optional
+/// "create the type at load time" step.
+pub(crate) mod duck_enum;
 
 pub use duck_value_type::*;
 pub use duck_array::*;
@@ -51,3 +56,5 @@ pub use duck_map::*;
 pub use wrapper_types::*;
 pub use duck_struct::*;
 pub use duck_lazy::*;
+pub use duck_enum::*;
+

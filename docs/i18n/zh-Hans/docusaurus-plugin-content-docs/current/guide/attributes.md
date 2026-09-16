@@ -18,6 +18,7 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 | `#[duck_sql_macro]` | SQL 宏 | `SqlMacro`、`DuckResult<SqlMacro>`、`String`、`&'static str`，或它们的 `DuckResult` |
 | `#[duck_custom_register]` | 函数自己注册的内容 | `fn(&Connection) -> DuckResult<()>` |
 | `#[derive(DuckStruct)]` | — | 把结构体映射为 DuckDB 的 `STRUCT` |
+| `#[derive(DuckEnum)]` | — | 把只有单元变体的枚举映射为 DuckDB 的 `ENUM`（可选在加载期建类型） |
 | `duckfn_entrypoint!("name")` | 扩展入口点 | — |
 | `duck_sql_macro_files!("a.sql", …)` | SQL 文件里定义的宏 | — |
 
@@ -44,6 +45,32 @@ struct CountDownS {
     start: i64,
 }
 ```
+
+`#[derive(DuckEnum)]` 把「只有单元变体的枚举」映射为 DuckDB 的 `ENUM`（字典 = 声明顺序），
+它有自己的参数：
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `rename_all` | `verbatim` | 变体名 → SQL 标签：`lowercase`、`UPPERCASE`、`snake_case`、`SCREAMING_SNAKE_CASE`、`camelCase`、`PascalCase`、`kebab-case`、`SCREAMING-KEBAB-CASE`。 |
+| `sql_name` | 类型名的小写蛇形 | SQL 侧类型名（`Priority` → `priority`）。 |
+| `create_type` | `false` | 扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)` —— 幂等，且不会覆盖已存在的同名类型。 |
+| 变体上的 `#[duck(rename = "...")]` | — | 单独覆盖该变体的标签。 |
+
+```rust
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+#[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+pub enum Priority {
+    #[default]
+    Low,
+    Medium,
+    High,
+}
+```
+
+之后这个枚举可以用在任何需要值类型的地方 —— 函数参数、返回值、`STRUCT` 字段、容器元素 ——
+`Option<Priority>` 则表示可空。**非可空**参数额外需要 `Default`（宏生成的参数结构体会 `derive(Default)`），
+所以例子里的 `Default` 与 `#[default]` 是必需的；写成 `Option<Priority>` 就不需要。`create_type`
+复用 SQL 宏那条执行路径，加载期用 `duckdb_query` 执行。见[类型 → 枚举](./types.md#枚举)。
 
 ## 宏展开了什么
 

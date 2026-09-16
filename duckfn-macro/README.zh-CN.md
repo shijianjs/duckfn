@@ -28,6 +28,7 @@
 | `#[duck_sql_macro]` | SQL 宏，返回 `SqlMacro` 或直接返回待执行的 SQL 字符串。 |
 | `#[duck_custom_register]` | 手动注册，签名为 `fn(&Connection) -> DuckResult<()>`。 |
 | `#[derive(DuckStruct)]` | 把结构体映射为 DuckDB `STRUCT`。 |
+| `#[derive(DuckEnum)]` | 把只有单元变体的枚举映射为 DuckDB `ENUM`（可选用 `create_type = true` 在加载期建类型）。 |
 | `duckfn_entrypoint!("name")` | 扩展入口符号。 |
 | `duck_sql_macro_files!("a.sql", …)` | 注册写在 `.sql` 文件里的 SQL 宏。 |
 

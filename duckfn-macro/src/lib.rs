@@ -17,6 +17,10 @@ mod duck_function;
 ///
 /// Implementation of `#[derive(DuckStruct)]`: maps a named struct onto a DuckDB `STRUCT`.
 mod duck_struct_derive;
+/// `#[derive(DuckEnum)]` 的实现：把只有单元变体的枚举映射为 DuckDB `ENUM`。
+///
+/// Implementation of `#[derive(DuckEnum)]`: maps a unit-variant-only enum onto a DuckDB `ENUM`.
+mod duck_enum_derive;
 /// 过程宏内部的 token/类型解析工具。
 ///
 /// Token and type parsing helpers used inside the procedural macros.
@@ -66,6 +70,62 @@ use crate::attr_args::handle_duck_function;
 pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
     let result = duck_struct_derive::duck_struct_derive(derive_input);
+    handle_token_stream2_result(result)
+}
+
+/// 把「只有单元变体的 Rust enum」映射成 DuckDB `ENUM`。
+///
+/// 生成的实现让该枚举可直接用于函数参数/返回值、`STRUCT` 字段与容器元素，逻辑类型是带字典的
+/// `ENUM('a', 'b', ...)`（字典就是变体的声明顺序）。ENUM 的规则很固定，所以这里生成完整实现，
+/// 而不是像 `#[derive(DuckStruct)]` 那样只生成 trait 实现再靠 blanket impl 兜底 ——
+/// `Option<T>` 与结构体已经各占一个 blanket impl，再加第三个会冲突（E0119）。
+///
+/// ```ignore
+/// #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+/// #[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+/// pub enum Priority {
+///     #[default]
+///     Low,
+///     Medium,
+///     High,
+/// }
+/// // SQL 侧：ENUM('low', 'medium', 'high')，并在加载时建好 `priority` 类型
+/// ```
+///
+/// `#[duck(...)]` 参数：
+///
+/// - `rename_all = "..."`：变体名 → SQL 标签的命名规则（`lowercase` / `UPPERCASE` /
+///   `snake_case` / `SCREAMING_SNAKE_CASE` / `camelCase` / `PascalCase` / `kebab-case` /
+///   `SCREAMING-KEBAB-CASE` / `verbatim`），默认原样使用变体名；
+/// - `sql_name = "..."`：SQL 侧类型名，默认是类型名的小写蛇形（`Priority` -> `priority`）；
+/// - `create_type = true`：加载期执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`，
+///   默认 `false`。语句幂等（重复 `LOAD` 不报错），也不会覆盖已存在的同名类型，执行路径与
+///   SQL 宏相同（`duckdb_query`）；
+/// - 变体级 `#[duck(rename = "...")]`：单独覆盖某个变体的标签。
+///
+/// 约束：必须是 enum、不能带泛型、至少一个变体、变体不能带数据、标签不能重复。
+/// 作为**非可空**函数参数时还需要 `Default`（宏生成的参数结构体会 `derive(Default)`），
+/// 因此通常写成 `#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]` 并用
+/// `#[default]` 标一个变体；可空参数写 `Option<Priority>` 则不需要。
+///
+/// Maps a unit-variant-only Rust enum onto a DuckDB `ENUM`. The generated implementation lets the
+/// enum be used as a function argument/return value, as a `STRUCT` field and as a container
+/// element; its logical type is `ENUM('a', 'b', ...)` with the dictionary in declaration order.
+/// The ENUM rules are fixed, so this generates the whole implementation instead of leaning on a
+/// blanket impl — `Option<T>` and the struct derive already own one blanket impl each, and a third
+/// would conflict (E0119).
+///
+/// `#[duck(...)]` arguments: `rename_all = "..."` for the variant-name-to-label rule,
+/// `sql_name = "..."` for the SQL-side type name (defaults to the lowercase snake_case of the Rust
+/// name), and `create_type = true` to run `CREATE TYPE IF NOT EXISTS ...` at load time
+/// (idempotent, leaves an existing type untouched, same execution path as the SQL macros). A single
+/// variant can override its label with `#[duck(rename = "...")]`. The input must be a non-generic
+/// enum with at least one data-free variant and distinct labels; a non-nullable function argument
+/// additionally needs `Default`.
+#[proc_macro_derive(DuckEnum, attributes(duck))]
+pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
+    let derive_input = parse_macro_input!(input as DeriveInput);
+    let result = duck_enum_derive::duck_enum_derive(derive_input);
     handle_token_stream2_result(result)
 }
 

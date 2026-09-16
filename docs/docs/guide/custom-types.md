@@ -134,6 +134,9 @@ label up in the enum dictionary), `BIT` and `VARINT`, all of which have no quack
 enum in `src/extension/types/custom_type_echo.rs` is the worked example: it declares the dictionary with
 `LogicalType::enum_type(&[...])`, overrides the raw-vector `read_valid` / `write_valid` to move the index
 in and out of the vector, and reads the label from a bind-time `duckdb_value` with `Value::as_str()`.
+For `ENUM` specifically you rarely need to write that by hand: `#[derive(DuckEnum)]` generates exactly
+this implementation — plus, with `create_type = true`, a load-time `CREATE TYPE ... AS ENUM (...)` — so
+the hand-written version is there to explain the mechanics, not as the day-to-day route.
 
 **A container type.** Containers need child readers and writers, and NULL has to be propagated into
 the children. `duckfn/src/value_types/duck_list.rs`, `duck_map.rs`, `duck_array.rs` and
