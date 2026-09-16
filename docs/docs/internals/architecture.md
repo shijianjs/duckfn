@@ -181,6 +181,11 @@ map entries and struct fields — applies that fallback, which is what lets a si
 `[T; N]` / `IndexMap<K, V>` implementation serve both nullable and non-nullable element types, and
 why `#[derive(DuckStruct)]` no longer inspects field types syntactically.
 
+`DuckValueReader` also carries a liveness token (`Arc<ChunkToken>`, exposed as a `Weak` through
+`alive_weak()`), which `DuckLazy<T>` uses to defer a read: holding a reader is holding proof that its
+vector is valid right now, so a deferred value can tell "still inside the callback" from "the chunk is
+gone" and report an error instead of dereferencing a stale vector.
+
 `DuckStructTrait` is the generated struct interface, and three blanket impls connect it to the rest of
 the system: `DuckValueType` (usable as a value), `DuckColumns` (usable as a table function's output
 row), and `DuckBindArgs` (usable as a table function's arguments).

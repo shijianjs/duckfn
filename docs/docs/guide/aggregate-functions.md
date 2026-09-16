@@ -183,6 +183,37 @@ FROM (VALUES (1, 2), (NULL, 5), (3, NULL), (4, 6)) t(a, b);
 folding constant `NULL`s, so the body still runs. `dfn_agg_seen_default` and
 `dfn_agg_seen_special` differ only for constant inputs.
 
+## A constant, expensive argument
+
+The argument struct is rebuilt for every row, so an argument that never changes still pays its full
+parse cost 5000 times over 5000 rows. When that argument is expensive — a configuration struct ten times
+heavier than the values being aggregated — wrap it in [`DuckLazy<T>`](./types.md#lazy-arguments) and pay
+it once:
+
+```rust
+#[derive(Default, Debug, Clone)]
+struct WeightedState {
+    config: Option<Config>,
+    sum: f64,
+}
+
+#[duck_aggregate_function]
+fn dfn_agg_weighted(cfg: DuckLazy<Config>, v: i64, state: &mut WeightedState) -> DuckResult<()> {
+    // Parsed once, on the first row; every later row reuses this value.
+    if state.config.is_none() {
+        state.config = Some(cfg.get());
+    }
+    state.sum += state.config.as_ref().unwrap().weight(v);
+    Ok(())
+}
+```
+
+Cache the **parsed value** in the state, never the token: `DuckLazy<T>` is only valid inside the
+callback that produced it, and `.get()` outside it fails the query (with a `DuckLazy<T> is stale: ...`
+error) instead of reading a stale vector. The example extension measures both spellings in
+`test/sql/demo/lazy_config_demo.test`: over 5000 rows the `DuckLazy` argument parses the configuration
+**once** while the eager `Config` argument parses it **5000 times**, with identical results.
+
 ## Overloads
 
 As with scalar functions, `overloads_name` merges several aggregates into one function set. When the

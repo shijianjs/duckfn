@@ -7,6 +7,7 @@ use libduckdb_sys::{duckdb_is_null_value, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{LogicalType, StructVector, TypeId, Value, VectorReader, VectorWriter};
 use std::fmt::Debug;
+use std::sync::{Arc, Weak};
 
 /// Rust 类型与 DuckDB 逻辑类型之间的映射：既负责声明 DuckDB 类型，也负责从向量读、往向量写。
 ///
@@ -266,6 +267,13 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
 /// Used by the macros to assert at compile time that a type implements [`DuckValueType`].
 pub fn assert_impl_duck_value_type<T: DuckValueType>() {}
 
+/// 一个 [`DuckValueReader`] 的存活凭证：reader 还在，凭证就在；reader 被释放后，
+/// 由它派生的 [`DuckLazy`](crate::DuckLazy) 才能发现自己已经失效。
+///
+/// A liveness token for one [`DuckValueReader`]: it lives exactly as long as the reader, which is
+/// what lets a [`DuckLazy`](crate::DuckLazy) derived from it notice that it has gone stale.
+pub(crate) struct ChunkToken;
+
 /// 一行值的读取器：同时持有 quack-rs 的高层 [`VectorReader`] 与 DuckDB 的裸向量。
 ///
 /// A reader for one row of values: it holds both the high-level quack-rs [`VectorReader`] and
@@ -283,6 +291,18 @@ pub struct DuckValueReader {
     ///
     /// Child readers built on top of `c_duckdb_vector` (e.g. LIST elements, STRUCT fields).
     pub child_reader: Vec<DuckValueReader>,
+    /// 存活凭证：拿到一个 reader，就等于拿到了「这块向量此刻有效」的证明。
+    ///
+    /// [`DuckLazy`](crate::DuckLazy) 只持有它的 [`Weak`]，于是「源 reader 是否还在」就成了唯一
+    /// 的有效性判据 —— 回调结束、局部 `readers` 被释放后，延迟取值会得到明确的报错，
+    /// 而不是解引用一块已经失效的向量。
+    ///
+    /// The liveness token: holding a reader is holding proof that this vector is valid right now.
+    /// [`DuckLazy`](crate::DuckLazy) keeps only a [`Weak`] to it, so "is the source reader still
+    /// alive?" becomes the one and only validity check — once the callback returns and the local
+    /// `readers` are dropped, a deferred read reports an error instead of dereferencing a stale
+    /// vector.
+    pub(crate) token: Arc<ChunkToken>,
 }
 
 impl DuckValueReader {
@@ -307,7 +327,16 @@ impl DuckValueReader {
             vector_reader: unsafe { VectorReader::from_vector(vector, size) },
             c_duckdb_vector: vector,
             child_reader: vec![],
+            token: Arc::new(ChunkToken),
         }
+    }
+
+    /// 本 reader 存活凭证的弱引用，交给 [`DuckLazy`](crate::DuckLazy) 判断自己是否还有效。
+    ///
+    /// A weak reference to this reader's liveness token, handed to
+    /// [`DuckLazy`](crate::DuckLazy) so it can tell whether it is still usable.
+    pub(crate) fn alive_weak(&self) -> Weak<ChunkToken> {
+        Arc::downgrade(&self.token)
     }
 }
 

@@ -136,6 +136,11 @@ label up in the enum dictionary), `BIT` and `VARINT`, all of which have no quack
 the children. `duckfn/src/value_types/duck_list.rs`, `duck_map.rs`, `duck_array.rs` and
 `duck_struct.rs` are the reference implementations.
 
+**A deferred read.** `duck_lazy.rs` is the other extreme: `read_valid` only records the position plus a
+liveness token and the real parse happens later in `get()`. Copy that pattern when your own type wants
+to postpone work — the token included, since it is what turns "consumed after its chunk died" from
+undefined behaviour into a query error.
+
 **A DuckDB 1.5 logical type.** Some of them only need a Cargo feature to become available:
 `TIME_NS` ships in duckfn behind `duckdb-1-5`, which forwards to the same feature on quack-rs — see
 [Installation](../getting-started/installation.md#cargo-features).

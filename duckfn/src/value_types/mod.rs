@@ -38,6 +38,11 @@ pub(crate) mod duck_map;
 /// `DuckStructTrait` (required by `#[derive(DuckStruct)]`-generated STRUCT structs) plus the
 /// blanket implementations wiring it into `DuckValueType` / `DuckColumns` / `DuckBindArgs`.
 pub(crate) mod duck_struct;
+/// `DuckLazy<T>`：本行内的延迟读取（只读），用于「多行不变的复杂配置项」这类场景。
+///
+/// `DuckLazy<T>`: a deferred read scoped to one row (read-only), for cases such as a complex
+/// configuration argument that stays constant across rows.
+pub(crate) mod duck_lazy;
 
 pub use duck_value_type::*;
 pub use duck_array::*;
@@ -45,3 +50,4 @@ pub use duck_list::*;
 pub use duck_map::*;
 pub use wrapper_types::*;
 pub use duck_struct::*;
+pub use duck_lazy::*;

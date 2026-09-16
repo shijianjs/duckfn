@@ -198,6 +198,32 @@ pub struct DuckStructWithList {
 `Vec<Option<Vec<Option<T>>>>`、`IndexMap<String, Option<IndexMap<String, Option<i32>>>>`、
 `DuckArray<Option<DuckArray<Option<i32>, 2>>, 2>` 都有对应的 DuckDB 类型。
 
+## 懒加载参数
+
+`DuckLazy<T>` 在 SQL 侧看起来就是 `T`（逻辑类型相同、`NULL` 规则相同），但解析被推迟了：读一行只记录
+「值在哪」（O(1)），真正的解析发生在 `get()` / `try_get()` 里。它面向的是「多行不变、却比旁边的值复杂
+得多」的参数，典型就是聚合函数的配置项：
+
+```rust
+#[duck_aggregate_function]
+fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> {
+    // 第一行解析一次；后续每一行复用解析结果。
+    if state.cfg.is_none() {
+        state.cfg = Some(cfg.get());
+    }
+    // ... 使用 state.cfg
+}
+```
+
+几条需要知道的规则：
+
+- 凭证**只在产生它的那次回调内有效**。把它存进聚合状态、或在之后的 chunk / 其它线程里消费都属于误用 ——
+  运行时守卫会把它变成 `DuckLazy<T> is stale: ...` 的查询报错，而不是未定义行为。请缓存**解析后的值**，
+  不要缓存凭证。
+- `DuckLazy<T>` **只读**：作为返回类型或输出字段使用会直接报错。
+- bind/`Value` 路径（表函数参数）显式拒绝：那类值只在 bind 回调内有效。
+- 单元格为 `NULL` 时和其它类型一样读到 `None` —— 参数可能为 `NULL` 就写 `Option<DuckLazy<T>>`。
+
 ## 已知缺口
 
 | 缺口 | 说明 |

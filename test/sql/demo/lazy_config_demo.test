@@ -1,0 +1,85 @@
+# name: test/sql/demo/lazy_config_demo.test
+# description: DuckLazy<T> 的聚合场景：复杂配置项多行不变、只解析一次（与 eager 入参对照，并固化跨回调误用的守卫行为）
+# group: [demo]
+
+require rusty_quack
+
+# 场景：聚合函数的配置参数多行不变，却比被聚合的值复杂十多倍。
+#   - lazy 组：入参写 DuckLazy<Config>，首行 get() 一次并把**解析结果**存进聚合状态 → 解析 1 次
+#   - eager 组：入参写 Config → 每行都完整解析一次 → 解析 N 次
+# 配置类型自带全局解析计数器，这里用「差值」断言，避免计数器跨测试文件累积。
+#
+# 线程数固定为 1：多线程下 DuckDB 会为每个并行状态各解析一次，差值断言需要确定性。
+
+statement ok
+SET threads=1;
+
+# ============================================================================
+# lazy 组：5000 行（跨多个 chunk）只解析 1 次
+# ============================================================================
+
+statement ok
+CREATE TABLE lazy_parse_base AS SELECT dfn_lazy_config_parse_count(0) AS c;
+
+query TTT
+SELECT CAST(x.rows AS VARCHAR), CAST(x.weighted_sum AS VARCHAR), CAST(x.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_lazy_config_demo(
+        {'scale': 2.0, 'offset': 1, 'weights': [1, 2], 'labels': ['a', 'b']}, v) AS x
+    FROM range(5000) t(v)
+);
+----
+5000	37510000.0	2.0
+
+query I
+SELECT dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base);
+----
+1
+
+# ============================================================================
+# eager 组：同样的逻辑、同样的结果，但每行都解析一次
+# ============================================================================
+
+query TTT
+SELECT CAST(y.rows AS VARCHAR), CAST(y.weighted_sum AS VARCHAR), CAST(y.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_eager_config_demo(
+        {'scale': 2.0, 'offset': 1, 'weights': [1, 2], 'labels': ['a', 'b']}, v) AS y
+    FROM range(5000) t(v)
+);
+----
+5000	37510000.0	2.0
+
+# 累计 = lazy 的 1 次 + eager 的 5000 次；两组结果值完全相同，说明 lazy 只改解析时机、不改语义
+query I
+SELECT dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base);
+----
+5001
+
+# ============================================================================
+# 空输入：配置从未被解析，结果为 0 行 / scale 0
+# ============================================================================
+
+query TT
+SELECT CAST(x.rows AS VARCHAR), CAST(x.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_lazy_config_demo(
+        {'scale': 2.0, 'offset': 1, 'weights': [1], 'labels': []}, v) AS x
+    FROM range(0) t(v)
+);
+----
+0	0.0
+
+# ============================================================================
+# 反面用例：把凭证存进状态、跨回调消费
+#
+# 那时产生凭证的回调早已返回、源 reader 也已释放。守卫会给出明确的查询报错，
+# 而不是解引用一块失效的向量（如果没有守卫，这里就是 UB）。
+# ============================================================================
+
+statement error
+SELECT dfn_agg_bad_lazy_use(
+    {'scale': 2.0, 'offset': 1, 'weights': [1], 'labels': []}, v)
+FROM range(3) t(v);
+----
+DuckLazy<T> is stale: consume it inside the callback that produced it

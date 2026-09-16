@@ -127,6 +127,10 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 **容器类型。** 容器需要子读写器，并且要把 NULL 传播进子向量。
 `duckfn/src/value_types/duck_list.rs`、`duck_map.rs`、`duck_array.rs`、`duck_struct.rs` 就是参考实现。
 
+**延迟读取。** `duck_lazy.rs` 是另一个极端：`read_valid` 只记录位置和一个存活凭证，真正的解析推迟到
+`get()`。自己的类型想推迟工作时就照这个模式来 —— 包括那个凭证，正是它把「源 chunk 已经死了还在消费」
+从未定义行为变成了查询报错。
+
 **DuckDB 1.5 新增的逻辑类型。** 其中一些只需要开启一个 feature 就能用：`TIME_NS` 已经内置在 duckfn 里，
 由 `duckdb-1-5` 控制，该 feature 转发到 quack-rs 的同名 feature —— 见[安装](../getting-started/installation.md#cargo-feature)。
 

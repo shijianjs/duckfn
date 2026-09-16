@@ -207,6 +207,36 @@ pub struct DuckStructWithList {
 `Vec<Option<Vec<Option<T>>>>`, `IndexMap<String, Option<IndexMap<String, Option<i32>>>>` and
 `DuckArray<Option<DuckArray<Option<i32>, 2>>, 2>` all have DuckDB equivalents.
 
+## Lazy arguments
+
+`DuckLazy<T>` reads like `T` on the SQL side — same logical type, same `NULL` rules — but the parse is
+deferred: reading a row only records *where* the value lives (O(1)), and `get()` / `try_get()` does the
+real work. It is for arguments that stay constant across many rows yet cost far more to parse than the
+values next to them, such as an aggregate's configuration argument:
+
+```rust
+#[duck_aggregate_function]
+fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> {
+    // Parse once, on the first row; every later row reuses the parsed value.
+    if state.cfg.is_none() {
+        state.cfg = Some(cfg.get());
+    }
+    // ... use state.cfg
+}
+```
+
+Rules worth knowing:
+
+- The token is **only valid inside the callback that produced it**. Storing it in the aggregate state,
+  or consuming it in a later chunk or on another thread, is a misuse — the runtime guard turns it into
+  a `DuckLazy<T> is stale: ...` query error rather than undefined behaviour. Cache the *parsed value*,
+  never the token.
+- `DuckLazy<T>` is **read-only**: a return type or output column that uses it raises an error.
+- The bind/`Value` path (table-function arguments) rejects it explicitly, because those values only
+  live inside the bind callback.
+- A `NULL` cell reads as `None` like everywhere else — write `Option<DuckLazy<T>>` when the argument
+  may be `NULL`.
+
 ## Known gaps
 
 | Gap | Detail |

@@ -174,6 +174,34 @@ FROM (VALUES (1, 2), (NULL, 5), (3, NULL), (4, 6)) t(a, b);
 `special_null_handling = true` 的含义与标量函数一致：阻止 DuckDB 折叠常量 `NULL`，让函数体仍然被执行。
 `dfn_agg_seen_default` 与 `dfn_agg_seen_special` 只在常量输入上有差别。
 
+## 多行不变的昂贵参数
+
+参数结构体每一行都会重建，所以一个「从不变化」的参数在 5000 行上也要完整解析 5000 次。当这个参数很贵
+—— 比如比被聚合的值重十多倍的配置结构 —— 用 [`DuckLazy<T>`](./types.md#懒加载参数) 包一层，它就只解析一次：
+
+```rust
+#[derive(Default, Debug, Clone)]
+struct WeightedState {
+    config: Option<Config>,
+    sum: f64,
+}
+
+#[duck_aggregate_function]
+fn dfn_agg_weighted(cfg: DuckLazy<Config>, v: i64, state: &mut WeightedState) -> DuckResult<()> {
+    // 第一行解析一次；后续每一行复用这个值。
+    if state.config.is_none() {
+        state.config = Some(cfg.get());
+    }
+    state.sum += state.config.as_ref().unwrap().weight(v);
+    Ok(())
+}
+```
+
+状态里缓存**解析后的值**，不要缓存凭证：`DuckLazy<T>` 只在产生它的那次回调内有效，回调之外 `.get()`
+会让查询失败（报 `DuckLazy<T> is stale: ...`），而不是去读一块失效的向量。示例扩展在
+`test/sql/demo/lazy_config_demo.test` 里把两种写法都量了一遍：5000 行下 `DuckLazy` 入参解析配置
+**1 次**，eager 的 `Config` 入参解析 **5000 次**，两者结果完全相同。
+
 ## 重载
 
 与标量函数相同，`overloads_name` 可以把多个聚合合并成一个函数集。当各重载需要**不同**返回类型时要注意：

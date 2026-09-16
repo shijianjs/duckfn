@@ -167,6 +167,10 @@ DuckDB 的六个回调都实现在状态类型上：
 各自只需一份实现就能同时服务可空与不可空的元素类型，`#[derive(DuckStruct)]` 也不必再按语法去
 识别字段类型。
 
+`DuckValueReader` 还带一个存活凭证（`Arc<ChunkToken>`，通过 `alive_weak()` 暴露成 `Weak`），
+`DuckLazy<T>` 正是靠它把读取推迟：拿到 reader 就等于拿到「这块向量此刻有效」的证明，于是延迟值能区分
+「还在回调里」与「chunk 已经没了」，后者给出报错而不是解引用一块失效的向量。
+
 `DuckStructTrait` 是生成的结构体接口，三个 blanket impl 把它接入系统其余部分：`DuckValueType`（可作为值）、
 `DuckColumns`（可作为表函数的输出行）、`DuckBindArgs`（可作为表函数的参数）。
 
