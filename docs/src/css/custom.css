@@ -28,3 +28,19 @@
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
 }
+
+/* Two implementations side by side; used by examples/side-by-side.md.
+   Each column claims at least 20rem and wraps to its own row when the viewport
+   is too narrow for both. */
+.code-compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.code-compare > div {
+  flex: 1 1 20rem;
+  /* Without this, the code blocks keep their intrinsic width and overflow. */
+  min-width: 0;
+}

@@ -56,6 +56,9 @@ so everything above is safe Rust.
 | **Nested types included** | `Vec<T>`, `IndexMap<K, V>`, fixed-size arrays, `STRUCT`s and any nesting of them map to DuckDB's LIST, MAP, ARRAY and STRUCT. |
 | **Fits DuckDB's CI** | The repository reuses DuckDB's official multi-platform extension pipeline, so a version tag produces binaries for every supported platform. |
 
+[Same functions, two ways](./examples/side-by-side.md) puts four functions from DuckDB's official
+template and the `quack-rs` example next to their raw implementations.
+
 ## How the pieces fit together
 
 | Crate | Role |

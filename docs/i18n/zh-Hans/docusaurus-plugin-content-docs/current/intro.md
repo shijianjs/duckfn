@@ -53,6 +53,9 @@ FFI 包装、列读写与注册代码都由属性宏生成，所以上面这段�
 | **支持嵌套类型** | `Vec<T>`、`IndexMap<K, V>`、定长数组、`STRUCT` 以及它们的任意嵌套，对应 DuckDB 的 LIST、MAP、ARRAY、STRUCT。 |
 | **复用官方 CI** | 本仓库沿用 DuckDB 官方多平台扩展流水线，打 tag 即可产出各平台二进制。 |
 
+官方模板与 `quack-rs` 示例里的四个函数，各写了原始绑定与 `duckfn` 两版：
+[同样功能的两种写法](./examples/side-by-side.md)。
+
 ## 各部分如何配合
 
 | Crate | 作用 |
