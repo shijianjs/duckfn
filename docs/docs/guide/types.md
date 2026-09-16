@@ -8,6 +8,11 @@ description: How DuckDB types map to Rust types, including LIST, MAP, ARRAY and 
 
 An argument or return type is written as the Rust type you want; the DuckDB type follows from it.
 
+Nullability is expressed by that type and nowhere else: write `T` for `NOT NULL` and `Option<T>` for
+nullable. `Option<T>` is a value type of its own — it maps to exactly the same DuckDB type as `T` —
+so one rule covers everything: element types (`Vec<Option<i32>>`, `[Option<i32>; 3]`,
+`IndexMap<String, Option<i32>>`), struct fields, function arguments and return types.
+
 ## Simple types
 
 | DuckDB | Rust |
@@ -76,8 +81,11 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 | `Vec<T>` | `LIST(T) NOT NULL` | The whole row becomes `NULL`. |
 | `Vec<Option<T>>` | `LIST(T)` | The element stays `NULL`. |
 
-The aliases `DuckList<T>` / `DuckOptionList<T>` mean the same two types — they exist only to mirror the
-[`DuckArray`](#arrays) naming, so there is no dedicated wrapper type to look for.
+The aliases `DuckList<T>` / `DuckOptionList<T>` mean exactly those two types (`Vec<T>` /
+`Vec<Option<T>>`) — they exist only to mirror the [`DuckArray`](#arrays) naming, so there is no
+dedicated wrapper type to look for. The element type carries the nullability, which is why `Vec<T>`
+needs a single implementation: a `NULL` element becomes `None` when the element type can hold it,
+and turns the whole row `NULL` when it cannot.
 
 ```rust
 #[duck_scalar_function]
@@ -103,8 +111,8 @@ Lists nest to any depth: `Vec<Vec<i32>>`, `Vec<Option<Vec<Option<i32>>>>`.
 | `IndexMap<K, V>` | No — a `NULL` value is an error. |
 | `IndexMap<K, Option<V>>` | Yes. |
 
-`DuckMap<K, V>` / `DuckOptionMap<K, V>` are aliases for those two, again mirroring the [`DuckArray`](#arrays)
-naming.
+`DuckMap<K, V>` / `DuckOptionMap<K, V>` are aliases for `IndexMap<K, V>` / `IndexMap<K, Option<V>>`,
+again mirroring the [`DuckArray`](#arrays) naming — a `NULL` value is carried by the value type.
 
 Keys may never be `NULL`, and a `MAP` argument is the way to pass key/value data into a table
 function:
@@ -202,7 +210,6 @@ pub struct DuckStructWithList {
 | No dedicated `DuckList` / `DuckMap` wrappers | `DuckList<T>` / `DuckMap<K, V>` are only aliases for `Vec<T>` / `IndexMap<K, V>`; the real types are the standard library / `indexmap` ones. |
 | `ARRAY` bind parameters | Not supported (see above). |
 | `MAP` keys | Never nullable. |
-| `Vec<T>` / `[T; N]` elements | Never nullable — use the `Option` variants. |
 | `DECIMAL` | DuckDB requires `WIDTH < 39`. |
 
 ## Source and tests

@@ -53,6 +53,7 @@ impl DuckValueType for Celsius {
 | `write_valid_to_vector_writer()` | always | Write one valid value into an output vector. |
 | `read_by_duck_value_valid_simple()` | for arguments | Read from a `duckdb_value` — the path used by table function arguments, struct fields and casts. |
 | `logical_type()` | for parameterised types | Override when the type is not fully described by `type_id()` — `DECIMAL(18,3)`, `LIST(T)`, `ARRAY(T,N)`, `STRUCT(...)`. |
+| `from_null()` | for nullable types | Whether the type can hold `NULL` *as a value*. `Option<T>` returns `Some(None)`; the default is `None`, meaning "this type cannot hold NULL, so a NULL slot invalidates the enclosing value". |
 | `write_null()` | for containers | Override when `NULL` must also be propagated into child vectors. |
 | `create_reader_from_vector()` / `create_writer_batch()` / `write_finish()` | for containers | Where child readers and writers are attached, and child lengths are finalised. |
 
@@ -63,7 +64,8 @@ Two bounds are worth knowing before you start:
   generates derives it.
 
 `read()` and `write()` are the NULL-aware entry points and are deliberately not meant to be
-overridden.
+overridden; `read_slot()` sits on top of `read()` and adds the `from_null()` fallback, which is how
+containers and struct fields read a single element or field.
 
 ## Using it
 

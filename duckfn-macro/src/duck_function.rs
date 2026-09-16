@@ -8,7 +8,7 @@
 
 use crate::attr_args::DuckFunctionMacroArgs;
 use crate::macro_utils::{
-    TokenStream2Result, extract_generic_arg_type, extract_option, iterator_item_type,
+    TokenStream2Result, extract_generic_arg_type, iterator_item_type,
 };
 use quote::quote;
 use syn::__private::TokenStream2;
@@ -325,27 +325,30 @@ impl ItemFnWrapper {
         let name = self.name();
         let vis = self.visibility();
         let item_fn = &self.item_fn;
-        let (input_type, input_is_option) = self.cast_input_type()?;
+        let input_type = self.cast_input_type()?;
         let (_, output_type) = self.scalar_return_type()?;
         let return_clause = self.build_scalar_return_clause()?;
         let implicit_cost = self.implicit_cost_override();
         let function_register = self.cast_function_register()?;
 
-        // 入参写成 T 时 NULL 直接短路成 NULL（函数体不执行）；
-        // 写成 Option<T> 时 NULL 以 None 进入函数体，语义由函数自己决定。
-        let body = if input_is_option {
-            quote! {
-                let result = #name(value);
-                #return_clause
-            }
-        } else {
-            quote! {
-                let Some(value) = value else {
-                    return Ok(None);
-                };
-                let result = #name(value);
-                #return_clause
-            }
+        // 入参的可空性由参数类型自己决定，判据是 `DuckValueType::from_null`：
+        // 写成 `T` 时 `from_null()` 给不出值 → NULL 直接短路成 NULL（函数体不执行）；
+        // 写成 `Option<T>` 时 `from_null()` 给出 `None` → NULL 以 `None` 进入函数体，
+        // 语义由函数自己决定。
+        //
+        // Input nullability is decided by the parameter type through
+        // `DuckValueType::from_null`: with `T` it yields no value, so NULL short-circuits to NULL
+        // (the body never runs); with `Option<T>` it yields `None`, so NULL reaches the body.
+        let body = quote! {
+            let value = match value {
+                Some(value) => value,
+                None => match <Self::Input as duckfn::DuckValueType>::from_null() {
+                    Some(value) => value,
+                    None => return Ok(None),
+                },
+            };
+            let result = #name(value);
+            #return_clause
         };
 
         Ok(quote! {
@@ -404,14 +407,16 @@ impl ItemFnWrapper {
         })
     }
 
-    /// 唯一参数就是「源类型的值」，`Option<T>` 表示允许把 NULL 带进函数体。
+    /// 唯一参数就是「源类型的值」：`Option<T>` 表示允许把 NULL 带进函数体。
     ///
-    /// 返回 `(源类型, 是否 Option)`；参数个数不为 1 时报编译错误。
+    /// 返回声明原样的源类型（`Option<T>` 不再剥掉 —— 它自己实现了 `DuckValueType`，
+    /// 可空性由 `DuckValueType::from_null` 承载）；参数个数不为 1 时报编译错误。
     ///
     /// The single parameter is the source value; `Option<T>` allows NULL to reach the body.
-    /// Returns `(source type, is_option)` and reports a compile error unless exactly one
-    /// parameter is present.
-    fn cast_input_type(&self) -> syn::Result<(Type, bool)> {
+    /// Returns the source type exactly as declared (`Option<T>` is no longer stripped — it
+    /// implements `DuckValueType` itself, with nullability carried by `DuckValueType::from_null`).
+    /// Reports a compile error unless exactly one parameter is present.
+    fn cast_input_type(&self) -> syn::Result<Type> {
         let args = self.args();
         if args.len() != 1 {
             return Err(syn::Error::new_spanned(
@@ -419,11 +424,7 @@ impl ItemFnWrapper {
                 CAST_SIGNATURE_HINT,
             ));
         }
-        let ty = args[0].resolve_type()?;
-        if let Some(inner) = extract_option(ty) {
-            return Ok((inner.clone(), true));
-        }
-        Ok((ty.clone(), false))
+        Ok(args[0].resolve_type()?.clone())
     }
 
     /// 生成 `implicit_cost()` 覆盖；未设置 `implicit_cost` 时输出空内容。
@@ -857,30 +858,46 @@ impl ItemFnWrapper {
         self.args().iter().map(x).collect::<syn::Result<Vec<_>>>()
     }
 
-    /// 解析标量函数的返回类型，得到「外层形式 + 内部类型」。
+    /// 解析标量函数的返回类型，得到「外层形式 + `Output` 类型」。
     ///
-    /// 支持 `T`（Plain）、`Option<T>`、`DuckOptionResult<T>`；其他形式报编译错误。
+    /// - `T`（Plain）：`Output = T`；
+    /// - `Option<T>`：`Output = Option<T>` —— 可空性由类型表达，`None` 就是 SQL NULL；
+    /// - `DuckOptionResult<T>`：`Output = T` —— `DuckOptionResult` 不是值类型，只表示「可失败」。
     ///
-    /// Parses a scalar return type into "outer form + inner type". `T` (plain), `Option<T>` and
-    /// `DuckOptionResult<T>` are supported; anything else is a compile error.
+    /// 其他形式报编译错误。
+    ///
+    /// Parses a scalar return type into "outer form + `Output` type": `T` (plain) keeps `T`,
+    /// `Option<T>` keeps `Option<T>` (nullability expressed by the type) and
+    /// `DuckOptionResult<T>` takes the inner `T` (`DuckOptionResult` is not a value type, it only
+    /// means "fallible"). Anything else is a compile error.
     fn scalar_return_type(&self) -> syn::Result<(DuckScalarResult, &Type)> {
         if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
             if let Type::Path(type_path) = &**ty {
                 if let Some(segment) = type_path.path.segments.last() {
                     let result_type = match segment.ident.to_string().as_str() {
-                        "Option" => {
-                            extract_generic_arg_type(segment)
-                                .map(|inner| (DuckScalarResult::Option, inner))
-                        }
-                        "DuckOptionResult" => {
-                            extract_generic_arg_type(segment)
-                                .map(|inner| (DuckScalarResult::DuckOptionResult, inner))
-                        }
+                        "Option" => Some(DuckScalarResult::Option),
+                        "DuckOptionResult" => Some(DuckScalarResult::DuckOptionResult),
                         _ => None,
                     };
 
-                    if let Some((result_type, inner)) = result_type {
-                        return Ok((result_type, inner));
+                    if let Some(result_type) = result_type {
+                        let inner = extract_generic_arg_type(segment).ok_or_else(|| {
+                            syn::Error::new_spanned(
+                                ty,
+                                "Only like `-> f64` `-> Option<f64>` `-> DuckOptionResult<f64>` is supported",
+                            )
+                        })?;
+                        // `Option<T>` 自己就是值类型，`Output` 保持 `Option<T>`；
+                        // `DuckOptionResult<T>` 只表示可失败，`Output` 取内层 `T`。
+                        //
+                        // `Option<T>` is a value type of its own, so `Output` stays `Option<T>`;
+                        // `DuckOptionResult<T>` only means "fallible", so `Output` is the inner `T`.
+                        let output = if matches!(result_type, DuckScalarResult::Option) {
+                            &**ty
+                        } else {
+                            inner
+                        };
+                        return Ok((result_type, output));
                     }
                 }
 
@@ -954,13 +971,19 @@ impl ItemFnWrapper {
 
     /// 按标量返回类型生成收尾代码，统一收敛成 `DuckOptionResult<Output>`。
     ///
+    /// `-> T` 与 `-> Option<T>` 的 `Output` 就是声明类型本身，因此都是 `Ok(Some(result))`
+    /// —— `Option<T>` 的 `None` 会在写向量时变成 SQL NULL；`-> DuckOptionResult<T>` 直接
+    /// 把结果（可失败、可为 NULL）交给适配层。
+    ///
     /// Generates the epilogue for a scalar return type, normalising it into
-    /// `DuckOptionResult<Output>`.
+    /// `DuckOptionResult<Output>`. For `-> T` and `-> Option<T>` the `Output` is the declared type
+    /// itself, hence `Ok(Some(result))` in both cases — `Option<T>`'s `None` turns into SQL NULL
+    /// while writing the vector. `-> DuckOptionResult<T>` hands the (fallible, nullable) result
+    /// straight to the adapter.
     fn build_scalar_return_clause(&self) -> TokenStream2Result {
         let (result_type, _) = self.scalar_return_type()?;
         match result_type {
-            DuckScalarResult::Plain => Ok(quote! { Ok(Some(result)) }),
-            DuckScalarResult::Option => Ok(quote! { Ok(result) }),
+            DuckScalarResult::Plain | DuckScalarResult::Option => Ok(quote! { Ok(Some(result)) }),
             DuckScalarResult::DuckOptionResult => Ok(quote! { result }),
         }
     }

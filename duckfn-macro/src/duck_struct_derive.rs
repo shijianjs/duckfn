@@ -4,7 +4,7 @@
 //! a STRUCT child field.
 
 use crate::attr_args::DuckFunctionMacroArgs;
-use crate::macro_utils::{TokenStream2Result, add_colon2_token, extract_option};
+use crate::macro_utils::{TokenStream2Result, add_colon2_token};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
 use quote::quote;
@@ -308,39 +308,34 @@ impl FieldWrapper {
     // fn init(&mut self) -> &mut FieldWrapper {
     //     add_colon2_token(&mut self.field.ty);
     //     self
-    /// 生成「从结构体引用取出本字段引用」的表达式：
-    /// 字段是 `Option<T>` 时用 `as_ref()` 得到 `Option<&T>`，否则用 `Some(&字段)`。
+    /// 生成「从结构体引用取出本字段引用」的表达式：一律 `Some(&v.#field)`。
     ///
-    /// Generates the expression that borrows this field from a struct reference: an `Option<T>`
-    /// field yields `Option<&T>` through `as_ref()`, otherwise `Some(&field)` is used.
+    /// 字段类型本身可以是 `Option<T>`，于是得到 `Option<&Option<T>>`；「字段是 NULL」
+    /// 由 `Option<T>` 自己的写入实现处理（`write_valid` 收到 `None` 时写 NULL），
+    /// 因此这里不再区分可空与否。
+    ///
+    /// Generates the expression that borrows this field from a struct reference: always
+    /// `Some(&v.field)`. A field of type `Option<T>` therefore yields `Option<&Option<T>>` and
+    /// "the field is NULL" is handled by `Option<T>`'s own write implementation (`write_valid`
+    /// turns `None` into a NULL write), so nullability is not branched on here any more.
     fn get_option_data(&self) -> TokenStream2Result {
         let field_name = self.require_field_name()?;
-        Ok(if self.is_option() {
-            quote! {  v.#field_name.as_ref() }
-        } else {
-            quote! { Some(&v.#field_name) }
-        })
+        Ok(quote! { Some(&v.#field_name) })
     }
 
-    /// 生成 `s_read_duck_values` 里的单条初始化：可空字段走 `s_read_by_duck_value_option`，
-    /// 非空字段走 `s_read_by_duck_value_notnull`（为 NULL 时报错，错误信息带上字段名）。
+    /// 生成 `s_read_duck_values` 里的单条初始化：可空性由字段类型自己决定
+    /// （`T` 遇到 NULL 或缺省时报错，`Option<T>` 取到 `None`）。
     ///
-    /// Generates one initialiser of `s_read_duck_values`: a nullable field goes through
-    /// `s_read_by_duck_value_option`, a non-nullable one through `s_read_by_duck_value_notnull`
-    /// (erroring on NULL with the field name in the message).
+    /// Generates one initialiser of `s_read_duck_values`: nullability is decided by the field
+    /// type itself (a NULL or missing value is an error for `T` and `None` for `Option<T>`).
     fn s_read_duck_values(&self) -> TokenStream2Result {
         let id = self.require_field_name()?;
         let name = id.to_string();
         let index = self.index;
-        if self.is_option() {
-            Ok(quote! {
-               #id: Self::s_read_by_duck_value_option(values[#index])?
-            })
-        } else {
-            Ok(quote! {
-               #id: Self::s_read_by_duck_value_notnull(values[#index], #name)?
-            })
-        }
+        let ty = self.duck_value_type();
+        Ok(quote! {
+           #id: Self::s_read_field_by_duck_value::<#ty>(values[#index], #name)?
+        })
     }
 
     /// 生成 `s_child_readers` 里的单个读取器：`#ty::create_reader_from_vector(vectors[#index], row_count)`。
@@ -398,32 +393,19 @@ impl FieldWrapper {
             .ok_or(syn::Error::new(self.field.span(), "Field name is required"))
     }
 
-    /// 若字段类型是 `Option<T>` 则取出 `T`。
+    /// 字段的 `DuckValueType` 类型：直接用字段声明的类型，只补上泛型的 turbofish。
     ///
-    /// Extracts `T` when the field type is `Option<T>`.
-    fn extract_option(&self) -> Option<&Type> {
-        // extract_option::from_ref(&self.field.ty)
-        extract_option(&self.field.ty)
-    }
-
-    /// 穿透Option的类型
-    /// - 如果是Option类型，则返回Option内部的类型
-    /// - 如果不是Option类型，则返回当前类型
-    /// - 只支持单层Option
-    /// - 给泛型加上::，例如Vec<T> -> Vec::<T>
+    /// 可空字段的类型就是 `Option<T>` —— 它自己实现了 `DuckValueType`（逻辑类型与 `T` 相同、
+    /// NULL 语义由 `from_null` 承载），所以这里不再把 `Option` 剥掉。
     ///
-    /// The type with `Option` stripped: for `Option<T>` the inner `T` is returned, otherwise the
-    /// type itself. Only one level of `Option` is supported. Turbofish is added to generics, e.g.
-    /// `Vec<T>` -> `Vec::<T>`.
+    /// The field's `DuckValueType`: the declared type itself, with a turbofish added for generics.
+    /// A nullable field is simply `Option<T>`, which implements `DuckValueType` on its own (same
+    /// logical type as `T`, NULL semantics carried by `from_null`), so `Option` is no longer
+    /// stripped here.
     fn duck_value_type(&self) -> Type {
-        let x = if let Some(ty) = self.extract_option() {
-            ty
-        } else {
-            &self.field.ty
-        };
-        let mut x1 = x.to_owned();
-        add_colon2_token(&mut x1);
-        x1
+        let mut ty = self.field.ty.to_owned();
+        add_colon2_token(&mut ty);
+        ty
     }
 
     /// 生成编译期断言语句，确认字段类型实现了 `DuckValueType`（未实现则在编译期报错）。
@@ -438,31 +420,20 @@ impl FieldWrapper {
     }
 
 
-    /// 生成 `s_read_columns` 里的单个字段初始化：
-    /// 可空字段直接赋 `Option<T>`，非空字段用 `?` 在 NULL 时整体返回 `None`。
+    /// 生成 `s_read_columns` 里的单个字段初始化：`#ty::read_slot` 读一个槽位，
+    /// NULL 时由字段类型决定是「取到 `Some(None)`」还是「整体返回 `None`」。
     ///
-    /// Generates one field initialiser of `s_read_columns`: a nullable field is assigned the
-    /// `Option<T>` as is, while a non-nullable one uses `?` to make the whole row `None` on NULL.
+    /// Generates one field initialiser of `s_read_columns`: `#ty::read_slot` reads one slot and a
+    /// NULL resolves through the field type — either to a `Some(None)` value or to a `None` that
+    /// invalidates the whole row.
     fn read_valid(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
         let field_name = self.require_field_name()?;
         let index = self.index;
-        let try_op = if self.is_option() {
-            quote!()
-        } else {
-            quote!(?)
-        };
 
         Ok(quote! {
-            #field_name: #ty::read(&readers[#index], row) #try_op
+            #field_name: #ty::read_slot(&readers[#index], row)?
         })
-    }
-
-    /// 字段类型是否为 `Option<T>`（只认单层）。
-    ///
-    /// Whether the field type is `Option<T>` (one level only).
-    fn is_option(&self) -> bool {
-        self.extract_option().is_some()
     }
 
 

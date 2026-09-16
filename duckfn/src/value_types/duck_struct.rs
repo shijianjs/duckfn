@@ -163,6 +163,26 @@ pub trait DuckStructTrait: DuckValueType {
             .ok_or_else(|| duck_error(format!("Parameter {} cannot be null", param_name)))
     }
 
+    /// 读取一个字段（[`Value`] 来源，如表函数的 bind 参数）：可空性由字段类型自己决定。
+    ///
+    /// 字段写 `T` 就是 NOT NULL —— 值为 NULL 或缺省时报错；写 `Option<T>` 就是可空 ——
+    /// 此时取到 `None`。判据是 [`DuckValueType::from_null`]，因此自定义的可空类型同样适用。
+    ///
+    /// Reads one field from a [`Value`] (table-function bind arguments and friends), with
+    /// nullability decided by the field type itself: `T` means NOT NULL (a NULL or missing value
+    /// is an error) while `Option<T>` accepts NULL as `None`. The criterion is
+    /// [`DuckValueType::from_null`], so custom nullable types work too.
+    fn s_read_field_by_duck_value<F: DuckValueType>(
+        option_value: Option<&Value>,
+        param_name: &str,
+    ) -> DuckResult<F> {
+        let read = match option_value {
+            Some(value) => F::read_slot_by_duck_value(value)?,
+            None => F::from_null(),
+        };
+        read.ok_or_else(|| duck_error(format!("Parameter {} cannot be null", param_name)))
+    }
+
     /// 是否命名参数
     ///
     /// 返回与字段一一对应的布尔表：`true` 表示该字段是命名参数。

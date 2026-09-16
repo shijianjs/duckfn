@@ -5,7 +5,7 @@
 
 use proc_macro::TokenStream;
 use syn::__private::TokenStream2;
-use syn::{GenericArgument, Path, PathArguments, Type, TypeImplTrait, TypeParamBound, TypePath};
+use syn::{GenericArgument, PathArguments, Type, TypeImplTrait, TypeParamBound};
 
 /// 常用过程宏返回值类型
 ///
@@ -25,25 +25,6 @@ pub fn handle_token_stream2_result(result: TokenStream2Result) -> TokenStream {
         Ok(token) => TokenStream::from(token),
         Err(err) => TokenStream::from(err.to_compile_error()),
     }
-}
-
-/// 若 `x` 形如 `Option<T>`，返回其内部类型 `T`（只认最后一个路径段的 `Option`）。
-///
-/// If `x` looks like `Option<T>`, returns the inner `T` (only `Option` as the last path segment
-/// is recognised).
-pub fn extract_option(x: &Type) -> Option<&Type> {
-    if let Type::Path(type_path) = x {
-        if let Some(segment) = type_path.path.segments.last() {
-            if segment.ident == "Option" {
-                if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(GenericArgument::Type(ty)) = args.args.first() {
-                        return Some(ty);
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 /// 取路径段的第一个泛型类型实参，例如 `Vec<T>` -> `T`、`Option<i64>` -> `i64`。
@@ -71,38 +52,6 @@ pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {
         GenericArgument::Type(ty) => Ok(ty),
         _ => Err(syn::Error::new_spanned(x, "expected a type")),
     }
-}
-
-/// 返回 `(是否 Option, 内部类型)`，内部类型通过 [`get_type_inner`] 并传入 `"Option"` 得到。
-///
-/// Returns `(is_option, inner_type)`, delegating to [`get_type_inner`] with `"Option"`.
-#[allow(dead_code)]
-pub fn get_option_inner(ty: &Type) -> (bool, &Type) {
-    get_type_inner(ty, "Option")
-}
-
-/// 若 `ty` 的**第一个**路径段是 `name<T>` 形式，返回 `(true, T)`，否则返回 `(false, ty)`。
-///
-/// If the **first** path segment of `ty` is `name<T>`, returns `(true, T)`; otherwise returns
-/// `(false, ty)`.
-#[allow(dead_code)]
-pub fn get_type_inner<'a>(ty: &'a Type, name: &str) -> (bool, &'a Type) {
-    if let Type::Path(TypePath {
-        path: Path { segments, .. },
-        ..
-    }) = ty
-    {
-        if let Some(v) = segments.iter().next() {
-            if v.ident == name {
-                if let PathArguments::AngleBracketed(a) = &v.arguments {
-                    if let Some(GenericArgument::Type(t)) = a.args.iter().next() {
-                        return (true, t);
-                    }
-                }
-            }
-        }
-    }
-    (false, ty)
 }
 
 /// 给泛型加上`::`，例如`Vec<T>` -> `Vec::<T>`

@@ -164,8 +164,8 @@ The simplest adapter: the returned `SqlMacro` is registered, or a returned strin
 
 | Direction | Methods |
 | --- | --- |
-| Type identity | `type_id()`, `logical_type()` |
-| Reading | `create_reader`, `read_valid`, `read_by_duck_value*` |
+| Type identity | `type_id()`, `logical_type()`, `from_null()` |
+| Reading | `create_reader`, `read_valid`, `read_slot`, `read_by_duck_value*` |
 | Writing | `write_batch`, `write_valid`, `write_null`, `write_finish` |
 
 Implementors override the `*_valid` half; `read` and `write` are not meant to be overridden.
@@ -173,6 +173,13 @@ Implementors override the `*_valid` half; `read` and `write` are not meant to be
 nested types recurse into LIST, MAP, ARRAY and STRUCT children. `#[derive(DuckStruct)]` additionally
 generates `assert_impl_duck_value_type::<T>()` calls for every field, so an unsupported field type is
 a compile error rather than a runtime surprise.
+
+Nullability is a property of the type rather than of the container: `Option<T>` implements
+`DuckValueType` with the same logical type as `T` and overrides `from_null()` to `Some(None)`, while
+every other type leaves it at the default `None`. `read_slot()` — the entry point used for elements,
+map entries and struct fields — applies that fallback, which is what lets a single `Vec<T>` /
+`[T; N]` / `IndexMap<K, V>` implementation serve both nullable and non-nullable element types, and
+why `#[derive(DuckStruct)]` no longer inspects field types syntactically.
 
 `DuckStructTrait` is the generated struct interface, and three blanket impls connect it to the rest of
 the system: `DuckValueType` (usable as a value), `DuckColumns` (usable as a table function's output

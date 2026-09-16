@@ -49,6 +49,7 @@ impl DuckValueType for Celsius {
 | `write_valid_to_vector_writer()` | 总是 | 把一个有效值写进输出向量。 |
 | `read_by_duck_value_valid_simple()` | 作为参数时 | 从 `duckdb_value` 读取 —— 表函数参数、结构体字段与类型转换走的就是这条路径。 |
 | `logical_type()` | 参数化类型 | 当类型无法只用 `type_id()` 描述时重写 —— `DECIMAL(18,3)`、`LIST(T)`、`ARRAY(T,N)`、`STRUCT(...)`。 |
+| `from_null()` | 可空类型 | 该类型能否用一个「值」表示 `NULL`：`Option<T>` 返回 `Some(None)`；默认 `None` 表示「装不下 NULL，遇到 NULL 槽位就让整个值作废」。 |
 | `write_null()` | 容器类型 | 需要把 `NULL` 一并传播到子向量时重写。 |
 | `create_reader_from_vector()` / `create_writer_batch()` / `write_finish()` | 容器类型 | 挂接子读写器、收尾子向量长度的地方。 |
 
@@ -57,7 +58,8 @@ impl DuckValueType for Celsius {
 - trait 本身要求 `Clone + Debug + Send + Sync + 'static`。
 - 作为**函数参数**的类型还需要 `Default`，因为宏生成的参数结构体会 derive 它。
 
-`read()` 与 `write()` 是带 NULL 判定的入口，刻意不打算被重写。
+`read()` 与 `write()` 是带 NULL 判定的入口，刻意不打算被重写；`read_slot()` 建在 `read()` 之上、
+额外接上 `from_null()` 回退，容器与结构体字段读单个元素/字段走的就是它。
 
 ## 用法
 

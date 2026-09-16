@@ -23,10 +23,11 @@ pub trait DuckColumns: Sized {
     /// Creates one reader per column of `chunk`, in column order.
     fn create_column_readers(chunk: &DataChunk) -> Vec<DuckValueReader>;
 
-    /// 用已创建的读取器读出第 `row` 行；任何非可选列遇到 SQL NULL 时返回 `None`。
+    /// 用已创建的读取器读出第 `row` 行；任何非可空列（列类型写 `T` 而不是 `Option<T>`）
+    /// 遇到 SQL NULL 时返回 `None`。
     ///
-    /// Reads row `row` using the given readers; returns `None` when a non-optional column
-    /// contains SQL NULL.
+    /// Reads row `row` using the given readers; returns `None` when a non-nullable column (one
+    /// declared as `T` rather than `Option<T>`) contains SQL NULL.
     fn read_columns(readers: &[DuckValueReader], row: usize) -> Option<Self>;
 
     /// 按声明顺序返回各列的逻辑类型（丢弃列名）。

@@ -197,8 +197,9 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
 
 :::note[Limitations]
 
-- Arguments are *bind* parameters, so a `NULL` inside a `Vec<T>` (element type not nullable) is an
-  error rather than a skipped element.
+- Arguments are *bind* parameters, so a `NULL` inside a `Vec<T>` (the element type is written as `T`,
+  i.e. not nullable) is an error rather than a skipped element — write `Vec<Option<T>>` to accept
+  `NULL` elements.
 - `ARRAY` types are not supported as bind parameters:
   `SELECT * FROM dfn_table_echo_array_integer_param([1,2,3]::INTEGER[3])` fails with
   `Bind value to array type is not supported`.

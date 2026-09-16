@@ -25,6 +25,11 @@ pub(crate) mod duck_array;
 /// Wrapper types (timestamp, date, time, UUID, blob, ...) whose physical representation is
 /// shared but whose logical semantics differ.
 pub(crate) mod wrapper_types;
+/// `Option<T>` 与可空值的映射：可空性由值承载，逻辑类型与 `T` 相同。
+///
+/// Mappings between `Option<T>` and nullable values: nullability is carried by the value and the
+/// logical type equals `T`'s.
+pub(crate) mod duck_option;
 /// `IndexMap<K, V>`（别名 `DuckMap` / `DuckOptionMap`）与 DuckDB `MAP` 的映射。
 ///
 /// Mappings between `IndexMap<K, V>` (aliased as `DuckMap` / `DuckOptionMap`) and DuckDB `MAP`.

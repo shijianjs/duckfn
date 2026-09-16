@@ -39,6 +39,24 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
         LogicalType::new(Self::type_id())
     }
 
+    /// 本类型能否用「值」表示 SQL NULL：`Some(v)` 表示可以（`Option<T>` 返回 `Some(None)`），
+    /// `None` 表示存不下 NULL。
+    ///
+    /// 容器（LIST / ARRAY / MAP）与结构体字段读取时据此决定：读到 NULL 时是「该位置的值就是
+    /// NULL」（取 `Some(v)`）还是「本类型表达不了 NULL，整个值作废」（`None`，整行变成 NULL）。
+    ///
+    /// 默认实现返回 `None`，因此自定义类型无需改动；只有 [`Option<T>`](Option) 覆写它。
+    ///
+    /// Whether this type can represent SQL NULL *as a value*: `Some(v)` means yes (`Option<T>`
+    /// returns `Some(None)`), `None` means the type cannot hold NULL. Container (LIST / ARRAY /
+    /// MAP) and struct-field reads use it to decide whether a NULL slot becomes that slot's value
+    /// (`Some(v)`) or invalidates the whole value (`None`, i.e. the row becomes NULL). The
+    /// default returns `None`, so existing custom types need no change; only `Option<T>`
+    /// overrides it.
+    fn from_null() -> Option<Self> {
+        None
+    }
+
     /// 为 `chunk` 的第 `column_index` 列创建读取器。
     ///
     /// Creates a reader for column `column_index` of `chunk`.
@@ -79,6 +97,31 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
             &reader.vector_reader,
             row,
         ))
+    }
+
+    /// 读取一个「槽位」（LIST/ARRAY 的元素、MAP 的键或值、STRUCT 的字段）。
+    ///
+    /// 与 [`Self::read`] 的区别只在 NULL：`read` 一律把 NULL 变成 `None`，而这里在 NULL 时
+    /// 会尝试 [`Self::from_null`] —— 类型能表示 NULL（`Option<T>`）就取到空值，取不到才返回
+    /// `None` 让上层把整个值当作 NULL。容器与结构体字段的读取都走这里。
+    ///
+    /// Reads one *slot* (a LIST/ARRAY element, a MAP key or value, a STRUCT field). It differs
+    /// from [`Self::read`] only for NULL: `read` always maps NULL to `None`, whereas this falls
+    /// back to [`Self::from_null`] — a nullable type yields its empty value and only a type that
+    /// cannot hold NULL returns `None`, invalidating the enclosing value.
+    fn read_slot(reader: &DuckValueReader, row: usize) -> Option<Self> {
+        Self::read(reader, row).or_else(Self::from_null)
+    }
+
+    /// [`Self::read_slot`] 的 [`Value`] 版本（表函数 bind 参数等自描述数据）。
+    ///
+    /// `Ok(None)` 表示该槽位是 NULL 且本类型表达不了 NULL，调用方据此给出自己的错误信息。
+    ///
+    /// The [`Value`] flavour of [`Self::read_slot`] (used for table-function bind arguments and
+    /// other self-describing data). `Ok(None)` means the slot is NULL and the type cannot
+    /// represent NULL; callers turn that into their own error message.
+    fn read_slot_by_duck_value(value: &Value) -> DuckResult<Option<Self>> {
+        Ok(Self::read_by_duck_value(value)?.or_else(Self::from_null))
     }
 
     /// 从裸 [`VectorReader`] 读取一个有效值（子类实现）。

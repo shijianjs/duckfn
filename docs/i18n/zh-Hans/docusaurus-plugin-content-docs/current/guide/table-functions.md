@@ -193,7 +193,8 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
 
 :::note[限制]
 
-- 参数是 *bind* 参数，因此 `Vec<T>`（元素不可空）里出现 `NULL` 会报错，而不是跳过该元素。
+- 参数是 *bind* 参数，因此 `Vec<T>`（元素类型写 `T`，即不可空）里出现 `NULL` 会报错，而不是跳过该元素；
+  需要接受 `NULL` 元素请写成 `Vec<Option<T>>`。
 - `ARRAY` 类型不能作为 bind 参数：
   `SELECT * FROM dfn_table_echo_array_integer_param([1,2,3]::INTEGER[3])` 会报
   `Bind value to array type is not supported`。

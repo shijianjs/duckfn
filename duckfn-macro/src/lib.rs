@@ -50,11 +50,18 @@ use crate::attr_args::handle_duck_function;
 /// - 表函数的 bind 参数（用 `#[duck(named_param_from = "字段名")]` 指定命名参数起点）；
 /// - 单独作为一个 STRUCT 列值读写。
 ///
+/// 字段的可空性完全由字段类型表达：写 `Option<T>` 就是可空（NULL 取到 `None`），
+/// 写 `T` 就是 NOT NULL（NULL 会让整行/整个结构变成 NULL，bind 参数处则报错）。
+///
 /// Maps a named struct onto a DuckDB `STRUCT` (nested LIST / MAP / ARRAY / STRUCT are
 /// supported). The generated implementations let the struct be used as scalar-function
 /// arguments (a row of columns), as table-function output rows, as table-function bind
 /// parameters (use `#[duck(named_param_from = "field")]` to mark where named parameters start)
 /// and as a standalone STRUCT column value.
+///
+/// Field nullability is expressed purely by the field type: `Option<T>` is nullable (a NULL
+/// yields `None`) while `T` is NOT NULL (a NULL turns the whole row / struct into NULL, or, for
+/// a bind argument, into an error).
 #[proc_macro_derive(DuckStruct, attributes(duck))]
 pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
@@ -64,26 +71,32 @@ pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
 
 /// 把普通 Rust 函数注册成 DuckDB 标量函数。
 ///
-/// 参数与返回值的映射规则：
+/// 参数与返回值的映射规则（可空性完全由类型表达）：
 ///
-/// - 每个参数对应一个 SQL 参数，参数类型决定 DuckDB 逻辑类型（`Option<T>` 表示可空）；
-/// - 返回类型可以是 `T`（永不为 NULL）、`Option<T>`（`None` -> SQL NULL）或
-///   `DuckOptionResult<T>`（可失败、可为 NULL）；
+/// - 每个参数对应一个 SQL 参数，参数类型决定 DuckDB 逻辑类型与可空性：写 `T` 就是 NOT NULL，
+///   写 `Option<T>` 就是可空 —— `Option<T>` 自己也实现了 `DuckValueType`，可空性由
+///   `DuckValueType::from_null` 承载；
 /// - 参数写成 `T` 时，输入为 NULL 会直接短路输出 NULL（函数体不执行）；写成 `Option<T>`
 ///   时以 `None` 进入函数体，语义由函数自己决定；
+/// - 返回类型可以是 `T`、`Option<T>`（`None` -> SQL NULL）或 `DuckOptionResult<T>`
+///   （可失败、可为 NULL）；`T` 与 `Option<T>` 都直接作为该列的值类型，只有
+///   `DuckOptionResult` 额外表示「可能失败」；
 /// - 函数体里的 panic 会被捕获并转成查询错误。
 ///
 /// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`，
 /// 便于手动注册重载或函数集。
 ///
 /// Registers an ordinary Rust function as a DuckDB scalar function. Each parameter maps to one
-/// SQL parameter whose type determines the DuckDB logical type (`Option<T>` means nullable).
-/// The return type may be `T` (never NULL), `Option<T>` (`None` maps to SQL NULL) or
-/// `DuckOptionResult<T>` (fallible and nullable). A `T` parameter short-circuits NULL input to
-/// NULL output without running the body, whereas an `Option<T>` parameter receives `None` and
-/// decides the semantics itself; panics in the body are caught and turned into query errors.
-/// A module named after the function is generated, exporting `scalar_function_builder()` and
-/// `scalar_overload_builder()` for manual overload / function-set registration.
+/// SQL parameter whose type determines both the DuckDB logical type and nullability: `T` means
+/// NOT NULL while `Option<T>` means nullable — `Option<T>` implements `DuckValueType` itself,
+/// carrying nullability through `DuckValueType::from_null`. A `T` parameter short-circuits NULL
+/// input to NULL output without running the body, whereas an `Option<T>` parameter receives
+/// `None` and decides the semantics itself. The return type may be `T`, `Option<T>` (`None` maps
+/// to SQL NULL) or `DuckOptionResult<T>` (fallible and nullable): `T` and `Option<T>` are both
+/// used as the column's value type directly, and only `DuckOptionResult` adds a failure channel.
+/// Panics in the body are caught and turned into query errors. A module named after the function
+/// is generated, exporting `scalar_function_builder()` and `scalar_overload_builder()` for manual
+/// overload / function-set registration.
 #[proc_macro_attribute]
 pub fn duck_scalar_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_scalar_function())

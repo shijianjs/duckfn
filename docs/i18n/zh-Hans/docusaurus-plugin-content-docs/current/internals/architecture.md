@@ -152,14 +152,20 @@ DuckDB 的六个回调都实现在状态类型上：
 
 | 方向 | 方法 |
 | --- | --- |
-| 类型标识 | `type_id()`、`logical_type()` |
-| 读取 | `create_reader`、`read_valid`、`read_by_duck_value*` |
+| 类型标识 | `type_id()`、`logical_type()`、`from_null()` |
+| 读取 | `create_reader`、`read_valid`、`read_slot`、`read_by_duck_value*` |
 | 写入 | `write_batch`、`write_valid`、`write_null`、`write_finish` |
 
 实现者只需重写 `*_valid` 那一半；`read` 与 `write` 不建议重写。`DuckValueReader` 与 `DuckValueWriter`
 携带 vector 及其子 reader/writer，嵌套类型正是靠这一点递归进 LIST、MAP、ARRAY、STRUCT 的子节点。
 `#[derive(DuckStruct)]` 还会为每个字段生成 `assert_impl_duck_value_type::<T>()` 调用，
 因此不支持的字段类型是编译错误，而不是运行时的意外。
+
+可空性是「类型」的属性，而不是容器的：`Option<T>` 实现了 `DuckValueType`，逻辑类型与 `T` 相同，
+并把 `from_null()` 覆写成 `Some(None)`，其余类型保持默认的 `None`。元素、map 键值、结构体字段
+统一走 `read_slot()`，由它接上这个回退 —— 正因如此 `Vec<T>` / `[T; N]` / `IndexMap<K, V>`
+各自只需一份实现就能同时服务可空与不可空的元素类型，`#[derive(DuckStruct)]` 也不必再按语法去
+识别字段类型。
 
 `DuckStructTrait` 是生成的结构体接口，三个 blanket impl 把它接入系统其余部分：`DuckValueType`（可作为值）、
 `DuckColumns`（可作为表函数的输出行）、`DuckBindArgs`（可作为表函数的参数）。
