@@ -107,12 +107,13 @@ rust-version = "1.86"
 
 ## 文档站
 
-`docs/` 下的 Docusaurus 站点由 `.github/workflows/DeployDocs.yml` 在每次推送到 `main` 时部署，
-也可以在 Actions 页面手动触发。它从 `actions/configure-pages` 读取 Pages 地址，
-用 `npm run build` 构建两种语言，然后发布产物。
+`docs/` 下的 Docusaurus 站点由 `.github/workflows/DeployDocs.yml` 在推送 `v*.*.*` tag 时部署
+（和扩展构建用的是同一批 tag），也可以在 Actions 页面手动触发；普通提交不会构建它。
+它从 `actions/configure-pages` 读取 Pages 地址，用 `npm run build` 构建两种语言，然后发布产物。
 
-推送 `v*.*.*` tag 会启动同一个工作流，但只做构建：受保护的 `github-pages` 环境只接受来自
-默认分支的部署，因此 tag 触发的那次运行会在部署作业前停下。
+`github-pages` 环境带保护规则，需要在
+`Settings -> Environments -> github-pages -> Deployment branches and tags` 中列出 `v*.*.*`
+这个 tag 模式，部署才会被接受。
 
 ## 接下来
 

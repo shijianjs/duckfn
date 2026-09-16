@@ -113,13 +113,14 @@ The example extension at the repository root is `publish = false`; it is never u
 
 ## Documentation site
 
-The Docusaurus site in `docs/` is deployed by `.github/workflows/DeployDocs.yml` on every push to
-`main` and on demand from the Actions tab. It reads the Pages URL from `actions/configure-pages`,
-builds both locales with `npm run build`, and publishes the result.
+The Docusaurus site in `docs/` is deployed by `.github/workflows/DeployDocs.yml` on every `v*.*.*`
+tag — the same tags that start the extension build — and on demand from the Actions tab. Ordinary
+commits do not build it. It reads the Pages URL from `actions/configure-pages`, builds both locales
+with `npm run build`, and publishes the result.
 
-A `v*.*.*` tag starts the same workflow but only builds the site: the protected `github-pages`
-environment accepts deployments from the default branch alone, so tag runs stop before the deploy
-job.
+The `github-pages` environment is protected, so the tag pattern `v*.*.*` has to be listed in
+`Settings -> Environments -> github-pages -> Deployment branches and tags` for the deployment to be
+accepted.
 
 ## Next
 

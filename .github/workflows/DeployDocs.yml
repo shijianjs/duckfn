@@ -1,23 +1,20 @@
 #
 # Builds the Docusaurus site in docs/ and publishes it to GitHub Pages.
 #
-# The `github-pages` environment is protected: it only accepts deployments from the refs listed in
-# Settings -> Environments -> github-pages -> Deployment branches and tags (here: `main`). A tag
-# push therefore still builds the site — a broken release tag shows up immediately — but skips the
-# deploy job instead of failing with
-#   Tag "vX.Y.Z" is not allowed to deploy to github-pages due to environment protection rules.
-# The docs of a release reach Pages through the push of its version-bump commit to main, which
-# happens right before the tag is pushed.
+# Triggered by a version tag (`v*.*.*`) or manually from the Actions tab; ordinary commits do not
+# build the site.
 #
-# To let a tag deploy directly, add the tag pattern `v*.*.*` in the environment settings and widen
-# the deploy job's `if` to `github.ref_type == 'tag'` as well.
+# The `github-pages` environment is protected, so the refs that may deploy are listed in
+# Settings -> Environments -> github-pages -> Deployment branches and tags (currently: branch
+# `main`, tag `v*.*.*`). Any other ref is rejected with
+#   Tag "vX.Y.Z" is not allowed to deploy to github-pages due to environment protection rules.
+# — the deploy job below skips such a run instead of failing.
 #
 # One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 #
 name: Deploy Docs
 on:
   push:
-    branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
 
@@ -75,12 +72,12 @@ jobs:
         with:
           path: docs/build
 
-  # The `github-pages` environment rejects every ref that is not in its deployment branch policy,
-  # so only the default branch deploys; tag runs stop after the build job above.
+  # Deploys only from the refs whitelisted in the `github-pages` environment; anything else (say a
+  # manual run started from a feature branch) stops after the build job above.
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.ref_type == 'tag' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     environment:
       name: github-pages
