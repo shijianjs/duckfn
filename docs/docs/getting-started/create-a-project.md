@@ -65,6 +65,9 @@ Reach for `quack-rs` directly when you need something the attributes do not expo
 `LogicalType`, a vector-level operation, a corner of the C API. It is already in your dependency
 list.
 
+[Same functions, two ways](../examples/side-by-side.md) takes four functions from the official
+template and the `quack-rs` example and writes each one both ways.
+
 ## Build with cargo-duckdb-ext-tools
 
 For day-to-day work,

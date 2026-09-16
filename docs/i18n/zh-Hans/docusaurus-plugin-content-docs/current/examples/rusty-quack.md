@@ -183,5 +183,6 @@ make configure debug test   # 或者：just test
 
 ## 接下来
 
+- [同样功能的两种写法](./side-by-side.md) —— `rusty_echo`、`rusty_quack`、`word_count`、`first_word` 与它们用原始 `duckdb` / `quack-rs` 写法的对照。
 - [快速开始](../getting-started/quick-start.md) —— 在一个最小 crate 上重复这些思路。
 - [构建与发布](../build-and-release.md) —— 这个扩展是如何打包与发布的。

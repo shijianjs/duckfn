@@ -1,0 +1,25 @@
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+/* Without this the code blocks keep their intrinsic width and overflow the grid. */
+.column {
+  min-width: 0;
+}
+
+.caption {
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-700);
+}
+
+@media (max-width: 996px) {
+  .compare {
+    grid-template-columns: 1fr;
+  }
+}

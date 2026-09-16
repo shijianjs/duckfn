@@ -58,6 +58,9 @@ duckdb = { version = "~1.10505.0", features = ["loadable-extension", "vscalar"] 
 需要宏没有暴露的能力（手写 `LogicalType`、向量级操作、C API 的某个角落）时再落到 `quack-rs`
 —— 它是对 DuckDB C API 覆盖最全、文档最完整的绑定；它本来就在你的依赖列表里。
 
+[同样功能的两种写法](../examples/side-by-side.md) 把官方模板与 `quack-rs` 示例里的四个函数各写了两遍，
+可以直观看到差别。
+
 ## 用 cargo-duckdb-ext-tools 构建
 
 日常开发用

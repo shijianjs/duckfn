@@ -190,5 +190,6 @@ make configure debug test   # or: just test
 
 ## Next
 
+- [Same functions, two ways](./side-by-side.md) — `rusty_echo`, `rusty_quack`, `word_count` and `first_word` next to their raw `duckdb` / `quack-rs` implementations.
 - [Quick start](../getting-started/quick-start.md) — the same ideas on a minimal crate.
 - [Build and release](../build-and-release.md) — how this extension is packaged and published.
