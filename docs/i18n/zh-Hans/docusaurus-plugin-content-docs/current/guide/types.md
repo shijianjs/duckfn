@@ -76,6 +76,9 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 | `Vec<T>` | `LIST(T) NOT NULL` | 整行变成 `NULL`。 |
 | `Vec<Option<T>>` | `LIST(T)` | 该元素保持 `NULL`。 |
 
+别名 `DuckList<T>` / `DuckOptionList<T>` 就是这两种类型 —— 只是为了和 [`DuckArray`](#数组) 的命名对齐，
+并不存在需要另找的专用包装类型。
+
 ```rust
 #[duck_scalar_function]
 fn dfn_echo_list_integer_n(i: Vec<Option<i32>>) -> Vec<Option<i32>> {
@@ -99,6 +102,8 @@ SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR); -- [1, NULL, 3]
 | --- | --- |
 | `IndexMap<K, V>` | 不可以 —— 出现 `NULL` 值会报错。 |
 | `IndexMap<K, Option<V>>` | 可以。 |
+
+`DuckMap<K, V>` / `DuckOptionMap<K, V>` 是上面两者的别名，同样是为了和 [`DuckArray`](#数组) 的命名对齐。
 
 键永远不可以为 `NULL`。`MAP` 参数也是把键值数据传进表函数的方式：
 
@@ -187,7 +192,7 @@ pub struct DuckStructWithList {
 | 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。 |
 | 未映射，但可以自己实现 | `ENUM`、`UNION`、`BIT`、`VARINT`、`GEOMETRY`、`VARIANT`：quack-rs 没有它们的读写方法，但你可以[自己实现 `DuckValueType`](./custom-types.md)，通过裸向量句柄直接调用 DuckDB 的 C API。 |
 | 不可存储类型 | `ANY`、`SQLNULL` 以及整数/字符串字面量类型只存在于 DuckDB 自身的函数签名与字面量中，不能作为扩展的参数或返回类型。 |
-| 没有 `DuckList` / `DuckMap` | 列表与映射就是 `Vec` 与 `IndexMap`，没有专用包装类型。 |
+| 没有专用的 `DuckList` / `DuckMap` 包装类型 | `DuckList<T>` / `DuckMap<K, V>` 只是 `Vec<T>` / `IndexMap<K, V>` 的别名，真正的类型是标准库 / `indexmap` 的那个。 |
 | `ARRAY` 作为 bind 参数 | 不支持（见上文）。 |
 | `MAP` 的键 | 永远不可为空。 |
 | `Vec<T>` / `[T; N]` 的元素 | 永远不可为空，需要可空请用 `Option` 版本。 |

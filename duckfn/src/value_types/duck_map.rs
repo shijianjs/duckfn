@@ -1,12 +1,32 @@
-//! `IndexMap<K, V>` 与 DuckDB `MAP` 的映射（保留键的插入顺序）。
+//! `IndexMap<K, V>`（别名 `DuckMap` / `DuckOptionMap`）与 DuckDB `MAP` 的映射（保留键的插入顺序）。
 //!
-//! Mappings between `IndexMap<K, V>` and DuckDB `MAP` (preserving key insertion order).
+//! Mappings between `IndexMap<K, V>` (aliased as `DuckMap` / `DuckOptionMap`) and DuckDB `MAP`
+//! (preserving key insertion order).
 
 use crate::{DuckResult, DuckValueReader, DuckValueType, DuckValueWriter, duck_error};
 use indexmap::IndexMap;
 use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, MapVector, TypeId, Value};
 use std::hash::Hash;
+
+/// 值可为 NULL 的映射：`MAP(K, V)`（键永远不可为 NULL）。
+///
+/// 只是 `IndexMap<K, Option<V>>` 的别名，没有专用包装类型；存在的意义是让命名与
+/// [`DuckOptionArray`](crate::DuckOptionArray) 对称。
+///
+/// A map whose values may be NULL: `MAP(K, V)` (keys are never NULL). Merely an alias for
+/// `IndexMap<K, Option<V>>` — there is no dedicated wrapper type; it exists so that the naming
+/// mirrors [`DuckOptionArray`](crate::DuckOptionArray).
+pub type DuckOptionMap<K, V> = IndexMap<K, Option<V>>;
+/// 键和值都不可为 NULL 的映射：`MAP(K, V)`。
+///
+/// 只是 `IndexMap<K, V>` 的别名，没有专用包装类型；存在的意义是让命名与
+/// [`DuckArray`](crate::DuckArray) 对称。
+///
+/// A map whose keys and values must not be NULL: `MAP(K, V)`. Merely an alias for
+/// `IndexMap<K, V>` — there is no dedicated wrapper type; it exists so that the naming mirrors
+/// [`DuckArray`](crate::DuckArray).
+pub type DuckMap<K, V> = IndexMap<K, V>;
 
 /// `IndexMap<K, Option<V>>` ↔ `MAP(K, V)`：值可以为 SQL NULL（键不允许为 NULL）。
 ///

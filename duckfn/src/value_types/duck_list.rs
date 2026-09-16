@@ -1,11 +1,30 @@
-//! `Vec<T>` / `Vec<Option<T>>` 与 DuckDB `LIST` 的映射。
+//! `Vec<T>` / `Vec<Option<T>>`（别名 `DuckList` / `DuckOptionList`）与 DuckDB `LIST` 的映射。
 //!
-//! Mappings between `Vec<T>` / `Vec<Option<T>>` and DuckDB `LIST`.
+//! Mappings between `Vec<T>` / `Vec<Option<T>>` (aliased as `DuckList` / `DuckOptionList`) and
+//! DuckDB `LIST`.
 
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, TypeId, Value};
 use crate::{duck_error, DuckResult};
+
+/// 元素可为 NULL 的列表：`LIST(T)`。
+///
+/// 只是 `Vec<Option<T>>` 的别名，没有专用包装类型；存在的意义是让命名与
+/// [`DuckOptionArray`](crate::DuckOptionArray) 对称。
+///
+/// A list whose elements may be NULL: `LIST(T)`. Merely an alias for `Vec<Option<T>>` — there is
+/// no dedicated wrapper type; it exists so that the naming mirrors
+/// [`DuckOptionArray`](crate::DuckOptionArray).
+pub type DuckOptionList<T> = Vec<Option<T>>;
+/// 元素不可为 NULL 的列表：`LIST(T)`。
+///
+/// 只是 `Vec<T>` 的别名，没有专用包装类型；存在的意义是让命名与
+/// [`DuckArray`](crate::DuckArray) 对称。
+///
+/// A list whose elements must not be NULL: `LIST(T)`. Merely an alias for `Vec<T>` — there is no
+/// dedicated wrapper type; it exists so that the naming mirrors [`DuckArray`](crate::DuckArray).
+pub type DuckList<T> = Vec<T>;
 
 /// `Vec<Option<T>>` ↔ `LIST(T)`：元素可以是 SQL NULL。
 ///

@@ -76,6 +76,9 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 | `Vec<T>` | `LIST(T) NOT NULL` | The whole row becomes `NULL`. |
 | `Vec<Option<T>>` | `LIST(T)` | The element stays `NULL`. |
 
+The aliases `DuckList<T>` / `DuckOptionList<T>` mean the same two types — they exist only to mirror the
+[`DuckArray`](#arrays) naming, so there is no dedicated wrapper type to look for.
+
 ```rust
 #[duck_scalar_function]
 fn dfn_echo_list_integer_n(i: Vec<Option<i32>>) -> Vec<Option<i32>> {
@@ -99,6 +102,9 @@ Lists nest to any depth: `Vec<Vec<i32>>`, `Vec<Option<Vec<Option<i32>>>>`.
 | --- | --- |
 | `IndexMap<K, V>` | No — a `NULL` value is an error. |
 | `IndexMap<K, Option<V>>` | Yes. |
+
+`DuckMap<K, V>` / `DuckOptionMap<K, V>` are aliases for those two, again mirroring the [`DuckArray`](#arrays)
+naming.
 
 Keys may never be `NULL`, and a `MAP` argument is the way to pass key/value data into a table
 function:
@@ -193,7 +199,7 @@ pub struct DuckStructWithList {
 | Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled. |
 | Not mapped, but implementable | `ENUM`, `UNION`, `BIT`, `VARINT`, `GEOMETRY`, `VARIANT`: quack-rs has no read/write for them, but a [`DuckValueType` implementation of your own](./custom-types.md) can call the DuckDB C API through the raw vector handle. |
 | Not storable types | `ANY`, `SQLNULL` and the integer/string literal types exist only in DuckDB's own signatures and literals; they cannot be an extension's argument or return type. |
-| No `DuckList` / `DuckMap` | Lists and maps *are* `Vec` and `IndexMap`; there are no dedicated wrapper types. |
+| No dedicated `DuckList` / `DuckMap` wrappers | `DuckList<T>` / `DuckMap<K, V>` are only aliases for `Vec<T>` / `IndexMap<K, V>`; the real types are the standard library / `indexmap` ones. |
 | `ARRAY` bind parameters | Not supported (see above). |
 | `MAP` keys | Never nullable. |
 | `Vec<T>` / `[T; N]` elements | Never nullable — use the `Option` variants. |
