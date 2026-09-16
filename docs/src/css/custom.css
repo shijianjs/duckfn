@@ -4,30 +4,102 @@
  * work well for content-centric websites.
  */
 
-/* You can override the default Infima variables here. */
+/* Brand colours.
+   The palette comes from `static/img/duckfn-logo.svg`, which is drawn with a deep
+   blue body (#14459b, with #17469b / #16459b / #304d90 / #143070 shading) and a
+   golden beak (#fcb103). The green that used to live here was the Docusaurus
+   template default and matched nothing in the logo.
+
+   The seven `--ifm-color-primary*` steps are the logo blue multiplied by the
+   same ratios the template used for its green ramp (dark x0.891, darker x0.848,
+   darkest x0.696, light x1.10, lighter x1.151, lightest x1.30), so hover states,
+   links and selected sidebar items keep the contrast relationships they had.
+
+   Contrast, checked against the palettes below:
+     #14459b on white           8.9:1   -> light-mode primary for text and links
+     white on #14459b           8.9:1   -> buttons and badges
+     #4d8fe8 on #1b1b1d         5.2:1   -> dark-mode primary for text and links
+     #fcb103 on #14459b         4.8:1   -> yellow is only legible on brand blue
+     #fcb103 on white           1.8:1   -> NOT a text colour; see the note below.
+
+   `--duckfn-*` are the tokens the homepage picks its tints, glows and borders
+   from, so the brand colour stays defined in exactly one place. They are written
+   out explicitly instead of derived with `color-mix()` to avoid relying on a
+   newer CSS feature for something this central. */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  --ifm-color-primary: #14459b;
+  --ifm-color-primary-dark: #123d8a;
+  --ifm-color-primary-darker: #113a83;
+  --ifm-color-primary-darkest: #0e306c;
+  --ifm-color-primary-light: #164caa;
+  --ifm-color-primary-lighter: #174fb2;
+  --ifm-color-primary-lightest: #1a5aca;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+
+  --duckfn-blue: #14459b;
+  /* Ends of the gradient the homepage headline is painted with. */
+  --duckfn-blue-deep: #0e306c;
+  --duckfn-blue-bright: #1a5aca;
+  /* Tinted surfaces: card icon chips, the code showcase band, hover shadows. */
+  --duckfn-blue-soft: #e8eefb;
+  --duckfn-tint: #f6f8fc;
+  /* Kept faint on purpose: the home page stretches these over a very large
+     radius, and a stronger tint shows the gradient's steps as visible bands. */
+  --duckfn-glow: rgba(20, 69, 155, 0.12);
+  --duckfn-glow-warm: rgba(252, 177, 3, 0.16);
+  --duckfn-card-bg: #ffffff;
+  --duckfn-card-border: #e3e8f2;
+  --duckfn-shadow: 0 8px 24px rgba(20, 69, 155, 0.12);
+  --duckfn-yellow: #fcb103;
+  /* Home page buttons, kept apart from the primary because the dark mode value
+     of `--ifm-color-primary` is too light to carry white text. Measured against
+     their own label: white on #14459b is 8.9:1, white on the hover #0e306c is
+     12.7:1. The outline border is decorative — the label above it carries the
+     contrast — so it is allowed to stay faint. */
+  --duckfn-btn-bg: #14459b;
+  --duckfn-btn-bg-hover: #0e306c;
+  --duckfn-btn-fg: #ffffff;
+  --duckfn-outline-border: #bccbe8;
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* For readability concerns, you should choose a lighter palette in dark mode.
+   The primary has to move well away from #14459b here: the deep blue only
+   reaches about 2.4:1 against #1b1b1d, which is unreadable for text. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
+  --ifm-color-primary: #4d8fe8;
+  --ifm-color-primary-dark: #457fcf;
+  --ifm-color-primary-darker: #4179c5;
+  --ifm-color-primary-darkest: #3664a2;
+  --ifm-color-primary-light: #559dff;
+  --ifm-color-primary-lighter: #59a5ff;
+  --ifm-color-primary-lightest: #64baff;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+
+  --duckfn-blue: #4d8fe8;
+  --duckfn-blue-deep: #4d8fe8;
+  --duckfn-blue-bright: #9ecbff;
+  --duckfn-blue-soft: #17253d;
+  --duckfn-tint: #1f2733;
+  --duckfn-glow: rgba(77, 143, 232, 0.16);
+  --duckfn-glow-warm: rgba(252, 177, 3, 0.12);
+  --duckfn-card-bg: #242526;
+  --duckfn-card-border: #33405c;
+  --duckfn-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --duckfn-yellow: #fcb103;
+  /* The dark primary is a light blue, so white on it would only reach 3.3:1.
+     The button therefore gets its own deeper blue: white on #2f6fd0 is 4.9:1,
+     and the one-notch-lighter hover stays at 4.4:1. */
+  --duckfn-btn-bg: #2f6fd0;
+  --duckfn-btn-bg-hover: #3576dd;
+  --duckfn-btn-fg: #ffffff;
+  --duckfn-outline-border: #33405c;
 }
+
+/* The yellow is an accent, never a text colour: #fcb103 on white is 1.8:1.
+   Safe uses (all already at or above 4.5:1): as a chip behind the deep blue,
+   as the icon chip background in dark mode, as a decorative underline or
+   border, and for small shapes that are not the only carrier of meaning. */
 
 /* Two implementations side by side; used by examples/side-by-side.md.
    Each column claims at least 20rem and wraps to its own row when the viewport

@@ -8,7 +8,7 @@ description: duckfn 可以把普通的 Rust 函数变成 DuckDB 的标量函数�
 # 简介
 
 [![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/shijianjs/duckfn)
-[![Docs](https://img.shields.io/badge/docs-duckfn-2e8555?logo=docusaurus&logoColor=white)](https://shijianjs.github.io/duckfn/)
+[![Docs](https://img.shields.io/badge/docs-duckfn-14459b?logo=docusaurus&logoColor=white)](https://shijianjs.github.io/duckfn/)
 [![crates.io](https://img.shields.io/crates/v/duckfn.svg)](https://crates.io/crates/duckfn)
 [![docs.rs](https://docs.rs/duckfn/badge.svg)](https://docs.rs/duckfn)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/shijianjs/duckfn/blob/main/LICENSE)

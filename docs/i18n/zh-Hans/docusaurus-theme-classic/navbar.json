@@ -18,5 +18,17 @@
   "item.label.Links": {
     "message": "相关链接",
     "description": "Navbar item with label Links"
+  },
+  "item.label.crates.io": {
+    "message": "crates.io",
+    "description": "Navbar item with label crates.io"
+  },
+  "item.label.docs.rs": {
+    "message": "docs.rs",
+    "description": "Navbar item with label docs.rs"
+  },
+  "item.label.Zread": {
+    "message": "Zread",
+    "description": "Navbar item with label Zread"
   }
 }

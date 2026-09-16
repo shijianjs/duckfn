@@ -93,6 +93,11 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
+      // Same behaviour as docusaurus.io: the sticky navbar slides away once the
+      // reader scrolls down past it, and slides back in on the way up. The theme
+      // already ships that animation as hashed CSS-module classes on the <nav>,
+      // so this needs no CSS in src/css/custom.css and no client module.
+      hideOnScroll: true,
       title: 'duckfn',
       logo: {
         alt: 'duckfn logo',

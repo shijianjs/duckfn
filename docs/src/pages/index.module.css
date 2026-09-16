@@ -1,23 +1,552 @@
 /**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
+ * Home page styles.
+ *
+ * Class names are hashed by CSS Modules, so nothing here leaks into Infima's own
+ * `.hero`, `.buttons` or `.container`, and nothing in the theme can reach these
+ * rules — no `@layer` or `!important` is needed anywhere below.
+ *
+ * Every colour comes from the `--duckfn-*` tokens in `src/css/custom.css`, which
+ * is the single place the brand palette is defined; dark mode therefore needs no
+ * rules of its own.
+ *
+ * Motion rules, deliberately:
+ *
+ * - all animations live inside `@media (prefers-reduced-motion: no-preference)`
+ *   and no static declaration sets `opacity: 0`, so a reader who disabled
+ *   animation sees the page complete rather than blank;
+ * - entrance animations fill `backwards` instead of `forwards`. The delay then
+ *   holds the start frame, but once the animation ends the element goes back to
+ *   its normal styles — which is what lets the `:hover` transforms on the cards
+ *   work. With `forwards` the finished animation would keep overriding them.
  */
 
-.heroBanner {
-  padding: 4rem 0;
-  text-align: center;
+/* --------------------------------------------------------------- hero */
+
+.hero {
   position: relative;
+  /* Contains the glow pseudo-elements below without needing a z-index race. */
+  isolation: isolate;
   overflow: hidden;
+  padding: 4.5rem 1.5rem 4rem;
+  text-align: center;
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
+/* Two soft pools of light: brand blue from above, a hint of the logo's beak
+   yellow from the lower right. Purely decorative. */
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero::before {
+  top: -18rem;
+  left: 50%;
+  width: 52rem;
+  height: 52rem;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--duckfn-glow), transparent 70%);
+}
+
+.hero::after {
+  right: -10rem;
+  bottom: -14rem;
+  width: 34rem;
+  height: 34rem;
+  background: radial-gradient(circle, var(--duckfn-glow-warm), transparent 70%);
+}
+
+.heroInner {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+
+.logoStage {
+  display: inline-block;
+  line-height: 0;
+}
+
+/* The logo is a vector, so this stays sharp at any density. */
+.logo {
+  display: block;
+  width: clamp(7rem, 16vw, 10rem);
+  height: auto;
+  filter: drop-shadow(0 14px 28px var(--duckfn-glow));
+}
+
+.title {
+  margin: 1.5rem 0 0;
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  /* The plain colour is the fallback for the gradient below: without
+     `background-clip: text` a `transparent` colour would hide the name. */
+  color: var(--duckfn-blue);
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .title {
+    background-image: linear-gradient(
+      120deg,
+      var(--duckfn-blue-deep),
+      var(--duckfn-blue-bright)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* Room for descenders, which the tight line box would otherwise clip. */
+    padding-bottom: 0.06em;
   }
 }
 
-.buttons {
+/* The only yellow on this page, and it carries no text: a short rule under the
+   name that echoes the beak. See the note on the token in custom.css. */
+.title::after {
+  content: '';
+  display: block;
+  width: 3rem;
+  height: 0.25rem;
+  margin: 1rem auto 0;
+  border-radius: 999px;
+  background-color: var(--duckfn-yellow);
+}
+
+.tagline {
+  max-width: 34rem;
+  margin: 1.25rem auto 0;
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  line-height: 1.65;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 1rem;
+  margin-top: 2.25rem;
+}
+
+.buttonPrimary,
+.buttonSecondary {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.6rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: background-color 0.2s var(--ifm-transition-timing-default),
+    border-color 0.2s var(--ifm-transition-timing-default),
+    color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.buttonPrimary {
+  background-color: var(--duckfn-btn-bg);
+  border-color: var(--duckfn-btn-bg);
+  color: var(--duckfn-btn-fg);
+}
+
+.buttonPrimary:hover,
+.buttonPrimary:focus-visible {
+  background-color: var(--duckfn-btn-bg-hover);
+  border-color: var(--duckfn-btn-bg-hover);
+  color: var(--duckfn-btn-fg);
+  box-shadow: var(--duckfn-shadow);
+  text-decoration: none;
+}
+
+.buttonSecondary {
+  background-color: transparent;
+  border-color: var(--duckfn-outline-border);
+  color: var(--duckfn-blue);
+}
+
+.buttonSecondary:hover,
+.buttonSecondary:focus-visible {
+  background-color: var(--duckfn-blue-soft);
+  border-color: var(--duckfn-blue);
+  color: var(--duckfn-blue);
+  text-decoration: none;
+}
+
+.buttonIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.badge {
+  display: inline-flex;
+}
+
+.badgeImage {
+  display: block;
+  width: auto;
+  height: 20px;
+}
+
+/* ------------------------------------------------------------ sections */
+
+.section,
+.sectionTint {
+  padding: 4.5rem 0;
+}
+
+.sectionTint {
+  background-color: var(--duckfn-tint);
+}
+
+.sectionInner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.sectionTitle {
+  margin-bottom: 0;
+  text-align: center;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.01em;
+}
+
+.sectionLead {
+  max-width: 46rem;
+  margin: 1rem auto 0;
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* ------------------------------------------------------------ features */
+
+.featureGrid {
+  display: grid;
+  /* min(17rem, 100%) rather than a bare 17rem: a track can then never be wider
+     than the viewport, which is what keeps the narrowest phones from scrolling
+     sideways. */
+  grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+  gap: 1.25rem;
+  margin-top: 2.75rem;
+}
+
+.featureCard {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border: 1px solid var(--duckfn-card-border);
+  border-radius: 1rem;
+  background-color: var(--duckfn-card-bg);
+  transition: border-color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.featureCard:hover {
+  border-color: var(--duckfn-blue);
+  box-shadow: var(--duckfn-shadow);
+}
+
+.featureIconChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  background-color: var(--duckfn-blue-soft);
+  color: var(--duckfn-blue);
+}
+
+.featureIcon {
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+.featureTitle {
+  margin-bottom: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.featureDetails {
+  margin-bottom: 0;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* ------------------------------------------------------------ showcase */
+
+.codeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
+  align-items: start;
+  gap: 1.25rem;
+  margin-top: 2.75rem;
+}
+
+/* Two code columns on a wide screen leave roughly 33rem each, and the default
+   code size would push the longest line into a scrollbar. Prism sets the size
+   on `.prism-code` itself, so that is the element to shrink. */
+.codeGrid :global(.prism-code) {
+  font-size: 0.8125rem;
+}
+
+/* The SQL side carries a note under the block, so it is a flex column rather
+   than a bare code block. `align-items: start` on the grid keeps both tops
+   aligned whatever the two blocks' heights end up being. */
+.codeColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.codeCaption {
+  margin-bottom: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.showcaseLinkRow {
+  margin: 2rem 0 0;
+  text-align: center;
+}
+
+.showcaseLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--duckfn-blue);
+  text-decoration: none;
+}
+
+.showcaseLink:hover,
+.showcaseLink:focus-visible {
+  color: var(--duckfn-blue);
+  text-decoration: underline;
+}
+
+.showcaseLinkArrow {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* ---------------------------------------------------------- next steps */
+
+.nextGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  gap: 1rem;
+  max-width: 54rem;
+  margin: 2.75rem auto 0;
+}
+
+.nextCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.375rem;
+  border: 1px solid var(--duckfn-card-border);
+  border-radius: 0.875rem;
+  background-color: var(--duckfn-card-bg);
+  /* The card is the link, so it must not pick up the anchor colour. */
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.nextCard:hover,
+.nextCard:focus-visible {
+  border-color: var(--duckfn-blue);
+  box-shadow: var(--duckfn-shadow);
+  color: inherit;
+  text-decoration: none;
+}
+
+.nextCardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.nextCardTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--duckfn-blue);
+}
+
+.nextCardDetails {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.nextCardArrow {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--ifm-color-emphasis-500);
+  transition: color 0.2s var(--ifm-transition-timing-default);
+}
+
+.nextCard:hover .nextCardArrow,
+.nextCard:focus-visible .nextCardArrow {
+  color: var(--duckfn-blue);
+}
+
+/* -------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  .logoStage,
+  .title,
+  .tagline,
+  .actions,
+  .badges {
+    animation: rise 0.6s var(--ifm-transition-timing-default) backwards;
+  }
+
+  .title {
+    animation-delay: 0.06s;
+  }
+
+  .tagline {
+    animation-delay: 0.12s;
+  }
+
+  .actions {
+    animation-delay: 0.18s;
+  }
+
+  .badges {
+    animation-delay: 0.24s;
+  }
+
+  /* Two elements on purpose: `rise` plays once on the stage, `float` loops on
+     the image. One element cannot run two animations that both set transform. */
+  .logo {
+    animation: float 7s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .featureCard,
+  .nextCard {
+    animation: rise 0.5s var(--ifm-transition-timing-default) backwards;
+  }
+
+  /* Cards arrive in reading order. Filling backwards keeps them invisible during
+     their delay and hands the element back to `:hover` when the animation ends. */
+  .featureCard:nth-child(2),
+  .nextCard:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+
+  .featureCard:nth-child(3),
+  .nextCard:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+
+  .featureCard:nth-child(4),
+  .nextCard:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+
+  .featureCard:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+
+  .featureCard:nth-child(6) {
+    animation-delay: 0.3s;
+  }
+
+  .featureCard,
+  .nextCard,
+  .nextCardArrow {
+    transition: transform 0.2s var(--ifm-transition-timing-default),
+      border-color 0.2s var(--ifm-transition-timing-default),
+      box-shadow 0.2s var(--ifm-transition-timing-default),
+      color 0.2s var(--ifm-transition-timing-default);
+  }
+
+  .featureCard:hover {
+    transform: translateY(-4px);
+  }
+
+  .nextCard:hover {
+    transform: translateY(-2px);
+  }
+
+  .nextCard:hover .nextCardArrow {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(-4px);
+  }
+
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+/* -------------------------------------------------------- breakpoints */
+
+@media screen and (max-width: 996px) {
+  .hero {
+    padding: 3rem 1.5rem;
+  }
+
+  .section,
+  .sectionTint {
+    padding: 3.5rem 0;
+  }
+}
+
+@media screen and (max-width: 576px) {
+  .sectionInner {
+    padding: 0 1rem;
+  }
+
+  /* Full-width buttons stack better than two pills on a phone. */
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
