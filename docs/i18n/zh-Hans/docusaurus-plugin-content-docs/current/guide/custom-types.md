@@ -123,6 +123,9 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 **quack-rs 没有映射的逻辑类型。** `DuckValueReader` 与 `DuckValueWriter` 在高层的 `vector_reader` /
 `vector_writer` 之外，都暴露了裸的 `c_duckdb_vector`，因此必要时可以下到 DuckDB 的 C API。`ENUM`
 （读下标、再从枚举字典取出标签）、`BIT`、`VARINT` 这些没有 quack-rs 访问器的类型，走的就是这条路。
+`src/extension/types/custom_type_echo.rs` 里的 `Color` 就是这个例子的完整实现：字典用
+`LogicalType::enum_type(&[...])` 声明，读写覆盖带裸向量的 `read_valid` / `write_valid` 来搬运下标，
+bind 阶段的标签用 `Value::as_str()` 从 `duckdb_value` 取。
 
 **容器类型。** 容器需要子读写器，并且要把 NULL 传播进子向量。
 `duckfn/src/value_types/duck_list.rs`、`duck_map.rs`、`duck_array.rs`、`duck_struct.rs` 就是参考实现。
