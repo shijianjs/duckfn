@@ -21,6 +21,11 @@ use quack_rs::prelude::{LogicalType, TypeId, Value};
 /// 有了这个实现，「元素/值/字段是否可空」在类型层面统一表达：写 `T` 就是 NOT NULL，写
 /// `Option<T>` 就是可空；`Vec<T>` / `[T; N]` / `IndexMap<K, V>` 只需一份实现。
 ///
+/// 于是「多套一层」也是合法的：`Option<Option<T>>` 与 `Option<T>` 完全等价 —— 逻辑类型相同、
+/// NULL 只会读成外层 `None`、`None` 与 `Some(None)` 都写 NULL。封装层不方便把中间类型剥出来时
+/// 可以直接套一层，不必为「本来就是 `Option`」单独加判断（能力用例见
+/// `test/sql/types/duck_opt_option_scalar_echo.test` 与 `duck_opt_option_table_echo.test`）。
+///
 /// `Option<T>` ↔ the same DuckDB type as `T`, just allowing SQL NULL. DuckDB's logical types have
 /// no "nullable" dimension — NULL lives in the vector's validity mask — so `Option<T>` shares
 /// `T`'s [`type_id`](DuckValueType::type_id) / [`logical_type`](DuckValueType::logical_type) and
@@ -29,7 +34,10 @@ use quack_rs::prelude::{LogicalType, TypeId, Value};
 /// `None` instead of invalidating the whole value) and
 /// [`write_valid`](DuckValueType::write_valid) turns `None` into a NULL write (forwarding
 /// `T::write_null`). This is what lets a single `Vec<T>` / `[T; N]` / `IndexMap<K, V>` impl cover
-/// both nullable and non-nullable element types.
+/// both nullable and non-nullable element types. It also makes a second layer valid:
+/// `Option<Option<T>>` is equivalent to `Option<T>` — same logical type, a NULL reads back only as
+/// the outer `None`, and `None` and `Some(None)` both write NULL — which is handy when a wrapper
+/// cannot easily strip the middle type.
 // 裸指针由 DuckDB FFI 提供，此处直接转发
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 impl<T: DuckValueType> DuckValueType for Option<T> {

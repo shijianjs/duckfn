@@ -13,6 +13,11 @@ nullable. `Option<T>` is a value type of its own — it maps to exactly the same
 so one rule covers everything: element types (`Vec<Option<i32>>`, `[Option<i32>; 3]`,
 `IndexMap<String, Option<i32>>`), struct fields, function arguments and return types.
 
+A second `Option` layer is allowed and changes nothing: `Option<Option<T>>` behaves exactly like
+`Option<T>` — same DuckDB type, a `NULL` reads back as the outer `None`, and both `None` and
+`Some(None)` write `NULL`. That is deliberate, because wrapping code often cannot strip the middle
+type (what it wraps may already be an `Option`) and would otherwise need a branch just for that.
+
 ## Simple types
 
 | DuckDB | Rust |
@@ -179,9 +184,11 @@ Structs nest, and they may be used inside the other containers — `Vec<DuckStru
 `IndexMap<String, DuckStructSimple>`, `DuckArray<DuckStructSimple, 2>` and the `Option`-wrapped
 variants are all supported.
 
-The derive has two constraints: the struct must have **named fields**, and an optional field may only
-be a single layer of `Option<T>` (`Option<Vec<Option<i32>>>` is fine as a field type, but
-`Option<Option<T>>` is not).
+The only constraint left is that the struct must have **named fields** — a field's type is used as
+written. `Option<T>` marks a field nullable, and nesting is fine: `Option<Vec<Option<i32>>>`,
+`Option<Option<i32>>` and `Vec<Option<Option<i32>>>` all compile. An extra `Option` layer is inert —
+it maps to the same DuckDB type, a `NULL` reads back as the outer `None`, and both `None` and a
+nested `Some(None)` write `NULL`.
 
 ## Containers of containers
 

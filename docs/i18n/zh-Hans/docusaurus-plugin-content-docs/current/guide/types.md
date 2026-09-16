@@ -12,6 +12,11 @@ description: DuckDB 类型与 Rust 类型的对应关系，涵盖 LIST、MAP、A
 （映射到和 `T` 完全相同的 DuckDB 类型），所以处处都是同一条规则：元素类型（`Vec<Option<i32>>`、
 `[Option<i32>; 3]`、`IndexMap<String, Option<i32>>`）、结构体字段、函数参数与返回值。
 
+多一层 `Option` 是允许的，而且不改变任何行为：`Option<Option<T>>` 与 `Option<T>` 完全等价 ——
+映射到同一个 DuckDB 类型，读到 `NULL` 得到的是外层 `None`，写 `None` 与写 `Some(None)` 都是写 `NULL`。
+这是有意保留的：封装层常常没法把中间类型剥出来（被包的类型本身可能已经是 `Option`），
+否则就得为它单独加一层判断。
+
 ## 简单类型
 
 | DuckDB | Rust |
@@ -172,8 +177,10 @@ SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}})).in
 结构体可以嵌套，也可以放进其它容器里 —— `Vec<DuckStructSimple>`、`IndexMap<String, DuckStructSimple>`、
 `DuckArray<DuckStructSimple, 2>` 以及它们的 `Option` 版本都支持。
 
-derive 有两个约束：结构体必须是**具名字段**，可选字段只能是单层 `Option<T>`（字段类型写成
-`Option<Vec<Option<i32>>>` 没问题，但不支持 `Option<Option<T>>`）。
+现在只剩一个约束：结构体必须是**具名字段** —— 字段类型按你写的原样使用。`Option<T>` 表示该字段可空，
+嵌套也没问题：`Option<Vec<Option<i32>>>`、`Option<Option<i32>>`、`Vec<Option<Option<i32>>>` 都能编译。
+多出来的 `Option` 层是「惰性」的：映射到同一个 DuckDB 类型，读到 `NULL` 得到的是外层 `None`，
+而写 `None` 与写嵌套的 `Some(None)` 都是写 `NULL`。
 
 ## 容器的组合
 
