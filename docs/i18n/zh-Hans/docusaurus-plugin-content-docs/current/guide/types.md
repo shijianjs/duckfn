@@ -85,9 +85,9 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 | `Vec<T>` | `LIST(T) NOT NULL` | 整行变成 `NULL`。 |
 | `Vec<Option<T>>` | `LIST(T)` | 该元素保持 `NULL`。 |
 
-别名 `DuckList<T>` / `DuckOptionList<T>` 就是这两种类型（`Vec<T>` / `Vec<Option<T>>`）—— 只是为了和
-[`DuckArray`](#数组) 的命名对齐，并不存在需要另找的专用包装类型。可空性由元素类型自己承载，
-所以 `Vec<T>` 只需一份实现：元素类型装得下 NULL 时该元素变成 `None`，装不下时整行变成 `NULL`。
+别名 `DuckList<T>` 就是 `Vec<T>` —— 只是让 LIST / ARRAY / MAP 共用 `Duck*` 命名，并不存在需要另找的
+专用包装类型。可空性由元素类型自己承载（元素可空就写 `Vec<Option<T>>`），所以 `Vec<T>` 只需一份实现：
+元素类型装得下 NULL 时该元素变成 `None`，装不下时整行变成 `NULL`。
 
 ```rust
 #[duck_scalar_function]
@@ -113,8 +113,8 @@ SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR); -- [1, NULL, 3]
 | `IndexMap<K, V>` | 不可以 —— 出现 `NULL` 值会报错。 |
 | `IndexMap<K, Option<V>>` | 可以。 |
 
-`DuckMap<K, V>` / `DuckOptionMap<K, V>` 是 `IndexMap<K, V>` / `IndexMap<K, Option<V>>` 的别名，同样是为了和
-[`DuckArray`](#数组) 的命名对齐 —— NULL 由值的类型承载。
+别名 `DuckMap<K, V>` 就是 `IndexMap<K, V>`，同样共用 `Duck*` 命名 —— NULL 由值的类型承载，
+值可空就写 `IndexMap<K, Option<V>>`。
 
 键永远不可以为 `NULL`。`MAP` 参数也是把键值数据传进表函数的方式：
 
@@ -130,7 +130,7 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2});                      -- 
 | Rust | DuckDB |
 | --- | --- |
 | `DuckArray<T, N>`（即 `[T; N]`） | `T[N]`，元素不可空 |
-| `DuckOptionArray<T, N>`（即 `[Option<T>; N]`） | `T[N]`，元素可空 |
+| `[Option<T>; N]` | `T[N]`，元素可空 |
 
 ```rust
 #[duck_scalar_function]
@@ -196,7 +196,7 @@ pub struct DuckStructWithList {
 ```
 
 `Vec<Option<Vec<Option<T>>>>`、`IndexMap<String, Option<IndexMap<String, Option<i32>>>>`、
-`DuckOptionArray<DuckOptionArray<i32, 2>, 2>` 都有对应的 DuckDB 类型。
+`DuckArray<Option<DuckArray<Option<i32>, 2>>, 2>` 都有对应的 DuckDB 类型。
 
 ## 已知缺口
 

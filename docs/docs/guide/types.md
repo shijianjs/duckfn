@@ -86,11 +86,11 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 | `Vec<T>` | `LIST(T) NOT NULL` | The whole row becomes `NULL`. |
 | `Vec<Option<T>>` | `LIST(T)` | The element stays `NULL`. |
 
-The aliases `DuckList<T>` / `DuckOptionList<T>` mean exactly those two types (`Vec<T>` /
-`Vec<Option<T>>`) — they exist only to mirror the [`DuckArray`](#arrays) naming, so there is no
-dedicated wrapper type to look for. The element type carries the nullability, which is why `Vec<T>`
-needs a single implementation: a `NULL` element becomes `None` when the element type can hold it,
-and turns the whole row `NULL` when it cannot.
+`DuckList<T>` is just an alias for `Vec<T>` — it exists only so that LIST / ARRAY / MAP share the
+`Duck*` naming, and there is no dedicated wrapper type to look for. The element type carries the
+nullability (write `Vec<Option<T>>` for nullable elements), which is why `Vec<T>` needs a single
+implementation: a `NULL` element becomes `None` when the element type can hold it, and turns the
+whole row `NULL` when it cannot.
 
 ```rust
 #[duck_scalar_function]
@@ -116,8 +116,8 @@ Lists nest to any depth: `Vec<Vec<i32>>`, `Vec<Option<Vec<Option<i32>>>>`.
 | `IndexMap<K, V>` | No — a `NULL` value is an error. |
 | `IndexMap<K, Option<V>>` | Yes. |
 
-`DuckMap<K, V>` / `DuckOptionMap<K, V>` are aliases for `IndexMap<K, V>` / `IndexMap<K, Option<V>>`,
-again mirroring the [`DuckArray`](#arrays) naming — a `NULL` value is carried by the value type.
+`DuckMap<K, V>` is an alias for `IndexMap<K, V>`, again sharing the `Duck*` naming — a `NULL` value
+is carried by the value type, so nullable values are written `IndexMap<K, Option<V>>`.
 
 Keys may never be `NULL`, and a `MAP` argument is the way to pass key/value data into a table
 function:
@@ -134,7 +134,7 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2});                      -- 
 | Rust | DuckDB |
 | --- | --- |
 | `DuckArray<T, N>` (an alias for `[T; N]`) | `T[N]`, elements not nullable |
-| `DuckOptionArray<T, N>` (`[Option<T>; N]`) | `T[N]`, elements nullable |
+| `[Option<T>; N]` | `T[N]`, elements nullable |
 
 ```rust
 #[duck_scalar_function]
@@ -205,7 +205,7 @@ pub struct DuckStructWithList {
 ```
 
 `Vec<Option<Vec<Option<T>>>>`, `IndexMap<String, Option<IndexMap<String, Option<i32>>>>` and
-`DuckOptionArray<DuckOptionArray<i32, 2>, 2>` all have DuckDB equivalents.
+`DuckArray<Option<DuckArray<Option<i32>, 2>>, 2>` all have DuckDB equivalents.
 
 ## Known gaps
 

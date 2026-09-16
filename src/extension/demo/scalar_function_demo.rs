@@ -1,7 +1,7 @@
 // 示例代码：部分函数/结构体仅用于演示，并未全部注册或调用。
 #![allow(dead_code)]
 
-use duckfn::{duck_error, DuckArray, DuckOptionArray, DuckOptionResult};
+use duckfn::{duck_error, DuckArray, DuckOptionResult};
 use duckfn::{duck_scalar_function, DuckStruct};
 use indexmap::IndexMap;
 use libduckdb_sys::{
@@ -358,7 +358,7 @@ pub fn input_map_notnull_demo(map: IndexMap<String, Vec<i64>>) -> i64 {
 /// SELECT input_array_demo(ARRAY [1, 2]);
 /// ```
 #[duck_scalar_function]
-pub fn input_array_demo(arr: DuckOptionArray<i64, 2>) -> DuckOptionArray<i64, 2> {
+pub fn input_array_demo(arr: [Option<i64>; 2]) -> [Option<i64>; 2] {
     arr
 }
 

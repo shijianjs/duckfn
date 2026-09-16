@@ -619,7 +619,7 @@ SELECT sum((dfn_echo_struct_array_nullable(x))[1].id) FROM (
 #           (map(['k2'], [NULL::STRUCT(id INTEGER, name VARCHAR)]))) t(x);
 #       -- false / true；对照 dfn_echo_struct_map_value_nullable -> {k2=NULL}
 #
-#   - ARRAY [T; N]  /  [Option<T>; N]（DuckArray / DuckOptionArray）
+#   - ARRAY [T; N]（别名 DuckArray） /  [Option<T>; N]
 #       SELECT dfn_echo_struct_array(x) IS NULL FROM (VALUES
 #           ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
 #           ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])) t(x);

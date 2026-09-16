@@ -4,7 +4,7 @@
 //! a STRUCT child field.
 
 use crate::attr_args::DuckFunctionMacroArgs;
-use crate::macro_utils::{TokenStream2Result, add_colon2_token};
+use crate::macro_utils::TokenStream2Result;
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
 use quote::quote;
@@ -305,9 +305,6 @@ impl FieldWrapper {
         })
     }
 
-    // fn init(&mut self) -> &mut FieldWrapper {
-    //     add_colon2_token(&mut self.field.ty);
-    //     self
     /// 生成「从结构体引用取出本字段引用」的表达式：一律 `Some(&v.#field)`。
     ///
     /// 字段类型本身可以是 `Option<T>`，于是得到 `Option<&Option<T>>`；「字段是 NULL」
@@ -338,16 +335,16 @@ impl FieldWrapper {
         })
     }
 
-    /// 生成 `s_child_readers` 里的单个读取器：`#ty::create_reader_from_vector(vectors[#index], row_count)`。
+    /// 生成 `s_child_readers` 里的单个读取器：`<#ty>::create_reader_from_vector(vectors[#index], row_count)`。
     ///
     /// Generates one reader of `s_child_readers`:
-    /// `#ty::create_reader_from_vector(vectors[#index], row_count)`.
+    /// `<#ty>::create_reader_from_vector(vectors[#index], row_count)`.
     fn s_child_readers(&self) -> TokenStream2Result {
-        // i64::create_reader_from_vector(vectors[0], row_count),
+        // <i64>::create_reader_from_vector(vectors[0], row_count),
         let ty = self.duck_value_type();
         let index = self.index;
         Ok(quote! {
-            #ty::create_reader_from_vector(vectors[#index], row_count)
+            <#ty>::create_reader_from_vector(vectors[#index], row_count)
         })
     }
 
@@ -359,8 +356,8 @@ impl FieldWrapper {
         let ty = self.duck_value_type();
         let name = self.require_field_name()?.to_string();
         Ok(quote! {
-            // ("count", i64::logical_type)
-            (#name, #ty::logical_type)
+            // ("count", <i64>::logical_type)
+            (#name, <#ty>::logical_type)
         })
     }
 
@@ -393,19 +390,21 @@ impl FieldWrapper {
             .ok_or(syn::Error::new(self.field.span(), "Field name is required"))
     }
 
-    /// 字段的 `DuckValueType` 类型：直接用字段声明的类型，只补上泛型的 turbofish。
+    /// 字段的 `DuckValueType` 类型：直接用字段声明的类型。
     ///
     /// 可空字段的类型就是 `Option<T>` —— 它自己实现了 `DuckValueType`（逻辑类型与 `T` 相同、
     /// NULL 语义由 `from_null` 承载），所以这里不再把 `Option` 剥掉。
     ///
-    /// The field's `DuckValueType`: the declared type itself, with a turbofish added for generics.
-    /// A nullable field is simply `Option<T>`, which implements `DuckValueType` on its own (same
-    /// logical type as `T`, NULL semantics carried by `from_null`), so `Option` is no longer
-    /// stripped here.
+    /// 生成代码统一用 `<#ty>::方法(...)` 这种全限定写法，所以数组、元组这类「不是
+    /// `Type::Path`」的类型也照样能用（`[T; N]::logical_type` 是解析不了的）。
+    ///
+    /// The field's `DuckValueType`: the declared type itself. A nullable field is simply
+    /// `Option<T>`, which implements `DuckValueType` on its own (same logical type as `T`, NULL
+    /// semantics carried by `from_null`), so `Option` is no longer stripped here. Generated code
+    /// always uses the fully-qualified form `<#ty>::method(...)`, so types that are not a
+    /// `Type::Path` (arrays, tuples) work as well — `[T; N]::logical_type` would not parse.
     fn duck_value_type(&self) -> Type {
-        let mut ty = self.field.ty.to_owned();
-        add_colon2_token(&mut ty);
-        ty
+        self.field.ty.to_owned()
     }
 
     /// 生成编译期断言语句，确认字段类型实现了 `DuckValueType`（未实现则在编译期报错）。
@@ -420,11 +419,11 @@ impl FieldWrapper {
     }
 
 
-    /// 生成 `s_read_columns` 里的单个字段初始化：`#ty::read_slot` 读一个槽位，
+    /// 生成 `s_read_columns` 里的单个字段初始化：`<#ty>::read_slot` 读一个槽位，
     /// NULL 时由字段类型决定是「取到 `Some(None)`」还是「整体返回 `None`」。
     ///
-    /// Generates one field initialiser of `s_read_columns`: `#ty::read_slot` reads one slot and a
-    /// NULL resolves through the field type — either to a `Some(None)` value or to a `None` that
+    /// Generates one field initialiser of `s_read_columns`: `<#ty>::read_slot` reads one slot and
+    /// a NULL resolves through the field type — either to a `Some(None)` value or to a `None` that
     /// invalidates the whole row.
     fn read_valid(&self) -> TokenStream2Result {
         let ty = self.duck_value_type();
@@ -432,7 +431,7 @@ impl FieldWrapper {
         let index = self.index;
 
         Ok(quote! {
-            #field_name: #ty::read_slot(&readers[#index], row)?
+            #field_name: <#ty>::read_slot(&readers[#index], row)?
         })
     }
 
@@ -444,7 +443,7 @@ impl FieldWrapper {
         let ty = self.duck_value_type();
         let index = self.index;
         Ok(quote! {
-            #ty::write_null(&mut writer.child_writer[#index], row)
+            <#ty>::write_null(&mut writer.child_writer[#index], row)
         })
     }
 
@@ -456,7 +455,7 @@ impl FieldWrapper {
         let ty = self.duck_value_type();
         let index = self.index;
         Ok(quote! {
-            #ty::write_finish(&mut writer.child_writer[#index])
+            <#ty>::write_finish(&mut writer.child_writer[#index])
         })
     }
 

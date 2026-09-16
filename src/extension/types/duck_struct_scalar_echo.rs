@@ -1,5 +1,5 @@
 use duckfn::duck_scalar_function;
-use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckOptionArray, DuckStruct, DuckTimestamp};
+use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTimestamp};
 use indexmap::IndexMap;
 
 // ============================================================================
@@ -313,7 +313,7 @@ fn dfn_echo_struct_array(i: DuckArray<DuckStructSimple, 2>) -> DuckArray<DuckStr
 /// ```
 #[duck_scalar_function]
 fn dfn_echo_struct_array_nullable(
-    i: DuckOptionArray<DuckStructSimple, 2>,
-) -> DuckOptionArray<DuckStructSimple, 2> {
+    i: [Option<DuckStructSimple>; 2],
+) -> [Option<DuckStructSimple>; 2] {
     i
 }

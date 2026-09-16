@@ -860,16 +860,16 @@ impl ItemFnWrapper {
 
     /// 解析标量函数的返回类型，得到「外层形式 + `Output` 类型」。
     ///
-    /// - `T`（Plain）：`Output = T`；
+    /// - `T`（Plain，含定长数组 `[T; N]`）：`Output = T`；
     /// - `Option<T>`：`Output = Option<T>` —— 可空性由类型表达，`None` 就是 SQL NULL；
     /// - `DuckOptionResult<T>`：`Output = T` —— `DuckOptionResult` 不是值类型，只表示「可失败」。
     ///
     /// 其他形式报编译错误。
     ///
-    /// Parses a scalar return type into "outer form + `Output` type": `T` (plain) keeps `T`,
-    /// `Option<T>` keeps `Option<T>` (nullability expressed by the type) and
-    /// `DuckOptionResult<T>` takes the inner `T` (`DuckOptionResult` is not a value type, it only
-    /// means "fallible"). Anything else is a compile error.
+    /// Parses a scalar return type into "outer form + `Output` type": `T` (plain, including the
+    /// fixed-size array `[T; N]`) keeps `T`, `Option<T>` keeps `Option<T>` (nullability expressed
+    /// by the type) and `DuckOptionResult<T>` takes the inner `T` (`DuckOptionResult` is not a
+    /// value type, it only means "fallible"). Anything else is a compile error.
     fn scalar_return_type(&self) -> syn::Result<(DuckScalarResult, &Type)> {
         if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
             if let Type::Path(type_path) = &**ty {
@@ -900,7 +900,15 @@ impl ItemFnWrapper {
                         return Ok((result_type, output));
                     }
                 }
+            }
 
+            // 定长数组 `[T; N]` 不是一个 `Type::Path`（`DuckArray<T, N>` 才是它的别名），
+            // 但同样是普通值类型，因此和 `Type::Path` 一样按 `Plain` 处理。
+            //
+            // A fixed-size array `[T; N]` is not a `Type::Path` (that is what the `DuckArray<T, N>`
+            // alias is for) but is an ordinary value type all the same, so it is treated as
+            // `Plain` just like `Type::Path`.
+            if matches!(&**ty, Type::Path(_) | Type::Array(_)) {
                 return Ok((DuckScalarResult::Plain, &**ty));
             }
         }

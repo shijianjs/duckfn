@@ -1,5 +1,5 @@
 use duckfn::duck_table_function;
-use duckfn::{DuckArray, DuckOptionArray, DuckResult, DuckStruct};
+use duckfn::{DuckArray, DuckResult, DuckStruct};
 use indexmap::IndexMap;
 
 use super::duck_struct_scalar_echo::{
@@ -345,7 +345,7 @@ fn dfn_table_echo_struct_array(
 /// ```
 #[derive(Clone, Debug, Default, DuckStruct)]
 pub struct TableEchoStructArrayNullableRow {
-    pub v: Option<DuckOptionArray<DuckStructSimple, 2>>,
+    pub v: Option<[Option<DuckStructSimple>; 2]>,
 }
 
 #[duck_table_function(named_param_from = "count")]

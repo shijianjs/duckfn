@@ -1,12 +1,12 @@
 use duckfn::duck_scalar_function;
-use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckOptionArray};
+use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal};
 
 // ============================================================================
 // ARRAY 类型 echo 函数
 //
-// 覆盖 duck_array.rs 中的两个实现（注意它们都是固定长度的定长数组，长度 N 是类型的一部分）：
-//   - DuckArray<T, N>       -> ARRAY(T)，即 T[N]，元素不可为 NULL（遇到 NULL 元素整体返回 NULL）
-//   - DuckOptionArray<T, N> -> ARRAY(T)，即 T[N]，元素可为 NULL
+// 覆盖 duck_array.rs 的实现（注意它是固定长度的定长数组，长度 N 是类型的一部分）：
+//   - T[N]（别名 DuckArray<T, N>）：元素类型写 T 时元素不可为 NULL（遇到 NULL 元素整体返回 NULL），
+//     元素类型写 Option<T> 时元素可为 NULL —— 可空性由元素类型表达，没有单独的别名
 //
 // 元素类型分别覆盖简单类型（i32/i64/f64/bool/String）、包装类型
 // （DuckDate/DuckDecimal/DuckBlob）以及嵌套 ARRAY（[T[N]; M] -> T[N][M]）。
@@ -109,7 +109,7 @@ fn dfn_echo_array_nested(i: DuckArray<DuckArray<i32, 2>, 2>) -> DuckArray<DuckAr
 }
 
 // ---------------------------------------------------------------------------
-// DuckOptionArray<T, N>：T[N]，元素可为 NULL
+// [Option<T>; N]：T[N]，元素可为 NULL
 // ---------------------------------------------------------------------------
 
 /// ARRAY(INTEGER, 3) // [Option<i32>; 3]
@@ -117,7 +117,7 @@ fn dfn_echo_array_nested(i: DuckArray<DuckArray<i32, 2>, 2>) -> DuckArray<DuckAr
 /// SELECT dfn_echo_array_integer_n([1, NULL, 3]::INTEGER[3]);
 /// ```
 #[duck_scalar_function]
-fn dfn_echo_array_integer_n(i: DuckOptionArray<i32, 3>) -> DuckOptionArray<i32, 3> {
+fn dfn_echo_array_integer_n(i: [Option<i32>; 3]) -> [Option<i32>; 3] {
     i
 }
 
@@ -126,7 +126,7 @@ fn dfn_echo_array_integer_n(i: DuckOptionArray<i32, 3>) -> DuckOptionArray<i32, 
 /// SELECT dfn_echo_array_varchar_n(['a', NULL]::VARCHAR[2]);
 /// ```
 #[duck_scalar_function]
-fn dfn_echo_array_varchar_n(i: DuckOptionArray<String, 2>) -> DuckOptionArray<String, 2> {
+fn dfn_echo_array_varchar_n(i: [Option<String>; 2]) -> [Option<String>; 2] {
     i
 }
 
@@ -135,17 +135,17 @@ fn dfn_echo_array_varchar_n(i: DuckOptionArray<String, 2>) -> DuckOptionArray<St
 /// SELECT dfn_echo_array_date_n([DATE '2024-01-02', NULL]::DATE[2]);
 /// ```
 #[duck_scalar_function]
-fn dfn_echo_array_date_n(i: DuckOptionArray<DuckDate, 2>) -> DuckOptionArray<DuckDate, 2> {
+fn dfn_echo_array_date_n(i: [Option<DuckDate>; 2]) -> [Option<DuckDate>; 2] {
     i
 }
 
-/// ARRAY(ARRAY(INTEGER, 2), 2) // [[Option<i32>; 2]; 2]，嵌套且元素可为 NULL
+/// ARRAY(ARRAY(INTEGER, 2), 2) // [Option<[Option<i32>; 2]>; 2]，外层/内层元素都可为 NULL
 /// ```sql
 /// SELECT dfn_echo_array_nested_n([[1, NULL], NULL]::INTEGER[2][2]);
 /// ```
 #[duck_scalar_function]
 fn dfn_echo_array_nested_n(
-    i: DuckOptionArray<DuckOptionArray<i32, 2>, 2>,
-) -> DuckOptionArray<DuckOptionArray<i32, 2>, 2> {
+    i: [Option<[Option<i32>; 2]>; 2],
+) -> [Option<[Option<i32>; 2]>; 2] {
     i
 }

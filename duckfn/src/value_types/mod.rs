@@ -11,10 +11,9 @@ pub(crate) mod duck_value_type;
 ///
 /// Mappings between Rust primitives (integers, floats, bool, string) and DuckDB scalar types.
 pub(crate) mod simple_types;
-/// `Vec<T>` / `Vec<Option<T>>`（别名 `DuckList` / `DuckOptionList`）与 DuckDB `LIST` 的映射。
+/// `Vec<T>`（别名 `DuckList`）与 DuckDB `LIST` 的映射。
 ///
-/// Mappings between `Vec<T>` / `Vec<Option<T>>` (aliased as `DuckList` / `DuckOptionList`) and
-/// DuckDB `LIST`.
+/// Mappings between `Vec<T>` (aliased as `DuckList`) and DuckDB `LIST`.
 pub(crate) mod duck_list;
 /// 定长数组 `[T; N]` / `[Option<T>; N]` 与 DuckDB `ARRAY` 的映射。
 ///
@@ -30,9 +29,9 @@ pub(crate) mod wrapper_types;
 /// Mappings between `Option<T>` and nullable values: nullability is carried by the value and the
 /// logical type equals `T`'s.
 pub(crate) mod duck_option;
-/// `IndexMap<K, V>`（别名 `DuckMap` / `DuckOptionMap`）与 DuckDB `MAP` 的映射。
+/// `IndexMap<K, V>`（别名 `DuckMap`）与 DuckDB `MAP` 的映射。
 ///
-/// Mappings between `IndexMap<K, V>` (aliased as `DuckMap` / `DuckOptionMap`) and DuckDB `MAP`.
+/// Mappings between `IndexMap<K, V>` (aliased as `DuckMap`) and DuckDB `MAP`.
 pub(crate) mod duck_map;
 /// `#[derive(DuckStruct)]` 生成的 STRUCT 结构体所需的 `DuckStructTrait` 及通用实现。
 ///

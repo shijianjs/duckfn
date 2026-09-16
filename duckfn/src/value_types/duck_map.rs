@@ -1,7 +1,7 @@
-//! `IndexMap<K, V>`（别名 `DuckMap` / `DuckOptionMap`）与 DuckDB `MAP` 的映射（保留键的插入顺序）。
+//! `IndexMap<K, V>`（别名 `DuckMap`）与 DuckDB `MAP` 的映射（保留键的插入顺序）。
 //!
-//! Mappings between `IndexMap<K, V>` (aliased as `DuckMap` / `DuckOptionMap`) and DuckDB `MAP`
-//! (preserving key insertion order).
+//! Mappings between `IndexMap<K, V>` (aliased as `DuckMap`) and DuckDB `MAP` (preserving key
+//! insertion order).
 
 use crate::{DuckResult, DuckValueReader, DuckValueType, DuckValueWriter, duck_error};
 use indexmap::IndexMap;
@@ -9,23 +9,15 @@ use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ListVector, LogicalType, MapVector, TypeId, Value};
 use std::hash::Hash;
 
-/// 值可为 NULL 的映射：`MAP(K, V)`（键永远不可为 NULL）。
+/// `IndexMap<K, V>` 的别名，与 [`DuckList`](crate::DuckList) / [`DuckArray`](crate::DuckArray)
+/// 命名一致。
 ///
-/// 只是 `IndexMap<K, Option<V>>` 的别名，没有专用包装类型；存在的意义是让命名与
-/// [`DuckOptionArray`](crate::DuckOptionArray) 对称。
+/// 值是否可空由值类型自己决定：写 `IndexMap<K, Option<V>>` 就是值可空（键永远不可为空），
+/// 没有单独的别名。
 ///
-/// A map whose values may be NULL: `MAP(K, V)` (keys are never NULL). Merely an alias for
-/// `IndexMap<K, Option<V>>` — there is no dedicated wrapper type; it exists so that the naming
-/// mirrors [`DuckOptionArray`](crate::DuckOptionArray).
-pub type DuckOptionMap<K, V> = IndexMap<K, Option<V>>;
-/// 键和值都不可为 NULL 的映射：`MAP(K, V)`。
-///
-/// 只是 `IndexMap<K, V>` 的别名，没有专用包装类型；存在的意义是让命名与
-/// [`DuckArray`](crate::DuckArray) 对称。
-///
-/// A map whose keys and values must not be NULL: `MAP(K, V)`. Merely an alias for
-/// `IndexMap<K, V>` — there is no dedicated wrapper type; it exists so that the naming mirrors
-/// [`DuckArray`](crate::DuckArray).
+/// An alias for `IndexMap<K, V>`, named to match [`DuckList`](crate::DuckList) /
+/// [`DuckArray`](crate::DuckArray). Value nullability is up to the value type — write
+/// `IndexMap<K, Option<V>>` for nullable values (keys are never NULL); there is no separate alias.
 pub type DuckMap<K, V> = IndexMap<K, V>;
 
 /// `IndexMap<K, V>` ↔ `MAP(K, V)`，值是否可为 NULL 由值类型 `V` 自己决定（键永远不可为空）。

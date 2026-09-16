@@ -54,30 +54,6 @@ pub fn require_generic_arg_type(x: &GenericArgument) -> syn::Result<&Type> {
     }
 }
 
-/// 给泛型加上`::`，例如`Vec<T>` -> `Vec::<T>`
-///
-/// 在生成 `Vec::<T>::create_reader_from_vector(...)` 这类「泛型类型调用关联函数」的代码时，
-/// 需要 `::<T>` 形式才能通过解析。
-///
-/// Adds `::` to a generic, e.g. `Vec<T>` -> `Vec::<T>`. Code such as
-/// `Vec::<T>::create_reader_from_vector(...)` that calls an associated function on a generic
-/// type needs this turbofish form to parse.
-pub fn add_colon2_token(ty: &mut syn::Type) {
-    let syn::Type::Path(type_path) = ty else {
-        return;
-    };
-
-    let Some(segment) = type_path.path.segments.last_mut() else {
-        return;
-    };
-
-    let syn::PathArguments::AngleBracketed(args) = &mut segment.arguments else {
-        return;
-    };
-
-    args.colon2_token = Some(Default::default());
-}
-
 /// 获取迭代器`impl Iterator<Item=T>`的`Item`类型
 ///
 /// Extracts the `Item` type of an `impl Iterator<Item = T>` trait object.

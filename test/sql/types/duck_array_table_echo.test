@@ -1,5 +1,5 @@
 # name: test/sql/types/duck_array_table_echo.test
-# description: duck_array_table_echo.rs 中 ARRAY 类型（DuckArray<T,N> / DuckOptionArray<T,N>）的表函数回显测试
+# description: duck_array_table_echo.rs 中 ARRAY 类型（DuckArray<T,N> / [Option<T>; N]）的表函数回显测试
 # group: [types]
 
 require rusty_quack
@@ -213,7 +213,7 @@ SELECT v FROM dfn_table_echo_array_nested([[1, 2]]);
 dfn_table_echo_array_nested: expected 2 elements, got 1
 
 # ============================================================================
-# ARRAY(INTEGER, 3) // DuckOptionArray<i32, 3>，元素可为 NULL
+# ARRAY(INTEGER, 3) // [Option<i32>; 3]，元素可为 NULL
 # ============================================================================
 
 query T
@@ -235,7 +235,7 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_array_integer_n([NULL, NULL, NULL]
 [NULL, NULL, NULL]
 
 # ============================================================================
-# ARRAY(VARCHAR, 2) // DuckOptionArray<String, 2>，元素可为 NULL
+# ARRAY(VARCHAR, 2) // [Option<String>; 2]，元素可为 NULL
 # ============================================================================
 
 query T
@@ -250,7 +250,7 @@ SELECT typeof(v) FROM dfn_table_echo_array_varchar_n(['a', NULL]);
 VARCHAR[2]
 
 # ============================================================================
-# ARRAY(DATE, 2) // DuckOptionArray<DuckDate, 2>，元素可为 NULL
+# ARRAY(DATE, 2) // [Option<DuckDate>; 2]，元素可为 NULL
 # ============================================================================
 
 query T
@@ -265,7 +265,7 @@ SELECT typeof(v) FROM dfn_table_echo_array_date_n([DATE '2024-01-02', NULL]);
 DATE[2]
 
 # ============================================================================
-# ARRAY(ARRAY(INTEGER, 2), 2) // DuckOptionArray<DuckArray<i32, 2>, 2>，外层/内层均可为 NULL
+# ARRAY(ARRAY(INTEGER, 2), 2) // [Option<[Option<i32>; 2]>; 2]，外层/内层元素均可为 NULL
 # ============================================================================
 
 query T

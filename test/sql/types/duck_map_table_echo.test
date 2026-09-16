@@ -11,7 +11,7 @@ require rusty_quack
 #   IndexMap<K, V>          -> value 出现 NULL 时 bind 报错 "Map value cannot be null"
 #   IndexMap<K, Option<V>>  -> NULL value 原样保留
 # 另外 DuckDB 的 MAP 本身不允许 NULL value，所以「可空 value 的 MAP」是靠
-# DuckOptionArray/子向量里的 validity 表达，而不是真的写 NULL 到 value 列表里。
+# value 子向量里的 validity 表达，而不是真的写 NULL 到 value 列表里。
 
 # ============================================================================
 # MAP(VARCHAR, INTEGER) // IndexMap<String, i32>

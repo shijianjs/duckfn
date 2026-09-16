@@ -1,7 +1,5 @@
 use duckfn::duck_table_function;
-use duckfn::{
-    DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckOptionArray, DuckResult, DuckStruct,
-};
+use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckResult, DuckStruct};
 
 use super::table_echo_util::{echo_rows, option_to_array, option_to_array_with, to_array};
 
@@ -192,7 +190,7 @@ fn dfn_table_echo_array_nested(
 /// ```
 #[derive(Clone, Debug, Default, DuckStruct)]
 pub struct TableEchoArrayIntegerNRow {
-    pub v: Option<DuckOptionArray<i32, 3>>,
+    pub v: Option<[Option<i32>; 3]>,
 }
 
 #[duck_table_function(named_param_from = "count")]
@@ -210,7 +208,7 @@ fn dfn_table_echo_array_integer_n(
 /// ```
 #[derive(Clone, Debug, Default, DuckStruct)]
 pub struct TableEchoArrayVarcharNRow {
-    pub v: Option<DuckOptionArray<String, 2>>,
+    pub v: Option<[Option<String>; 2]>,
 }
 
 #[duck_table_function(named_param_from = "count")]
@@ -228,7 +226,7 @@ fn dfn_table_echo_array_varchar_n(
 /// ```
 #[derive(Clone, Debug, Default, DuckStruct)]
 pub struct TableEchoArrayDateNRow {
-    pub v: Option<DuckOptionArray<DuckDate, 2>>,
+    pub v: Option<[Option<DuckDate>; 2]>,
 }
 
 #[duck_table_function(named_param_from = "count")]
@@ -246,7 +244,7 @@ fn dfn_table_echo_array_date_n(
 /// ```
 #[derive(Clone, Debug, Default, DuckStruct)]
 pub struct TableEchoArrayNestedNRow {
-    pub v: Option<DuckOptionArray<DuckOptionArray<i32, 2>, 2>>,
+    pub v: Option<[Option<[Option<i32>; 2]>; 2]>,
 }
 
 #[duck_table_function(named_param_from = "count")]

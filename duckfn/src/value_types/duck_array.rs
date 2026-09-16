@@ -1,20 +1,19 @@
-//! 定长数组 `[T; N]`（别名 `DuckArray` / `DuckOptionArray`）与 DuckDB `ARRAY` 的映射。
+//! 定长数组 `[T; N]`（别名 `DuckArray`）与 DuckDB `ARRAY` 的映射。
 //!
-//! Mappings between fixed-size arrays `[T; N]` (aliased as `DuckArray` / `DuckOptionArray`) and
-//! DuckDB `ARRAY`.
+//! Mappings between fixed-size arrays `[T; N]` (aliased as `DuckArray`) and DuckDB `ARRAY`.
 
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType, DuckValueWriter};
 use crate::{DuckResult, duck_error};
 use libduckdb_sys::duckdb_vector;
 use quack_rs::prelude::{ArrayVector, LogicalType, TypeId, Value};
 
-/// 元素可为 NULL 的定长数组：`ARRAY(T, N)`。
+/// `[T; N]` 的别名，与 [`DuckList`](crate::DuckList) / [`DuckMap`](crate::DuckMap) 命名一致。
 ///
-/// A fixed-size array whose elements may be NULL: `ARRAY(T, N)`.
-pub type DuckOptionArray<T, const N: usize> = [Option<T>; N];
-/// 元素不可为 NULL 的定长数组：`ARRAY(T, N)`。
+/// 元素是否可空由元素类型自己决定：写 `[Option<U>; N]` 就是元素可空，没有单独的别名。
 ///
-/// A fixed-size array whose elements must not be NULL: `ARRAY(T, N)`.
+/// An alias for `[T; N]`, named to match [`DuckList`](crate::DuckList) /
+/// [`DuckMap`](crate::DuckMap). Element nullability is up to the element type — write
+/// `[Option<U>; N]` for nullable elements; there is no separate alias for it.
 pub type DuckArray<T, const N: usize> = [T; N];
 
 /// `[T; N]` ↔ `ARRAY(T, N)`，元素的可空性由元素类型 `T` 自己决定。
