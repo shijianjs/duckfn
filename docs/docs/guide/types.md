@@ -190,6 +190,34 @@ written. `Option<T>` marks a field nullable, and nesting is fine: `Option<Vec<Op
 it maps to the same DuckDB type, a `NULL` reads back as the outer `None`, and both `None` and a
 nested `Some(None)` write `NULL`.
 
+A struct can also be given a **name in the catalog**: `#[duck(sql_name = "ticket", create_type = true)]`
+makes the extension run `CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)` when it loads, after which
+SQL can use `ticket` as a type — a column type or a cast target:
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = true)]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,      // #[derive(DuckEnum)] enum
+    pub labels: Vec<String>,
+}
+// CREATE TYPE IF NOT EXISTS "ticket" AS
+//   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
+```
+
+```sql
+CREATE TABLE tickets (v ticket);
+INSERT INTO tickets VALUES ({'id': 1, 'priority': 'low', 'labels': ['a']});
+SELECT dfn_echo_struct_ticket(v) FROM tickets;   -- 函数用的是等价的结构化类型
+```
+
+The field types are not spelled out by the macro: the `LogicalType` of each field is rendered
+recursively (through DuckDB's own type introspection), so enums, nested structs, `LIST` / `ARRAY` /
+`MAP`, `DECIMAL` and hand-written custom types all come along — and `Option<T>` does not change the
+type text, because nullability is not part of a DuckDB type. The statement is idempotent, so loading
+the extension twice is fine and a type of that name that already exists is left untouched.
+
 ## Containers of containers
 
 The containers compose. A struct field may be a list or a map, a list may hold structs, a map value

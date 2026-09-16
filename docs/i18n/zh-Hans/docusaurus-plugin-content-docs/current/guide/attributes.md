@@ -46,19 +46,14 @@ struct CountDownS {
 }
 ```
 
-`#[derive(DuckEnum)]` 把「只有单元变体的枚举」映射为 DuckDB 的 `ENUM`（字典 = 声明顺序），
-它有自己的参数：
-
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `rename_all` | `verbatim` | 变体名 → SQL 标签：`lowercase`、`UPPERCASE`、`snake_case`、`SCREAMING_SNAKE_CASE`、`camelCase`、`PascalCase`、`kebab-case`、`SCREAMING-KEBAB-CASE`。 |
-| `sql_name` | 类型名的小写蛇形 | SQL 侧类型名（`Priority` → `priority`）。 |
-| `create_type` | `false` | 扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)` —— 幂等，且不会覆盖已存在的同名类型。 |
-| 变体上的 `#[duck(rename = "...")]` | — | 单独覆盖该变体的标签。 |
+`#[derive(DuckEnum)]` 把「只有单元变体的枚举」映射为 DuckDB 的 `ENUM`（字典 = 声明顺序）。
+它自己只有一个参数 —— `rename_all`（`lowercase`、`UPPERCASE`、`snake_case`、
+`SCREAMING_SNAKE_CASE`、`camelCase`、`PascalCase`、`kebab-case`、`SCREAMING-KEBAB-CASE`，默认
+`verbatim`）—— 外加变体上的 `#[duck(rename = "...")]`：
 
 ```rust
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
-#[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+#[duck(rename_all = "lowercase")]
 pub enum Priority {
     #[default]
     Low,
@@ -69,8 +64,36 @@ pub enum Priority {
 
 之后这个枚举可以用在任何需要值类型的地方 —— 函数参数、返回值、`STRUCT` 字段、容器元素 ——
 `Option<Priority>` 则表示可空。**非可空**参数额外需要 `Default`（宏生成的参数结构体会 `derive(Default)`），
-所以例子里的 `Default` 与 `#[default]` 是必需的；写成 `Option<Priority>` 就不需要。`create_type`
-复用 SQL 宏那条执行路径，加载期用 `duckdb_query` 执行。见[类型 → 枚举](./types.md#枚举)。
+所以例子里的 `Default` 与 `#[default]` 是必需的；写成 `Option<Priority>` 就不需要。
+
+### 在 catalog 里建命名类型
+
+两个 derive 都支持：
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `sql_name` | 类型名的小写蛇形 | SQL 侧类型名（`Priority` → `priority`、`Ticket` → `ticket`）。 |
+| `create_type` | `false` | 扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`。 |
+
+语句是幂等的 —— `LOAD` 两次也没问题 —— 且不会覆盖已存在的同名类型；执行路径与 SQL 宏相同
+（`duckdb_query`）。枚举建成 `ENUM(...)`，结构体建成 `STRUCT(...)`，而结构体的字段类型是从 DuckDB
+**自己的逻辑类型**渲染出来的，所以嵌套枚举/结构体、`LIST` / `ARRAY` / `MAP`、手写的自定义字段类型
+都会自动带上：
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = true)]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,
+    pub labels: Vec<String>,
+}
+// CREATE TYPE IF NOT EXISTS "ticket" AS
+//   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
+```
+
+之后 SQL 里就能直接把 `ticket` 当类型用（列类型、cast 目标），而函数注册用的仍是等价的结构化类型 ——
+两者可以互相转换。见[类型 → 枚举](./types.md#枚举)与[类型 → 结构体](./types.md#结构体)。
 
 ## 宏展开了什么
 

@@ -20,19 +20,6 @@ use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Fields, Variant};
 
-/// `#[duck(...)]` 属性在枚举上的解析结果。
-///
-/// Parse result of the `#[duck(...)]` attribute on the enum.
-#[derive(Debug, FromDeriveInput)]
-#[darling(attributes(duck))]
-struct DuckEnumDeriveArgs {
-    /// 枚举级配置（`rename_all` / `sql_name` / `create_type`）。
-    ///
-    /// The enum-level configuration (`rename_all` / `sql_name` / `create_type`).
-    #[darling(flatten)]
-    args: DuckEnumMacroArgs,
-}
-
 /// `#[derive(DuckEnum)]` 的入口。
 ///
 /// 校验「是 enum、没有泛型、至少一个成员、成员都是单元变体、标签不重复」，然后生成：
@@ -73,7 +60,7 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
         ));
     }
 
-    let macro_args = DuckEnumDeriveArgs::from_derive_input(&input)?.args;
+    let macro_args = DuckEnumMacroArgs::from_derive_input(&input)?;
     let rename_all = macro_args.rename_all.unwrap_or_default();
 
     let mut variants: Vec<Ident> = Vec::with_capacity(data.variants.len());
@@ -102,6 +89,7 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
     let enum_ident = &input.ident;
     let module_ident = format_ident!("__duck_enum_{}", to_snake_case(&enum_ident.to_string()));
     let sql_name = macro_args
+        .args
         .sql_name
         .clone()
         .unwrap_or_else(|| to_snake_case(&enum_ident.to_string()));
@@ -110,33 +98,29 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
     // `create_type = true` 时才生成注册函数与 inventory 提交。
     //
     // The registration function and the inventory submission only exist for `create_type = true`.
-    let register = macro_args
-        .create_type
-        .unwrap_or(false)
-        .then(|| {
-            quote! {
-                /// 加载期把 ENUM 类型建进 catalog（`CREATE TYPE IF NOT EXISTS ...`，幂等）。
-                ///
-                /// Creates the ENUM type in the catalog at load time (`CREATE TYPE IF NOT
-                /// EXISTS ...`, idempotent).
-                pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
-                    ::duckfn::register_enum_type(connection, #sql_name, MEMBERS)
-                }
-            }
-        });
+    let create_type = macro_args.args.create_type.unwrap_or(false);
 
-    let submit = macro_args
-        .create_type
-        .unwrap_or(false)
-        .then(|| {
-            quote! {
-                ::duckfn::inventory_submit! {
-                    ::duckfn::DuckFunctionItem {
-                        register_fn: #module_ident::register,
-                    }
+    let register = create_type.then(|| {
+        quote! {
+            /// 加载期把 ENUM 类型建进 catalog（`CREATE TYPE IF NOT EXISTS ...`，幂等）。
+            ///
+            /// Creates the ENUM type in the catalog at load time (`CREATE TYPE IF NOT
+            /// EXISTS ...`, idempotent).
+            pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
+                ::duckfn::register_enum_type(connection, #sql_name, MEMBERS)
+            }
+        }
+    });
+
+    let submit = create_type.then(|| {
+        quote! {
+            ::duckfn::inventory_submit! {
+                ::duckfn::DuckFunctionItem {
+                    register_fn: #module_ident::register,
                 }
             }
-        });
+        }
+    });
 
     Ok(quote! {
         #[allow(non_snake_case)]

@@ -29,7 +29,7 @@ runtime.
 | `#[duck_replacement_scan]` | Redirect an unresolved table name (usually a file path) to a table function. |
 | `#[duck_sql_macro]` | A SQL macro, either as a `SqlMacro` or as raw SQL to execute. |
 | `#[duck_custom_register]` | Manual registration, signature `fn(&Connection) -> DuckResult<()>`. |
-| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT`. |
+| `#[derive(DuckStruct)]` | Map a struct to a DuckDB `STRUCT` (optionally creating the type at load time with `create_type = true`). |
 | `#[derive(DuckEnum)]` | Map a unit-variant enum to a DuckDB `ENUM` (optionally creating the type at load time with `create_type = true`). |
 | `duckfn_entrypoint!("name")` | The extension entry point symbol. |
 | `duck_sql_macro_files!("a.sql", …)` | Register SQL macros kept in `.sql` files. |

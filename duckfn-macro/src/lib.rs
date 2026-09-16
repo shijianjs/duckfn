@@ -57,6 +57,11 @@ use crate::attr_args::handle_duck_function;
 /// 字段的可空性完全由字段类型表达：写 `Option<T>` 就是可空（NULL 取到 `None`），
 /// 写 `T` 就是 NOT NULL（NULL 会让整行/整个结构变成 NULL，bind 参数处则报错）。
 ///
+/// 还可以用 `#[duck(sql_name = "ticket", create_type = true)]` 在加载期把这个结构体建成 catalog 里的
+/// 命名类型：`CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)`。字段类型不是宏写死的 —— 注册时把整
+/// 个结构体的 `LogicalType` 递归渲染成 SQL（走 DuckDB 的类型 introspection），因此枚举、嵌套结构体、
+/// LIST / ARRAY / MAP、DECIMAL 与手写的自定义字段类型都能自动带上；语句幂等，`LOAD` 多次不会报错。
+///
 /// Maps a named struct onto a DuckDB `STRUCT` (nested LIST / MAP / ARRAY / STRUCT are
 /// supported). The generated implementations let the struct be used as scalar-function
 /// arguments (a row of columns), as table-function output rows, as table-function bind
@@ -66,6 +71,12 @@ use crate::attr_args::handle_duck_function;
 /// Field nullability is expressed purely by the field type: `Option<T>` is nullable (a NULL
 /// yields `None`) while `T` is NOT NULL (a NULL turns the whole row / struct into NULL, or, for
 /// a bind argument, into an error).
+///
+/// `#[duck(sql_name = "ticket", create_type = true)]` additionally creates a named type in the
+/// catalog at load time (`CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)`). The field types are
+/// not hard-coded: the struct's `LogicalType` is rendered recursively through DuckDB's own type
+/// introspection, so enums, nested structs, LIST / ARRAY / MAP, DECIMAL and hand-written custom
+/// field types all come along. The statement is idempotent.
 #[proc_macro_derive(DuckStruct, attributes(duck))]
 pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);

@@ -4,10 +4,10 @@
 //! a STRUCT child field.
 
 use crate::attr_args::DuckFunctionMacroArgs;
-use crate::macro_utils::TokenStream2Result;
+use crate::macro_utils::{TokenStream2Result, to_snake_case};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
 use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
@@ -117,12 +117,72 @@ impl DuckStructContext {
         &self.input.ident
     }
 
-    /// 生成全部代码（当前只生成 `DuckStructTrait` 实现）。
+    /// 生成全部代码：`DuckStructTrait` 实现，以及（`create_type = true` 时）加载期建类型的注册。
     ///
-    /// Generates all the code (currently only the `DuckStructTrait` implementation).
+    /// Generates all the code: the `DuckStructTrait` implementation plus — for `create_type = true`
+    /// — the load-time type registration.
     fn build_all(&self) -> TokenStream2Result {
-        let ts = self.build_duck_struct_impl()?;
-        Ok(ts)
+        let impl_ts = self.build_duck_struct_impl()?;
+        let type_registration = self.build_type_registration()?;
+        Ok(quote! {
+            #impl_ts
+            #type_registration
+        })
+    }
+
+    /// 生成「加载期创建命名 STRUCT 类型」的注册函数与 inventory 提交。
+    ///
+    /// 只在 `#[duck(create_type = true)]` 时生成：字段类型不在这里拼 SQL —— 注册函数把
+    /// `<Self as DuckValueType>::logical_type()`（也就是引擎眼里的那个 STRUCT 逻辑类型）交给
+    /// [`duckfn::register_named_type`]，由它递归渲染成 SQL，因此自定义字段类型同样适用。
+    ///
+    /// Generates the registration function and the inventory submission that create the named
+    /// STRUCT type at load time. Only emitted for `#[duck(create_type = true)]`. The field types are
+    /// not assembled here: the registrar hands `<Self as DuckValueType>::logical_type()` to
+    /// `duckfn::register_named_type`, which renders it recursively — so custom field types work.
+    fn build_type_registration(&self) -> TokenStream2Result {
+        if !self.macro_args.args.create_type.unwrap_or(false) {
+            return Ok(quote!());
+        }
+        if let Some(param) = self.input.generics.params.first() {
+            return Err(syn::Error::new(
+                param.span(),
+                "`#[duck(create_type = true)]` is not supported on a generic struct: the SQL type \
+                 must be concrete",
+            ));
+        }
+
+        let struct_name = self.struct_name();
+        let module_ident = format_ident!("__duck_struct_{}", to_snake_case(&struct_name.to_string()));
+        let sql_name = self
+            .macro_args
+            .args
+            .sql_name
+            .clone()
+            .unwrap_or_else(|| to_snake_case(&struct_name.to_string()));
+
+        Ok(quote! {
+            #[allow(non_snake_case)]
+            mod #module_ident {
+                /// 加载期把 STRUCT 类型建进 catalog（`CREATE TYPE IF NOT EXISTS ...`，幂等）。
+                ///
+                /// Creates the STRUCT type in the catalog at load time (`CREATE TYPE IF NOT
+                /// EXISTS ...`, idempotent).
+                pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
+                    ::duckfn::register_named_type(
+                        connection,
+                        #sql_name,
+                        <super::#struct_name as ::duckfn::DuckValueType>::logical_type(),
+                    )
+                }
+            }
+
+            ::duckfn::inventory_submit! {
+                ::duckfn::DuckFunctionItem {
+                    register_fn: #module_ident::register,
+                }
+            }
+        })
     }
 
     /// 生成 `impl DuckStructTrait for #struct_name`，逐字段拼出各 `s_*` 方法体。

@@ -48,7 +48,13 @@ pub(crate) mod duck_lazy;
 /// ENUM read/write helpers used by `#[derive(DuckEnum)]`-generated code, plus the optional
 /// "create the type at load time" step.
 pub(crate) mod duck_enum;
+/// 把逻辑类型渲染成 SQL，并在加载期注册成 DuckDB 的命名类型（`create_type`）。
+///
+/// Renders a logical type as SQL and registers it as a named DuckDB type at load time
+/// (`create_type`).
+pub(crate) mod named_types;
 
+pub use named_types::*;
 pub use duck_value_type::*;
 pub use duck_array::*;
 pub use duck_list::*;

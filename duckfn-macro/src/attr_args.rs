@@ -4,7 +4,7 @@
 
 use crate::duck_function::ItemFnWrapper;
 use crate::macro_utils::{TokenStream2Result, handle_token_stream2_result, to_snake_case};
-use darling::FromMeta;
+use darling::{FromDeriveInput, FromMeta};
 use proc_macro::TokenStream;
 use syn::{ItemFn, parse_macro_input};
 
@@ -95,6 +95,31 @@ pub(crate) struct DuckFunctionMacroArgs {
     /// Several signatures sharing the same `overloads_name` are merged into one function set,
     /// each overload keeping its own return type.
     pub overloads_name: Option<String>,
+
+    /// `#[duck(sql_name = "priority")]`（`#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`）：
+    /// SQL 侧的类型名，默认用类型名的小写蛇形（`Priority` -> `priority`）。
+    ///
+    /// 配合 `create_type` 建类型，也用在报错信息里。
+    ///
+    /// `#[duck(sql_name = "priority")]` (on `#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`): the
+    /// SQL-side type name; defaults to the type name in lowercase snake_case. It is used by
+    /// `create_type` and in error messages.
+    pub sql_name: Option<String>,
+
+    /// `#[duck(create_type = true)]`（`#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`）：
+    /// 加载期执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`，默认 `false`。
+    ///
+    /// 语句是幂等的（`LOAD` 多次也不会报错），且不会覆盖已存在的同名类型；执行路径与 SQL 宏相同
+    /// （`duckdb_query`）。STRUCT 的字段类型由 DuckDB 自己的逻辑类型渲染成 SQL，因此自定义字段
+    /// 类型（含手写的 `DuckValueType`）同样适用。
+    ///
+    /// `#[duck(create_type = true)]` (on `#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`): run
+    /// `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` at load time; defaults to `false`. The
+    /// statement is idempotent (loading the extension twice is fine) and leaves a pre-existing type
+    /// untouched; it goes through the SQL-macro execution path (`duckdb_query`). A STRUCT's field
+    /// types are rendered from DuckDB's own logical types, so custom field types — hand-written
+    /// `DuckValueType` implementations included — work too.
+    pub create_type: Option<bool>,
 }
 
 /// 变体名 → SQL 字典标签的命名规则（`#[duck(rename_all = "...")]`）。
@@ -188,12 +213,16 @@ impl FromMeta for RenameRule {
 
 /// `#[derive(DuckEnum)]` 在枚举上 `#[duck(...)]` 可用的参数。
 ///
+/// 除 `rename_all` 外，其余键（`sql_name` / `create_type`）就是
+/// [`DuckFunctionMacroArgs`] 里那两个，通过 `#[darling(flatten)]` 复用。
 /// 变体级只支持 `#[duck(rename = "...")]`（在 derive 里就地解析）。
 ///
-/// The `#[duck(...)]` arguments `#[derive(DuckEnum)]` accepts on the enum. At variant level only
-/// `#[duck(rename = "...")]` is supported (parsed in the derive itself).
-#[derive(Debug, FromMeta)]
-#[darling(derive_syn_parse)]
+/// The `#[duck(...)]` arguments `#[derive(DuckEnum)]` accepts on the enum. Apart from
+/// `rename_all` they are the `sql_name` / `create_type` keys of [`DuckFunctionMacroArgs`], reused
+/// through `#[darling(flatten)]`. At variant level only `#[duck(rename = "...")]` is supported
+/// (parsed in the derive itself).
+#[derive(Debug, FromDeriveInput)]
+#[darling(attributes(duck))]
 pub(crate) struct DuckEnumMacroArgs {
     /// `#[duck(rename_all = "snake_case")]`：变体名 → SQL 字典标签的命名规则，默认原样使用。
     ///
@@ -201,22 +230,9 @@ pub(crate) struct DuckEnumMacroArgs {
     /// by default the variant name is used verbatim.
     pub rename_all: Option<RenameRule>,
 
-    /// `#[duck(sql_name = "priority")]`：SQL 侧的类型名，默认用类型名的小写蛇形
-    /// （`Priority` -> `priority`）。配合 `create_type` 建类型，也用于报错信息。
+    /// `sql_name` / `create_type` 等共用配置。
     ///
-    /// `#[duck(sql_name = "priority")]`: the SQL-side type name; defaults to the type name in
-    /// lowercase snake_case. It is used by `create_type` and in error messages.
-    pub sql_name: Option<String>,
-
-    /// `#[duck(create_type = true)]`：加载期执行
-    /// `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`，默认 `false`。
-    ///
-    /// 语句是幂等的（`LOAD` 多次也不会报错），且不会覆盖已存在的同名类型。
-    /// 执行路径与 SQL 宏相同（`duckdb_query`）。
-    ///
-    /// `#[duck(create_type = true)]`: run `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`
-    /// at load time; defaults to `false`. The statement is idempotent (loading the extension
-    /// twice is fine) and leaves a pre-existing type untouched. It goes through the SQL-macro
-    /// execution path (`duckdb_query`).
-    pub create_type: Option<bool>,
+    /// The shared configuration (`sql_name`, `create_type`, ...).
+    #[darling(flatten)]
+    pub args: DuckFunctionMacroArgs,
 }

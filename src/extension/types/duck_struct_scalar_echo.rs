@@ -2,6 +2,8 @@ use duckfn::duck_scalar_function;
 use duckfn::{DuckArray, DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTimestamp};
 use indexmap::IndexMap;
 
+use super::duck_enum_echo::Priority;
+
 // ============================================================================
 // STRUCT 类型 echo 函数
 //
@@ -315,5 +317,52 @@ fn dfn_echo_struct_array(i: DuckArray<DuckStructSimple, 2>) -> DuckArray<DuckStr
 fn dfn_echo_struct_array_nullable(
     i: [Option<DuckStructSimple>; 2],
 ) -> [Option<DuckStructSimple>; 2] {
+    i
+}
+
+// ---------------------------------------------------------------------------
+// create_type：加载期建一个命名 STRUCT 类型
+// ---------------------------------------------------------------------------
+
+/// 作为 `DuckStructTicket` 一个字段的嵌套结构体：STRUCT(flag BOOLEAN)。
+///
+/// A nested struct used as one field of `DuckStructTicket`: `STRUCT(flag BOOLEAN)`.
+#[derive(Clone, Debug, Default, DuckStruct)]
+pub struct DuckStructTicketInner {
+    pub flag: bool,
+}
+
+/// `#[duck(create_type = true)]`：加载期执行
+/// `CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[], "slot" INTEGER[3], "scores" MAP(VARCHAR, DOUBLE), "amount" DECIMAL(18, 3), "inner" STRUCT("flag" BOOLEAN));`
+///
+/// 字段类型不是在这里写死的 SQL —— 注册函数把整个结构体的**逻辑类型**交给
+/// `duckfn::register_named_type`，由它递归渲染（`duckdb_get_type_id` + 子类型 / 字典 / 精度查询）。
+/// 所以枚举（含 `#[derive(DuckEnum)]` 生成的）、自定义类型、嵌套结构体、LIST / ARRAY / MAP
+/// 都能自动带上，`Option<T>` 的可空性也不影响类型文本。
+///
+/// `#[duck(create_type = true)]` runs `CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)` at load
+/// time. The field types are not hard-coded SQL: the registrar hands the struct's *logical type* to
+/// `duckfn::register_named_type`, which renders it recursively, so enums, custom types, nested
+/// structs and LIST / ARRAY / MAP come along automatically.
+///
+/// ```sql
+/// SELECT typeof(NULL::ticket);       -- STRUCT(id BIGINT, ...)：类型可以在 SQL 里直接用
+/// CREATE TABLE tickets (v ticket);   -- 也可以作为列类型
+/// SELECT dfn_echo_struct_ticket(v) FROM tickets;
+/// ```
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = true)]
+pub struct DuckStructTicket {
+    pub id: i64,
+    pub priority: Priority,
+    pub labels: Vec<String>,
+    pub slot: [i32; 3],
+    pub scores: IndexMap<String, f64>,
+    pub amount: DuckDecimal<18, 3>,
+    pub inner: DuckStructTicketInner,
+}
+
+#[duck_scalar_function]
+fn dfn_echo_struct_ticket(i: DuckStructTicket) -> DuckStructTicket {
     i
 }

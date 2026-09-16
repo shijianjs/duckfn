@@ -49,18 +49,13 @@ struct CountDownS {
 ```
 
 `#[derive(DuckEnum)]` maps a unit-variant-only enum onto a DuckDB `ENUM` (dictionary = declaration
-order) and takes its own arguments:
-
-| Argument | Default | Meaning |
-| --- | --- | --- |
-| `rename_all` | `verbatim` | Variant name → SQL label: `lowercase`, `UPPERCASE`, `snake_case`, `SCREAMING_SNAKE_CASE`, `camelCase`, `PascalCase`, `kebab-case`, `SCREAMING-KEBAB-CASE`. |
-| `sql_name` | the type name in snake_case | The SQL-side type name (`Priority` → `priority`). |
-| `create_type` | `false` | Run `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)` when the extension loads — idempotent, and an existing type of that name is left untouched. |
-| `#[duck(rename = "...")]` on a variant | — | Overrides the label of that single variant. |
+order). It has one argument of its own — `rename_all` (`lowercase`, `UPPERCASE`, `snake_case`,
+`SCREAMING_SNAKE_CASE`, `camelCase`, `PascalCase`, `kebab-case`, `SCREAMING-KEBAB-CASE`, default
+`verbatim`) — plus `#[duck(rename = "...")]` on a single variant:
 
 ```rust
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
-#[duck(rename_all = "lowercase", sql_name = "priority", create_type = true)]
+#[duck(rename_all = "lowercase")]
 pub enum Priority {
     #[default]
     Low,
@@ -73,8 +68,37 @@ The enum is then usable anywhere a value type is expected — function arguments
 `STRUCT` fields, container elements — and `Option<Priority>` makes it nullable. A **non-nullable**
 argument additionally needs `Default` (the generated argument struct derives it), which is why the
 example derives `Default` and marks a `#[default]` variant; with `Option<Priority>` it is not needed.
-`create_type` reuses the SQL-macro execution path, so the statement is issued with `duckdb_query`
-at load time. See [Types → Enums](./types.md#enums).
+
+### Named types in the catalog
+
+Both derives also accept:
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `sql_name` | the type name in snake_case | The SQL-side type name (`Priority` → `priority`, `Ticket` → `ticket`). |
+| `create_type` | `false` | Run `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` when the extension loads. |
+
+The statement is idempotent — loading the extension twice is fine — and leaves an existing type of
+that name untouched. It goes through the same execution path as the SQL macros (`duckdb_query`). An
+enum becomes `ENUM(...)`; a struct becomes `STRUCT(...)`, and its field types are rendered from
+DuckDB's *own* logical types, so nested enums and structs, `LIST` / `ARRAY` / `MAP` and hand-written
+custom field types come along automatically:
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = true)]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,
+    pub labels: Vec<String>,
+}
+// CREATE TYPE IF NOT EXISTS "ticket" AS
+//   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
+```
+
+SQL can then use `ticket` as a type — a column type or a cast target — even though the functions are
+registered with the equivalent structural type; the two are interchangeable. See
+[Types → Enums](./types.md#enums) and [Types → Structs](./types.md#structs).
 
 ## What a macro generates
 

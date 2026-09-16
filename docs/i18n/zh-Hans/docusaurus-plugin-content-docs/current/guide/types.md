@@ -182,6 +182,33 @@ SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}})).in
 多出来的 `Option` 层是「惰性」的：映射到同一个 DuckDB 类型，读到 `NULL` 得到的是外层 `None`，
 而写 `None` 与写嵌套的 `Some(None)` 都是写 `NULL`。
 
+结构体也能在 catalog 里**取个名字**：`#[duck(sql_name = "ticket", create_type = true)]` 会让扩展在加载时
+执行 `CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)`，之后 SQL 里就能把 `ticket` 当类型用
+（列类型或 cast 目标）：
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = true)]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,      // #[derive(DuckEnum)] 生成的枚举
+    pub labels: Vec<String>,
+}
+// CREATE TYPE IF NOT EXISTS "ticket" AS
+//   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
+```
+
+```sql
+CREATE TABLE tickets (v ticket);
+INSERT INTO tickets VALUES ({'id': 1, 'priority': 'low', 'labels': ['a']});
+SELECT dfn_echo_struct_ticket(v) FROM tickets;   -- 函数用的是等价的结构化类型
+```
+
+字段类型不是宏写死的：每个字段的 `LogicalType` 会被递归渲染（走 DuckDB 自己的类型 introspection），
+所以枚举、嵌套结构体、`LIST` / `ARRAY` / `MAP`、`DECIMAL` 以及手写的自定义类型都会自动带上 ——
+`Option<T>` 也不会改变类型文本，因为可空性不是 DuckDB 类型的一部分。语句是幂等的，`LOAD` 两次没问题，
+已存在的同名类型也不会被覆盖。
+
 ## 容器的组合
 
 各类容器可以自由组合：结构体字段可以是列表或映射，列表元素可以是结构体，映射的值可以是另一个映射：
