@@ -89,12 +89,12 @@ A second job turns the pushed tag into a GitHub Release:
 3. Build release notes from the commit list since the previous `v*` tag.
 4. Create the release, or upload to it if it already exists.
 
-So bumping the version is: tag `v0.0.3`, push the tag, and wait for both jobs.
+So bumping the version is: tag `vX.Y.Z`, push the tag, and wait for both jobs.
 
 ## Publishing the crates
 
 The two library crates are published in dependency order — `duckfn` depends on
-`duckfn-macro = "=0.0.2"`, so the macro crate has to exist on crates.io first:
+`duckfn-macro = "=0.0.3"`, so the macro crate has to exist on crates.io first:
 
 ```bash
 just publish_dry   # cargo publish -p duckfn-macro --dry-run, then -p duckfn
@@ -105,7 +105,7 @@ Versions come from the workspace:
 
 ```toml
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 rust-version = "1.86"
 ```
 

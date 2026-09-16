@@ -44,7 +44,7 @@
 
 ```toml
 [dependencies]
-duckfn = "0.0.2"
+duckfn = "0.0.3"
 
 # duckfn 本身就建立在下面两个 crate 之上；需要直接使用它们的类型或 builder 时显式加上
 # （本仓库的示例扩展就是这么写的）。

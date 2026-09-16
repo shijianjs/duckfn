@@ -1,7 +1,7 @@
 #
 # This workflow calls the main distribution pipeline from DuckDB to build, test and (optionally) release the extension
 #
-# Pushing a version tag (e.g. v0.0.2) builds the extension for every supported platform and then publishes a
+# Pushing a version tag (e.g. v0.0.3) builds the extension for every supported platform and then publishes a
 # GitHub Release for that tag, with all built extension binaries attached as release assets.
 #
 name: Main Extension Distribution Pipeline

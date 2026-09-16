@@ -26,7 +26,7 @@ rust-version = "1.86"
 crate-type = ["cdylib"]
 
 [dependencies]
-duckfn = "0.0.2"
+duckfn = "0.0.3"
 quack-rs = "0.16.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```

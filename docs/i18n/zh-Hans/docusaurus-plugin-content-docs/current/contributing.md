@@ -44,7 +44,7 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 | `duckfn-macro/` | 是 | 过程宏；不依赖运行时，只依赖 `darling`、`syn`、`quote`。 |
 | `/`（`rusty_quack`） | 否（`publish = false`） | 示例扩展，放在根目录以便复用 DuckDB 官方 CI。 |
 
-`duckfn/` 锁定 `duckfn-macro = "=0.0.2"`，因此两个 crate 总是一起发布。
+`duckfn/` 锁定 `duckfn-macro = "=0.0.3"`，因此两个 crate 总是一起发布。
 
 ## 日常命令
 

@@ -84,11 +84,11 @@ jobs:
 3. 用上一个 `v*` tag 以来的提交记录生成发布说明。
 4. 创建 Release；若已存在则上传覆盖。
 
-因此发版流程就是：打 `v0.0.3` tag、推送、等两个作业跑完。
+因此发版流程就是：打 `vX.Y.Z` tag、推送、等两个作业跑完。
 
 ## 发布 crate
 
-两个库 crate 按依赖顺序发布 —— `duckfn` 依赖 `duckfn-macro = "=0.0.2"`，所以宏 crate 必须先上 crates.io：
+两个库 crate 按依赖顺序发布 —— `duckfn` 依赖 `duckfn-macro = "=0.0.3"`，所以宏 crate 必须先上 crates.io：
 
 ```bash
 just publish_dry   # 先 cargo publish -p duckfn-macro --dry-run，再 -p duckfn
@@ -99,7 +99,7 @@ just publish
 
 ```toml
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 rust-version = "1.86"
 ```
 
