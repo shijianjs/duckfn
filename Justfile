@@ -29,12 +29,16 @@ config_env:
 build_wasm:
 	cargo build --release --target wasm32-unknown-emscripten --example rusty_quack
 
-publish_dry:
+publish_macro_dry:
 	cargo publish -p duckfn-macro --registry crates-io --dry-run
+
+publish_macro:
+	cargo publish -p duckfn-macro --registry crates-io
+
+publish_dry:
 	cargo publish -p duckfn --registry crates-io --dry-run
 
 publish:
-	cargo publish -p duckfn-macro --registry crates-io
 	cargo publish -p duckfn --registry crates-io
 
 doc:
