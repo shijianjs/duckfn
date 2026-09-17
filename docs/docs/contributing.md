@@ -46,7 +46,7 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 | `duckfn-macro/` | yes | The procedural macros; depends on the runtime for nothing, only on `darling`, `syn`, `quote`. |
 | `/` (`rusty_quack`) | no (`publish = false`) | The example extension, kept at the root so it can reuse DuckDB's official CI. |
 
-`duckfn/` pins `duckfn-macro = "=0.0.4"`, so the two crates always ship together.
+`duckfn/` pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
 
 ## Day-to-day commands
 

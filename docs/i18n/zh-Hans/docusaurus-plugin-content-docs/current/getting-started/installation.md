@@ -10,7 +10,7 @@ description: 添加 duckfn 依赖、声明 cdylib crate 类型，以及为什么
 
 ```toml
 [dependencies]
-duckfn = "0.0.4"
+duckfn = "{{DUCKFN_VERSION}}"
 
 # duckfn 基于这两个 crate 构建。只要你直接书写它们的类型或 builder ——
 # 例如 SqlMacro、Connection、LogicalType、Value —— 就需要显式添加。
@@ -21,7 +21,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
 
 `duckfn` 已重新导出 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) 的全部宏，因此上面的片段就够了。
-只有想脱离运行时单独使用宏时，才需要直接依赖 `duckfn-macro = "0.0.4"`。
+只有想脱离运行时单独使用宏时，才需要直接依赖 `duckfn-macro = "{{DUCKFN_VERSION}}"`。
 
 ## Cargo feature
 
@@ -30,7 +30,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | `duckdb-1-5` | 支持 DuckDB 1.5 新增的逻辑类型 —— 目前是 `TIME_NS`（`DuckTimeNs`）。 | `libduckdb-sys` 使用 DuckDB 1.5 及以上的头文件。 |
 
 ```toml
-duckfn = { version = "0.0.4", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
 ```
 
 `loadable-extension` 是 `libduckdb-sys` 的 feature，不是 `duckfn` 的，需要你自己开启。

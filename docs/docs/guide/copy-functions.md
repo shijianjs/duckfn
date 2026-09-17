@@ -23,7 +23,7 @@ and `NULL` therefore work in both directions.
 Copy functions come from DuckDB's C API as of 1.5.0, so they need `duckfn`'s `duckdb-1-5` feature:
 
 ```toml
-duckfn = { version = "0.0.4", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
 ```
 :::
 

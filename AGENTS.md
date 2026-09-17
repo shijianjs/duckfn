@@ -43,13 +43,16 @@ just release_bump 0.0.5
 
 - **Cargo 文件**：取工作区当前版本（开发版本，如 `0.0.5-dev.0`）→ `0.0.5`，
   涉及 `Cargo.toml` 与 `duckfn/Cargo.toml`。
-- **文档 / README / CI 注释**：取**最近一次 tag** 的版本（如 `0.0.4`）→ `0.0.5`，
-  文件由 `git grep` 自动找出，不需要维护清单：
+- **文档 / README / CI 注释**：取**最近一次 tag** 的版本（如 `0.0.4`）→ `0.0.5`。
+  涉及的文件由 `git grep` 自动找出，不需要维护清单：
   - `README.md`、`README.zh-CN.md`
   - `duckfn/README.md`、`duckfn/README.zh-CN.md`
-  - `docs/docs/**`：`build-and-release.md`、`contributing.md`、`getting-started/installation.md`、`getting-started/quick-start.md`、`guide/copy-functions.md`
-  - `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`：上面各页面的中文版
   - `.github/workflows/MainDistributionPipeline.yml`：注释里的示例 tag
+  - `docs/duckfn-version.ts`：文档站版本号的唯一来源
+
+  文档站的正文（`docs/docs/**`、`docs/i18n/**`）不再出现具体版本号，只写
+  `{{DUCKFN_VERSION}}` 占位符，由 `docs/plugins/remark-version-placeholder.ts`
+  在构建时替换成 `docs/duckfn-version.ts` 里的值。
 
 最后用 `cargo update -p duckfn -p duckfn-macro` 同步 `Cargo.lock`，并打印残留的旧版本号
 （应当为空）以及 `git diff --stat`。
@@ -113,5 +116,6 @@ just release_dev 0.0.6-dev.0
 ## 相关文档
 
 - [`scripts/release.sh`](scripts/release.sh)：`release_bump` / `release_dev` / `release_tag` 的实际实现。
+- [`docs/duckfn-version.ts`](docs/duckfn-version.ts) 与 [`docs/plugins/remark-version-placeholder.ts`](docs/plugins/remark-version-placeholder.ts)：文档站的版本占位符机制。
 - [`docs/docs/build-and-release.md`](docs/docs/build-and-release.md)：面向读者的构建与发布说明。
 - [`docs/docs/contributing.md`](docs/docs/contributing.md)：本地开发流程与约定。

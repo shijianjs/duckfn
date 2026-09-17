@@ -13,14 +13,29 @@
 #   bash scripts/release.sh tag  <version>       # 打 tag 并推送，触发 CI 发版
 set -euo pipefail
 
-# git grep 时始终跳过的文件：
+# 核对「旧版本号残留」时跳过的文件：
 # Cargo.lock 由 cargo update 负责；package-lock.json 与本项目版本号无关；
 # AGENTS.md 是流程说明，里面的版本号只是示例。
-GREP_EXCLUDES=(
+CHECK_EXCLUDES=(
     ':(exclude)Cargo.lock'
     ':(exclude)docs/package-lock.json'
     ':(exclude)AGENTS.md'
 )
+
+# 批量替换时额外跳过：两个 Cargo 清单单独处理；文档站的正文只写
+# {{DUCKFN_VERSION}} 占位符，版本号集中在 docs/duckfn-version.ts。
+REPLACE_EXCLUDES=(
+    "${CHECK_EXCLUDES[@]}"
+    ':(exclude)Cargo.toml'
+    ':(exclude)duckfn/Cargo.toml'
+    ':(exclude)docs/duckfn-version.ts'
+    ':(exclude)docs/docs'
+    ':(exclude)docs/i18n'
+)
+
+# 文档站版本号的唯一来源，在 cmd_bump 里显式替换：
+# 它可能是新建、尚未被 git 跟踪的文件，那时 git grep 找不到它。
+DOC_VERSION_FILE='docs/duckfn-version.ts'
 
 die() {
     echo "error: $*" >&2
@@ -72,18 +87,21 @@ cmd_bump() {
         sed -i "s/${escaped}/${new}/g" Cargo.toml duckfn/Cargo.toml
     fi
 
-    # 文档 / README / CI 注释里的版本号 = 最近一次 tag 的版本
+    # 文档 / README / CI 注释里的版本号 = 最近一次 tag 的版本。
+    # docs/docs 与 docs/i18n 只写占位符，真正的版本号集中在 DOC_VERSION_FILE。
     if [ -n "$doc" ] && [ "$doc" != "$new" ]; then
         echo "文档 / CI 版本 ${doc} -> ${new}（取自 ${tag}）"
-        mapfile -t files < <(git grep -l -F -- "$doc" -- . \
-            "${GREP_EXCLUDES[@]}" \
-            ':(exclude)Cargo.toml' \
-            ':(exclude)duckfn/Cargo.toml')
+        mapfile -t files < <(git grep -l -F -- "$doc" -- . "${REPLACE_EXCLUDES[@]}")
         escaped=$(sed_escape "$doc")
         for f in "${files[@]}"; do
             sed -i "s/${escaped}/${new}/g" "$f"
             echo "  updated $f"
         done
+
+        if [ -f "$DOC_VERSION_FILE" ]; then
+            sed -i "s/${escaped}/${new}/g" "$DOC_VERSION_FILE"
+            echo "  updated $DOC_VERSION_FILE"
+        fi
     fi
 
     sync_lock
@@ -93,7 +111,7 @@ cmd_bump() {
     for v in "$dev" "$doc"; do
         [ -n "$v" ] || continue
         [ "$v" = "$new" ] && continue
-        git grep -n -F -- "$v" -- . "${GREP_EXCLUDES[@]}" || true
+        git grep -n -F -- "$v" -- . "${CHECK_EXCLUDES[@]}" || true
     done
 
     echo

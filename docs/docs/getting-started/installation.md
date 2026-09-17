@@ -10,7 +10,7 @@ description: Add duckfn to a crate, declare the cdylib crate type, and why a loc
 
 ```toml
 [dependencies]
-duckfn = "0.0.4"
+duckfn = "{{DUCKFN_VERSION}}"
 
 # duckfn is built on these two crates. Add them explicitly as soon as you name
 # their types or builders yourself — SqlMacro, Connection, LogicalType, Value, …
@@ -22,7 +22,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
 
 `duckfn` re-exports every macro from [`duckfn-macro`](https://crates.io/crates/duckfn-macro), so
-the snippet above is enough. Depend on `duckfn-macro = "0.0.4"` directly only if you want the
+the snippet above is enough. Depend on `duckfn-macro = "{{DUCKFN_VERSION}}"` directly only if you want the
 macros without the runtime.
 
 ## Cargo features
@@ -32,7 +32,7 @@ macros without the runtime.
 | `duckdb-1-5` | Logical types added in DuckDB 1.5 — today `TIME_NS` (`DuckTimeNs`). | `libduckdb-sys` headers from DuckDB 1.5 or newer. |
 
 ```toml
-duckfn = { version = "0.0.4", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
 ```
 
 `loadable-extension` is a feature of `libduckdb-sys`, not of `duckfn`, and it has to be enabled by
