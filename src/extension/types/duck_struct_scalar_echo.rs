@@ -366,3 +366,32 @@ pub struct DuckStructTicket {
 fn dfn_echo_struct_ticket(i: DuckStructTicket) -> DuckStructTicket {
     i
 }
+
+// ---------------------------------------------------------------------------
+// create_type = "print"：加载期只收集建类型的 DDL，不建类型
+// ---------------------------------------------------------------------------
+
+/// 打印模式：`#[duck(create_type = "print")]` 把
+/// `CREATE TYPE IF NOT EXISTS "preview_ticket" AS STRUCT("id" BIGINT, "name" VARCHAR);`
+/// 收进队列、不执行，`LOAD` 结束后和其它 `"print"` 类型一起打印到 stderr；所以
+/// `duckdb_types()` 里查不到 `preview_ticket`。
+///
+/// Print mode: the `CREATE TYPE IF NOT EXISTS "preview_ticket" AS STRUCT(...)` statement is queued
+/// instead of executed and shows up in the batch printed to stderr after the load, so
+/// `preview_ticket` never appears in `duckdb_types()`.
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "preview_ticket", create_type = "print")]
+pub struct DuckStructPreviewTicket {
+    pub id: i64,
+    pub name: String,
+}
+
+/// 打印模式只影响「建不建类型」：结构体作为 STRUCT 值类型照常可用。
+///
+/// ```sql
+/// SELECT dfn_echo_struct_preview_ticket({'id': 1, 'name': 'a'});
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_struct_preview_ticket(t: DuckStructPreviewTicket) -> DuckStructPreviewTicket {
+    t
+}

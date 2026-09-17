@@ -2,12 +2,26 @@
 //!
 //! Rendering a logical type as SQL and registering it as a **named type** in DuckDB at load time.
 //!
-//! `#[derive(DuckEnum)]` / `#[derive(DuckStruct)]` 的 `create_type = true` 走的就是这里：
+//! `#[derive(DuckEnum)]` / `#[derive(DuckStruct)]` 的 `create_type` 走的就是这里：
 //!
 //! ```sql
 //! CREATE TYPE IF NOT EXISTS "priority" AS ENUM ('low', 'medium', 'high');
 //! CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(id BIGINT, priority ENUM('low', 'medium', 'high'));
 //! ```
+//!
+//! 其中 `create_type = "print"` 不执行语句，只把渲染好的 DDL 收进队列
+//! （[`queue_named_type_ddl`] / [`queue_enum_type_ddl`]）；等全部注册项跑完，扩展入口点
+//! [`crate::register_all_duckfn`] 再调 [`flush_queued_type_ddl`] 把这批**一次性**打印出来
+//! （两行 `-- [duckfn]` 提示 + 每行一条 DDL + 一行结束语），所以有几个 `"print"` 类型也只有一块提示。
+//! `create_type = false`（宏完全不介入）时，插件作者也可以自己调 [`named_type_ddl`] +
+//! [`print_sql_preview`] 把某一条 DDL 亮出来。
+//!
+//! The `"print"` mode of `create_type` never runs the statement: it queues the rendered DDL
+//! ([`queue_named_type_ddl`] / [`queue_enum_type_ddl`]) and the extension entry point
+//! ([`crate::register_all_duckfn`]) flushes the batch in one block afterwards
+//! ([`flush_queued_type_ddl`]), so any number of print-mode types yields a single notice. With
+//! `create_type = false`, where the macro stays out of the way, an author can show a single
+//! statement with [`named_type_ddl`] + [`print_sql_preview`].
 //!
 //! 关键点是「SQL 文本从哪来」。DuckDB 的 C API 没有「逻辑类型 → 文本」的函数，
 //! 但类型 introspection 齐全（`duckdb_get_type_id` + 子类型 / 字典 / 精度查询），
@@ -33,6 +47,7 @@ use crate::register_sql_macro_str;
 use crate::{DuckResult, duck_error};
 use quack_rs::connection::Connection;
 use quack_rs::prelude::{LogicalType, TypeId};
+use std::sync::Mutex;
 
 /// 用双引号包住标识符（类型名、STRUCT 字段名），并把内部的 `"` 转义成 `""`。
 ///
@@ -188,6 +203,133 @@ pub fn register_named_type(
     register_sql_macro_str(connection, &named_type_ddl(name, &logical_type)?)
 }
 
+/// 打一行 `-- [duckfn] ...` 提示。
+///
+/// 每行都以 `--` 开头（SQL 注释），所以提示与 DDL 混在一起也能整块复制去执行。
+///
+/// Prints one `-- [duckfn] ...` hint line. The `--` prefix makes it a SQL comment, so hints and DDL
+/// can be copied and run as a single block.
+fn eprintln_hint(hint: &str) {
+    eprintln!("-- [duckfn] {hint}");
+}
+
+/// 把一段**不会执行**的 SQL 连同前后提示一起打印到 stderr（单个语句的即时版本）。
+///
+/// 输出三行：`-- [duckfn] {before}`、SQL 本身、`-- [duckfn] {after}`。前后两行都以 `--` 开头
+/// （SQL 注释），所以整块直接复制进脚本执行也没问题；这样亮出来的 DDL 不会被误读成「已经执行过了」。
+///
+/// `create_type = "print"` 走的是「先收集、最后一次性打印」的批量路径（[`queue_named_type_ddl`] +
+/// [`flush_queued_type_ddl`]）；这个函数是**单个语句**的即时出口，给 `create_type = false`
+/// （宏完全不介入）的插件作者自己调，配上自己的说明：
+///
+/// Prints a single statement that is **not** run, framed by two caller-supplied hints (both are `--`
+/// comments, so the block stays copy-pasteable as SQL). `create_type = "print"` goes through the
+/// batched path instead ([`queue_named_type_ddl`] + [`flush_queued_type_ddl`]); this is the
+/// immediate, single-statement flavour for authors — e.g. with `create_type = false`, where the
+/// macro does not step in at all:
+///
+/// ```ignore
+/// #[duck_custom_register]
+/// fn show_the_create_type_ddl(_connection: &Connection) -> DuckResult<()> {
+///     // create_type = false：要不要亮出 DDL、配什么说明，全部由作者决定
+///     let ddl = duckfn::named_type_ddl("ticket", &Ticket::logical_type())?;
+///     duckfn::print_sql_preview(
+///         "my extension will NOT create this type",
+///         &ddl,
+///         "end - copy the statement above and run it yourself if you want it",
+///     );
+///     Ok(())
+/// }
+/// ```
+pub fn print_sql_preview(before: &str, sql: &str, after: &str) {
+    eprintln_hint(before);
+    eprintln!("{}", sql.trim_end());
+    eprintln_hint(after);
+}
+
+/// `create_type = "print"` 收集到的 DDL，等注册跑完由 [`flush_queued_type_ddl`] 一次性打印。
+///
+/// DDL collected by `create_type = "print"`, printed as one block by [`flush_queued_type_ddl`] once
+/// registration has finished.
+static QUEUED_TYPE_DDL: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// 渲染 `CREATE TYPE` 的 DDL 并**收进队列**（不执行、也不立刻打印）。
+///
+/// `#[duck(create_type = "print")]` 生成的注册函数调的就是它：`LOAD` 时先把每个类型要建的 DDL
+/// 攒起来，等所有注册项跑完，入口点 [`crate::register_all_duckfn`] 再调 [`flush_queued_type_ddl`]
+/// 一次性打印 —— 所以一个扩展里有几个 `"print"` 类型，也只有**一块**提示，不会每个类型重复一遍
+/// 「未执行 / 可手动执行」。
+///
+/// Renders the `CREATE TYPE` DDL and queues it — it is neither run nor printed right away. This is
+/// what the registration function generated for `#[duck(create_type = "print")]` calls: the DDLs are
+/// collected during `LOAD` and the entry point ([`crate::register_all_duckfn`]) flushes them in one
+/// block afterwards ([`flush_queued_type_ddl`]), so any number of print-mode types produces a single
+/// notice instead of one per type.
+///
+/// # Errors
+///
+/// 逻辑类型无法渲染成 SQL 时返回错误（同 [`named_type_ddl`]）。
+///
+/// Returns an error when the logical type has no SQL spelling (as [`named_type_ddl`] does).
+pub fn queue_named_type_ddl(name: &str, logical_type: &LogicalType) -> DuckResult<()> {
+    let ddl = named_type_ddl(name, logical_type)?;
+    QUEUED_TYPE_DDL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(ddl);
+    Ok(())
+}
+
+/// 把 [`queue_named_type_ddl`] / [`queue_enum_type_ddl`] 收集到的 DDL 一次性打印出来（队列为空则什么都不做）。
+///
+/// 由扩展入口点 [`crate::register_all_duckfn`] 在所有注册项跑完后调用，因此整份输出只有一块提示：
+/// 两行 `-- [duckfn]` 说明 + 每行一条 DDL + 一行结束语。DDL 一行一条，方便挑需要的复制执行。
+/// 输出走 stderr，不会混进查询结果。
+///
+/// Prints every DDL collected by [`queue_named_type_ddl`] / [`queue_enum_type_ddl`] in one block, and
+/// does nothing when the queue is empty. It is called by the extension entry point
+/// ([`crate::register_all_duckfn`]) once every registration has run, so the whole output is a single
+/// notice: two `-- [duckfn]` hint lines, one DDL per line, and a closing line. One DDL per line keeps
+/// them easy to copy. Going to stderr keeps query results clean.
+pub fn flush_queued_type_ddl() {
+    let statements = {
+        let mut queued = QUEUED_TYPE_DDL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if queued.is_empty() {
+            return;
+        }
+        std::mem::take(&mut *queued)
+    };
+
+    if statements.len() == 1 {
+        eprintln_hint("create_type = \"print\": the statement below was NOT executed.");
+        eprintln_hint("Copy it and run it yourself if you want the type created.");
+    } else {
+        eprintln_hint(&format!(
+            "create_type = \"print\": the {} statements below were NOT executed.",
+            statements.len()
+        ));
+        eprintln_hint("Copy the ones you need and run them yourself.");
+    }
+    for statement in &statements {
+        eprintln!("{statement}");
+    }
+    eprintln_hint("end - nothing above was executed.");
+}
+
+/// ENUM 的逻辑类型；空字典直接报错。
+///
+/// The logical type of an ENUM dictionary; an empty dictionary is an error.
+fn enum_logical_type(name: &str, members: &[&str]) -> DuckResult<LogicalType> {
+    if members.is_empty() {
+        return Err(duck_error(format!(
+            "cannot create ENUM type `{name}`: at least one member is required"
+        )));
+    }
+    Ok(LogicalType::enum_type(members))
+}
+
 /// 在 catalog 里创建一个 ENUM 类型（幂等）。
 ///
 /// [`register_named_type`] 的便捷版本：字典直接给标签列表，不需要先有 `DuckValueType` 实现。
@@ -202,10 +344,24 @@ pub fn register_named_type(
 /// }
 /// ```
 pub fn register_enum_type(connection: &Connection, name: &str, members: &[&str]) -> DuckResult<()> {
-    if members.is_empty() {
-        return Err(duck_error(format!(
-            "cannot create ENUM type `{name}`: at least one member is required"
-        )));
-    }
-    register_named_type(connection, name, LogicalType::enum_type(members))
+    register_named_type(connection, name, enum_logical_type(name, members)?)
+}
+
+/// 渲染 ENUM 的 `CREATE TYPE` DDL 并收进队列：[`queue_named_type_ddl`] 的 ENUM 便捷版本。
+///
+/// [`register_enum_type`] 的「只排队、不执行」对应物，`#[duck(create_type = "print")]` 在枚举上走的
+/// 就是它；字典照样直接给标签列表，不需要先有 `DuckValueType` 实现。
+///
+/// The queueing counterpart of [`register_enum_type`] and the ENUM flavour of
+/// [`queue_named_type_ddl`]; `#[duck(create_type = "print")]` on an enum calls exactly this. The
+/// dictionary is still a plain label list, so no `DuckValueType` implementation is needed.
+///
+/// ```ignore
+/// #[duck_custom_register]
+/// fn queue_my_types(_connection: &Connection) -> DuckResult<()> {
+///     duckfn::queue_enum_type_ddl("color", &["red", "green", "blue"])
+/// }
+/// ```
+pub fn queue_enum_type_ddl(name: &str, members: &[&str]) -> DuckResult<()> {
+    queue_named_type_ddl(name, &enum_logical_type(name, members)?)
 }

@@ -76,7 +76,7 @@ Both derives also accept:
 | Argument | Default | Meaning |
 | --- | --- | --- |
 | `sql_name` | the type name in snake_case | The SQL-side type name (`Priority` → `priority`, `Ticket` → `ticket`). |
-| `create_type` | `false` | Run `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` when the extension loads. |
+| `create_type` | `false` | `true` runs `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` when the extension loads, `"print"` only prints that statement (to stderr), `false` does nothing. |
 
 The statement is idempotent — loading the extension twice is fine — and leaves an existing type of
 that name untouched. It goes through the same execution path as the SQL macros (`duckdb_query`). An
@@ -95,6 +95,49 @@ pub struct Ticket {
 // CREATE TYPE IF NOT EXISTS "ticket" AS
 //   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
 ```
+
+With `create_type = "print"` the macro renders that very same statement but creates nothing. The DDL
+is queued and printed **once**, after every registration has run, so an extension with a dozen
+print-mode types still gets a single notice instead of a dozen hints. The block is framed by
+`-- [duckfn]` comments saying it was *not* executed, which keeps it copy-pasteable as SQL and makes a
+bare DDL line impossible to mistake for something that actually happened:
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = "print")]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,
+}
+```
+
+```
+-- [duckfn] create_type = "print": the statement below was NOT executed.
+-- [duckfn] Copy it and run it yourself if you want the type created.
+CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'));
+-- [duckfn] end - nothing above was executed.
+```
+
+Keep `create_type = false` (the default) when the macro should stay out of the way entirely, and
+print the DDL yourself — from `#[duck_custom_register]`, with wording of your own:
+
+```rust
+#[duck_custom_register]
+fn show_the_create_type_ddl(_connection: &Connection) -> DuckResult<()> {
+    // `create_type = false`: showing the DDL — and what it means — is up to you
+    let ddl = duckfn::named_type_ddl("ticket", &Ticket::logical_type())?;
+    duckfn::print_sql_preview(
+        "my extension will NOT create this type",
+        &ddl,
+        "end - copy the statement above and run it yourself if you want it",
+    );
+    Ok(())
+}
+```
+
+An enum works the same way — `duckfn::named_type_ddl("priority", &Priority::logical_type())` (its
+`logical_type()` already carries the dictionary), or `duckfn::register_enum_type` /
+`duckfn::queue_enum_type_ddl` for a hand-written label list.
 
 SQL can then use `ticket` as a type — a column type or a cast target — even though the functions are
 registered with the equivalent structural type; the two are interchangeable. See

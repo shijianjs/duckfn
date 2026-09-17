@@ -1,5 +1,5 @@
 # name: test/sql/types/duck_struct_create_type.test
-# description: #[derive(DuckStruct)] 的 create_type：加载期建命名 STRUCT 类型，字段类型（含 ENUM / DECIMAL / LIST / ARRAY / MAP / 嵌套 STRUCT）由逻辑类型渲染
+# description: #[derive(DuckStruct)] 的 create_type：加载期建命名 STRUCT 类型（字段类型含 ENUM / DECIMAL / LIST / ARRAY / MAP / 嵌套 STRUCT，由逻辑类型渲染），以及 "print" 模式只打印不建类型
 # group: [types]
 
 require rusty_quack
@@ -98,3 +98,35 @@ query T
 SELECT CAST(v::ticket AS VARCHAR) IS NOT NULL FROM tickets;
 ----
 true
+
+# ============================================================================
+# create_type = "print"：加载期只打印 DDL，不建类型
+#
+# 打印的是与 create_type = true 完全相同的那条语句：
+#   CREATE TYPE IF NOT EXISTS "preview_ticket" AS
+#     STRUCT("id" BIGINT, "name" VARCHAR);
+# 只是不执行 —— 所以 catalog 里查不到 preview_ticket。
+# ============================================================================
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'preview_ticket';
+----
+0
+
+# 对照：真正的 create_type = true 会建出类型
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'ticket';
+----
+1
+
+# 打印模式不影响结构体作为 STRUCT 值类型（匿名 STRUCT(...)）使用
+#（`name` 是关键字，DuckDB 渲染 typeof 时会给它加引号）
+query T
+SELECT typeof(dfn_echo_struct_preview_ticket({'id': 1, 'name': 'a'}));
+----
+STRUCT(id BIGINT, "name" VARCHAR)
+
+query T
+SELECT CAST((dfn_echo_struct_preview_ticket({'id': 1, 'name': 'a'})).name AS VARCHAR);
+----
+a

@@ -209,6 +209,10 @@ SELECT dfn_echo_struct_ticket(v) FROM tickets;   -- 函数用的是等价的结�
 `Option<T>` 也不会改变类型文本，因为可空性不是 DuckDB 类型的一部分。语句是幂等的，`LOAD` 两次没问题，
 已存在的同名类型也不会被覆盖。
 
+把 `create_type = true` 换成 `create_type = "print"`，渲染的是**同一条**语句，但不建类型：
+DDL 先收进队列，等全部注册跑完再一次性打印（带 `-- [duckfn]` 提示框、写明没有执行，可直接复制去跑）。见
+[属性参考 → 在 catalog 里建命名类型](./attributes.md#在-catalog-里建命名类型)。
+
 ## 容器的组合
 
 各类容器可以自由组合：结构体字段可以是列表或映射，列表元素可以是结构体，映射的值可以是另一个映射：
@@ -272,6 +276,7 @@ pub enum Priority {
   `Option<Priority>` 表示可空；
 - `create_type = true` 还会在扩展加载时执行 `CREATE TYPE IF NOT EXISTS "priority" AS ENUM (...)` ——
   幂等，且不会覆盖已存在的同名类型 —— 之后 SQL 里可以直接写 `'high'::priority`，也能把列声明成 `priority`；
+  `create_type = "print"` 渲染的是同一条语句，但只打印到 stderr，catalog 不受影响；
 - 与其它参数一样，**非可空**的枚举参数需要 `Default`（宏生成的参数结构体会 `derive(Default)`），
   所以例子里有 `#[derive(Default)]` + `#[default]`。
 

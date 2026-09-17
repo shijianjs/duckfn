@@ -3,7 +3,7 @@
 //! Implementation of `#[derive(DuckStruct)]`: maps every field of a named struct onto a column /
 //! a STRUCT child field.
 
-use crate::attr_args::DuckFunctionMacroArgs;
+use crate::attr_args::{CreateTypeMode, DuckFunctionMacroArgs};
 use crate::macro_utils::{TokenStream2Result, to_snake_case};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
@@ -117,10 +117,10 @@ impl DuckStructContext {
         &self.input.ident
     }
 
-    /// 生成全部代码：`DuckStructTrait` 实现，以及（`create_type = true` 时）加载期建类型的注册。
+    /// 生成全部代码：`DuckStructTrait` 实现，以及（`create_type` 不为 `false` 时）加载期处理命名类型的注册。
     ///
-    /// Generates all the code: the `DuckStructTrait` implementation plus — for `create_type = true`
-    /// — the load-time type registration.
+    /// Generates all the code: the `DuckStructTrait` implementation plus — unless `create_type` is
+    /// `false` — the load-time handling of the named type.
     fn build_all(&self) -> TokenStream2Result {
         let impl_ts = self.build_duck_struct_impl()?;
         let type_registration = self.build_type_registration()?;
@@ -130,24 +130,28 @@ impl DuckStructContext {
         })
     }
 
-    /// 生成「加载期创建命名 STRUCT 类型」的注册函数与 inventory 提交。
+    /// 生成「加载期处理命名 STRUCT 类型」的注册函数与 inventory 提交。
     ///
-    /// 只在 `#[duck(create_type = true)]` 时生成：字段类型不在这里拼 SQL —— 注册函数把
+    /// 只在 `#[duck(create_type = ...)]` 不是 `false` 时生成：字段类型不在这里拼 SQL —— 注册函数把
     /// `<Self as DuckValueType>::logical_type()`（也就是引擎眼里的那个 STRUCT 逻辑类型）交给
-    /// [`duckfn::register_named_type`]，由它递归渲染成 SQL，因此自定义字段类型同样适用。
+    /// [`duckfn::register_named_type`]，由它递归渲染成 SQL 并建类型，因此自定义字段类型同样适用；
+    /// `"print"` 模式则把同一份渲染结果交给 `duckfn::queue_named_type_ddl`，收进队列、由入口点统一打印。
     ///
-    /// Generates the registration function and the inventory submission that create the named
-    /// STRUCT type at load time. Only emitted for `#[duck(create_type = true)]`. The field types are
-    /// not assembled here: the registrar hands `<Self as DuckValueType>::logical_type()` to
-    /// `duckfn::register_named_type`, which renders it recursively — so custom field types work.
+    /// Generates the registration function and the inventory submission that handle the named
+    /// STRUCT type at load time; emitted for every `create_type` other than `false`. The field types
+    /// are not assembled here: the registrar hands `<Self as DuckValueType>::logical_type()` to
+    /// `duckfn::register_named_type`, which renders it recursively and creates the type — so custom
+    /// field types work. The `"print"` mode hands the very same rendering to
+    /// `duckfn::queue_named_type_ddl`, which queues it for the entry point to print as one block.
     fn build_type_registration(&self) -> TokenStream2Result {
-        if !self.macro_args.args.create_type.unwrap_or(false) {
+        let create_type = self.macro_args.args.create_type.unwrap_or_default();
+        if create_type == CreateTypeMode::Off {
             return Ok(quote!());
         }
         if let Some(param) = self.input.generics.params.first() {
             return Err(syn::Error::new(
                 param.span(),
-                "`#[duck(create_type = true)]` is not supported on a generic struct: the SQL type \
+                "`#[duck(create_type = ...)]` is not supported on a generic struct: the SQL type \
                  must be concrete",
             ));
         }
@@ -160,21 +164,35 @@ impl DuckStructContext {
             .sql_name
             .clone()
             .unwrap_or_else(|| to_snake_case(&struct_name.to_string()));
-
-        Ok(quote! {
-            #[allow(non_snake_case)]
-            mod #module_ident {
+        let logical_type = quote! {
+            <super::#struct_name as ::duckfn::DuckValueType>::logical_type()
+        };
+        let register = match create_type {
+            CreateTypeMode::Create => quote! {
                 /// 加载期把 STRUCT 类型建进 catalog（`CREATE TYPE IF NOT EXISTS ...`，幂等）。
                 ///
                 /// Creates the STRUCT type in the catalog at load time (`CREATE TYPE IF NOT
                 /// EXISTS ...`, idempotent).
                 pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
-                    ::duckfn::register_named_type(
-                        connection,
-                        #sql_name,
-                        <super::#struct_name as ::duckfn::DuckValueType>::logical_type(),
-                    )
+                    ::duckfn::register_named_type(connection, #sql_name, #logical_type)
                 }
+            },
+            CreateTypeMode::Print => quote! {
+                /// 加载期把建类型的 DDL 收进队列（不建类型）；全部注册跑完后由入口点一次性打印。
+                ///
+                /// Queues the `CREATE TYPE IF NOT EXISTS ...` statement at load time (the type is
+                /// not created); the entry point prints the collected batch afterwards.
+                pub fn register(_connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
+                    ::duckfn::queue_named_type_ddl(#sql_name, &#logical_type)
+                }
+            },
+            CreateTypeMode::Off => return Ok(quote!()),
+        };
+
+        Ok(quote! {
+            #[allow(non_snake_case)]
+            mod #module_ident {
+                #register
             }
 
             ::duckfn::inventory_submit! {

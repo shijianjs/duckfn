@@ -36,19 +36,38 @@ inventory::collect!(DuckFunctionItem);
 ///
 /// 顺序为：先按提交顺序执行所有 `DuckFunctionItem`（标量函数、表函数、cast、SQL 宏、
 /// replacement scan、自定义注册等），再分组注册聚合函数集重载，最后分组注册标量函数集
-/// 重载。
+/// 重载。全部跑完后统一把 `create_type = "print"` 收集到的 DDL 打印一次（见
+/// [`crate::flush_queued_type_ddl`]）—— 入口点在这里，所以一批 `"print"` 类型只有一块提示。
 ///
 /// Registers every DuckDB function collected by this extension (the extension init entry
 /// point). It first runs all `DuckFunctionItem`s in submission order (scalar functions,
 /// table functions, casts, SQL macros, replacement scans, custom registrations, ...), then
-/// registers the aggregate overload sets and finally the scalar overload sets.
+/// registers the aggregate overload sets and finally the scalar overload sets. Once everything has
+/// run it flushes the DDL collected by `create_type = "print"` in one go (see
+/// [`crate::flush_queued_type_ddl`]) — this is the entry point, so a batch of print-mode types
+/// yields a single notice.
 ///
 /// # Errors
 ///
-/// 任一注册步骤失败时立即返回该错误，后续函数不再注册。
+/// 任一注册步骤失败时立即返回该错误，后续函数不再注册（收集到的 DDL 仍会打印出来）。
 ///
-/// Returns the first error encountered; remaining functions are then left unregistered.
+/// Returns the first error encountered; remaining functions are then left unregistered (the
+/// collected DDL is printed either way).
 pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
+    let result = register_collected_items(connection);
+    // 注册失败也把 `create_type = "print"` 的 DDL 打出来：它只是「预览」，与注册成败无关，
+    // 出问题时反而更需要看到。
+    //
+    // Flush the `create_type = "print"` DDL even when registration failed: it is only a preview,
+    // independent of the outcome — and all the more useful when something went wrong.
+    crate::flush_queued_type_ddl();
+    result
+}
+
+/// [`register_all_duckfn`] 的实际注册流程；收尾（打印 `create_type = "print"` 的 DDL）由调用方负责。
+///
+/// The actual registration pass; the caller takes care of the flush afterwards.
+fn register_collected_items(connection: &Connection) -> DuckResult<()> {
     for item in inventory::iter::<DuckFunctionItem>() {
         (item.register_fn)(connection)?;
     }

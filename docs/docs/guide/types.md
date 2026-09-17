@@ -218,6 +218,11 @@ recursively (through DuckDB's own type introspection), so enums, nested structs,
 type text, because nullability is not part of a DuckDB type. The statement is idempotent, so loading
 the extension twice is fine and a type of that name that already exists is left untouched.
 
+Write `create_type = "print"` instead of `true` to render that same statement without creating
+anything: the DDL is printed once, after every registration has run, inside a `-- [duckfn]` frame
+that says it was *not* executed — easy to inspect, and to copy and run. See
+[Attributes → Named types in the catalog](./attributes.md#named-types-in-the-catalog).
+
 ## Containers of containers
 
 The containers compose. A struct field may be a list or a map, a list may hold structs, a map value
@@ -287,7 +292,8 @@ pub enum Priority {
   field or a container element, and `Option<Priority>` makes it nullable;
 - `create_type = true` additionally runs `CREATE TYPE IF NOT EXISTS "priority" AS ENUM (...) ` when the
   extension loads — idempotent, and it leaves an existing type of that name alone — so SQL can write
-  `'high'::priority` and use `priority` as a column type;
+  `'high'::priority` and use `priority` as a column type; `create_type = "print"` renders that same
+  statement but only prints it to stderr, leaving the catalog untouched;
 - as with any argument, a **non-nullable** enum parameter needs `Default` (the generated argument
   struct derives it), hence the `#[derive(Default)]` + `#[default]` in the example.
 

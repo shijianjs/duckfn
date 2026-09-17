@@ -119,3 +119,39 @@ pub enum Channel {
 fn dfn_echo_channel(c: Channel) -> Channel {
     c
 }
+
+// ============================================================================
+// create_type = "print"：加载期只收集建类型的 DDL，不建类型
+//
+// `"print"` 渲染的是与 `create_type = true` 完全相同的那条语句（同一个
+// `duckfn::named_type_ddl`），只是收进队列、不执行；等全部注册项跑完，入口点
+// （`duckfn::register_all_duckfn`）把这一批一次性打到 stderr —— 可以先看看宏会生成什么
+// SQL、再决定要不要真的建类型。所以下面的 `severity` **不会**出现在 `duckdb_types()` 里。
+// ============================================================================
+
+/// 打印模式：`#[duck(create_type = "print")]`。
+///
+/// 扩展 `LOAD` 结束时会和其它 `"print"` 类型一起打印
+/// `CREATE TYPE IF NOT EXISTS "severity" AS ENUM('info', 'warn', 'error');`，但不建类型。
+///
+/// Print mode: once the extension has loaded, `CREATE TYPE IF NOT EXISTS "severity" AS
+/// ENUM('info', 'warn', 'error');` shows up in the batch printed to stderr, without creating the
+/// type.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+#[duck(rename_all = "lowercase", sql_name = "severity", create_type = "print")]
+pub enum Severity {
+    #[default]
+    Info,
+    Warn,
+    Error,
+}
+
+/// 打印模式只影响「建不建类型」：枚举作为值类型照常可用（常量字符串会被隐式转换过来）。
+///
+/// ```sql
+/// SELECT dfn_echo_severity('warn');
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_severity(s: Severity) -> Severity {
+    s
+}

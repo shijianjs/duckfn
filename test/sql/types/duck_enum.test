@@ -1,5 +1,5 @@
 # name: test/sql/types/duck_enum.test
-# description: #[derive(DuckEnum)] 生成的 ENUM：字典与命名规则、读写往返、NULL、STRUCT 字段、表函数 bind 路径，以及 create_type 建类型
+# description: #[derive(DuckEnum)] 生成的 ENUM：字典与命名规则、读写往返、NULL、STRUCT 字段、表函数 bind 路径，以及 create_type 建类型 / "print" 只打印
 # group: [types]
 
 require rusty_quack
@@ -33,6 +33,36 @@ query T
 SELECT CAST('high'::priority AS VARCHAR);
 ----
 high
+
+# ============================================================================
+# create_type = "print"：加载期只把 DDL 打印到 stderr，不建类型
+#
+# 渲染的是与 create_type = true 完全相同的那条语句：
+#   CREATE TYPE IF NOT EXISTS "severity" AS ENUM ('info', 'warn', 'error');
+# 只是不执行 —— 所以 catalog 里查不到 severity，但枚举本身照常可用。
+# ============================================================================
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'severity';
+----
+0
+
+# 仅用于对照：true 模式建的 priority 确实存在
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'priority';
+----
+1
+
+query T
+SELECT typeof(dfn_echo_severity('info'));
+----
+ENUM('info', 'warn', 'error')
+
+# 常量字符串会被隐式转换成参数所需的 ENUM
+query T
+SELECT CAST(dfn_echo_severity('warn') AS VARCHAR);
+----
+warn
 
 # ============================================================================
 # 字典与命名规则：rename_all = "lowercase"

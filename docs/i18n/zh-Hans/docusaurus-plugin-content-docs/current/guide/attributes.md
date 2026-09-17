@@ -73,7 +73,7 @@ pub enum Priority {
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
 | `sql_name` | 类型名的小写蛇形 | SQL 侧类型名（`Priority` → `priority`、`Ticket` → `ticket`）。 |
-| `create_type` | `false` | 扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`。 |
+| `create_type` | `false` | `true`：扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`；`"print"`：只把该语句打印到 stderr；`false`：什么都不做。 |
 
 语句是幂等的 —— `LOAD` 两次也没问题 —— 且不会覆盖已存在的同名类型；执行路径与 SQL 宏相同
 （`duckdb_query`）。枚举建成 `ENUM(...)`，结构体建成 `STRUCT(...)`，而结构体的字段类型是从 DuckDB
@@ -91,6 +91,48 @@ pub struct Ticket {
 // CREATE TYPE IF NOT EXISTS "ticket" AS
 //   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
 ```
+
+`create_type = "print"` 渲染的是**完全相同**的那条语句，只是不注册进 catalog。DDL 会先被收进
+队列，等全部注册项跑完再**一次性**打出来 —— 所以哪怕有十几个 `"print"` 类型，也只有一块提示，
+不会每个类型重复一遍「未执行 / 可手动执行」。提示行用 `-- [duckfn]` 开头（SQL 注释），
+整块直接复制出去就能跑，也不会再出现「一行孤零零的 DDL、看不出到底跑没跑」的歧义：
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = "print")]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,
+}
+```
+
+```
+-- [duckfn] create_type = "print": the statement below was NOT executed.
+-- [duckfn] Copy it and run it yourself if you want the type created.
+CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'));
+-- [duckfn] end - nothing above was executed.
+```
+
+如果希望宏完全不介入、DDL 与提示都由自己安排，就保持默认的 `create_type = false`，在
+`#[duck_custom_register]` 里自己打印 —— 用现成的 `duckfn::named_type_ddl` 渲染、
+用 `duckfn::print_sql_preview` 加自己的说明：
+
+```rust
+#[duck_custom_register]
+fn show_the_create_type_ddl(_connection: &Connection) -> DuckResult<()> {
+    // create_type = false：要不要亮出 DDL、配什么说明，全部由作者决定
+    let ddl = duckfn::named_type_ddl("ticket", &Ticket::logical_type())?;
+    duckfn::print_sql_preview(
+        "my extension will NOT create this type",
+        &ddl,
+        "end - copy the statement above and run it yourself if you want it",
+    );
+    Ok(())
+}
+```
+
+枚举同理：`duckfn::named_type_ddl("priority", &Priority::logical_type())`（`logical_type()` 本身就
+带字典），或者用 `duckfn::register_enum_type` / `duckfn::queue_enum_type_ddl` 直接给标签列表。
 
 之后 SQL 里就能直接把 `ticket` 当类型用（列类型、cast 目标），而函数注册用的仍是等价的结构化类型 ——
 两者可以互相转换。见[类型 → 枚举](./types.md#枚举)与[类型 → 结构体](./types.md#结构体)。

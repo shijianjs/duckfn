@@ -106,20 +106,78 @@ pub(crate) struct DuckFunctionMacroArgs {
     /// `create_type` and in error messages.
     pub sql_name: Option<String>,
 
-    /// `#[duck(create_type = true)]`（`#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`）：
-    /// 加载期执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`，默认 `false`。
+    /// `#[duck(create_type = ...)]`（`#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`）：
+    /// 加载期如何处理这个命名类型，默认 `false`（什么都不做）。取值见 [`CreateTypeMode`]：
+    ///
+    /// - `true`：执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`；
+    /// - `"print"`：把同一条 DDL 收进队列，**不**建类型；等全部注册项跑完，扩展入口点把这一批
+    ///   （`"print"` 的全部类型）一次性打印到 stderr。
     ///
     /// 语句是幂等的（`LOAD` 多次也不会报错），且不会覆盖已存在的同名类型；执行路径与 SQL 宏相同
     /// （`duckdb_query`）。STRUCT 的字段类型由 DuckDB 自己的逻辑类型渲染成 SQL，因此自定义字段
     /// 类型（含手写的 `DuckValueType`）同样适用。
     ///
-    /// `#[duck(create_type = true)]` (on `#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`): run
-    /// `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` at load time; defaults to `false`. The
-    /// statement is idempotent (loading the extension twice is fine) and leaves a pre-existing type
-    /// untouched; it goes through the SQL-macro execution path (`duckdb_query`). A STRUCT's field
-    /// types are rendered from DuckDB's own logical types, so custom field types — hand-written
+    /// `#[duck(create_type = ...)]` (on `#[derive(DuckEnum)]` / `#[derive(DuckStruct)]`): how the
+    /// named type is handled at load time; defaults to `false` (nothing happens). See
+    /// [`CreateTypeMode`]: `true` runs `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` while
+    /// `"print"` queues that same DDL without creating the type — the entry point prints the whole
+    /// batch (every print-mode type) in one block once every registration has run. The statement is
+    /// idempotent (loading the extension twice is fine) and leaves a pre-existing type untouched; it
+    /// goes through the SQL-macro execution path (`duckdb_query`). A STRUCT's field types are
+    /// rendered from DuckDB's own logical types, so custom field types — hand-written
     /// `DuckValueType` implementations included — work too.
-    pub create_type: Option<bool>,
+    pub create_type: Option<CreateTypeMode>,
+}
+
+/// `#[duck(create_type = ...)]` 的取值。
+///
+/// 「打印」模式（`create_type = "print"`）只把宏会执行的 DDL 收进队列、**不**进 catalog；等全部
+/// 注册项跑完，入口点把这一批一次性打到 stderr —— 可以先看看渲染出来的 SQL 长什么样、再决定要不要
+/// 真的建类型，也可以把语句抄走自己执行。
+///
+/// The values `#[duck(create_type = ...)]` accepts. The print mode
+/// (`create_type = "print"`) queues the very DDL the macro would run without touching the catalog,
+/// and the entry point prints the collected batch in one block once every registration has run — so
+/// the rendered statements can be inspected and copied before committing to them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum CreateTypeMode {
+    /// `create_type = false`（默认）：不建类型、不打印。
+    ///
+    /// `create_type = false` (the default): neither create nor print.
+    #[default]
+    Off,
+    /// `create_type = true`：加载期执行 `CREATE TYPE IF NOT EXISTS ...`。
+    ///
+    /// `create_type = true`: run `CREATE TYPE IF NOT EXISTS ...` at load time.
+    Create,
+    /// `create_type = "print"`：把 `CREATE TYPE IF NOT EXISTS ...` 收进队列，由入口点统一打印；不建类型。
+    ///
+    /// `create_type = "print"`: queue `CREATE TYPE IF NOT EXISTS ...` for the entry point to print
+    /// as one block; the type is not created.
+    Print,
+}
+
+impl FromMeta for CreateTypeMode {
+    /// `create_type = true` / `create_type = false`。
+    ///
+    /// `create_type = true` / `create_type = false`.
+    fn from_bool(value: bool) -> darling::Result<Self> {
+        Ok(if value {
+            CreateTypeMode::Create
+        } else {
+            CreateTypeMode::Off
+        })
+    }
+
+    /// `create_type = "print"`。
+    ///
+    /// `create_type = "print"`.
+    fn from_string(value: &str) -> darling::Result<Self> {
+        Ok(match value {
+            "print" => CreateTypeMode::Print,
+            other => return Err(darling::Error::unknown_value(other)),
+        })
+    }
 }
 
 /// 变体名 → SQL 字典标签的命名规则（`#[duck(rename_all = "...")]`）。

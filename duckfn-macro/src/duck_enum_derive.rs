@@ -12,7 +12,7 @@
 //! struct derive already own a blanket `impl<T: …> DuckValueType for T` each, and a third one
 //! would conflict with them (E0119).
 
-use crate::attr_args::DuckEnumMacroArgs;
+use crate::attr_args::{CreateTypeMode, DuckEnumMacroArgs};
 use crate::macro_utils::{TokenStream2Result, to_snake_case};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
@@ -25,14 +25,15 @@ use syn::{Data, DeriveInput, Fields, Variant};
 /// 校验「是 enum、没有泛型、至少一个成员、成员都是单元变体、标签不重复」，然后生成：
 ///
 /// - 一个私有辅助模块：字典 `MEMBERS`、`index` / `from_index` / `from_label`，以及（当
-///   `create_type = true` 时）加载期建类型的注册函数；
+///   `create_type` 不为 `false` 时）加载期处理命名类型的函数 —— `true` 建类型，`"print"` 把 DDL 收进队列；
 /// - `DuckValueType` 实现：逻辑类型是带字典的 ENUM，读写只搬运下标，bind 阶段按标签匹配；
-/// - 当 `create_type = true` 时，把注册函数提交给 `inventory`（与其它宏一样的自动注册机制）。
+/// - 当 `create_type` 不为 `false` 时，把该函数提交给 `inventory`（与其它宏一样的自动注册机制）。
 ///
 /// Entry point of `#[derive(DuckEnum)]`. After validating the shape it generates a private helper
-/// module (dictionary plus index/label conversions, and the load-time registration when
-/// `create_type = true`), the `DuckValueType` implementation and — again for `create_type` — the
-/// `inventory` submission that every other macro uses to auto-register.
+/// module (dictionary plus index/label conversions, and the load-time handling of the named type
+/// when `create_type` is not `false` — `true` creates it, `"print"` queues the DDL), the
+/// `DuckValueType` implementation and — again when `create_type` is not `false` — the `inventory`
+/// submission that every other macro uses to auto-register.
 ///
 /// # Errors
 ///
@@ -95,13 +96,14 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
         .unwrap_or_else(|| to_snake_case(&enum_ident.to_string()));
     let indexes: Vec<u32> = (0..variants.len() as u32).collect();
 
-    // `create_type = true` 时才生成注册函数与 inventory 提交。
+    // `create_type` 不为 `false` 时才生成注册函数与 inventory 提交：`true` 建类型，`"print"` 只打印 DDL。
     //
-    // The registration function and the inventory submission only exist for `create_type = true`.
-    let create_type = macro_args.args.create_type.unwrap_or(false);
+    // The registration function and the inventory submission only exist for a `create_type` other
+    // than `false`: `true` creates the type, `"print"` only prints the DDL.
+    let create_type = macro_args.args.create_type.unwrap_or_default();
 
-    let register = create_type.then(|| {
-        quote! {
+    let register = match create_type {
+        CreateTypeMode::Create => Some(quote! {
             /// 加载期把 ENUM 类型建进 catalog（`CREATE TYPE IF NOT EXISTS ...`，幂等）。
             ///
             /// Creates the ENUM type in the catalog at load time (`CREATE TYPE IF NOT
@@ -109,10 +111,20 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
             pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
                 ::duckfn::register_enum_type(connection, #sql_name, MEMBERS)
             }
-        }
-    });
+        }),
+        CreateTypeMode::Print => Some(quote! {
+            /// 加载期把建类型的 DDL 收进队列（不建类型）；全部注册跑完后由入口点一次性打印。
+            ///
+            /// Queues the `CREATE TYPE IF NOT EXISTS ...` statement at load time (the type is not
+            /// created); the entry point prints the collected batch afterwards.
+            pub fn register(_connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
+                ::duckfn::queue_enum_type_ddl(#sql_name, MEMBERS)
+            }
+        }),
+        CreateTypeMode::Off => None,
+    };
 
-    let submit = create_type.then(|| {
+    let submit = register.as_ref().map(|_| {
         quote! {
             ::duckfn::inventory_submit! {
                 ::duckfn::DuckFunctionItem {

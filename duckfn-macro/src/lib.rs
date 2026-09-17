@@ -61,6 +61,8 @@ use crate::attr_args::handle_duck_function;
 /// 命名类型：`CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)`。字段类型不是宏写死的 —— 注册时把整
 /// 个结构体的 `LogicalType` 递归渲染成 SQL（走 DuckDB 的类型 introspection），因此枚举、嵌套结构体、
 /// LIST / ARRAY / MAP、DECIMAL 与手写的自定义字段类型都能自动带上；语句幂等，`LOAD` 多次不会报错。
+/// 把 `true` 换成 `"print"` 则不建类型：DDL 被收进队列，等全部注册项跑完由入口点一次性打印出来，
+/// 方便先看看宏会生成什么。
 ///
 /// Maps a named struct onto a DuckDB `STRUCT` (nested LIST / MAP / ARRAY / STRUCT are
 /// supported). The generated implementations let the struct be used as scalar-function
@@ -76,7 +78,9 @@ use crate::attr_args::handle_duck_function;
 /// catalog at load time (`CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT(...)`). The field types are
 /// not hard-coded: the struct's `LogicalType` is rendered recursively through DuckDB's own type
 /// introspection, so enums, nested structs, LIST / ARRAY / MAP, DECIMAL and hand-written custom
-/// field types all come along. The statement is idempotent.
+/// field types all come along. The statement is idempotent. Replacing `true` with `"print"` does not
+/// create the type: the DDL is queued and the entry point prints the whole batch once every
+/// registration has run, which is handy for previewing what the macro would run.
 #[proc_macro_derive(DuckStruct, attributes(duck))]
 pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
@@ -109,9 +113,10 @@ pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
 ///   `snake_case` / `SCREAMING_SNAKE_CASE` / `camelCase` / `PascalCase` / `kebab-case` /
 ///   `SCREAMING-KEBAB-CASE` / `verbatim`），默认原样使用变体名；
 /// - `sql_name = "..."`：SQL 侧类型名，默认是类型名的小写蛇形（`Priority` -> `priority`）；
-/// - `create_type = true`：加载期执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`，
-///   默认 `false`。语句幂等（重复 `LOAD` 不报错），也不会覆盖已存在的同名类型，执行路径与
-///   SQL 宏相同（`duckdb_query`）；
+/// - `create_type`：`true` 在加载期执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS ENUM (...)`，
+///   `"print"` 则不建类型、只把同一条 DDL 收进队列，由入口点在全部注册跑完后一次性打印；
+///   默认 `false` 什么都不做。语句幂等（重复 `LOAD` 不报错），也不会覆盖已存在的同名类型，
+///   执行路径与 SQL 宏相同（`duckdb_query`）；
 /// - 变体级 `#[duck(rename = "...")]`：单独覆盖某个变体的标签。
 ///
 /// 约束：必须是 enum、不能带泛型、至少一个变体、变体不能带数据、标签不能重复。
@@ -128,11 +133,13 @@ pub fn duck_struct_derive(input: TokenStream) -> TokenStream {
 ///
 /// `#[duck(...)]` arguments: `rename_all = "..."` for the variant-name-to-label rule,
 /// `sql_name = "..."` for the SQL-side type name (defaults to the lowercase snake_case of the Rust
-/// name), and `create_type = true` to run `CREATE TYPE IF NOT EXISTS ...` at load time
-/// (idempotent, leaves an existing type untouched, same execution path as the SQL macros). A single
-/// variant can override its label with `#[duck(rename = "...")]`. The input must be a non-generic
-/// enum with at least one data-free variant and distinct labels; a non-nullable function argument
-/// additionally needs `Default`.
+/// name), and `create_type` — `true` runs `CREATE TYPE IF NOT EXISTS ...` at load time while
+/// `"print"` creates nothing: it queues that same DDL for the entry point to print as one batch
+/// after every registration, and `false` (the default) does nothing (idempotent, leaves an existing
+/// type untouched, same execution path as the SQL macros). A single variant can override its label
+/// with `#[duck(rename = "...")]`. The input
+/// must be a non-generic enum with at least one data-free variant and distinct labels; a
+/// non-nullable function argument additionally needs `Default`.
 #[proc_macro_derive(DuckEnum, attributes(duck))]
 pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
     let derive_input = parse_macro_input!(input as DeriveInput);
