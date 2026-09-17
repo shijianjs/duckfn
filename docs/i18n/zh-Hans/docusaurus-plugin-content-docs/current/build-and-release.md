@@ -88,7 +88,7 @@ jobs:
 
 ## 发布 crate
 
-两个库 crate 按依赖顺序发布 —— `duckfn` 依赖 `duckfn-macro = "=0.0.3"`，所以宏 crate 必须先上 crates.io：
+两个库 crate 按依赖顺序发布 —— `duckfn` 依赖 `duckfn-macro = "=0.0.4"`，所以宏 crate 必须先上 crates.io：
 
 ```bash
 just publish_dry   # 先 cargo publish -p duckfn-macro --dry-run，再 -p duckfn
@@ -99,7 +99,7 @@ just publish
 
 ```toml
 [workspace.package]
-version = "0.0.3"
+version = "0.0.4"
 rust-version = "1.86"
 ```
 

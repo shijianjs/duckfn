@@ -36,7 +36,7 @@ C/C++ glue code, and no local DuckDB build required.
 
 ```toml
 [dependencies]
-duckfn = "0.0.3"
+duckfn = "0.0.4"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
@@ -55,7 +55,7 @@ re-exported by `duckfn` and no extra dependency is needed.
 (currently `TIME_NS`):
 
 ```toml
-duckfn = { version = "0.0.3", features = ["duckdb-1-5"] }
+duckfn = { version = "0.0.4", features = ["duckdb-1-5"] }
 ```
 
 ## Quick start

@@ -94,7 +94,7 @@ So bumping the version is: tag `vX.Y.Z`, push the tag, and wait for both jobs.
 ## Publishing the crates
 
 The two library crates are published in dependency order — `duckfn` depends on
-`duckfn-macro = "=0.0.3"`, so the macro crate has to exist on crates.io first:
+`duckfn-macro = "=0.0.4"`, so the macro crate has to exist on crates.io first:
 
 ```bash
 just publish_dry   # cargo publish -p duckfn-macro --dry-run, then -p duckfn
@@ -105,7 +105,7 @@ Versions come from the workspace:
 
 ```toml
 [workspace.package]
-version = "0.0.3"
+version = "0.0.4"
 rust-version = "1.86"
 ```
 

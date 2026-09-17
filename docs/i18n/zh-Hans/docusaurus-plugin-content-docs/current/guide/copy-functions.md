@@ -22,7 +22,7 @@ COPY orders FROM 'orders.tsv' (FORMAT dfn_copy_tsv_from);
 COPY 函数来自 DuckDB 1.5.0 起的 C API，因此需要 `duckfn` 的 `duckdb-1-5` feature：
 
 ```toml
-duckfn = { version = "0.0.3", features = ["duckdb-1-5"] }
+duckfn = { version = "0.0.4", features = ["duckdb-1-5"] }
 ```
 :::
 
