@@ -89,13 +89,13 @@ pub fn dfn_macro_concat() -> SqlMacro {
 // 返回类型 2/4：-> DuckResult<SqlMacro>（构造失败可冒泡）
 // ============================================================================
 
-/// `?` 把 `SqlMacro::scalar` 的 ExtensionError 直接交给注册流程
+/// 返回 `DuckResult<SqlMacro>`：`SqlMacro::scalar` 的构造错误直接作为返回值冒泡给注册流程
 /// ```sql
 /// SELECT dfn_macro_add(2, 3);
 /// ```
 #[duck_sql_macro]
 pub fn dfn_macro_add() -> DuckResult<SqlMacro> {
-    Ok(SqlMacro::scalar("dfn_macro_add", &["a", "b"], "a + b")?)
+    SqlMacro::scalar("dfn_macro_add", &["a", "b"], "a + b")
 }
 
 /// 表宏：`AS TABLE`，参数是标量（DuckDB 的表宏参数由 body 里的用法决定）
@@ -104,7 +104,7 @@ pub fn dfn_macro_add() -> DuckResult<SqlMacro> {
 /// ```
 #[duck_sql_macro]
 pub fn dfn_macro_gen() -> DuckResult<SqlMacro> {
-    Ok(SqlMacro::table("dfn_macro_gen", &["n"], "SELECT * FROM range(n)")?)
+    SqlMacro::table("dfn_macro_gen", &["n"], "SELECT * FROM range(n)")
 }
 
 /// 零参数表宏
@@ -113,11 +113,7 @@ pub fn dfn_macro_gen() -> DuckResult<SqlMacro> {
 /// ```
 #[duck_sql_macro]
 pub fn dfn_macro_constants() -> DuckResult<SqlMacro> {
-    Ok(SqlMacro::table(
-        "dfn_macro_constants",
-        &[],
-        "SELECT 1 AS one, 'x' AS s",
-    )?)
+    SqlMacro::table("dfn_macro_constants", &[], "SELECT 1 AS one, 'x' AS s")
 }
 
 // ============================================================================

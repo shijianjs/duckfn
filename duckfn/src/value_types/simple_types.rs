@@ -10,7 +10,6 @@ use crate::DuckResult;
 ///
 /// `bool` ↔ `BOOLEAN`.
 // TypeId::Boolean
-
 impl DuckValueType for bool {
     fn type_id() -> TypeId {
         TypeId::Boolean

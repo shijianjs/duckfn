@@ -128,7 +128,6 @@ inventory::collect!(DuckAggregateOverloadItem);
 pub fn register_all_aggregate_overload(connection: &Connection) -> DuckResult<()> {
     let map: HashMap<&'static str, Vec<&DuckAggregateOverloadItem>> =
         inventory::iter::<DuckAggregateOverloadItem>()
-            .into_iter()
             .into_grouping_map_by(|item| item.name)
             .collect();
     for (name, items) in map {
@@ -192,7 +191,6 @@ inventory::collect!(DuckScalarOverloadItem);
 pub fn register_all_scalar_overload(connection: &Connection) -> DuckResult<()> {
     let map: HashMap<&'static str, Vec<&DuckScalarOverloadItem>> =
         inventory::iter::<DuckScalarOverloadItem>()
-            .into_iter()
             .into_grouping_map_by(|item| item.name)
             .collect();
     for (name, items) in map {
