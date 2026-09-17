@@ -13,6 +13,7 @@ description: Every duckfn attribute, the arguments they share, the items they ge
 | `#[duck_scalar_function]` | a scalar function | `T`, `Option<T>`, `DuckOptionResult<T>` |
 | `#[duck_aggregate_function]` | an aggregate function | row handler returns `()` or `DuckResult<()>`; the output comes from the state |
 | `#[duck_table_function]` | a table function | `impl Iterator<Item = Row>`, `DuckResult<impl Iterator<Item = Row>>`, `DuckFullIteratorResult<Row>` |
+| `#[duck_copy_function]` | a `COPY ... TO` file format | `fn(&mut Writer, &DataChunk) -> DuckResult<()>` (the writer type implements `DuckCopyWriter`) |
 | `#[duck_cast_function]` | a type cast | `T`, `Option<T>`, `DuckOptionResult<T>` |
 | `#[duck_replacement_scan]` | a replacement scan | `Option<String>`, `Option<&'static str>`, `DuckOptionResult<String>`, `DuckOptionResult<&'static str>` |
 | `#[duck_sql_macro]` | a SQL macro | `SqlMacro`, `DuckResult<SqlMacro>`, `String`, `&'static str`, or `DuckResult` of those |
@@ -191,6 +192,7 @@ provides:
 | `#[duck_scalar_function]` | `ScalarFunctionImpl`, `scalar_function_builder()`, `scalar_overload_builder()` |
 | `#[duck_aggregate_function]` | `AggregateFunctionImpl`, `aggregate_function_builder()`, `aggregate_overload_builder(builder)`, `aggregate_function_guard()` |
 | `#[duck_table_function]` | `TableFunctionImpl`, `table_function_builder()` (returns a `DuckResult`) |
+| `#[duck_copy_function]` | `CopyFunctionImpl`, `copy_function_builder()` (returns a `DuckResult`), `copy_function_register(connection)` — no `DuckArgsImpl` |
 | `#[duck_cast_function]` | `CastFunctionImpl`, `cast_function_builder()`, `cast_function_register(connection)` |
 | `#[duck_replacement_scan]` | `ReplacementScanImpl`, `replacement_scan_register(connection)` — no `DuckArgsImpl` |
 

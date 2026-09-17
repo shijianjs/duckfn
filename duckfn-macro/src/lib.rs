@@ -223,6 +223,67 @@ pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream
     handle_duck_function(_attr, item, |wrapper| wrapper.build_table_function())
 }
 
+/// 把「按 chunk 写出」的 Rust 函数注册成 DuckDB 的 COPY 函数，为 `COPY ... TO` 提供自定义文件格式。
+///
+/// 需要 `duckfn` 打开 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API 才提供 COPY 函数）。
+///
+/// 签名固定为「writer + chunk」两参，顺序可互换：
+///
+/// ```ignore
+/// use duckfn::{duck_copy_function, DuckCopyWriter, DuckResult, DataChunk, LogicalType};
+/// use std::fs::File;
+/// use std::io::{BufWriter, Write};
+///
+/// /// writer 状态：持有已打开的输出文件。
+/// pub struct MyWriter {
+///     file: BufWriter<File>,
+/// }
+///
+/// impl DuckCopyWriter for MyWriter {
+///     fn open(path: &str, _columns: &[LogicalType]) -> DuckResult<Self> {
+///         Ok(Self { file: BufWriter::new(File::create(path)?) })
+///     }
+///     fn finish(&mut self) -> DuckResult<()> {
+///         self.file.flush()?;
+///         Ok(())
+///     }
+/// }
+///
+/// /// 每个数据块调用一次；函数名即 `FORMAT <函数名>` 里的格式名。
+/// #[duck_copy_function]
+/// fn my_copy(writer: &mut MyWriter, chunk: &DataChunk) -> DuckResult<()> {
+///     // 逐行读 chunk、写入 writer.file …
+///     Ok(())
+/// }
+/// ```
+///
+/// - `&mut Writer`：COPY 的 writer 状态，需实现 `duckfn::DuckCopyWriter`（`open` 在 global init
+///   阶段打开输出目标，`finish` 在 finalize 阶段收尾）；
+/// - `&DataChunk`：本批要写出的数据块（至少一列、至多 `vector_size()` 行）；
+/// - 返回 `DuckResult<()>`，入参或写出失败会让整条 `COPY` 失败，panic 也会被转成查询错误。
+///
+/// 四个生命周期阶段的回调由适配层生成：bind 记录输出列逻辑类型，global init 调用
+/// `DuckCopyWriter::open`，sink 调用被标注的函数，finalize 调用 `DuckCopyWriter::finish`。
+///
+/// 宏生成同名模块，导出 `copy_function_builder()` 与 `copy_function_register(connection)`；
+/// `auto_register = false` 时只生成它们、不自动注册。
+///
+/// Registers a chunk-writing Rust function as a DuckDB copy function, providing a custom file
+/// format for `COPY ... TO`. Requires `duckfn`'s `duckdb-1-5` feature (only the DuckDB 1.5.0+ C
+/// API provides copy functions). The signature is fixed to "writer + chunk" (in either order):
+/// `&mut Writer` is the writer state implementing `duckfn::DuckCopyWriter` (its `open` opens the
+/// output during global init and its `finish` wraps up during finalize), and `&DataChunk` is the
+/// chunk to write. It returns `DuckResult<()>`: a failure fails the whole `COPY`, and a panic is
+/// turned into a query error as well. The adapter generates the four life-cycle callbacks (bind
+/// records the output column logical types, global init calls `DuckCopyWriter::open`, sink calls
+/// the annotated function and finalize calls `DuckCopyWriter::finish`). A module named after the
+/// function is generated, exporting `copy_function_builder()` and `copy_function_register(connection)`;
+/// with `auto_register = false` they are generated but nothing is registered.
+#[proc_macro_attribute]
+pub fn duck_copy_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    handle_duck_function(_attr, item, |wrapper| wrapper.build_copy_function())
+}
+
 /// 手动注册入口：把 `fn(&Connection) -> DuckResult<()>` 交给扩展初始化时调用。
 ///
 /// 用于 `auto_register = false` 的场景：宏生成的各种 `*_builder()` 需要自己注册，

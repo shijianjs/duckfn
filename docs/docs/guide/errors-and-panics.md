@@ -1,6 +1,6 @@
 ---
 title: Errors and panics
-sidebar_position: 9
+sidebar_position: 10
 description: Reporting a query error, returning NULL, and how Rust panics become DuckDB errors.
 ---
 

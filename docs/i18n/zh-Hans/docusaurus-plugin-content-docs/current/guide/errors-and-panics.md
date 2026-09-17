@@ -1,6 +1,6 @@
 ---
 title: 错误与 panic
-sidebar_position: 9
+sidebar_position: 10
 description: 如何报告查询错误、如何返回 NULL，以及 Rust panic 如何变成 DuckDB 错误。
 ---
 

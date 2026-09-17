@@ -18,9 +18,9 @@
 
 `duckfn` is a runtime framework for building [DuckDB](https://duckdb.org) extensions on top of
 DuckDB's C Extension API. Together with [`duckfn-macro`](https://crates.io/crates/duckfn-macro),
-a single attribute turns an ordinary Rust function into a DuckDB **scalar**, **aggregate** or
-**table function**, a SQL macro, a replacement scan, a type cast, or a nested type — no C/C++ glue
-code, and no local DuckDB build required.
+a single attribute turns an ordinary Rust function into a DuckDB **scalar**, **aggregate**,
+**table** or **copy function**, a SQL macro, a replacement scan, a type cast, or a nested type — no
+C/C++ glue code, and no local DuckDB build required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
 - Built on [`quack-rs`](https://crates.io/crates/quack-rs) · [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys)
@@ -100,6 +100,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [Scalar functions](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) | Return shapes, `NULL` handling, overloads. |
 | [Aggregate functions](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) | Row handlers, state types, parallel aggregation. |
 | [Table functions](https://shijianjs.github.io/duckfn/docs/guide/table-functions) | Row structs, named parameters, streaming. |
+| [Copy functions](https://shijianjs.github.io/duckfn/docs/guide/copy-functions) | A custom file format for `COPY ... TO`. |
 | [Type casts](https://shijianjs.github.io/duckfn/docs/guide/casts) | Overriding `CAST` for one source/target pair. |
 | [Replacement scans](https://shijianjs.github.io/duckfn/docs/guide/replacement-scans) | Making `SELECT * FROM 'data.points'` work. |
 | [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) | Macros from Rust or from `.sql` files. |

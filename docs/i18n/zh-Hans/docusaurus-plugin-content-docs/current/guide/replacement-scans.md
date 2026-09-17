@@ -1,6 +1,6 @@
 ---
 title: 替换扫描
-sidebar_position: 7
+sidebar_position: 8
 description: 把 DuckDB 找不到的表名（通常是文件路径）解析到你自己的表函数。
 ---
 

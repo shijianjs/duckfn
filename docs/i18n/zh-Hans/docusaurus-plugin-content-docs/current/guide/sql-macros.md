@@ -1,6 +1,6 @@
 ---
 title: SQL 宏
-sidebar_position: 5
+sidebar_position: 6
 description: 注册标量宏与表宏 —— 推荐把 SQL 写进 .sql 文件，编译期自动内联。
 ---
 

@@ -131,6 +131,15 @@ DuckDB 的六个回调都实现在状态类型上：
 `scan` 每个 chunk 从该迭代器拉一次数据。两者都包在 `catch_unwind` 里，因此任一处 panic 都会变成查询错误。
 迭代器类型是 `DuckFullIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>`。
 
+### COPY 函数
+
+`COPY ... TO` 由四个回调驱动。适配层把四个都实现了：`bind` 把输出列的 `LogicalType` 记成 bind data，
+`global_init` 调用 `DuckCopyWriter::open(path, columns)` 并把 writer 存成 global state，`sink` 每个数据块
+调用一次被标注的函数，`finalize` 调用 `DuckCopyWriter::finish`。bind data 与 global state 都用 `Box`
+承载、配上负责 drop 的析构回调交给 DuckDB，每个回调都包在 `catch_unwind` 里，错误经 `set_error`
+上报。这套 API 来自 DuckDB 1.5.0+，因此该模块、适配层与 quack-rs 的再导出都在 `duckdb-1-5`
+feature 后面。
+
 ### 类型转换
 
 包装函数拿到 `count`、输入 vector 与输出 vector，逐行调用函数。出错时按转换路径处理：

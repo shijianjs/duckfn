@@ -1,6 +1,6 @@
 ---
 title: Replacement scans
-sidebar_position: 7
+sidebar_position: 8
 description: Resolve a table name DuckDB cannot find — usually a file path — to one of your own table functions.
 ---
 

@@ -141,6 +141,16 @@ return type per set, while each duckfn overload has its own `Output`.
 Both are wrapped in `catch_unwind`, so a panic in either becomes a query error. The iterator type is
 `DuckFullIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>`.
 
+### Copy
+
+`COPY ... TO` is driven through four callbacks. The adapter implements all of them: `bind` records the
+output columns' `LogicalType`s as bind data, `global_init` calls `DuckCopyWriter::open(path, columns)`
+and stores the writer as global state, `sink` calls the annotated function once per chunk, and
+`finalize` calls `DuckCopyWriter::finish`. Bind data and global state are `Box`ed and handed to DuckDB
+with a destructor callback that drops them, and every callback is wrapped in `catch_unwind` with
+errors reported through `set_error`. This API comes from DuckDB 1.5.0+, so the module, the adapters
+and the quack-rs re-exports are all behind the `duckdb-1-5` feature.
+
 ### Cast
 
 The wrapper receives a `count`, an input vector and an output vector, and calls the function per row.

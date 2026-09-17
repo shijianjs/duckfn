@@ -1,6 +1,6 @@
 ---
 title: Custom types
-sidebar_position: 10
+sidebar_position: 11
 description: Implement DuckValueType for your own types, and how to reach logical types duckfn does not map yet.
 ---
 

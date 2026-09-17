@@ -8,21 +8,22 @@
 //! [![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/shijianjs/duckfn)
 //!
 //! 本 crate 提供一组过程宏（`#[duck_scalar_function]`、`#[duck_aggregate_function]`、
-//! `#[duck_table_function]`、`#[duck_cast_function]`、`#[duck_sql_macro]`、
+//! `#[duck_table_function]`、`#[duck_copy_function]`、`#[duck_cast_function]`、`#[duck_sql_macro]`、
 //! `#[duck_replacement_scan]`、`#[duck_custom_register]`、`#[derive(DuckStruct)]`、
 //! `#[derive(DuckEnum)]`、`duckfn_entrypoint!`、`duck_sql_macro_files!`）以及配套的适配层和
 //! 值类型工具，把普通的 Rust 函数/结构体/枚举直接变成可注册到 DuckDB 的标量函数、聚合函数、
-//! 表函数、cast 函数、SQL 宏，以及可映射到 LIST / MAP / ARRAY / STRUCT / ENUM 的值类型。
+//! 表函数、COPY 函数、cast 函数、SQL 宏，以及可映射到 LIST / MAP / ARRAY / STRUCT / ENUM 的值类型。
 //!
 //! `duckfn`: write DuckDB extensions in plain Rust.
 //!
 //! This crate ships a set of procedural macros (`#[duck_scalar_function]`,
-//! `#[duck_aggregate_function]`, `#[duck_table_function]`, `#[duck_cast_function]`,
-//! `#[duck_sql_macro]`, `#[duck_replacement_scan]`, `#[duck_custom_register]`,
-//! `#[derive(DuckStruct)]`, `#[derive(DuckEnum)]`, `duckfn_entrypoint!`,
-//! `duck_sql_macro_files!`) together with the runtime adapter layer and value-type helpers that
-//! turn ordinary Rust functions, structs and enums into DuckDB scalar/aggregate/table functions,
-//! casts, SQL macros and LIST / MAP / ARRAY / STRUCT / ENUM value types.
+//! `#[duck_aggregate_function]`, `#[duck_table_function]`, `#[duck_copy_function]`,
+//! `#[duck_cast_function]`, `#[duck_sql_macro]`, `#[duck_replacement_scan]`,
+//! `#[duck_custom_register]`, `#[derive(DuckStruct)]`, `#[derive(DuckEnum)]`,
+//! `duckfn_entrypoint!`, `duck_sql_macro_files!`) together with the runtime adapter layer and
+//! value-type helpers that turn ordinary Rust functions, structs and enums into DuckDB
+//! scalar/aggregate/table/copy functions, casts, SQL macros and LIST / MAP / ARRAY / STRUCT / ENUM
+//! value types.
 
 /// 列集合读写抽象：`DuckColumns`。
 ///
@@ -82,4 +83,13 @@ pub use inventory::submit as inventory_submit;
 // Re-exported quack-rs types: custom `DuckValueType` implementations and macro-generated code both
 // need them, and going through `duckfn` means not having to depend on quack-rs directly.
 pub use quack_rs::connection::Connection;
-pub use quack_rs::prelude::{LogicalType, TypeId, Value};
+pub use quack_rs::prelude::{DataChunk, LogicalType, TypeId, Value};
+// COPY 函数（`COPY ... TO (FORMAT xxx)`）相关的 quack-rs 类型：DuckDB 1.5.0+ 的
+// C API 才提供，因此跟随 `duckdb-1-5` feature 一起开关。
+//
+// quack-rs types for copy functions (`COPY ... TO (FORMAT xxx)`): only the DuckDB 1.5.0+ C API
+// provides them, so they follow the `duckdb-1-5` feature.
+#[cfg(feature = "duckdb-1-5")]
+pub use quack_rs::prelude::{
+    CopyBindInfo, CopyFinalizeInfo, CopyFunctionBuilder, CopyGlobalInitInfo, CopySinkInfo,
+};

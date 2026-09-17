@@ -1,6 +1,6 @@
 ---
 title: 自定义类型
-sidebar_position: 10
+sidebar_position: 11
 description: 为自己的类型实现 DuckValueType，以及如何触达 duckfn 尚未映射的逻辑类型。
 ---
 

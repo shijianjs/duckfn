@@ -1,6 +1,6 @@
 ---
 title: Type mapping
-sidebar_position: 8
+sidebar_position: 9
 description: How DuckDB types map to Rust types, including LIST, MAP, ARRAY and STRUCT, plus the nullability rules and the gaps.
 ---
 

@@ -1,5 +1,6 @@
 mod aggregate_function;
 mod cast_function;
+mod copy_function;
 mod replacement_scan;
 mod scalar_function;
 mod sql_macro;

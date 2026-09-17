@@ -1,6 +1,6 @@
 ---
 title: SQL macros
-sidebar_position: 5
+sidebar_position: 6
 description: Register scalar and table SQL macros — preferably from .sql files that are inlined at compile time.
 ---
 

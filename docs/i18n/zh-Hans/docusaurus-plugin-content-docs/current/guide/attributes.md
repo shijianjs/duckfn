@@ -13,6 +13,7 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 | `#[duck_scalar_function]` | 标量函数 | `T`、`Option<T>`、`DuckOptionResult<T>` |
 | `#[duck_aggregate_function]` | 聚合函数 | 行处理函数返回 `()` 或 `DuckResult<()>`；输出由状态给出 |
 | `#[duck_table_function]` | 表函数 | `impl Iterator<Item = Row>`、`DuckResult<impl Iterator<Item = Row>>`、`DuckFullIteratorResult<Row>` |
+| `#[duck_copy_function]` | `COPY ... TO` 的文件格式 | `fn(&mut Writer, &DataChunk) -> DuckResult<()>`（writer 类型需实现 `DuckCopyWriter`） |
 | `#[duck_cast_function]` | 类型转换 | `T`、`Option<T>`、`DuckOptionResult<T>` |
 | `#[duck_replacement_scan]` | 替换扫描 | `Option<String>`、`Option<&'static str>`、`DuckOptionResult<String>`、`DuckOptionResult<&'static str>` |
 | `#[duck_sql_macro]` | SQL 宏 | `SqlMacro`、`DuckResult<SqlMacro>`、`String`、`&'static str`，或它们的 `DuckResult` |
@@ -184,6 +185,7 @@ mod dfn_scalar_reg_manual {
 | `#[duck_scalar_function]` | `ScalarFunctionImpl`、`scalar_function_builder()`、`scalar_overload_builder()` |
 | `#[duck_aggregate_function]` | `AggregateFunctionImpl`、`aggregate_function_builder()`、`aggregate_overload_builder(builder)`、`aggregate_function_guard()` |
 | `#[duck_table_function]` | `TableFunctionImpl`、`table_function_builder()`（返回 `DuckResult`） |
+| `#[duck_copy_function]` | `CopyFunctionImpl`、`copy_function_builder()`（返回 `DuckResult`）、`copy_function_register(connection)`，不生成 `DuckArgsImpl` |
 | `#[duck_cast_function]` | `CastFunctionImpl`、`cast_function_builder()`、`cast_function_register(connection)` |
 | `#[duck_replacement_scan]` | `ReplacementScanImpl`、`replacement_scan_register(connection)`，不生成 `DuckArgsImpl` |
 

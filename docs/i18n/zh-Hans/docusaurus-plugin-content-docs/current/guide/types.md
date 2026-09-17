@@ -1,6 +1,6 @@
 ---
 title: 类型映射
-sidebar_position: 8
+sidebar_position: 9
 description: DuckDB 类型与 Rust 类型的对应关系，涵盖 LIST、MAP、ARRAY、STRUCT，以及可空性规则与暂不支持的部分。
 ---
 

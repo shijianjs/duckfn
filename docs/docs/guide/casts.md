@@ -1,6 +1,6 @@
 ---
 title: Type casts
-sidebar_position: 6
+sidebar_position: 7
 description: Override DuckDB's CAST behaviour for one source/target pair, including TRY_CAST and implicit conversion costs.
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: 类型转换
-sidebar_position: 6
+sidebar_position: 7
 description: 覆盖 DuckDB 某一对源类型/目标类型的 CAST 行为，包括 TRY_CAST 与隐式转换代价。
 ---
 

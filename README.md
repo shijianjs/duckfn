@@ -17,8 +17,8 @@
 
 `duckfn` is a Rust framework for building [DuckDB](https://duckdb.org) extensions on top of
 DuckDB's C Extension API. A single attribute turns an ordinary Rust function into a DuckDB
-**scalar**, **aggregate** or **table function**, a SQL macro, a replacement scan, a type cast, or a
-nested type — no C/C++ glue code, and no local DuckDB build required.
+**scalar**, **aggregate**, **table** or **copy function**, a SQL macro, a replacement scan, a type
+cast, or a nested type — no C/C++ glue code, and no local DuckDB build required.
 
 - Repository: <https://github.com/shijianjs/duckfn>
 - Crates: [`duckfn`](https://crates.io/crates/duckfn) · [`duckfn-macro`](https://crates.io/crates/duckfn-macro)
@@ -99,7 +99,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [Create a project](https://shijianjs.github.io/duckfn/docs/getting-started/create-a-project) | Start from DuckDB's official Rust extension template. |
 | [Installation](https://shijianjs.github.io/duckfn/docs/getting-started/installation) | Dependencies, MSRV, and why no DuckDB build is needed. |
 | [Quick start](https://shijianjs.github.io/duckfn/docs/getting-started/quick-start) | Write, build and load your first extension. |
-| [Guide](https://shijianjs.github.io/duckfn/docs/guide/attributes) | Attributes, scalar/aggregate/table functions, casts, replacement scans, SQL macros. |
+| [Guide](https://shijianjs.github.io/duckfn/docs/guide/attributes) | Attributes, scalar/aggregate/table/copy functions, casts, replacement scans, SQL macros. |
 | [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability rules and known gaps. |
 | [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) | `duck_error`, `DuckOptionResult`, and panic handling. |
 | [Example extension](https://shijianjs.github.io/duckfn/docs/examples/rusty-quack) | `rusty_quack`, with runnable SQL for every feature. |

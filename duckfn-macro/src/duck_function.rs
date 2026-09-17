@@ -1,10 +1,10 @@
 //! `#[duck_scalar_function]` / `#[duck_aggregate_function]` / `#[duck_table_function]` /
-//! `#[duck_cast_function]` / `#[duck_sql_macro]` / `#[duck_replacement_scan]` /
-//! `#[duck_custom_register]` 的代码生成实现。
+//! `#[duck_copy_function]` / `#[duck_cast_function]` / `#[duck_sql_macro]` /
+//! `#[duck_replacement_scan]` / `#[duck_custom_register]` 的代码生成实现。
 //!
 //! Code generation behind `#[duck_scalar_function]`, `#[duck_aggregate_function]`,
-//! `#[duck_table_function]`, `#[duck_cast_function]`, `#[duck_sql_macro]`,
-//! `#[duck_replacement_scan]` and `#[duck_custom_register]`.
+//! `#[duck_table_function]`, `#[duck_copy_function]`, `#[duck_cast_function]`,
+//! `#[duck_sql_macro]`, `#[duck_replacement_scan]` and `#[duck_custom_register]`.
 
 use crate::attr_args::DuckFunctionMacroArgs;
 use crate::macro_utils::{
@@ -60,6 +60,84 @@ impl ItemFnWrapper {
     /// registration (which can be disabled by arguments).
     pub(crate) fn build_table_function(&self) -> TokenStream2Result {
         self.common_build(self.build_table_function_impl()?)
+    }
+
+    /// 生成 COPY 函数（`COPY ... TO (FORMAT xxx)`）：同名模块 + `CopyFunctionImpl` + builder
+    /// 导出 + 自动注册（可按参数关闭）。
+    ///
+    /// 函数签名固定为「writer + chunk」两参：
+    ///
+    /// ```ignore
+    /// #[duck_copy_function]
+    /// fn my_copy(writer: &mut MyWriter, chunk: &DataChunk) -> DuckResult<()> { ... }
+    /// ```
+    ///
+    /// - `&mut MyWriter` 是 COPY 的 writer 状态，需实现 `duckfn::DuckCopyWriter`
+    ///   （`open` 决定输出目标怎么打开、`finish` 怎么收尾）；
+    /// - `&DataChunk` 是本次要写出的数据块；
+    /// - 返回 `DuckResult<()>`，出错会让整条 `COPY` 失败。
+    ///
+    /// 生成的模块导出 `copy_function_builder()` 与 `copy_function_register(connection)`，函数名
+    /// 即 `COPY ... (FORMAT <函数名>)` 里的格式名。
+    ///
+    /// Generates the copy function (`COPY ... TO (FORMAT xxx)`): a same-named module,
+    /// `CopyFunctionImpl`, the builder exports and the automatic registration (which can be
+    /// disabled by arguments). The signature is fixed to "writer + chunk": `&mut MyWriter` is the
+    /// writer state (implementing `duckfn::DuckCopyWriter`, whose `open` decides how the output
+    /// target is opened and whose `finish` how it is closed) and `&DataChunk` is the chunk to
+    /// write. It returns `DuckResult<()>`; an error fails the whole `COPY`. The generated module
+    /// exports `copy_function_builder()` and `copy_function_register(connection)`, and the
+    /// function name is the format name used by `COPY ... (FORMAT <function name>)`.
+    pub(crate) fn build_copy_function(&self) -> TokenStream2Result {
+        let name = self.name();
+        let vis = self.visibility();
+        let item_fn = &self.item_fn;
+        let (writer_type, call_args) = self.copy_signature()?;
+        let function_register = self.copy_function_register()?;
+
+        Ok(quote! {
+            #item_fn
+
+            #vis mod #name {
+                use super::*;
+
+                pub struct CopyFunctionImpl;
+
+                impl duckfn::CopyFunctionAdapter for CopyFunctionImpl {
+                    const NAME: &'static str = stringify!(#name);
+                    type Writer = #writer_type;
+
+                    fn write_chunk(
+                        writer: &mut Self::Writer,
+                        chunk: &duckfn::DataChunk,
+                    ) -> duckfn::DuckResult<()> {
+                        #name(#(#call_args),*)
+                    }
+                }
+
+                /// 只生成 builder、不自动注册时使用。
+                ///
+                /// Used when the builder is generated without automatic registration.
+                pub fn copy_function_builder()
+                    -> duckfn::DuckResult<quack_rs::prelude::CopyFunctionBuilder>
+                {
+                    use duckfn::CopyFunctionAdapter;
+                    CopyFunctionImpl::copy_function_builder()
+                }
+
+                /// 手动注册入口：在 `#[duck_custom_register]` 里调用。
+                ///
+                /// Manual registration entry point: call it inside `#[duck_custom_register]`.
+                pub fn copy_function_register(
+                    c: &quack_rs::prelude::Connection,
+                ) -> duckfn::DuckResult<()> {
+                    let builder = copy_function_builder()?;
+                    unsafe { builder.register(c.as_raw_connection()) }
+                }
+
+                #function_register
+            }
+        })
     }
 
     /// 生成 `#[duck_custom_register]`：原函数 + 一条 inventory 提交，把函数本身当作注册回调。
@@ -760,6 +838,112 @@ impl ItemFnWrapper {
         })
     }
 
+    /// 生成 COPY 函数的注册代码；`auto_register = false` 时输出空内容。
+    ///
+    /// Emits the copy-function registration; produces nothing when `auto_register = false`.
+    fn copy_function_register(&self) -> TokenStream2Result {
+        if !self.auto_register() {
+            return Ok(quote! {});
+        }
+        self.inventory_submit(quote! {
+            copy_function_register(c)
+        })
+    }
+
+    /// 解析 COPY 函数的签名：恰好两个参数 —— 一个 `&mut Writer` 和一个 `&DataChunk` ——
+    /// 且返回类型是 `DuckResult<...>`。
+    ///
+    /// 返回 writer 类型与调用被标注函数时的实参序列（writer 位置传 `writer`，chunk 位置传
+    /// `chunk`，因此参数顺序怎么写都行）。
+    ///
+    /// Parses the copy-function signature: exactly two parameters — one `&mut Writer` and one
+    /// `&DataChunk` — plus a `DuckResult<...>` return type. It returns the writer type and the
+    /// argument sequence used to call the annotated function (`writer` at the writer position and
+    /// `chunk` at the chunk position, so the two may be written in either order).
+    fn copy_signature(&self) -> syn::Result<(Type, Vec<TokenStream2>)> {
+        let args = self.args();
+        if args.len() != COPY_SIGNATURE_ARITY {
+            return Err(syn::Error::new_spanned(
+                &self.item_fn.sig.inputs,
+                COPY_SIGNATURE_HINT,
+            ));
+        }
+
+        let mut writer_type: Option<Type> = None;
+        let mut chunk_count = 0usize;
+        let mut call_args: Vec<TokenStream2> = Vec::with_capacity(args.len());
+        for arg in &args {
+            if arg.is_agg_state() {
+                // 第二个 `&mut` 参数没有意义：writer 只能有一个。
+                if writer_type.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        &self.item_fn.sig.inputs,
+                        COPY_SIGNATURE_HINT,
+                    ));
+                }
+                writer_type = Some(arg.resolve_state_type()?.clone());
+                call_args.push(quote! { writer });
+            } else if Self::is_data_chunk_ref(arg.resolve_type()?) {
+                chunk_count += 1;
+                call_args.push(quote! { chunk });
+            } else {
+                return Err(syn::Error::new_spanned(
+                    &self.item_fn.sig.inputs,
+                    COPY_SIGNATURE_HINT,
+                ));
+            }
+        }
+
+        if writer_type.is_none() || chunk_count != 1 {
+            return Err(syn::Error::new_spanned(
+                &self.item_fn.sig.inputs,
+                COPY_SIGNATURE_HINT,
+            ));
+        }
+
+        self.copy_return_type()?;
+        Ok((writer_type.expect("checked above"), call_args))
+    }
+
+    /// 校验 COPY 函数的返回类型是 `DuckResult<...>`：sink 阶段出错要能让整条 `COPY` 失败。
+    ///
+    /// Validates that the copy function returns `DuckResult<...>`: a sink-phase error must be able
+    /// to fail the whole `COPY`.
+    fn copy_return_type(&self) -> syn::Result<()> {
+        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
+            if let Type::Path(type_path) = &**ty {
+                if type_path
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "DuckResult")
+                {
+                    return Ok(());
+                }
+            }
+        }
+        Err(syn::Error::new_spanned(
+            &self.item_fn.sig.output,
+            COPY_SIGNATURE_HINT,
+        ))
+    }
+
+    /// 判断类型是不是 `&DataChunk`（`DataChunk` 的引用，路径前缀不限）。
+    ///
+    /// Whether the type is `&DataChunk` (a reference to `DataChunk`, any path prefix).
+    fn is_data_chunk_ref(ty: &Type) -> bool {
+        if let Type::Reference(type_ref) = ty {
+            if let Type::Path(type_path) = &*type_ref.elem {
+                return type_path
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "DataChunk");
+            }
+        }
+        false
+    }
+
     /// 被标注函数的标识符（同时用作生成模块的名字）。
     ///
     /// The annotated function's identifier (also used as the generated module name).
@@ -1312,4 +1496,13 @@ is supported"#;
 const CAST_SIGNATURE_HINT: &str = r#"Only like
     `fn my_cast(from: SourceType) -> TargetType`: the single argument is the source value, the return type is the target type;
     `fn my_cast(from: Option<SourceType>) -> TargetType`: NULL is passed in as None;
+is supported"#;
+
+/// COPY 函数签名要求恰好两个参数（writer + chunk）。
+///
+/// A copy-function signature takes exactly two parameters (writer + chunk).
+const COPY_SIGNATURE_ARITY: usize = 2;
+
+const COPY_SIGNATURE_HINT: &str = r#"Only like
+    `fn my_copy(writer: &mut MyWriter, chunk: &DataChunk) -> DuckResult<()>`: the arguments are the copy writer (a `&mut` type implementing `duckfn::DuckCopyWriter`) and the data chunk to write, in either order, and the return type is `DuckResult<()>`;
 is supported"#;

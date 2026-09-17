@@ -6,3 +6,6 @@ duckdb_unittest_tempdir
 /test/bin
 venv
 /.codebuddy
+
+# COPY 测试写出的临时数据文件（测试运行器的 __TEST_DIR__ 就是 test/sql）
+test/sql/dfn_copy_*.tsv

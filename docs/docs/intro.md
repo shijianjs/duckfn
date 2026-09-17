@@ -2,7 +2,7 @@
 title: Introduction
 sidebar_position: 1
 slug: /intro
-description: duckfn turns plain Rust functions into DuckDB scalar, aggregate and table functions, SQL macros, casts and replacement scans — without C/C++ glue code or a local DuckDB build.
+description: duckfn turns plain Rust functions into DuckDB scalar, aggregate, table and copy functions, SQL macros, casts and replacement scans — without C/C++ glue code or a local DuckDB build.
 ---
 
 # Introduction
@@ -19,7 +19,7 @@ description: duckfn turns plain Rust functions into DuckDB scalar, aggregate and
 
 `duckfn` is a framework for building [DuckDB](https://duckdb.org) extensions on top of DuckDB's
 C Extension API. A single attribute turns an ordinary Rust function into a DuckDB **scalar**,
-**aggregate** or **table function**, a SQL macro, a replacement scan, or a type cast.
+**aggregate**, **table** or **copy function**, a SQL macro, a replacement scan, or a type cast.
 
 ```rust
 use duckfn::{duck_error, duck_scalar_function, duckfn_entrypoint, DuckOptionResult};

@@ -16,7 +16,7 @@
 **用纯 Rust 写 DuckDB 扩展。**
 
 `duckfn` 是一个基于 DuckDB C Extension API 的 Rust 框架。借助一个属性宏，就能把普通的 Rust
-函数变成 DuckDB 的**标量函数**、**聚合函数**、**表函数**、SQL 宏、替换扫描（replacement scan）、类型转换，
+函数变成 DuckDB 的**标量函数**、**聚合函数**、**表函数**、**COPY 函数**、SQL 宏、替换扫描（replacement scan）、类型转换，
 或嵌套类型 —— 无需 C/C++ 胶水代码，也无需在本地编译 DuckDB。
 
 - 仓库地址：<https://github.com/shijianjs/duckfn>
@@ -95,7 +95,7 @@ duckfn_entrypoint!("my_ext");
 | [创建项目](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/create-a-project) | 从 DuckDB 官方 Rust 扩展模板起步。 |
 | [安装](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/installation) | 依赖、MSRV，以及为什么不需要编译 DuckDB。 |
 | [快速开始](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/quick-start) | 编写、构建并加载第一个扩展。 |
-| [指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 属性参考、标量/聚合/表函数、类型转换、替换扫描、SQL 宏。 |
+| [指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 属性参考、标量/聚合/表/COPY 函数、类型转换、替换扫描、SQL 宏。 |
 | [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
 | [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) | `duck_error`、`DuckOptionResult` 与 panic 的处理。 |
 | [示例扩展](https://shijianjs.github.io/duckfn/zh-Hans/docs/examples/rusty-quack) | `rusty_quack`，每个功能都配可运行的 SQL。 |
