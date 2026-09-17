@@ -109,6 +109,8 @@ LOAD 'my_ext.duckdb_extension'
 `apply_with_null` 返回 `Ok(None)`，这就是整行短路的来源。`null_handling()` 默认返回 `DefaultNullHandling`，
 `special_null_handling = true` 时被覆盖为 `SpecialNullHandling`。类似地，`volatile()` 默认返回 `false`，
 `volatile = true` 时被覆盖为 `true`，注册期随之调用 `duckdb_scalar_function_set_volatile`（DuckDB 1.5+）。
+`varargs_element_type()` 默认返回 `None`；`varargs = true` 时返回签名最后一个 `Vec<T>` 的元素类型，
+注册期调用 `duckdb_scalar_function_set_varargs`（DuckDB 1.5+），回调则改走 `apply_varargs` 而不是 `apply`。
 
 ### 聚合函数
 

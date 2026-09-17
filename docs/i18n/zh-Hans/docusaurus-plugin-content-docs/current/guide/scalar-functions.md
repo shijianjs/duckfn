@@ -159,6 +159,51 @@ SELECT dfn_scalar_volatile_special(NULL::INTEGER);  -- -1（常量 NULL 未被�
 标量函数 —— quack-rs 的 `ScalarOverloadBuilder` 没有暴露 volatile 开关，因此 `volatile = true` 与
 `overloads_name` 同时出现会在编译期直接报错。上面的函数是确定性的，取值不随开关变化，变的是 DuckDB 调用它的次数。
 
+### 可变参数
+
+`varargs = true` 把函数签名的最后一个参数声明成 `Vec<T>`，其中 `T` 是「单个可变参数」的类型。
+宏把 `T` 的逻辑类型交给 DuckDB 的 `duckdb_scalar_function_set_varargs`，并把固定参数之后的每一列
+读成该类型、收进这个 `Vec<T>`：
+
+```rust
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_sum(values: Vec<i64>) -> i64 {
+    values.iter().sum()
+}
+
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_join(sep: String, parts: Vec<Option<String>>) -> String {
+    parts.into_iter().flatten().collect::<Vec<_>>().join(&sep)
+}
+
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_merge(lists: Vec<Vec<i64>>) -> Vec<i64> {
+    lists.into_iter().flatten().collect()
+}
+```
+
+```sql
+SELECT dfn_scalar_varargs_sum(1, 2, 3);            -- 6
+SELECT dfn_scalar_varargs_sum();                  -- 0（零个可变参数）
+SELECT dfn_scalar_varargs_join('-', 'a', 'b');    -- a-b
+SELECT dfn_scalar_varargs_join('-', 'a', NULL);   -- NULL（常量 NULL 被折叠）
+SELECT dfn_scalar_varargs_merge([1, 2], [3], []); -- [1, 2, 3]
+SELECT typeof(dfn_scalar_varargs_merge([1]));     -- BIGINT[]
+```
+
+`T` 可以是任意值类型：
+
+- `i64` → `BIGINT`；
+- `Option<String>` → `VARCHAR`，每个可变参数都可空（列里的 `NULL` 以 `None` 进入函数体，而常量
+  `NULL` 仍会被 DuckDB 折叠 —— 与固定参数的行为一致）；
+- `Vec<i64>` → `LIST(BIGINT)`，即每个可变参数本身就是一个 LIST，等价于在 quack-rs 里手写
+  `varargs_logical(LogicalType::list(TypeId::BigInt))`。
+
+任一非可空参数或元素为 `NULL` 时整行短路成 `NULL`，与固定的非 `Option` 参数一致；零个可变参数也是
+合法的。该开关需要 duckfn 的 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API），且不能与
+`overloads_name` 同用（quack-rs 的 `ScalarOverloadBuilder` 没有暴露 varargs 开关），宏会在编译期
+拒绝这种组合。
+
 ## 重载与函数集
 
 多个签名可以共用一个 SQL 名字。最简单的方式是 `overloads_name`：取值相同的签名会被合并成一个函数集，

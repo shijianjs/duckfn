@@ -117,7 +117,10 @@ batch. `apply_with_null` returns `Ok(None)` when any non-`Option` argument is `N
 short-circuits the row. `null_handling()` defaults to `DefaultNullHandling` and is overridden to
 `SpecialNullHandling` by `special_null_handling = true`. Likewise `volatile()` defaults to `false`
 and is overridden to `true` by `volatile = true`, which makes registration call
-`duckdb_scalar_function_set_volatile` (DuckDB 1.5+).
+`duckdb_scalar_function_set_volatile` (DuckDB 1.5+). `varargs_element_type()` defaults to `None`;
+with `varargs = true` it returns the element type of the signature's last `Vec<T>` and registration
+calls `duckdb_scalar_function_set_varargs` (DuckDB 1.5+), while the callback reads the extra columns
+through `apply_varargs` instead of `apply`.
 
 ### Aggregate
 

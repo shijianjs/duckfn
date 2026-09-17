@@ -386,3 +386,49 @@ fn dfn_scalar_volatile_random(seed: i32) -> i64 {
 fn dfn_scalar_volatile_special(a: Option<i32>) -> i64 {
     a.map(i64::from).unwrap_or(-1)
 }
+
+// ============================================================================
+// duck_scalar_function：varargs
+//
+// 属性写 varargs = true 时，函数签名的最后一个参数必须是 Vec<T>，表示「可变参数集合」：
+// 宏把 T 的逻辑类型交给 DuckDB 的 duckdb_scalar_function_set_varargs
+// （quack-rs 的 ScalarFunctionBuilder::varargs_logical），固定参数之后的每一列都按 T 读出来，
+// 组成 Vec<T> 传给函数体。
+//
+//   T = i64               -> varargs_logical(BIGINT)
+//   T = Option<String>    -> varargs_logical(VARCHAR)，每个可变参数可空
+//   T = Vec<i64>          -> varargs_logical(LIST(BIGINT))，即「可变参数本身是 LIST」
+//
+// 固定参数照常由 DuckArgsImpl 承载（可变参数不参与其中）；任一非可空固定参数或元素为 NULL 时
+// 整行输出 NULL。
+//
+// 注意：依赖 duckfn 的 duckdb-1-5 feature；varargs = true 不能和 overloads_name 同用，
+// 也不能用在标量函数之外（aggregate/table/cast/copy/... 会直接报编译错误）。
+// ============================================================================
+
+/// 只有可变参数：所有入参都按 BIGINT 读成 `Vec<i64>`
+/// ```sql
+/// SELECT dfn_scalar_varargs_sum(1, 2, 3);
+/// ```
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_sum(values: Vec<i64>) -> i64 {
+    values.iter().sum()
+}
+
+/// 固定参数 + 可变参数，且每个可变参数可空（`Vec<Option<String>>` → VARCHAR）
+/// ```sql
+/// SELECT dfn_scalar_varargs_join('-', 'a', 'b');
+/// ```
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_join(sep: String, parts: Vec<Option<String>>) -> String {
+    parts.into_iter().flatten().collect::<Vec<_>>().join(&sep)
+}
+
+/// 可变参数本身是 LIST（`Vec<Vec<i64>>` → `LIST(BIGINT)`），与用户示例 merge_lists 等价
+/// ```sql
+/// SELECT dfn_scalar_varargs_merge([1, 2], [3], []);
+/// ```
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_merge(lists: Vec<Vec<i64>>) -> Vec<i64> {
+    lists.into_iter().flatten().collect()
+}

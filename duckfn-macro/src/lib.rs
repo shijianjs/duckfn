@@ -163,7 +163,11 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// - `volatile = true` 把函数标记为 volatile：注册时调用
 ///   `duckdb_scalar_function_set_volatile`，DuckDB 不缓存也不复用相同参数的调用结果，每一行
 ///   都重新求值（`random()` 这类函数需要它）。需要 duckfn 打开 `duckdb-1-5` feature
-///   （DuckDB 1.5.0+ 的 C API），且不能与 `overloads_name` 同用。
+///   （DuckDB 1.5.0+ 的 C API），且不能与 `overloads_name` 同用；
+/// - `varargs = true` 开启可变参数：函数签名的最后一个参数必须是 `Vec<T>`（可变参数集合），
+///   `T` 的逻辑类型会交给 DuckDB 的 `duckdb_scalar_function_set_varargs`，调用时固定参数之后的
+///   每一列都按 `T` 读出来、组成 `Vec<T>` 传给函数体。比如
+///   `fn my_sum(values: Vec<i64>) -> i64`。同样需要 `duckdb-1-5`，也不能与 `overloads_name` 同用。
 ///
 /// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`，
 /// 便于手动注册重载或函数集。
@@ -179,10 +183,14 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// Panics in the body are caught and turned into query errors. `volatile = true` marks the
 /// function volatile: registration then calls `duckdb_scalar_function_set_volatile`, so DuckDB
 /// neither caches nor reuses the result of a call with the same arguments and every row is
-/// re-evaluated (which is what functions like `random()` need). It requires duckfn's `duckdb-1-5`
-/// feature (the DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. A module named
-/// after the function is generated, exporting `scalar_function_builder()` and
-/// `scalar_overload_builder()` for manual overload / function-set registration.
+/// re-evaluated (which is what functions like `random()` need). `varargs = true` enables variadic
+/// arguments: the last parameter must then be `Vec<T>` (the variadic collection) and `T`'s logical
+/// type goes to DuckDB's `duckdb_scalar_function_set_varargs`, so at call time every column after
+/// the fixed ones is read as a `T` and collected into the `Vec<T>` passed to the body — e.g.
+/// `fn my_sum(values: Vec<i64>) -> i64`. Both switches require duckfn's `duckdb-1-5` feature (the
+/// DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. A module named after the
+/// function is generated, exporting `scalar_function_builder()` and `scalar_overload_builder()`
+/// for manual overload / function-set registration.
 #[proc_macro_attribute]
 pub fn duck_scalar_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_scalar_function())

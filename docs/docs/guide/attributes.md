@@ -37,6 +37,7 @@ Every function attribute shares one argument list:
 | `named_param_from` | — | For table functions: the argument from which on everything is a named parameter. |
 | `special_null_handling` | `false` | Ask DuckDB to hand `NULL` arguments to the callback instead of folding them away. See [Scalar functions](./scalar-functions.md#null-handling). |
 | `volatile` | `false` | For scalar functions: mark the function volatile, so registration calls `duckdb_scalar_function_set_volatile` and DuckDB neither caches nor reuses calls with the same arguments. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#volatile). |
+| `varargs` | `false` | For scalar functions: enable variadic arguments. The last parameter must be `Vec<T>` and `T`'s logical type is passed to `duckdb_scalar_function_set_varargs`. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#variadic-arguments). |
 | `implicit_cost` | — | For casts: the implicit conversion cost. |
 | `overloads_name` | — | Register as an overload of this function set instead of under the function's own name. |
 

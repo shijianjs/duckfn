@@ -36,8 +36,8 @@ runtime.
 
 Common arguments: `auto_register = false` (generate the builders without registering),
 `named_param_from = "field"` (where named parameters start in a table function),
-`special_null_handling`, `volatile` (scalar functions on DuckDB 1.5+), `implicit_cost` and
-`overloads_name`.
+`special_null_handling`, `volatile` and `varargs` (scalar functions on DuckDB 1.5+),
+`implicit_cost` and `overloads_name`.
 
 ## Example
 

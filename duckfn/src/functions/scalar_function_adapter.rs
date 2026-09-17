@@ -4,14 +4,16 @@
 
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
-use crate::value_types::duck_value_type::DuckValueType;
+use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType};
 use crate::{
     DuckExtraInfo, DuckOptionResult, DuckResult, duck_scalar_unwind, erased_extra_info,
     raw_extra_info, vec_option_to_ref,
 };
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
+use quack_rs::prelude::{
+    LogicalType, NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder,
+};
 
 /// 把「参数结构体 -> 输出值」的纯 Rust 函数注册成 DuckDB 标量函数。
 ///
@@ -20,6 +22,8 @@ use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo,
 /// - 用 [`Self::Args`]（实现 [`DuckColumns`]）从输入 `DataChunk` 逐行取参；
 /// - 每行调用 [`Self::apply`]（或 NULL 时代替的 [`Self::apply_with_null`]，以及带附加数据的
 ///   [`Self::apply_with_extra`]）；
+/// - 启用可变参数（[`Self::varargs_element_type`] 返回 `Some`）时改走
+///   [`Self::apply_varargs`]，固定参数之后的列全部按该类型读成一个集合；
 /// - 收集成 `Vec<Option<Self::Output>>` 后一次性写入输出向量。
 ///
 /// 一般不用手写这个 impl，直接用 `#[duck_scalar_function]` 作用在普通函数上即可。
@@ -28,7 +32,10 @@ use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo,
 /// splits quack-rs' vector-level callback into per-row Rust code: it reads arguments row by
 /// row through [`Self::Args`] (a [`DuckColumns`] implementation), calls [`Self::apply`] (or
 /// [`Self::apply_with_null`] for NULL rows, or [`Self::apply_with_extra`] when extra data is
-/// attached) and finally writes the collected results into the output vector in one batch. Usually you do not implement this manually: just annotate a
+/// attached), or [`Self::apply_varargs`] once variadic arguments are enabled
+/// ([`Self::varargs_element_type`] returns `Some`), where every column past the fixed ones is
+/// read as one element of the variadic element type. It finally writes the collected results into
+/// the output vector in one batch. Usually you do not implement this manually: just annotate a
 /// plain function with `#[duck_scalar_function]`.
 pub trait ScalarFunctionAdapter: Sized + 'static {
     /// # Safety
@@ -49,13 +56,27 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         let extra = unsafe { erased_extra_info(&info) };
         duck_scalar_unwind(&info,|| {
             let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
-            let readers = Self::Args::create_column_readers(&chunk);
+            let mut readers = Self::Args::create_column_readers(&chunk);
+            // 固定参数列数：可变参数（`varargs_element_type()` 为 `Some`）从这一列之后开始。
+            //
+            // Number of fixed-argument columns; variadic arguments (when `varargs_element_type()`
+            // is `Some`) start right after them.
+            let fixed_count = readers.len();
+            let has_varargs = Self::varargs_element_type().is_some();
+            if has_varargs {
+                for column_index in fixed_count..chunk.column_count() {
+                    readers.push(Self::varargs_create_reader(&chunk, column_index));
+                }
+            }
             let row_count = chunk.size();
 
             let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
             for row in 0..row_count {
-                let args = Self::Args::read_columns(&readers, row);
-                let result = Self::apply_with_extra(args, extra);
+                let result = if has_varargs {
+                    Self::apply_varargs(&readers, row, fixed_count)
+                } else {
+                    Self::apply_with_extra(Self::Args::read_columns(&readers, row), extra)
+                };
                 match result {
                     Ok(r) => output_vec.push(r),
                     Err(e) => {
@@ -98,6 +119,70 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         false
     }
 
+    /// 可变参数的元素逻辑类型；默认 `None`（函数没有可变参数）。
+    ///
+    /// 返回 `Some(lt)` 表示函数带可变参数：注册期会调用 DuckDB 的
+    /// `duckdb_scalar_function_set_varargs`（也就是 quack-rs 的
+    /// `ScalarFunctionBuilder::varargs_logical`），调用期除去固定参数之外的每一列都按 `lt`
+    /// 读成一个元素，交给 [`Self::apply_varargs`]。
+    ///
+    /// 元素可以是任意 [`DuckValueType`]，包括 `Option<T>`（元素可为 NULL）与 `Vec<T>`
+    /// （即「可变参数本身是 LIST」，对应 `varargs_logical(LogicalType::list(...))`）。
+    ///
+    /// 该能力只在 duckfn 打开 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API）时真正生效；
+    /// 函数集重载（[`Self::scalar_overload_builder`]）不支持它。宏 `#[duck_scalar_function(varargs = true)]`
+    /// 会从函数签名最后一个参数 `Vec<T>` 推断出 `T`。
+    ///
+    /// Variadic-argument element logical type; `None` (the default) means the function has no
+    /// variadic arguments. `Some(lt)` makes registration call DuckDB's
+    /// `duckdb_scalar_function_set_varargs` (quack-rs' `ScalarFunctionBuilder::varargs_logical`)
+    /// and, at call time, reads every column after the fixed ones as one element of type `lt`
+    /// handed to [`Self::apply_varargs`]. The element may be any [`DuckValueType`], `Option<T>`
+    /// (nullable element) and `Vec<T>` (i.e. the variadic argument is itself a LIST, matching
+    /// `varargs_logical(LogicalType::list(...))`) included. The capability only takes effect with
+    /// duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API) and is not supported for function-set
+    /// overloads ([`Self::scalar_overload_builder`]). The macro
+    /// `#[duck_scalar_function(varargs = true)]` infers the element type `T` from the last
+    /// parameter `Vec<T>` of the signature.
+    fn varargs_element_type() -> Option<LogicalType> {
+        None
+    }
+
+    /// 为可变参数的第 `column_index` 列创建读取器。
+    ///
+    /// 只在 [`Self::varargs_element_type`] 返回 `Some` 时调用；默认实现直接 panic，因此手写
+    /// impl 不需要实现它。
+    ///
+    /// Creates the reader for the `column_index`-th variadic column. Only called when
+    /// [`Self::varargs_element_type`] returns `Some`; the default panics, so hand-written
+    /// implementations do not need it.
+    fn varargs_create_reader(_chunk: &DataChunk, _column_index: usize) -> DuckValueReader {
+        unreachable!("varargs_create_reader is only used when varargs_element_type() returns Some")
+    }
+
+    /// 带可变参数时的一行求值。
+    ///
+    /// `readers` 覆盖固定参数与可变参数的全部列，`fixed_count` 是固定参数列数；实现方用
+    /// `readers[..fixed_count]` 读固定参数、其余读成一个可变参数集合。`Ok(None)` 表示该行整体
+    /// 输出 SQL NULL（任一非可空参数或元素为 NULL 时就应该这样短路）。
+    ///
+    /// 只在 [`Self::varargs_element_type`] 返回 `Some` 时调用；默认实现直接 panic，因此手写
+    /// impl 不需要实现它。
+    ///
+    /// Evaluates one row when variadic arguments are enabled. `readers` covers both the fixed and
+    /// the variadic columns and `fixed_count` is the number of fixed ones; the implementation reads
+    /// the fixed arguments from `readers[..fixed_count]` and the rest as one variadic collection.
+    /// `Ok(None)` makes the whole row SQL NULL — the right short-circuit when any non-nullable
+    /// argument or element is NULL. Only called when [`Self::varargs_element_type`] returns `Some`;
+    /// the default panics, so hand-written implementations do not need it.
+    fn apply_varargs(
+        _readers: &[DuckValueReader],
+        _row: usize,
+        _fixed_count: usize,
+    ) -> DuckOptionResult<Self::Output> {
+        unreachable!("apply_varargs is only used when varargs_element_type() returns Some")
+    }
+
     /// 构造「独立函数」用的 builder（自带函数名）。
     ///
     /// Builds the builder for a standalone function (carrying its own name).
@@ -109,6 +194,9 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             .with_params(Self::Args::column_types());
         if Self::volatile() {
             builder = set_volatile(builder);
+        }
+        if let Some(varargs_type) = Self::varargs_element_type() {
+            builder = set_varargs(builder, varargs_type);
         }
         if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
             // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；函数对象交给 DuckDB 后
@@ -123,12 +211,13 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
 
     /// 构造「函数集重载」用的 builder（不带函数名，由函数集决定）。
     ///
-    /// 注意：quack-rs 的 [`ScalarOverloadBuilder`] 没有暴露 volatile 开关，因此
-    /// [`Self::volatile`] 对重载无效；需要 volatile 时请注册成独立函数。
+    /// 注意：quack-rs 的 [`ScalarOverloadBuilder`] 没有暴露 volatile / varargs 开关，因此
+    /// [`Self::volatile`] 与 [`Self::varargs_element_type`] 对重载无效；需要它们时请注册成独立函数。
     ///
     /// Builds the builder for a function-set overload (no name; the set provides it). Note that
-    /// quack-rs' [`ScalarOverloadBuilder`] exposes no volatile switch, so [`Self::volatile`] has
-    /// no effect on overloads; register the function standalone when volatile is required.
+    /// quack-rs' [`ScalarOverloadBuilder`] exposes neither a volatile nor a varargs switch, so
+    /// [`Self::volatile`] and [`Self::varargs_element_type`] have no effect on overloads; register
+    /// the function standalone when they are required.
     fn scalar_overload_builder() -> ScalarOverloadBuilder {
         let mut builder = ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
@@ -223,7 +312,15 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
 
     /// 对一行非 NULL 参数求值；返回 `Ok(None)` 表示该行输出 SQL NULL。
     ///
-    /// Evaluates one row of non-NULL arguments; returning `Ok(None)` makes this row SQL NULL.
+    /// 启用可变参数（[`Self::varargs_element_type`] 返回 `Some`）时不会调用本方法，适配层改走
+    /// [`Self::apply_varargs`]；`#[duck_scalar_function(varargs = true)]` 生成的实现因此只放一个
+    /// 占位方法体。
+    ///
+    /// Evaluates one row of non-NULL arguments; returning `Ok(None)` makes this row SQL NULL. It
+    /// is not called once variadic arguments are enabled ([`Self::varargs_element_type`] returns
+    /// `Some`), where the adapter goes through [`Self::apply_varargs`] instead; the implementation
+    /// generated by `#[duck_scalar_function(varargs = true)]` therefore only carries a placeholder
+    /// body.
     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output>;
 }
 
@@ -243,6 +340,27 @@ fn set_volatile(builder: ScalarFunctionBuilder) -> ScalarFunctionBuilder {
     }
     #[cfg(not(feature = "duckdb-1-5"))]
     {
+        builder
+    }
+}
+
+/// 给标量函数设置可变参数类型（[`ScalarFunctionAdapter::varargs_element_type`] 的实现细节）。
+///
+/// `ScalarFunctionBuilder::varargs_logical` 只在 quack-rs 的 `duckdb-1-5` feature 下存在，因此
+/// 没有该 feature 时这里原样返回 builder：可变参数被忽略，而不是让整个扩展编译失败。
+///
+/// Sets the variadic-argument type (the implementation detail behind
+/// [`ScalarFunctionAdapter::varargs_element_type`]). `ScalarFunctionBuilder::varargs_logical`
+/// only exists under quack-rs' `duckdb-1-5` feature, so without it the builder is returned
+/// unchanged: varargs are ignored rather than failing the whole extension build.
+fn set_varargs(builder: ScalarFunctionBuilder, varargs_type: LogicalType) -> ScalarFunctionBuilder {
+    #[cfg(feature = "duckdb-1-5")]
+    {
+        builder.varargs_logical(varargs_type)
+    }
+    #[cfg(not(feature = "duckdb-1-5"))]
+    {
+        let _ = varargs_type;
         builder
     }
 }

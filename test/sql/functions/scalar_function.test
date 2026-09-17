@@ -462,3 +462,81 @@ SELECT dfn_scalar_volatile_special(NULL::INTEGER) FROM range(3);
 -1
 -1
 -1
+
+# ============================================================================
+# varargs：注册期调用 duckdb_scalar_function_set_varargs
+#
+# 属性写 varargs = true 时函数签名最后一个参数必须是 Vec<T>（可变参数集合），
+# 宏把 T 的逻辑类型交给上面那个 FFI 设置函数，并把固定参数之后的每一列按 T 读成 Vec<T>。
+# 固定参数照常走 DuckArgsImpl；任一非可空固定参数或元素为 NULL 时整行短路为 NULL。
+# ============================================================================
+
+# 只有可变参数：所有入参都是 BIGINT
+query I
+SELECT dfn_scalar_varargs_sum(1, 2, 3);
+----
+6
+
+query T
+SELECT typeof(dfn_scalar_varargs_sum(1, 2, 3));
+----
+BIGINT
+
+# 零个可变参数也合法，得到空集合
+query I
+SELECT dfn_scalar_varargs_sum();
+----
+0
+
+# 逐行读取：range 的每一行都作为「一个可变参数」传进来
+query I
+SELECT dfn_scalar_varargs_sum(i) FROM range(3) t(i);
+----
+0
+1
+2
+
+# 固定参数 + 可变参数，元素类型是 Option<String>（每个可变参数可空）
+# 列里的 NULL 会进入函数体，被 flatten 掉
+query T
+SELECT dfn_scalar_varargs_join(sep, p1, p2)
+FROM (VALUES ('-', 'a', NULL), ('+', NULL, 'b'), ('*', 'x', 'y')) t(sep, p1, p2);
+----
+a
+b
+x*y
+
+# 只有固定参数、没有可变参数：可变参数集合为空
+query I
+SELECT length(dfn_scalar_varargs_join('-'));
+----
+0
+
+# 常量 NULL 与普通参数一样会被 DuckDB 折叠，回调不执行
+query T
+SELECT dfn_scalar_varargs_join('-', 'a', NULL);
+----
+NULL
+
+query T
+SELECT dfn_scalar_varargs_join(NULL, 'a');
+----
+NULL
+
+# 非可空元素遇到 NULL：读取层整行短路为 NULL（第二行正常计算）
+query I
+SELECT dfn_scalar_varargs_sum(a, b, c) FROM (VALUES (1, NULL, 3), (4, 5, 6)) t(a, b, c);
+----
+NULL
+15
+
+# 可变参数本身是 LIST：Vec<Vec<i64>> 对应 varargs_logical(LIST(BIGINT))
+query I
+SELECT dfn_scalar_varargs_merge([1, 2], [3], []);
+----
+[1, 2, 3]
+
+query T
+SELECT typeof(dfn_scalar_varargs_merge([1]));
+----
+BIGINT[]

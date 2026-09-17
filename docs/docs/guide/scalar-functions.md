@@ -167,6 +167,52 @@ no volatile switch, so combining `volatile = true` with `overloads_name` is reje
 time. The functions above are deterministic, so their values do not depend on the flag; what
 changes is how often DuckDB calls them.
 
+### Variadic arguments
+
+`varargs = true` declares the last parameter as `Vec<T>`, where `T` is the type of one variadic
+argument. The macro hands `T`'s logical type to DuckDB's `duckdb_scalar_function_set_varargs` and
+collects every column after the fixed ones into that `Vec<T>`:
+
+```rust
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_sum(values: Vec<i64>) -> i64 {
+    values.iter().sum()
+}
+
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_join(sep: String, parts: Vec<Option<String>>) -> String {
+    parts.into_iter().flatten().collect::<Vec<_>>().join(&sep)
+}
+
+#[duck_scalar_function(varargs = true)]
+fn dfn_scalar_varargs_merge(lists: Vec<Vec<i64>>) -> Vec<i64> {
+    lists.into_iter().flatten().collect()
+}
+```
+
+```sql
+SELECT dfn_scalar_varargs_sum(1, 2, 3);            -- 6
+SELECT dfn_scalar_varargs_sum();                  -- 0  (zero variadic arguments)
+SELECT dfn_scalar_varargs_join('-', 'a', 'b');    -- a-b
+SELECT dfn_scalar_varargs_join('-', 'a', NULL);   -- NULL (the constant NULL is folded)
+SELECT dfn_scalar_varargs_merge([1, 2], [3], []); -- [1, 2, 3]
+SELECT typeof(dfn_scalar_varargs_merge([1]));     -- BIGINT[]
+```
+
+`T` may be any value type:
+
+- `i64` → `BIGINT`;
+- `Option<String>` → `VARCHAR`, with each variadic argument nullable (a `NULL` in a column arrives
+  as `None`, while a constant `NULL` is still folded by DuckDB, exactly as for fixed arguments);
+- `Vec<i64>` → `LIST(BIGINT)`, i.e. each variadic argument is a LIST itself — the same thing
+  `varargs_logical(LogicalType::list(TypeId::BigInt))` does by hand in quack-rs.
+
+A `NULL` in a non-nullable argument or element short-circuits the whole row to `NULL`, just like a
+fixed non-`Option` argument. Zero variadic arguments are allowed. The switch requires duckfn's
+`duckdb-1-5` feature (the DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`
+(quack-rs' `ScalarOverloadBuilder` exposes no varargs switch); the macro rejects that combination
+at compile time.
+
 ## Overloads and function sets
 
 Several signatures can share one SQL name. The simplest way is `overloads_name`, which merges every

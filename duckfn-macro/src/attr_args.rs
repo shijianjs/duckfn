@@ -109,6 +109,35 @@ pub(crate) struct DuckFunctionMacroArgs {
     /// `overloads_name` (quack-rs' `ScalarOverloadBuilder` does not expose it).
     pub volatile: Option<bool>,
 
+    /// `#[duck_scalar_function(varargs = true)]`
+    ///
+    /// 是否开启标量函数的可变参数（variadic arguments），默认 `false`。
+    ///
+    /// 开启后，函数签名的**最后一个参数**必须是 `Vec<T>`，表示「可变参数集合」：T 是单个可变参数
+    /// 的类型（可以写 `Option<U>` 让每个可变参数可空，也可以写 `Vec<U>` 让可变参数本身是 LIST）。
+    /// 宏把这个 `T` 的逻辑类型交给 DuckDB 的 `duckdb_scalar_function_set_varargs`，
+    /// 调用时固定参数之后的每一列都按 `T` 读出来组成 `Vec<T>` 传给函数体：
+    ///
+    /// ```ignore
+    /// #[duck_scalar_function(varargs = true)]
+    /// fn my_sum(values: Vec<i64>) -> i64 { values.iter().sum() }
+    /// ```
+    ///
+    /// 需要 duckfn 打开 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API），未开启时该开关被忽略。
+    /// 仅对标量函数有效，且不能和 `overloads_name` 同用（quack-rs 的 `ScalarOverloadBuilder`
+    /// 没有暴露该开关）。
+    ///
+    /// `#[duck_scalar_function(varargs = true)]`: whether the scalar function takes variadic
+    /// arguments; defaults to `false`. The **last** parameter of the signature must then be
+    /// `Vec<T>`, standing for "the variadic arguments": `T` is the type of a single variadic
+    /// argument (`Option<U>` makes each one nullable, `Vec<U>` makes each one a LIST). The macro
+    /// hands `T`'s logical type to DuckDB's `duckdb_scalar_function_set_varargs`, so at call time
+    /// every column after the fixed ones is read as a `T` and collected into the `Vec<T>` passed to
+    /// the body. Requires duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API); the switch is
+    /// ignored otherwise. It only applies to scalar functions and cannot be combined with
+    /// `overloads_name` (quack-rs' `ScalarOverloadBuilder` does not expose it).
+    pub varargs: Option<bool>,
+
     /// `#[duck_cast_function(implicit_cost = 100)]`
     /// 隐式转换代价：设置后 DuckDB 可能自动插入该 cast，值越小优先级越高
     ///

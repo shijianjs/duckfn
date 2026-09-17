@@ -51,6 +51,7 @@ impl ItemFnWrapper {
     /// Generates the aggregate function: a same-named module, `AggregateFunctionImpl` and
     /// automatic registration (which can be disabled by arguments).
     pub(crate) fn build_aggregate_function(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         self.common_build(self.build_aggregate_function_impl()?)
     }
 
@@ -59,6 +60,7 @@ impl ItemFnWrapper {
     /// Generates the table function: a same-named module, `TableFunctionImpl` and automatic
     /// registration (which can be disabled by arguments).
     pub(crate) fn build_table_function(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         self.common_build(self.build_table_function_impl()?)
     }
 
@@ -89,6 +91,7 @@ impl ItemFnWrapper {
     /// exports `copy_function_builder()` and `copy_function_register(connection)`, and the
     /// function name is the format name used by `COPY ... (FORMAT <function name>)`.
     pub(crate) fn build_copy_function(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         let name = self.name();
         let vis = self.visibility();
         let item_fn = &self.item_fn;
@@ -152,6 +155,7 @@ impl ItemFnWrapper {
     /// another is `limit: usize` (how many rows this batch may hold), in either order, and it
     /// returns `DuckResult<Vec<DuckDynamicRow>>` where an empty `Vec` ends the stream.
     pub(crate) fn build_copy_from_function(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         let name = self.name();
         let vis = self.visibility();
         let item_fn = &self.item_fn;
@@ -196,6 +200,7 @@ impl ItemFnWrapper {
     /// Generates `#[duck_custom_register]`: the original function plus an inventory submission
     /// that uses the function itself as the registration callback.
     pub(crate) fn build_custom_register(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         let name = self.name();
         let item_fn = &self.item_fn;
 
@@ -221,6 +226,7 @@ impl ItemFnWrapper {
     /// `String` / `&'static str` and their `DuckResult` variants are executed as SQL text through
     /// `register_sql_macro_str`.
     pub(crate) fn build_sql_macro(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         let name = self.name();
         let item_fn = &self.item_fn;
 
@@ -270,6 +276,7 @@ impl ItemFnWrapper {
     /// `duckfn::ReplacementScanAdapter`) and `replacement_scan_register` for manual registration
     /// via `#[duck_custom_register]`.
     pub(crate) fn build_replacement_scan(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         let name = self.name();
         let vis = self.visibility();
         let item_fn = &self.item_fn;
@@ -451,6 +458,7 @@ impl ItemFnWrapper {
     /// type (using the same return shapes as `duck_scalar_function`), registered as
     /// `CAST(source AS target)`.
     pub(crate) fn build_cast_function(&self) -> TokenStream2Result {
+        self.reject_varargs()?;
         let name = self.name();
         let vis = self.visibility();
         let item_fn = &self.item_fn;
@@ -598,7 +606,15 @@ impl ItemFnWrapper {
     /// Generates the `#[derive(duckfn::DuckStruct)]` argument struct `DuckArgsImpl` from the
     /// function parameters, writing the original attributes through unchanged.
     fn build_duck_args(&self) -> TokenStream2Result {
-        let fields = self.args_to_code(|x| x.build_duck_args_field())?;
+        // `varargs = true` 时最后一个参数是「可变参数集合」，不属于固定参数结构体。
+        //
+        // With `varargs = true` the last parameter is the variadic collection and does not belong
+        // to the fixed-argument struct.
+        let (fixed_args, _) = self.split_varargs()?;
+        let fields = fixed_args
+            .iter()
+            .map(|x| x.build_duck_args_field())
+            .collect::<syn::Result<Vec<_>>>()?;
         let attr = &self.attr;
 
         Ok(quote! {
@@ -619,7 +635,40 @@ impl ItemFnWrapper {
         let name = self.name();
         let (_, return_type) = self.scalar_return_type()?;
         let return_clause = self.build_scalar_return_clause()?;
-        let get_data = self.args_to_code(|x| x.build_get_data())?;
+        // `varargs = true` 时最后一个参数是可变参数集合，只有其余参数从 `DuckArgsImpl` 取值。
+        //
+        // With `varargs = true` the last parameter is the variadic collection; only the others are
+        // read from `DuckArgsImpl`.
+        let (fixed_args, varargs_element) = self.split_varargs()?;
+        let get_data = fixed_args
+            .iter()
+            .map(|x| x.build_get_data())
+            .collect::<syn::Result<Vec<_>>>()?;
+        let varargs_methods =
+            self.build_scalar_varargs_methods(&varargs_element, &get_data, &return_clause)?;
+        // 可变参数函数走 `apply_varargs`，`apply` 只保留一个占位实现，避免生成缺少可变参数的调用。
+        //
+        // A variadic function goes through `apply_varargs`; `apply` keeps a placeholder body so
+        // that no call missing the variadic argument is generated.
+        let apply_body = if varargs_element.is_some() {
+            quote! {
+                fn apply(_args: Self::Args) -> duckfn::DuckOptionResult<Self::Output> {
+                    unreachable!(
+                        "`apply` is not used by variadic scalar functions: the adapter calls \
+                         `apply_varargs` instead"
+                    )
+                }
+            }
+        } else {
+            quote! {
+                fn apply(args: Self::Args) -> duckfn::DuckOptionResult<Self::Output> {
+                    let result = #name(
+                        #(#get_data),*
+                    );
+                    #return_clause
+                }
+            }
+        };
         let function_register = self.scalar_function_register()?;
         let null_handling = self.null_handling_override();
         let volatile_override = self.volatile_override()?;
@@ -637,12 +686,9 @@ impl ItemFnWrapper {
 
                 #volatile_override
 
-                fn apply(args: Self::Args) -> duckfn::DuckOptionResult<Self::Output> {
-                    let result = #name(
-                        #(#get_data),*
-                    );
-                    #return_clause
-                }
+                #varargs_methods
+
+                #apply_body
             }
             pub fn scalar_function_builder() -> quack_rs::prelude::ScalarFunctionBuilder {
                 use duckfn::ScalarFunctionAdapter;
@@ -1338,6 +1384,147 @@ impl ItemFnWrapper {
         })
     }
 
+    /// `#[duck_scalar_function(varargs = true)]`
+    ///
+    /// 是否开启可变参数（variadic arguments），默认 `false`。
+    ///
+    /// `#[duck_scalar_function(varargs = true)]`: whether to enable variadic arguments; defaults
+    /// to `false`.
+    fn varargs(&self) -> bool {
+        self.duck_args.varargs.unwrap_or(false)
+    }
+
+    /// 把参数拆成「固定参数 + 可变参数元素类型」。
+    ///
+    /// `varargs = false` 时原样返回全部参数与 `None`；`varargs = true` 时最后一个参数必须是
+    /// `Vec<T>`，这里返回除它以外的参数与元素类型 `T`。同时拒绝与 `overloads_name` 组合
+    /// （quack-rs 的重载 builder 没有暴露 varargs 开关，组合只会让开关静默失效）。
+    ///
+    /// Splits the parameters into "fixed arguments + variadic element type". With `varargs =
+    /// false` every parameter is returned unchanged together with `None`; with `varargs = true`
+    /// the last parameter must be `Vec<T>` and everything before it is returned along with the
+    /// element type `T`. Combining the flag with `overloads_name` is rejected (quack-rs' overload
+    /// builder exposes no varargs switch, so the combination would silently drop the flag).
+    fn split_varargs(&self) -> syn::Result<(Vec<FnArgWrapper>, Option<Type>)> {
+        let args = self.args();
+        if !self.varargs() {
+            return Ok((args, None));
+        }
+        if self.overloads_name().is_some() {
+            return Err(syn::Error::new_spanned(
+                self.name(),
+                "`varargs = true` cannot be combined with `overloads_name`: quack-rs' \
+                 `ScalarOverloadBuilder` exposes no varargs switch, so the flag would be dropped \
+                 silently. Register the function under its own name instead.",
+            ));
+        }
+        let Some((last, fixed)) = args.split_last() else {
+            return Err(syn::Error::new_spanned(
+                &self.item_fn.sig.inputs,
+                "`varargs = true` requires at least one parameter, and the last one must be `Vec<T>`",
+            ));
+        };
+        let last_type = last.resolve_type()?;
+        let element = Self::vec_element_type(last_type).ok_or_else(|| {
+            syn::Error::new_spanned(
+                last_type,
+                "With `varargs = true` the last parameter must be `Vec<T>`, where `T` is the type \
+                 of one variadic argument (use `Vec<Option<U>>` for nullable arguments or \
+                 `Vec<Vec<U>>` when each argument is itself a LIST)",
+            )
+        })?;
+        Ok((fixed.to_vec(), Some(element.clone())))
+    }
+
+    /// 取 `Vec<T>` 里的 `T`；类型不是 `Vec<...>`（或没有类型参数）时返回 `None`。
+    ///
+    /// Returns the `T` of a `Vec<T>`; `None` when the type is not a `Vec<...>` or carries no type
+    /// argument.
+    fn vec_element_type(ty: &Type) -> Option<&Type> {
+        let Type::Path(path) = ty else {
+            return None;
+        };
+        let segment = path.path.segments.last()?;
+        if segment.ident != "Vec" {
+            return None;
+        }
+        extract_generic_arg_type(segment)
+    }
+
+    /// 生成 `varargs = true` 时适配层需要的方法：元素类型、可变列读取器与逐行求值。
+    ///
+    /// 逐行求值把固定参数读成 `DuckArgsImpl`，再把固定列之后的每一列按元素类型读成一个值，
+    /// 组成 `Vec<T>` 传给被标注函数；任一非可空固定参数或元素为 NULL 时整行输出 NULL。
+    ///
+    /// Generates the adapter methods needed when `varargs = true`: the element type, the reader for
+    /// a variadic column and the per-row evaluation. The latter reads the fixed arguments into
+    /// `DuckArgsImpl` and every column after them as one element of the element type, feeding the
+    /// collected `Vec<T>` to the annotated function; a NULL in any non-nullable fixed argument or
+    /// element makes the whole row NULL.
+    fn build_scalar_varargs_methods(
+        &self,
+        varargs_element: &Option<Type>,
+        fixed_get_data: &[TokenStream2],
+        return_clause: &TokenStream2,
+    ) -> TokenStream2Result {
+        let Some(element) = varargs_element else {
+            return Ok(quote! {});
+        };
+        let name = self.name();
+        Ok(quote! {
+            fn varargs_element_type() -> Option<quack_rs::prelude::LogicalType> {
+                Some(<#element as duckfn::DuckValueType>::logical_type())
+            }
+
+            fn varargs_create_reader(
+                chunk: &quack_rs::prelude::DataChunk,
+                column_index: usize,
+            ) -> duckfn::DuckValueReader {
+                <#element as duckfn::DuckValueType>::create_reader(chunk, column_index)
+            }
+
+            fn apply_varargs(
+                readers: &[duckfn::DuckValueReader],
+                row: usize,
+                fixed_count: usize,
+            ) -> duckfn::DuckOptionResult<Self::Output> {
+                use duckfn::DuckValueType;
+                let args = match <DuckArgsImpl as duckfn::DuckColumns>::read_columns(
+                    &readers[..fixed_count],
+                    row,
+                ) {
+                    Some(args) => args,
+                    None => return Ok(None),
+                };
+                let _ = &args;
+                let mut __duckfn_varargs: Vec<#element> =
+                    Vec::with_capacity(readers.len() - fixed_count);
+                for __duckfn_reader in &readers[fixed_count..] {
+                    match <#element as duckfn::DuckValueType>::read_slot(__duckfn_reader, row) {
+                        Some(__duckfn_value) => __duckfn_varargs.push(__duckfn_value),
+                        None => return Ok(None),
+                    }
+                }
+                let result = #name(#(#fixed_get_data,)* __duckfn_varargs);
+                #return_clause
+            }
+        })
+    }
+
+    /// 拒绝把 `varargs` 用在标量函数之外的属性宏上（那些宏没有对应的可变参数通路）。
+    ///
+    /// Rejects `varargs` on every attribute macro other than `#[duck_scalar_function]` (they have
+    /// no variadic-argument path).
+    fn reject_varargs(&self) -> syn::Result<()> {
+        if self.varargs() {
+            return Err(syn::Error::new_spanned(
+                self.name(),
+                "`varargs = true` is only supported by `#[duck_scalar_function]`",
+            ));
+        }
+        Ok(())
+    }
+
     /// 收集函数的所有参数（含 `&mut State`）。
     ///
     /// Collects all parameters of the function (including `&mut State`).
@@ -1618,6 +1805,7 @@ impl ItemFnWrapper {
 ///
 /// Wrapper around one function parameter: resolves the parameter name, its type and whether it is
 /// the aggregate state.
+#[derive(Clone)]
 struct FnArgWrapper {
     /// 被包装的函数参数。
     ///
