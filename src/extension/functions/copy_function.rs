@@ -1,52 +1,88 @@
+// 示例：为 COPY ... TO 提供自定义 TSV 格式（动态列版本）。
+//
+// Example: a custom TSV format for `COPY ... TO` (the dynamic-column flavour).
+//
+//   四个生命周期阶段（由 duckfn 适配层驱动）分别对应：
+//     bind        -> 把查询结果各列的类型反推成动态 schema，并读出 COPY 选项
+//     global_init -> TsvWriter::open(path, schema, options)：建文件（需要时写表头）
+//     sink        -> 被标注的函数：每个数据块调用一次，按 schema 把动态行写成文本
+//     finalize    -> TsvWriter::finish()：flush / 关闭
+//
+//   与旧版（只支持标量）的关键区别：这里的每一行都是 `DuckDynamicRow`，`LIST` / `STRUCT` / `MAP`
+//   与 NULL 都在其中，写出逻辑不需要（也无法）针对编译期已知的列类型。
+//
+//   函数签名固定为「writer + 行批」两参，返回 DuckResult<()>；
+//   函数名 dfn_copy_tsv 就是 FORMAT 后面的格式名。
+//
+// The four life-cycle phases (driven by duckfn's adapter): bind reconstructs every result column's
+// type into a dynamic schema and reads the COPY options; global init calls
+// `TsvWriter::open(path, schema, options)` (creating the file, header and all); sink runs once per
+// data chunk and writes the dynamic rows as text; finalize flushes and closes. Unlike the scalar-only
+// previous version, every row here is a `DuckDynamicRow` carrying `LIST` / `STRUCT` / `MAP` and NULL,
+// so the writing logic neither needs nor can rely on compile-time column types.
+
+use super::tsv_format;
 use duckfn::{
-    DataChunk, DuckCopyWriter, DuckResult, LogicalType, TypeId, duck_copy_function, duck_error,
+    DuckCopyOptions, DuckCopyToWriter, DuckDynamicRow, DuckResult, DuckResultSchema,
+    duck_copy_function, duck_error,
 };
-use quack_rs::prelude::VectorReader;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-// ============================================================================
-// duck_copy_function：为 COPY ... TO 提供自定义文件格式
-//
-//   COPY (SELECT ...) TO 'out.tsv' (FORMAT dfn_copy_tsv);
-//
-//   四个生命周期阶段（由 duckfn 适配层生成）分别对应：
-//     bind        -> 从 COPY 的 bind info 读出输出列逻辑类型（存在 bind data 里）
-//     global_init -> TsvWriter::open(path, columns)：建文件、记住列类型
-//     sink        -> 被标注的函数：每个数据块调用一次，把 chunk 写成文本
-//     finalize    -> TsvWriter::finish()：flush / 关闭
-//
-//   函数签名固定为「writer + chunk」两参（顺序可互换），返回 DuckResult<()>；
-//   函数名 dfn_copy_tsv 就是 FORMAT 后面的格式名。
-// ============================================================================
-
-/// writer 状态：一个打开的输出文件 + 输出列的逻辑类型。
+/// writer 状态：一个打开的输出文件 + bind 阶段定下的动态 schema。
 ///
-/// 逻辑类型在 bind 阶段被记下、在 `open` 里换成 [`TypeId`]（`TypeId` 是 `Copy`，
-/// 读数据块时用来分派「这一列该按什么类型读」）。
+/// The writer state: an open output file plus the dynamic schema fixed during bind.
+///
+/// schema 用来把每列渲染成正确的文本（`LIST` / `STRUCT` / `MAP` 的嵌套形状由它决定），也是写表头
+/// 时的列名来源。注意 COPY 的输出列本身没有名字，适配层给的是合成的 `column_0`、`column_1`…
+///
+/// The schema renders each column into the right text (it decides the nested shape of
+/// `LIST` / `STRUCT` / `MAP`) and supplies the column names for a header. Note that COPY output
+/// columns are unnamed, so the adapter synthesises `column_0`, `column_1`, ...
 pub struct TsvWriter {
     file: BufWriter<File>,
-    /// 输出列的逻辑类型，顺序与数据块的列一致。
-    column_types: Vec<TypeId>,
+    schema: DuckResultSchema,
 }
 
-impl DuckCopyWriter for TsvWriter {
-    /// 打开输出目标；`columns` 是 COPY 查询的输出列逻辑类型。
-    fn open(path: &str, columns: &[LogicalType]) -> DuckResult<Self> {
+impl DuckCopyToWriter for TsvWriter {
+    /// 打开输出目标；`options` 里可以读到 `COPY ... TO (...)` 的选项。
+    ///
+    /// ```sql
+    /// COPY (SELECT 1 AS i) TO 'out.tsv' (FORMAT dfn_copy_tsv, HEADER true);
+    /// ```
+    ///
+    /// Opens the output target; `options` carries the `COPY ... TO (...)` options.
+    fn open(path: &str, schema: &DuckResultSchema, options: &DuckCopyOptions) -> DuckResult<Self> {
         let file = File::create(path)
             .map_err(|e| duck_error(format!("dfn_copy_tsv: cannot create {path}: {e}")))?;
-        let column_types = columns
-            .iter()
-            // SAFETY: 本函数由 DuckDB 在 global init 阶段回调，运行时已就绪。
-            .map(|column| unsafe { column.get_type_id() })
-            .collect();
+        let mut file = BufWriter::new(file);
+
+        // `HEADER true`：第一行写列名。只做一次的事情放在 open 里最合适。
+        //
+        // `HEADER true`: write the column names as the first line. One-off work belongs in open.
+        if options.get_bool("header").unwrap_or(false) {
+            let names: Vec<&str> = schema
+                .columns()
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect();
+            let line = format!("{}\n", names.join(&tsv_format::DELIMITER.to_string()));
+            file.write_all(line.as_bytes())
+                .map_err(|e| duck_error(format!("dfn_copy_tsv: header write failed: {e}")))?;
+        }
+
         Ok(Self {
-            file: BufWriter::new(file),
-            column_types,
+            file,
+            // schema 是 `Send` 友好的描述，可以直接留着跨数据块复用。
+            //
+            // The schema is a `Send`-friendly description, so it is kept and reused across chunks.
+            schema: schema.clone(),
         })
     }
 
     /// flush 缓冲区（错误不会被 `Drop` 吞掉）。
+    ///
+    /// Flushes the buffer (an error is not swallowed by `Drop`).
     fn finish(&mut self) -> DuckResult<()> {
         self.file
             .flush()
@@ -54,97 +90,39 @@ impl DuckCopyWriter for TsvWriter {
     }
 }
 
-/// 把 `SELECT` 的结果写成「制表符分隔、每行一条记录」的文本；NULL 写作 `\N`。
+/// 把一个数据块的动态行写成一 Tab 分隔的文本；NULL 写作 `\N`。
 ///
-/// 每行格式：`列1 \t 列2 \t ... \t 列N \n`，既没有表头也不带引号，因此可以直接
-/// `read_csv(..., delim = '\t', header = false, nullstr = '\N')` 读回来。
+/// 每行格式：`列1 \t 列2 \t ... \t 列N \n`；单元格文本来自
+/// [`DuckDynamicValue::to_text`](duckfn::DuckDynamicValue::to_text)，再按 TSV 规则转义，因此可以直接
+/// 用 `read_csv(..., delim = '\t', header = false, nullstr = '\N')` 读回标量列，也可以用
+/// [`super::copy_from_function`] 的同名读取器把嵌套列原样读回来。
 ///
 /// ```sql
 /// COPY (SELECT 1 AS i, 'a' AS s) TO 'out.tsv' (FORMAT dfn_copy_tsv);
+/// COPY (SELECT [1, 2] AS l, {'k': 3} AS st, MAP {'m': 4} AS mp) TO 'out.tsv' (FORMAT dfn_copy_tsv);
 /// ```
+///
+/// Writes one chunk's dynamic rows as tab-separated text with NULL as `\N`. Each line is
+/// `col1 \t col2 \t ... \n`; the cell text comes from `DuckDynamicValue::to_text`, escaped for TSV,
+/// so scalar columns read back with `read_csv(..., delim = '\t', header = false, nullstr = '\N')` and
+/// nested columns read back through the reader in [`super::copy_from_function`].
 #[duck_copy_function]
-fn dfn_copy_tsv(writer: &mut TsvWriter, chunk: &DataChunk) -> DuckResult<()> {
-    let rows = chunk.size();
-    let columns = chunk.column_count();
-    // 每列建一次 reader；下面按行按列读取。
-    let readers: Vec<VectorReader> = (0..columns)
-        // SAFETY: col < column_count()，且 chunk 在本次回调期间有效。
-        .map(|col| unsafe { chunk.reader(col) })
-        .collect();
-    // 先拷一份列类型，避免读 writer.file 时与 writer 的可变借用冲突。
-    let column_types = writer.column_types.clone();
-
-    for row in 0..rows {
-        for (col, reader) in readers.iter().enumerate() {
-            if col > 0 {
-                write_bytes(writer, b"\t")?;
+fn dfn_copy_tsv(writer: &mut TsvWriter, rows: &[DuckDynamicRow]) -> DuckResult<()> {
+    let columns = writer.schema.columns();
+    for row in rows {
+        let mut line = String::new();
+        for (index, (_, desc)) in columns.iter().enumerate() {
+            if index > 0 {
+                line.push(tsv_format::DELIMITER);
             }
-            let type_id = column_types.get(col).copied().ok_or_else(|| {
-                duck_error(format!(
-                    "dfn_copy_tsv: chunk has more columns ({columns}) than the query declared ({})",
-                    column_types.len()
-                ))
-            })?;
-            match format_cell(reader, row, type_id)? {
-                Some(text) => write_bytes(writer, text.as_bytes())?,
-                // NULL：写成 read_csv 能识别的空标记。
-                None => write_bytes(writer, b"\\N")?,
-            }
+            let cell = row.values().get(index).and_then(Option::as_ref);
+            line.push_str(&tsv_format::format_cell(cell, desc));
         }
-        write_bytes(writer, b"\n")?;
+        line.push('\n');
+        writer
+            .file
+            .write_all(line.as_bytes())
+            .map_err(|e| duck_error(format!("dfn_copy_tsv: write failed: {e}")))?;
     }
     Ok(())
-}
-
-/// 按列逻辑类型把一个单元格读成文本；`None` 表示该值为 NULL。
-///
-/// 这里只覆盖常见标量类型；遇到 LIST / STRUCT / MAP 等复杂类型会报错，让整条 `COPY` 失败，
-/// 而不是写出一份不可读的文件。
-fn format_cell(reader: &VectorReader, row: usize, type_id: TypeId) -> DuckResult<Option<String>> {
-    // SAFETY: row < chunk.size()，reader 来自本次回调的 chunk。
-    if !unsafe { reader.is_valid(row) } {
-        return Ok(None);
-    }
-    // SAFETY: 下面每个 read_* 都要求「列类型与该方法一致」且值非 NULL，两者都由
-    // type_id 分派与上面的 is_valid 检查保证。
-    let text = match type_id {
-        TypeId::Boolean => unsafe { reader.read_bool(row) }.to_string(),
-        TypeId::TinyInt => unsafe { reader.read_i8(row) }.to_string(),
-        TypeId::SmallInt => unsafe { reader.read_i16(row) }.to_string(),
-        TypeId::Integer => unsafe { reader.read_i32(row) }.to_string(),
-        TypeId::BigInt => unsafe { reader.read_i64(row) }.to_string(),
-        TypeId::UTinyInt => unsafe { reader.read_u8(row) }.to_string(),
-        TypeId::USmallInt => unsafe { reader.read_u16(row) }.to_string(),
-        TypeId::UInteger => unsafe { reader.read_u32(row) }.to_string(),
-        TypeId::UBigInt => unsafe { reader.read_u64(row) }.to_string(),
-        TypeId::HugeInt => unsafe { reader.read_i128(row) }.to_string(),
-        TypeId::UHugeInt => unsafe { reader.read_u128(row) }.to_string(),
-        TypeId::Float => unsafe { reader.read_f32(row) }.to_string(),
-        TypeId::Double => unsafe { reader.read_f64(row) }.to_string(),
-        TypeId::Varchar => escape(unsafe { reader.read_str(row) }),
-        other => {
-            return Err(duck_error(format!(
-                "dfn_copy_tsv: unsupported column type: {}",
-                other.sql_name()
-            )));
-        }
-    };
-    Ok(Some(text))
-}
-
-/// 把字符串里的反斜杠、制表符与换行转义掉，避免破坏「一行一条记录」的格式。
-fn escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('\t', "\\t")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-}
-
-/// 往输出文件写一段字节，失败时带上格式名报错。
-fn write_bytes(writer: &mut TsvWriter, bytes: &[u8]) -> DuckResult<()> {
-    writer
-        .file
-        .write_all(bytes)
-        .map_err(|e| duck_error(format!("dfn_copy_tsv: write failed: {e}")))
 }

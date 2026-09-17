@@ -26,15 +26,16 @@
 //! [`DuckDynamicTable`] then carry that schema and a row iterator through the bind/scan phases.
 
 use crate::value_types::vector_layout::{
-    element_child_vector, finish_elements, map_keys, map_values, reserve_elements, set_entry,
-    struct_field, write_null_row,
+    element_child_size, element_child_vector, element_entry, finish_elements, map_entry, map_keys,
+    map_total_entries, map_values, reserve_elements, set_entry, struct_field, write_null_row,
 };
 use crate::{
-    DuckOptionResult, DuckResult, DuckValueType, DuckValueWriter, duck_error, duck_value_is_null,
+    DuckOptionResult, DuckResult, DuckValueReader, DuckValueType, DuckValueWriter, duck_error,
+    duck_value_is_null,
 };
 use libduckdb_sys::duckdb_vector;
 use quack_rs::interval::DuckInterval;
-use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value};
+use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value, VectorReader};
 
 // ============================================================================
 // 运行时类型描述
@@ -197,7 +198,7 @@ impl DuckTypeDesc {
         let raw = unsafe { libduckdb_sys::duckdb_get_type_id(logical_type.as_raw()) };
         let Some(type_id) = TypeId::try_from_duckdb_type(raw) else {
             return Err(duck_error(format!(
-                "dynamic table function: unknown DuckDB type id {raw}; cannot build a \
+                "dynamic column: unknown DuckDB type id {raw}; cannot build a \
                  DuckTypeDesc from this logical type"
             )));
         };
@@ -227,7 +228,7 @@ impl DuckTypeDesc {
             }),
             other => Self::from_scalar_type_id(other).ok_or_else(|| {
                 duck_error(format!(
-                    "dynamic table function: the DuckDB logical type `{other:?}` cannot be turned \
+                    "dynamic column: the DuckDB logical type `{other:?}` cannot be turned \
                      into a DuckTypeDesc (its parameters are not expressible); use a supported \
                      scalar, DECIMAL, LIST, STRUCT or MAP instead"
                 ))
@@ -690,25 +691,288 @@ impl DuckDynamicValue {
                         .map(|key| Self::from_duck_value(&key, key_desc))
                         .transpose()?
                         .flatten()
-                        .ok_or_else(|| duck_error("dynamic table function: MAP key cannot be null"))?;
+                        .ok_or_else(|| duck_error("dynamic column: MAP key cannot be null"))?;
                     let map_value = value
                         .map_value(index)
                         .map(|map_value| Self::from_duck_value(&map_value, value_desc))
                         .transpose()?
                         .flatten()
-                        .ok_or_else(|| duck_error("dynamic table function: MAP value cannot be null"))?;
+                        .ok_or_else(|| duck_error("dynamic column: MAP value cannot be null"))?;
                     pairs.push((key, map_value));
                 }
                 Self::Map(pairs)
             }
             DuckTypeDesc::Scalar(other) => {
                 return Err(duck_error(format!(
-                    "dynamic table function: DuckTypeDesc `{other:?}` is not supported by \
+                    "dynamic column: DuckTypeDesc `{other:?}` is not supported by \
                      DuckDynamicValue::from_duck_value"
                 )));
             }
         };
         Ok(Some(dynamic))
+    }
+
+    /// 从一个向量读取器里读出一个动态值；该槽位是 SQL NULL 时返回 `Ok(None)`。
+    ///
+    /// Reads one dynamic value out of a vector reader; `Ok(None)` means the slot is SQL NULL.
+    ///
+    /// `desc` 是唯一真相：读取完全由它驱动，叶子按 `VectorReader::read_*` 分派，`LIST` /
+    /// `STRUCT` / `MAP` 递归到 [`DuckValueReader::child_reader`]。因此调用前必须先用
+    /// [`prepare_dynamic_reader`] 把读取器的子读取器按同一份 `desc` 建好。
+    ///
+    /// `desc` is the single source of truth: the read is driven entirely by it — leaves dispatch to
+    /// `VectorReader::read_*`, while `LIST` / `STRUCT` / `MAP` recurse into
+    /// [`DuckValueReader::child_reader`]. The child readers must therefore have been built for the
+    /// same `desc` by [`prepare_dynamic_reader`] beforehand.
+    ///
+    /// # Errors
+    ///
+    /// `desc` 描述的类型读不出来（例如 `ENUM` / `ARRAY` / `UNION` / `BIT`）、或子读取器缺失、
+    /// 或 `MAP` 的键/值为 NULL 时返回错误。
+    ///
+    /// Returns an error when the described type cannot be read (`ENUM` / `ARRAY` / `UNION` / `BIT`),
+    /// when a child reader is missing, or when a `MAP` key or value is NULL.
+    pub fn read_cell(
+        reader: &DuckValueReader,
+        row: usize,
+        desc: &DuckTypeDesc,
+    ) -> DuckResult<Option<Self>> {
+        // SAFETY: row 由调用方保证落在 `reader.vector_reader.row_count()` 之内。
+        //
+        // SAFETY: the caller guarantees `row` is within `reader.vector_reader.row_count()`.
+        if !unsafe { reader.vector_reader.is_valid(row) } {
+            return Ok(None);
+        }
+
+        let value = match desc {
+            DuckTypeDesc::Scalar(type_id) => Self::read_scalar(&reader.vector_reader, row, *type_id)?,
+            DuckTypeDesc::Decimal { width, scale } => Self::Decimal {
+                width: *width,
+                scale: *scale,
+                unscaled: unsafe { reader.vector_reader.read_decimal(row, *width) },
+            },
+            DuckTypeDesc::List(element) => {
+                let (offset, length) = element_entry(reader.c_duckdb_vector, row);
+                let child = child_reader_at(reader, 0, "LIST element")?;
+                let mut items = Vec::with_capacity(length);
+                for index in 0..length {
+                    items.push(Self::read_cell(child, offset + index, element)?);
+                }
+                Self::List(items)
+            }
+            DuckTypeDesc::Struct(fields) => {
+                let mut values = Vec::with_capacity(fields.len());
+                for (index, (name, field_desc)) in fields.iter().enumerate() {
+                    let child = child_reader_at(reader, index, name)?;
+                    values.push(Self::read_cell(child, row, field_desc)?);
+                }
+                Self::Struct(values)
+            }
+            DuckTypeDesc::Map(key_desc, value_desc) => {
+                let (offset, length) = map_entry(reader.c_duckdb_vector, row);
+                let keys = child_reader_at(reader, 0, "MAP key")?;
+                let values = child_reader_at(reader, 1, "MAP value")?;
+                let mut pairs = Vec::with_capacity(length);
+                for index in 0..length {
+                    let index = offset + index;
+                    let key = Self::read_cell(keys, index, key_desc)?
+                        .ok_or_else(|| duck_error("dynamic value: MAP key cannot be null"))?;
+                    let value = Self::read_cell(values, index, value_desc)?
+                        .ok_or_else(|| duck_error("dynamic value: MAP value cannot be null"))?;
+                    pairs.push((key, value));
+                }
+                Self::Map(pairs)
+            }
+        };
+        Ok(Some(value))
+    }
+
+    /// 读一个标量槽位（调用方已确认该行非 NULL）。
+    ///
+    /// Reads one scalar slot (the caller has already established that the row is not NULL).
+    ///
+    /// # Errors
+    ///
+    /// `type_id` 没有对应的读法时返回错误（`ENUM` / `ARRAY` / `UNION` / `BIT` 等）。
+    ///
+    /// Returns an error when `type_id` has no read path (`ENUM` / `ARRAY` / `UNION` / `BIT`, ...).
+    fn read_scalar(raw: &VectorReader, row: usize, type_id: TypeId) -> DuckResult<Self> {
+        // SAFETY: 每个 `read_*` 都要求「列类型与该方法一致」且该行非 NULL，两者分别由
+        // type_id 分派与调用方的 is_valid 检查保证。
+        //
+        // SAFETY: every `read_*` requires the column type to match and the row to be non-NULL,
+        // which the `type_id` dispatch and the caller's validity check guarantee.
+        let value = match type_id {
+            TypeId::Boolean => Self::Boolean(unsafe { raw.read_bool(row) }),
+            TypeId::TinyInt => Self::TinyInt(unsafe { raw.read_i8(row) }),
+            TypeId::SmallInt => Self::SmallInt(unsafe { raw.read_i16(row) }),
+            TypeId::Integer => Self::Integer(unsafe { raw.read_i32(row) }),
+            TypeId::BigInt => Self::BigInt(unsafe { raw.read_i64(row) }),
+            TypeId::HugeInt => Self::HugeInt(unsafe { raw.read_i128(row) }),
+            TypeId::UTinyInt => Self::UTinyInt(unsafe { raw.read_u8(row) }),
+            TypeId::USmallInt => Self::USmallInt(unsafe { raw.read_u16(row) }),
+            TypeId::UInteger => Self::UInteger(unsafe { raw.read_u32(row) }),
+            TypeId::UBigInt => Self::UBigInt(unsafe { raw.read_u64(row) }),
+            TypeId::UHugeInt => Self::UHugeInt(unsafe { raw.read_u128(row) }),
+            TypeId::Float => Self::Float(unsafe { raw.read_f32(row) }),
+            TypeId::Double => Self::Double(unsafe { raw.read_f64(row) }),
+            TypeId::Varchar => Self::Varchar(unsafe { raw.read_str(row) }.to_owned()),
+            TypeId::Blob => Self::Blob(unsafe { raw.read_blob(row) }.to_vec()),
+            TypeId::Date => Self::Date(unsafe { raw.read_date(row) }),
+            TypeId::Time => Self::Time(unsafe { raw.read_time(row) }),
+            TypeId::TimeTz => Self::TimeTz(unsafe { raw.read_time_tz(row) }),
+            TypeId::Timestamp => Self::Timestamp(unsafe { raw.read_timestamp(row) }),
+            TypeId::TimestampTz => Self::TimestampTz(unsafe { raw.read_timestamp_tz(row) }),
+            TypeId::TimestampS => Self::TimestampS(unsafe { raw.read_timestamp_s(row) }),
+            TypeId::TimestampMs => Self::TimestampMs(unsafe { raw.read_timestamp_ms(row) }),
+            TypeId::TimestampNs => Self::TimestampNs(unsafe { raw.read_timestamp_ns(row) }),
+            TypeId::Uuid => Self::Uuid(unsafe { raw.read_uuid(row) }),
+            TypeId::Interval => Self::Interval(unsafe { raw.read_interval(row) }),
+            other => {
+                return Err(duck_error(format!(
+                    "dynamic value: DuckDB type `{}` cannot be read from a vector",
+                    other.sql_name()
+                )));
+            }
+        };
+        Ok(value)
+    }
+
+    /// 文本渲染（展示 / 诊断用）：嵌套结构用 schema 里的字段名，便于人读。
+    ///
+    /// Text rendering (for display / diagnostics): nested structures use the schema's field names so
+    /// they read like themselves.
+    ///
+    /// **它不是一种无歧义的往返编码**：字符串原样输出、容器里的 NULL 写作 `NULL`，因此
+    /// `['NULL', NULL]` 与 `['NULL', 'NULL']` 会渲染成同一个字符串。自定义文件格式应当按自己的
+    /// 转义约定递归渲染（`src/extension/functions/tsv_format.rs` 就是一个例子），而不是直接拿这份
+    /// 文本去解析。
+    ///
+    /// **This is not an unambiguous round-trip encoding**: strings are written verbatim and a NULL
+    /// inside a container becomes `NULL`, so `['NULL', NULL]` and `['NULL', 'NULL']` render
+    /// identically. A custom file format should render recursively with its own escaping rules (see
+    /// `src/extension/functions/tsv_format.rs` for an example) rather than parse this text back.
+    ///
+    /// 约定：
+    /// - `VARCHAR` 原样输出（不做引号 / 转义，格式实现若需要转义请自行处理）；
+    /// - `BLOB` 输出 `\xHH`（大写十六进制）；
+    /// - 浮点一定带小数点（`1.0` 而不是 `1`）；
+    /// - `DATE` / `TIME` / `TIMESTAMP*` / `UUID` / `INTERVAL` / `DECIMAL` 输出其**物理整数**
+    ///   （就是 `DuckDynamicValue` 各分支里存的那个值），不做日历 / 小数格式化；
+    /// - `LIST` → `[a, b]`，`STRUCT`（用 `desc` 给的名字）→ `{'k': v}`，`MAP` → `{k=v}`；
+    ///   元素 / 字段 / 值为 NULL 时写 `NULL`；空容器写 `[]` / `{}`。
+    ///
+    /// Conventions: `VARCHAR` verbatim, `BLOB` as `\xHH`, floats always with a decimal point, the
+    /// datetime / `UUID` / `INTERVAL` / `DECIMAL` wrappers as their **physical integer** (the value
+    /// the enum branch stores), `LIST` as `[a, b]`, `STRUCT` (named by `desc`) as `{'k': v}` and
+    /// `MAP` as `{k=v}`; NULL elements / fields / values become `NULL`, empty containers `[]` / `{}`.
+    #[must_use]
+    pub fn to_text(&self, desc: &DuckTypeDesc) -> String {
+        let mut out = String::new();
+        self.render(Some(desc), &mut out);
+        out
+    }
+
+    /// 递归渲染实现；`desc` 为 `None` 时退化成「无 schema」渲染（`STRUCT` 只写位置）。
+    ///
+    /// The recursive rendering; with `desc` as `None` it degrades to a schema-less rendering (a
+    /// `STRUCT` prints positions only).
+    fn render(&self, desc: Option<&DuckTypeDesc>, out: &mut String) {
+        match self {
+            Self::Boolean(value) => out.push_str(if *value { "true" } else { "false" }),
+            Self::TinyInt(value) => out.push_str(&value.to_string()),
+            Self::SmallInt(value) => out.push_str(&value.to_string()),
+            Self::Integer(value) => out.push_str(&value.to_string()),
+            Self::BigInt(value) => out.push_str(&value.to_string()),
+            Self::HugeInt(value) => out.push_str(&value.to_string()),
+            Self::UTinyInt(value) => out.push_str(&value.to_string()),
+            Self::USmallInt(value) => out.push_str(&value.to_string()),
+            Self::UInteger(value) => out.push_str(&value.to_string()),
+            Self::UBigInt(value) => out.push_str(&value.to_string()),
+            Self::UHugeInt(value) => out.push_str(&value.to_string()),
+            Self::Float(value) => push_float(*value as f64, out),
+            Self::Double(value) => push_float(*value, out),
+            Self::Varchar(value) => out.push_str(value),
+            Self::Blob(value) => {
+                for byte in value {
+                    out.push_str(&format!("\\x{byte:02X}"));
+                }
+            }
+            Self::Date(value) => out.push_str(&value.to_string()),
+            Self::Time(value) => out.push_str(&value.to_string()),
+            Self::TimeTz(value) => out.push_str(&value.to_string()),
+            Self::Timestamp(value) => out.push_str(&value.to_string()),
+            Self::TimestampTz(value) => out.push_str(&value.to_string()),
+            Self::TimestampS(value) => out.push_str(&value.to_string()),
+            Self::TimestampMs(value) => out.push_str(&value.to_string()),
+            Self::TimestampNs(value) => out.push_str(&value.to_string()),
+            Self::Uuid(value) => out.push_str(&value.to_string()),
+            Self::Interval(value) => {
+                out.push_str(&format!("{} {} {}", value.months, value.days, value.micros));
+            }
+            Self::Decimal { unscaled, .. } => out.push_str(&unscaled.to_string()),
+            Self::List(items) => {
+                let element = match desc {
+                    Some(DuckTypeDesc::List(element)) => Some(element.as_ref()),
+                    _ => None,
+                };
+                out.push('[');
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        out.push_str(", ");
+                    }
+                    match item {
+                        Some(value) => value.render(element, out),
+                        None => out.push_str("NULL"),
+                    }
+                }
+                out.push(']');
+            }
+            Self::Struct(values) => {
+                let fields = match desc {
+                    Some(DuckTypeDesc::Struct(fields)) => Some(fields.as_slice()),
+                    _ => None,
+                };
+                out.push('{');
+                for (index, value) in values.iter().enumerate() {
+                    if index > 0 {
+                        out.push_str(", ");
+                    }
+                    let (name, field_desc) = match fields.and_then(|fields| fields.get(index)) {
+                        Some((name, field_desc)) => (Some(name.as_str()), Some(field_desc)),
+                        None => (None, None),
+                    };
+                    if let Some(name) = name {
+                        out.push('\'');
+                        out.push_str(name);
+                        out.push_str("': ");
+                    }
+                    match value {
+                        Some(value) => value.render(field_desc, out),
+                        None => out.push_str("NULL"),
+                    }
+                }
+                out.push('}');
+            }
+            Self::Map(pairs) => {
+                let (key_desc, value_desc) = match desc {
+                    Some(DuckTypeDesc::Map(key, value)) => {
+                        (Some(key.as_ref()), Some(value.as_ref()))
+                    }
+                    _ => (None, None),
+                };
+                out.push('{');
+                for (index, (key, value)) in pairs.iter().enumerate() {
+                    if index > 0 {
+                        out.push_str(", ");
+                    }
+                    key.render(key_desc, out);
+                    out.push('=');
+                    value.render(value_desc, out);
+                }
+                out.push('}');
+            }
+        }
     }
 
     /// 把一个标量值写进向量；嵌套值由 [`DynColumnWriter`] 处理，这里返回错误。
@@ -790,7 +1054,7 @@ impl DuckDynamicValue {
             },
             Self::List(_) | Self::Struct(_) | Self::Map(_) => {
                 return Err(duck_error(
-                    "dynamic table function: a nested value must be written through its column \
+                    "dynamic column: a nested value must be written through its column \
                      writer, not as a scalar",
                 ));
             }
@@ -859,6 +1123,24 @@ impl From<&str> for DuckDynamicValue {
     /// `&str` → `VARCHAR`.
     fn from(value: &str) -> Self {
         Self::Varchar(value.to_owned())
+    }
+}
+
+impl std::fmt::Display for DuckDynamicValue {
+    /// 无 schema 的文本渲染（诊断 / 展示用）。
+    ///
+    /// The schema-less text rendering (for diagnostics / display).
+    ///
+    /// 与 [`DuckDynamicValue::to_text`] 的唯一区别是 `STRUCT`：这里没有 schema，只能用位置表示
+    /// （`{1, a}`）而不是字段名（`{'id': 1, 'name': a}`）。需要可读的嵌套结构时请用 `to_text`。
+    ///
+    /// The only difference from [`DuckDynamicValue::to_text`] is `STRUCT`: without a schema it can
+    /// only print positions (`{1, a}`) rather than field names (`{'id': 1, 'name': a}`). Use
+    /// `to_text` whenever a nested structure should look like itself.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut out = String::new();
+        self.render(None, &mut out);
+        f.write_str(&out)
     }
 }
 
@@ -1058,7 +1340,7 @@ impl DuckDynamicRow {
             };
             if row.values.len() != columns.len() {
                 return Err(duck_error(format!(
-                    "dynamic table function: row {row_index} has {} columns but the schema \
+                    "dynamic column: row {row_index} has {} columns but the schema \
                      declares {}",
                     row.values.len(),
                     columns.len()
@@ -1068,7 +1350,7 @@ impl DuckDynamicRow {
                 if let Some(value) = &row.values[column_index] {
                     if !desc.matches_value(value) {
                         return Err(duck_error(format!(
-                            "dynamic table function: row {row_index} column `{name}` expects \
+                            "dynamic column: row {row_index} column `{name}` expects \
                              {desc} but got a value of type {}",
                             value.scalar_type_desc()
                         )));
@@ -1116,6 +1398,65 @@ impl DuckDynamicRow {
             writer.finish();
         }
         Ok(())
+    }
+
+    /// 按 `schema` 把一个数据块读成动态行 —— [`Self::write_batch`] 的逆向操作。
+    ///
+    /// Reads a whole data chunk into dynamic rows according to `schema` — the inverse of
+    /// [`Self::write_batch`].
+    ///
+    /// `COPY ... TO` 的 sink 阶段用它把每个数据块交给用户；凡是能从 schema 描述出来的列
+    /// （标量、`DECIMAL`、`LIST`、`STRUCT`、`MAP`）都能读，嵌套任意深度。每列只建一次读取器
+    /// （子读取器按同一份描述预先建好），随后按行复用，因此不会每行重复分配。
+    ///
+    /// The sink phase of `COPY ... TO` uses it to hand each data chunk to the user. Any column the
+    /// schema can describe (scalars, `DECIMAL`, `LIST`, `STRUCT`, `MAP`) is readable, nested to any
+    /// depth. One reader is built per column (with its child readers prepared from the same
+    /// description) and then reused for every row, so nothing is re-allocated per row.
+    ///
+    /// # Errors
+    ///
+    /// 数据块的列数少于 schema、或某列的类型读不出来时返回错误。
+    ///
+    /// Returns an error when the chunk has fewer columns than the schema, or when a column's type
+    /// cannot be read.
+    pub fn read_batch(
+        chunk: &DataChunk,
+        schema: &DuckResultSchema,
+    ) -> DuckResult<Vec<DuckDynamicRow>> {
+        let columns = schema.columns();
+        let size = chunk.size();
+        if chunk.column_count() < columns.len() {
+            return Err(duck_error(format!(
+                "dynamic value: the chunk has {} columns but the schema declares {}",
+                chunk.column_count(),
+                columns.len()
+            )));
+        }
+
+        // 1) 每列建一次读取器（含子读取器）。
+        //
+        // 1) Build one reader per column (child readers included).
+        let mut readers = Vec::with_capacity(columns.len());
+        for (index, (_, desc)) in columns.iter().enumerate() {
+            let vector = unsafe { chunk.vector(index) };
+            let mut reader = DuckValueReader::new_from_vector(vector, size);
+            prepare_dynamic_reader(&mut reader, desc)?;
+            readers.push(reader);
+        }
+
+        // 2) 逐行读。
+        //
+        // 2) Read every row.
+        let mut rows = Vec::with_capacity(size);
+        for row in 0..size {
+            let mut cells = Vec::with_capacity(columns.len());
+            for (index, reader) in readers.iter().enumerate() {
+                cells.push(DuckDynamicValue::read_cell(reader, row, &columns[index].1)?);
+            }
+            rows.push(Self::new(cells));
+        }
+        Ok(rows)
     }
 }
 
@@ -1355,7 +1696,7 @@ impl DynColumnWriter {
             DuckDynamicValue::List(items) => {
                 if self.children.len() != 1 {
                     return Err(duck_error(
-                        "dynamic table function: LIST value written through a non-LIST column writer",
+                        "dynamic column: LIST value written through a non-LIST column writer",
                     ));
                 }
                 let offset = self.offset;
@@ -1372,7 +1713,7 @@ impl DynColumnWriter {
             DuckDynamicValue::Struct(values) => {
                 if self.children.len() != values.len() {
                     return Err(duck_error(format!(
-                        "dynamic table function: STRUCT has {} fields but the column declares {}",
+                        "dynamic column: STRUCT has {} fields but the column declares {}",
                         values.len(),
                         self.children.len()
                     )));
@@ -1388,7 +1729,7 @@ impl DynColumnWriter {
             DuckDynamicValue::Map(pairs) => {
                 if self.children.len() != 2 {
                     return Err(duck_error(
-                        "dynamic table function: MAP value written through a non-MAP column writer",
+                        "dynamic column: MAP value written through a non-MAP column writer",
                     ));
                 }
                 let offset = self.offset;
@@ -1477,4 +1818,101 @@ fn column_struct_values<'a>(
             })
         })
         .collect()
+}
+
+// ============================================================================
+// 读取器构建与文本渲染辅助
+// Reader construction and text-rendering helpers
+// ============================================================================
+
+/// 取第 `index` 个子读取器；缺失时报错（说明读取器与类型描述不同构）。
+///
+/// Returns child reader `index`, or an error when it is missing (the reader and the type
+/// description are not isomorphic).
+fn child_reader_at<'a>(
+    reader: &'a DuckValueReader,
+    index: usize,
+    what: &str,
+) -> DuckResult<&'a DuckValueReader> {
+    reader.child_reader.get(index).ok_or_else(|| {
+        duck_error(format!(
+            "dynamic value: no child reader for {what} at index {index}; was the reader prepared \
+             for this type description?"
+        ))
+    })
+}
+
+/// 把浮点数写成「一定带小数点」的文本（`1` → `1.0`），`inf` / `NaN` 原样保留。
+///
+/// Writes a float so that it always carries a decimal point (`1` → `1.0`), leaving `inf` / `NaN`
+/// alone.
+fn push_float(value: f64, out: &mut String) {
+    let text = value.to_string();
+    out.push_str(&text);
+    if !text.contains(['.', 'e', 'E']) && !text.contains("inf") && !text.contains("NaN") {
+        out.push_str(".0");
+    }
+}
+
+/// 按类型描述为读取器准备子读取器（`LIST` 元素 / `STRUCT` 字段 / `MAP` 键值），递归。
+///
+/// Prepares a reader's child readers (`LIST` elements, `STRUCT` fields, `MAP` keys and values) from
+/// a type description, recursively.
+///
+/// [`DuckDynamicValue::read_cell`] 完全由 `desc` 驱动递归读取，因此读取器树必须与描述严格同构；
+/// 这里是那棵树唯一的构建入口 —— 静态侧 `DuckValueType::create_reader_from_vector` 的动态对应物。
+///
+/// [`DuckDynamicValue::read_cell`] reads recursively, driven entirely by `desc`, so the reader tree
+/// must mirror that description exactly: this is the single place it is built — the dynamic
+/// counterpart of the static `DuckValueType::create_reader_from_vector`.
+///
+/// 标量（含 `DECIMAL`）不需要子读取器，因此这里不校验它们的可读性：`DuckTypeDesc` 里正常的标量
+/// 分支都来自 [`DuckTypeDesc::from_logical_type`]，本就只有可读的类型。手写出的不可读标量
+/// （例如 `Scalar(TypeId::Bit)`）会在第一次读该列时报错。
+///
+/// Scalars (including `DECIMAL`) need no child reader, so their readability is not checked here:
+/// every scalar branch a `DuckTypeDesc` normally carries comes from
+/// [`DuckTypeDesc::from_logical_type`], which only admits readable types. A hand-built unreadable
+/// scalar (say `Scalar(TypeId::Bit)`) reports its error on the first read of that column instead.
+///
+/// # Errors
+///
+/// 子读取器树无法按 `desc` 建出来时返回错误。
+///
+/// Returns an error when the child-reader tree cannot be built from `desc`.
+fn prepare_dynamic_reader(reader: &mut DuckValueReader, desc: &DuckTypeDesc) -> DuckResult<()> {
+    let row_count = reader.vector_reader.row_count();
+    match desc {
+        DuckTypeDesc::Scalar(_) | DuckTypeDesc::Decimal { .. } => Ok(()),
+        DuckTypeDesc::List(element) => {
+            let vector = element_child_vector(reader.c_duckdb_vector);
+            let size = element_child_size(reader.c_duckdb_vector);
+            let mut child = DuckValueReader::new_from_vector(vector, size);
+            prepare_dynamic_reader(&mut child, element)?;
+            reader.child_reader = vec![child];
+            Ok(())
+        }
+        DuckTypeDesc::Struct(fields) => {
+            let mut children = Vec::with_capacity(fields.len());
+            for (index, (_, field_desc)) in fields.iter().enumerate() {
+                let vector = struct_field(reader.c_duckdb_vector, index);
+                let mut child = DuckValueReader::new_from_vector(vector, row_count);
+                prepare_dynamic_reader(&mut child, field_desc)?;
+                children.push(child);
+            }
+            reader.child_reader = children;
+            Ok(())
+        }
+        DuckTypeDesc::Map(key_desc, value_desc) => {
+            let total = map_total_entries(reader.c_duckdb_vector);
+            let mut key_reader =
+                DuckValueReader::new_from_vector(map_keys(reader.c_duckdb_vector), total);
+            prepare_dynamic_reader(&mut key_reader, key_desc)?;
+            let mut value_reader =
+                DuckValueReader::new_from_vector(map_values(reader.c_duckdb_vector), total);
+            prepare_dynamic_reader(&mut value_reader, value_desc)?;
+            reader.child_reader = vec![key_reader, value_reader];
+            Ok(())
+        }
+    }
 }

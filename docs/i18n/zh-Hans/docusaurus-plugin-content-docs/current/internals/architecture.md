@@ -133,12 +133,32 @@ DuckDB 的六个回调都实现在状态类型上：
 
 ### COPY 函数
 
-`COPY ... TO` 由四个回调驱动。适配层把四个都实现了：`bind` 把输出列的 `LogicalType` 记成 bind data，
-`global_init` 调用 `DuckCopyWriter::open(path, columns)` 并把 writer 存成 global state，`sink` 每个数据块
-调用一次被标注的函数，`finalize` 调用 `DuckCopyWriter::finish`。bind data 与 global state 都用 `Box`
-承载、配上负责 drop 的析构回调交给 DuckDB，每个回调都包在 `catch_unwind` 里，错误经 `set_error`
-上报。这套 API 来自 DuckDB 1.5.0+，因此该模块、适配层与 quack-rs 的再导出都在 `duckdb-1-5`
-feature 后面。
+`COPY ... TO` 与 `COPY ... FROM` 都建立在运行时动态列（`duckfn/src/duck_dynamic.rs`）之上，而不是
+`DuckValueType` —— 因为 COPY 函数的列要到 bind 阶段才知道。
+
+`COPY ... TO` 由四个回调驱动：`bind` 把输出列逐列反推成 `DuckResultSchema`（每列一次
+`DuckTypeDesc::from_logical_type`）并读出 COPY 选项，两者存成 bind data；`global_init` 调用
+`DuckCopyToWriter::open(path, schema, options)` 并把 writer 存成 global state；`sink` 通过
+`DuckDynamicRow::read_batch` 把每个数据块读成 `Vec<DuckDynamicRow>` 后调用被标注的函数；
+`finalize` 调用 `DuckCopyToWriter::finish`。
+
+`COPY ... FROM` 完全不是 COPY 的回调：它是一个普通的表函数，由它的 scan **产出**行，再用
+`duckdb_copy_function_set_copy_from_function` 接到格式上。quack-rs 0.16 没有 `copy_from` 辅助、也不
+外泄表函数的原始句柄，所以适配层直接用 `libduckdb_sys` 建这个表函数，同时复用 quack-rs 的
+`FfiBindData` / `FfiInitData` 完成 bind → init → scan 的状态传递。`bind` 解析 `Args`、用
+`duckdb_table_function_bind_get_result_column_*` 读**目标表**的 schema（COPY FROM 的 reader 不声明结果
+列）；`scan` 调用被标注的取批函数并用 `DuckDynamicRow::write_batch` 写出；reader 的 `finish` 由
+init data 的析构回调触发 —— 表函数没有 finalize 回调。
+
+bind data 与 global state 都用 `Box` 承载、配上负责 drop 的析构回调交给 DuckDB，每个回调都包在
+`catch_unwind` 里，错误经 `set_error` 上报。这套 API 来自 DuckDB 1.5.0+，因此这些模块、适配层与
+quack-rs 的再导出都在 `duckdb-1-5` feature 后面。
+
+改这块代码时要记住两个所有权陷阱：`duckdb_table_function_bind_get_result_column_name` 返回的字符串、
+以及 `duckdb_copy_function_bind_get_options` 返回的 value，都**由 DuckDB 持有**，不能释放（否则堆损坏
+`0xC0000374`），适配层只借用它们。交给 `duckdb_copy_function_set_copy_from_function` 的 reader 表函数
+句柄则**刻意不销毁**：DuckDB 是拷贝还是接管没有文档，double free 是致命的，而每次 `LOAD` 泄漏一个句柄
+无害。
 
 ### 类型转换
 

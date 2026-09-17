@@ -93,7 +93,7 @@ duckfn_entrypoint!("my_ext");
 | [标量函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) | 返回形态、`NULL` 处理、重载。 |
 | [聚合函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/aggregate-functions) | 行处理函数、状态类型、并行聚合。 |
 | [表函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/table-functions) | 行结构体、命名参数、流式输出。 |
-| [COPY 函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/copy-functions) | 为 `COPY ... TO` 提供自定义文件格式。 |
+| [COPY 函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/copy-functions) | 为 `COPY ... TO` / `COPY ... FROM` 提供自定义文件格式，基于运行时动态列。 |
 | [类型转换](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/casts) | 覆盖某一对源类型/目标类型的 `CAST`。 |
 | [替换扫描](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/replacement-scans) | 让 `SELECT * FROM 'data.points'` 生效。 |
 | [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros) | 用 Rust 或 `.sql` 文件注册宏。 |

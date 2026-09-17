@@ -147,3 +147,63 @@ pub(crate) fn struct_field(vector: duckdb_vector, index: usize) -> duckdb_vector
     // SAFETY: 由调用方保证 vector 是有效的 STRUCT 向量且 index 合法。
     unsafe { StructVector::get_child(vector, index) }
 }
+
+// ============================================================================
+// 读侧：与上面写侧一一对应的布局读取
+// Read side: layout reads mirroring the writes above
+// ============================================================================
+
+/// `LIST` / `MAP` 子向量的**当前长度**（已写入的元素总数）。
+///
+/// The current length of a `LIST` / `MAP` child vector (the total number of elements written).
+///
+/// 读子向量时必须用它作为 reader 的行数：子向量按整个数据块预留/增长，实际有效元素数由这里给出。
+///
+/// This is the row count a child reader must be built with: the child vector is reserved/grown for
+/// the whole data chunk, and only this call tells how many elements are actually valid.
+///
+/// # Safety
+///
+/// 同 [`element_child_vector`]。
+pub(crate) fn element_child_size(vector: duckdb_vector) -> usize {
+    // SAFETY: 由调用方保证 vector 是有效的 LIST / MAP 向量。
+    unsafe { ListVector::get_size(vector) }
+}
+
+/// 读第 `row` 行的 entry，返回 `(子向量偏移, 元素个数)`。
+///
+/// Reads the entry of row `row` and returns `(child offset, element count)`.
+///
+/// # Safety
+///
+/// 同 [`element_child_vector`]；`row` 必须在该向量的行数范围内。
+pub(crate) fn element_entry(vector: duckdb_vector, row: usize) -> (usize, usize) {
+    // SAFETY: 由调用方保证 vector 与 row 有效。
+    let entry = unsafe { ListVector::get_entry(vector, row) };
+    (entry.offset as usize, entry.length as usize)
+}
+
+/// `MAP` 子向量（键/值）的当前长度。
+///
+/// The current length of a `MAP`'s child vectors (keys / values).
+///
+/// # Safety
+///
+/// `vector` 必须是本行所在列的、有效的 `MAP` 向量。
+pub(crate) fn map_total_entries(vector: duckdb_vector) -> usize {
+    // SAFETY: 由调用方保证 vector 是有效的 MAP 向量。
+    unsafe { MapVector::total_entry_count(vector) }
+}
+
+/// 读 `MAP` 第 `row` 行的 entry，返回 `(子向量偏移, 键值对个数)`。
+///
+/// Reads the entry of `MAP` row `row` and returns `(child offset, pair count)`.
+///
+/// # Safety
+///
+/// 同 [`map_total_entries`]；`row` 必须在该向量的行数范围内。
+pub(crate) fn map_entry(vector: duckdb_vector, row: usize) -> (usize, usize) {
+    // SAFETY: 由调用方保证 vector 与 row 有效。
+    let entry = unsafe { MapVector::get_entry(vector, row) };
+    (entry.offset as usize, entry.length as usize)
+}

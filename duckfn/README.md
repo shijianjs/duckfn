@@ -100,7 +100,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [Scalar functions](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) | Return shapes, `NULL` handling, overloads. |
 | [Aggregate functions](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) | Row handlers, state types, parallel aggregation. |
 | [Table functions](https://shijianjs.github.io/duckfn/docs/guide/table-functions) | Row structs, named parameters, streaming. |
-| [Copy functions](https://shijianjs.github.io/duckfn/docs/guide/copy-functions) | A custom file format for `COPY ... TO`. |
+| [Copy functions](https://shijianjs.github.io/duckfn/docs/guide/copy-functions) | Custom file formats for `COPY ... TO` / `COPY ... FROM`, built on runtime dynamic columns. |
 | [Type casts](https://shijianjs.github.io/duckfn/docs/guide/casts) | Overriding `CAST` for one source/target pair. |
 | [Replacement scans](https://shijianjs.github.io/duckfn/docs/guide/replacement-scans) | Making `SELECT * FROM 'data.points'` work. |
 | [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) | Macros from Rust or from `.sql` files. |

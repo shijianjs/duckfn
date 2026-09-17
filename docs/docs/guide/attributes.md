@@ -13,7 +13,8 @@ description: Every duckfn attribute, the arguments they share, the items they ge
 | `#[duck_scalar_function]` | a scalar function | `T`, `Option<T>`, `DuckOptionResult<T>` |
 | `#[duck_aggregate_function]` | an aggregate function | row handler returns `()` or `DuckResult<()>`; the output comes from the state |
 | `#[duck_table_function]` | a table function | `impl Iterator<Item = Row>`, `DuckResult<impl Iterator<Item = Row>>`, `DuckFullIteratorResult<Row>` |
-| `#[duck_copy_function]` | a `COPY ... TO` file format | `fn(&mut Writer, &DataChunk) -> DuckResult<()>` (the writer type implements `DuckCopyWriter`) |
+| `#[duck_copy_function]` | a `COPY ... TO` file format | `fn(&mut Writer, &[DuckDynamicRow]) -> DuckResult<()>` (the writer type implements `DuckCopyToWriter`) |
+| `#[duck_copy_from_function]` | a `COPY ... FROM` file format | `fn(&mut Reader, usize) -> DuckResult<Vec<DuckDynamicRow>>` (the reader type implements `DuckCopyFromReader`) |
 | `#[duck_cast_function]` | a type cast | `T`, `Option<T>`, `DuckOptionResult<T>` |
 | `#[duck_replacement_scan]` | a replacement scan | `Option<String>`, `Option<&'static str>`, `DuckOptionResult<String>`, `DuckOptionResult<&'static str>` |
 | `#[duck_sql_macro]` | a SQL macro | `SqlMacro`, `DuckResult<SqlMacro>`, `String`, `&'static str`, or `DuckResult` of those |

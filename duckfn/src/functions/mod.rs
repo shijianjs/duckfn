@@ -15,12 +15,22 @@ pub(crate) mod cast_function_adapter;
 ///
 /// Scalar-function adapter: `ScalarFunctionAdapter`.
 pub(crate) mod scalar_function_adapter;
-/// COPY TO 适配层：`CopyFunctionAdapter` / `DuckCopyWriter`（需要 `duckdb-1-5`）。
+/// COPY FROM 适配层：`CopyFromFunctionAdapter` / `DuckCopyFromReader`（需要 `duckdb-1-5`）。
 ///
-/// Copy-function (`COPY ... TO`) adapter: `CopyFunctionAdapter`, `DuckCopyWriter`
-/// (requires `duckdb-1-5`).
+/// Copy-from adapter: `CopyFromFunctionAdapter`, `DuckCopyFromReader` (requires `duckdb-1-5`).
+///
+/// COPY 函数（`COPY ... TO` / `COPY ... FROM` 的自定义格式）走 DuckDB 1.5.0+ 的 C API，
+/// 与 quack-rs 的 `copy_function` 模块一起跟随 `duckdb-1-5` feature 开关。
+///
+/// Copy functions (custom formats for `COPY ... TO` / `COPY ... FROM`) use the DuckDB 1.5.0+ C API
+/// and follow the `duckdb-1-5` feature, like quack-rs' own `copy_function` module.
 #[cfg(feature = "duckdb-1-5")]
-pub(crate) mod copy_function_adapter;
+pub(crate) mod copy_from_adapter;
+/// COPY TO 适配层：`CopyToFunctionAdapter` / `DuckCopyToWriter`（需要 `duckdb-1-5`）。
+///
+/// Copy-to adapter: `CopyToFunctionAdapter`, `DuckCopyToWriter` (requires `duckdb-1-5`).
+#[cfg(feature = "duckdb-1-5")]
+pub(crate) mod copy_to_adapter;
 /// 表函数适配层：`TableFunctionAdapter` / `DuckBindArgs` 等。
 ///
 /// Table-function adapter: `TableFunctionAdapter`, `DuckBindArgs`, ...
@@ -37,7 +47,9 @@ pub(crate) mod replacement_scan_adapter;
 pub use aggregate_function_adapter::*;
 pub use cast_function_adapter::*;
 #[cfg(feature = "duckdb-1-5")]
-pub use copy_function_adapter::*;
+pub use copy_from_adapter::*;
+#[cfg(feature = "duckdb-1-5")]
+pub use copy_to_adapter::*;
 pub use scalar_function_adapter::*;
 pub use sql_macro_adapter::*;
 pub use table_function_adapter::*;

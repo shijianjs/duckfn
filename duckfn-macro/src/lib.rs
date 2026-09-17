@@ -223,65 +223,157 @@ pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream
     handle_duck_function(_attr, item, |wrapper| wrapper.build_table_function())
 }
 
-/// 把「按 chunk 写出」的 Rust 函数注册成 DuckDB 的 COPY 函数，为 `COPY ... TO` 提供自定义文件格式。
+/// 把「按批写行」的 Rust 函数注册成 DuckDB 的 COPY 函数，为 `COPY ... TO` 提供自定义文件格式。
 ///
 /// 需要 `duckfn` 打开 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API 才提供 COPY 函数）。
 ///
-/// 签名固定为「writer + chunk」两参，顺序可互换：
+/// 输出 schema 是**运行时**的：适配层在 bind 阶段把结果各列的类型反推成动态描述，sink 阶段再把每个
+/// 数据块读成动态行，因此 `LIST` / `STRUCT` / `MAP` 等嵌套列同样能写出。
+///
+/// 签名固定为「writer + 行批」两参，顺序可互换：
 ///
 /// ```ignore
-/// use duckfn::{duck_copy_function, DuckCopyWriter, DuckResult, DataChunk, LogicalType};
+/// use duckfn::{
+///     duck_copy_function, DuckCopyOptions, DuckCopyToWriter, DuckDynamicRow, DuckResult,
+///     DuckResultSchema,
+/// };
 /// use std::fs::File;
 /// use std::io::{BufWriter, Write};
 ///
-/// /// writer 状态：持有已打开的输出文件。
+/// /// writer 状态：持有已打开的输出文件与 bind 阶段定下的 schema。
 /// pub struct MyWriter {
 ///     file: BufWriter<File>,
+///     schema: DuckResultSchema,
 /// }
 ///
-/// impl DuckCopyWriter for MyWriter {
-///     fn open(path: &str, _columns: &[LogicalType]) -> DuckResult<Self> {
-///         Ok(Self { file: BufWriter::new(File::create(path)?) })
+/// impl DuckCopyToWriter for MyWriter {
+///     fn open(path: &str, schema: &DuckResultSchema, _options: &DuckCopyOptions)
+///         -> DuckResult<Self>
+///     {
+///         Ok(Self {
+///             file: BufWriter::new(File::create(path).map_err(/* … */)?),
+///             schema: schema.clone(),
+///         })
 ///     }
+///
+///     fn write_rows(&mut self, rows: &[DuckDynamicRow]) -> DuckResult<()> {
+///         // 逐行逐列渲染；LIST / STRUCT / MAP 都能从 DuckDynamicValue 里取到
+///         Ok(())
+///     }
+///
 ///     fn finish(&mut self) -> DuckResult<()> {
-///         self.file.flush()?;
+///         self.file.flush().map_err(/* … */)?;
 ///         Ok(())
 ///     }
 /// }
 ///
 /// /// 每个数据块调用一次；函数名即 `FORMAT <函数名>` 里的格式名。
 /// #[duck_copy_function]
-/// fn my_copy(writer: &mut MyWriter, chunk: &DataChunk) -> DuckResult<()> {
-///     // 逐行读 chunk、写入 writer.file …
-///     Ok(())
+/// fn my_copy(writer: &mut MyWriter, rows: &[DuckDynamicRow]) -> DuckResult<()> {
+///     writer.write_rows(rows)
 /// }
 /// ```
 ///
-/// - `&mut Writer`：COPY 的 writer 状态，需实现 `duckfn::DuckCopyWriter`（`open` 在 global init
-///   阶段打开输出目标，`finish` 在 finalize 阶段收尾）；
-/// - `&DataChunk`：本批要写出的数据块（至少一列、至多 `vector_size()` 行）；
+/// - `&mut Writer`：COPY 的 writer 状态，需实现 `duckfn::DuckCopyToWriter`（`open` 在 global init
+///   阶段拿到路径、动态 schema 与 COPY 选项，`finish` 在 finalize 阶段收尾）；
+/// - `&[DuckDynamicRow]`：本批要写出的动态行（至多 `vector_size()` 行）；行的列与 `open` 收到的
+///   schema 逐列对应，`None` 单元格就是 SQL NULL；
 /// - 返回 `DuckResult<()>`，入参或写出失败会让整条 `COPY` 失败，panic 也会被转成查询错误。
 ///
-/// 四个生命周期阶段的回调由适配层生成：bind 记录输出列逻辑类型，global init 调用
-/// `DuckCopyWriter::open`，sink 调用被标注的函数，finalize 调用 `DuckCopyWriter::finish`。
+/// 四个生命周期阶段的回调由适配层生成：bind 把输出列反推成动态 schema 并读出 COPY 选项，global init
+/// 调用 `DuckCopyToWriter::open`，sink 把数据块读成动态行后调用被标注的函数，finalize 调用
+/// `DuckCopyToWriter::finish`。
 ///
 /// 宏生成同名模块，导出 `copy_function_builder()` 与 `copy_function_register(connection)`；
 /// `auto_register = false` 时只生成它们、不自动注册。
 ///
-/// Registers a chunk-writing Rust function as a DuckDB copy function, providing a custom file
-/// format for `COPY ... TO`. Requires `duckfn`'s `duckdb-1-5` feature (only the DuckDB 1.5.0+ C
-/// API provides copy functions). The signature is fixed to "writer + chunk" (in either order):
-/// `&mut Writer` is the writer state implementing `duckfn::DuckCopyWriter` (its `open` opens the
-/// output during global init and its `finish` wraps up during finalize), and `&DataChunk` is the
-/// chunk to write. It returns `DuckResult<()>`: a failure fails the whole `COPY`, and a panic is
-/// turned into a query error as well. The adapter generates the four life-cycle callbacks (bind
-/// records the output column logical types, global init calls `DuckCopyWriter::open`, sink calls
-/// the annotated function and finalize calls `DuckCopyWriter::finish`). A module named after the
-/// function is generated, exporting `copy_function_builder()` and `copy_function_register(connection)`;
-/// with `auto_register = false` they are generated but nothing is registered.
+/// Registers a batch-writing Rust function as a DuckDB copy function, providing a custom file format
+/// for `COPY ... TO`. Requires `duckfn`'s `duckdb-1-5` feature (only the DuckDB 1.5.0+ C API provides
+/// copy functions). The output schema is a **runtime** one: bind reconstructs every result column's
+/// type into a dynamic description and sink reads each data chunk into dynamic rows, so nested
+/// columns (`LIST` / `STRUCT` / `MAP`) can be written too. The signature is fixed to "writer + rows"
+/// (in either order): `&mut Writer` is the writer state implementing `duckfn::DuckCopyToWriter` (its
+/// `open` receives the path, the dynamic schema and the COPY options during global init; its
+/// `finish` wraps up during finalize), and `&[DuckDynamicRow]` is the batch to write, one column per
+/// schema column with `None` cells as SQL NULL. It returns `DuckResult<()>`: a failure fails the whole
+/// `COPY`, and a panic is turned into a query error as well. A module named after the function is
+/// generated, exporting `copy_function_builder()` and `copy_function_register(connection)`; with
+/// `auto_register = false` they are generated but nothing is registered.
 #[proc_macro_attribute]
 pub fn duck_copy_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_copy_function())
+}
+
+/// 把「按批取行」的 Rust 函数注册成 DuckDB 的 COPY 读取格式，为 `COPY ... FROM` 提供自定义文件格式。
+///
+/// 需要 `duckfn` 打开 `duckdb-1-5` feature。
+///
+/// 目标表的 schema 由 DuckDB 给出，读取器**不能**声明结果列；装载时逐批取动态行写进目标表，因此
+/// `LIST` / `STRUCT` / `MAP` 等嵌套列同样能读入。
+///
+/// 签名固定为「reader + limit」两参，顺序可互换：
+///
+/// ```ignore
+/// use duckfn::{
+///     duck_copy_from_function, DuckCopyFromReader, DuckDynamicRow, DuckResult, DuckResultSchema,
+///     DuckStruct,
+/// };
+///
+/// /// bind 参数：字段 0 必须是文件路径（唯一的位置参数），其余字段是 COPY 的命名选项。
+/// #[derive(Default, Debug, Clone, DuckStruct)]
+/// #[duck(named_param_from = "skip_rows")]
+/// pub struct MyFromArgs {
+///     pub path: String,
+///     /// `COPY ... FROM 'f' (FORMAT my_from, SKIP_ROWS 2)`
+///     pub skip_rows: Option<i64>,
+/// }
+///
+/// pub struct MyReader { /* … */ }
+///
+/// impl DuckCopyFromReader for MyReader {
+///     type Args = MyFromArgs;
+///
+///     fn open(args: Self::Args, schema: &DuckResultSchema) -> DuckResult<Self> {
+///         // schema 就是目标表的列名与类型（含嵌套类型）
+///         /* … */
+///     }
+/// }
+///
+/// /// 每次取一批行；空 Vec 表示文件读完。函数名即 `FORMAT <函数名>` 里的格式名。
+/// #[duck_copy_from_function]
+/// fn my_from(reader: &mut MyReader, limit: usize) -> DuckResult<Vec<DuckDynamicRow>> {
+///     reader.next_batch(limit)
+/// }
+/// ```
+///
+/// - `&mut Reader`：读取器状态，需实现 `duckfn::DuckCopyFromReader`（`open` 在 bind 阶段拿到参数与
+///   目标表 schema）；
+/// - `limit: usize`：本批最多多少行（即一个 DuckDB 向量的行数）；
+/// - 返回 `DuckResult<Vec<DuckDynamicRow>>`：空 `Vec` 表示流结束；行数与类型不匹配目标表时，错误由
+///   适配层的按列校验给出。
+///
+/// 位置参数必须**恰好一个**（文件路径，`VARCHAR`），bind 阶段会校验；其余 `COPY ... FROM (...)` 选项
+/// 以命名参数到达（大小写不敏感），由 `Reader::Args` 声明 —— 未声明的选项 DuckDB 会在 bind 之前报错。
+///
+/// 宏生成同名模块，导出 `copy_from_register(connection)`；`auto_register = false` 时只生成、不注册。
+///
+/// Registers a batch-reading Rust function as a DuckDB copy-from format for `COPY ... FROM`.
+/// Requires `duckfn`'s `duckdb-1-5` feature. The target table's schema comes from DuckDB and the
+/// reader **must not** declare result columns; loading pulls dynamic rows batch by batch, so nested
+/// columns (`LIST` / `STRUCT` / `MAP`) load as well. The signature is fixed to "reader + limit" (in
+/// either order): `&mut Reader` is the reader state implementing `duckfn::DuckCopyFromReader` (its
+/// `open` receives the arguments and the target schema during bind) and `limit: usize` is the batch
+/// size (one DuckDB vector's row count). It returns `DuckResult<Vec<DuckDynamicRow>>`, where an empty
+/// `Vec` ends the stream; a row whose width or types disagree with the target table is reported by the
+/// adapter's per-column validation. Exactly **one** positional parameter (the file path, `VARCHAR`)
+/// is required and checked during bind; the remaining `COPY ... FROM (...)` options arrive as named
+/// parameters (case-insensitively) declared through `Reader::Args` — an undeclared option is rejected
+/// by DuckDB before bind. A module named after the function is generated, exporting
+/// `copy_from_register(connection)`; with `auto_register = false` it is generated but nothing is
+/// registered.
+#[proc_macro_attribute]
+pub fn duck_copy_from_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    handle_duck_function(_attr, item, |wrapper| wrapper.build_copy_from_function())
 }
 
 /// 手动注册入口：把 `fn(&Connection) -> DuckResult<()>` 交给扩展初始化时调用。

@@ -92,7 +92,7 @@ impl ItemFnWrapper {
         let name = self.name();
         let vis = self.visibility();
         let item_fn = &self.item_fn;
-        let (writer_type, call_args) = self.copy_signature()?;
+        let (writer_type, call_args) = self.copy_to_signature()?;
         let function_register = self.copy_function_register()?;
 
         Ok(quote! {
@@ -103,13 +103,13 @@ impl ItemFnWrapper {
 
                 pub struct CopyFunctionImpl;
 
-                impl duckfn::CopyFunctionAdapter for CopyFunctionImpl {
+                impl duckfn::CopyToFunctionAdapter for CopyFunctionImpl {
                     const NAME: &'static str = stringify!(#name);
                     type Writer = #writer_type;
 
-                    fn write_chunk(
+                    fn write_rows(
                         writer: &mut Self::Writer,
-                        chunk: &duckfn::DataChunk,
+                        rows: &[duckfn::DuckDynamicRow],
                     ) -> duckfn::DuckResult<()> {
                         #name(#(#call_args),*)
                     }
@@ -121,7 +121,7 @@ impl ItemFnWrapper {
                 pub fn copy_function_builder()
                     -> duckfn::DuckResult<quack_rs::prelude::CopyFunctionBuilder>
                 {
-                    use duckfn::CopyFunctionAdapter;
+                    use duckfn::CopyToFunctionAdapter;
                     CopyFunctionImpl::copy_function_builder()
                 }
 
@@ -129,10 +129,61 @@ impl ItemFnWrapper {
                 ///
                 /// Manual registration entry point: call it inside `#[duck_custom_register]`.
                 pub fn copy_function_register(
-                    c: &quack_rs::prelude::Connection,
+                    c: &duckfn::Connection,
                 ) -> duckfn::DuckResult<()> {
-                    let builder = copy_function_builder()?;
-                    unsafe { builder.register(c.as_raw_connection()) }
+                    use duckfn::CopyToFunctionAdapter;
+                    unsafe { CopyFunctionImpl::register(c) }
+                }
+
+                #function_register
+            }
+        })
+    }
+
+    /// 生成 COPY FROM 的实现体：`CopyFromFunctionAdapter`（行级读取）+ 注册函数。
+    ///
+    /// 被标注的函数就是「取下一批行」：参数里一个是 `&mut Reader`（读取器状态，需实现
+    /// `duckfn::DuckCopyFromReader`），一个是 `limit: usize`（本批最多取多少行），顺序可互换；
+    /// 返回 `DuckResult<Vec<DuckDynamicRow>>`，空 `Vec` 表示流结束。
+    ///
+    /// Generates the COPY FROM implementation: `CopyFromFunctionAdapter` (row-level reading) plus
+    /// the registration function. The annotated function is the "take the next batch" step: one
+    /// parameter is `&mut Reader` (the reader state, implementing `duckfn::DuckCopyFromReader`) and
+    /// another is `limit: usize` (how many rows this batch may hold), in either order, and it
+    /// returns `DuckResult<Vec<DuckDynamicRow>>` where an empty `Vec` ends the stream.
+    pub(crate) fn build_copy_from_function(&self) -> TokenStream2Result {
+        let name = self.name();
+        let vis = self.visibility();
+        let item_fn = &self.item_fn;
+        let (reader_type, call_args) = self.copy_from_signature()?;
+        let function_register = self.copy_from_function_register()?;
+
+        Ok(quote! {
+            #item_fn
+
+            #vis mod #name {
+                use super::*;
+
+                pub struct CopyFromFunctionImpl;
+
+                impl duckfn::CopyFromFunctionAdapter for CopyFromFunctionImpl {
+                    const NAME: &'static str = stringify!(#name);
+                    type Reader = #reader_type;
+
+                    fn next_batch(
+                        reader: &mut Self::Reader,
+                        limit: usize,
+                    ) -> duckfn::DuckResult<Vec<duckfn::DuckDynamicRow>> {
+                        #name(#(#call_args),*)
+                    }
+                }
+
+                /// 手动注册入口：在 `#[duck_custom_register]` 里调用。
+                ///
+                /// Manual registration entry point: call it inside `#[duck_custom_register]`.
+                pub fn copy_from_register(c: &duckfn::Connection) -> duckfn::DuckResult<()> {
+                    use duckfn::CopyFromFunctionAdapter;
+                    unsafe { CopyFromFunctionImpl::register(c) }
                 }
 
                 #function_register
@@ -949,27 +1000,39 @@ impl ItemFnWrapper {
         })
     }
 
-    /// 解析 COPY 函数的签名：恰好两个参数 —— 一个 `&mut Writer` 和一个 `&DataChunk` ——
+    /// 生成 COPY FROM 的注册代码；`auto_register = false` 时输出空内容。
+    ///
+    /// Emits the copy-from registration; produces nothing when `auto_register = false`.
+    fn copy_from_function_register(&self) -> TokenStream2Result {
+        if !self.auto_register() {
+            return Ok(quote! {});
+        }
+        self.inventory_submit(quote! {
+            copy_from_register(c)
+        })
+    }
+
+    /// 解析 COPY TO 的签名：恰好两个参数 —— 一个 `&mut Writer` 和一个 `&[DuckDynamicRow]` ——
     /// 且返回类型是 `DuckResult<...>`。
     ///
-    /// 返回 writer 类型与调用被标注函数时的实参序列（writer 位置传 `writer`，chunk 位置传
-    /// `chunk`，因此参数顺序怎么写都行）。
+    /// 返回 writer 类型与调用被标注函数时的实参序列（writer 位置传 `writer`，行批位置传 `rows`，
+    /// 因此参数顺序怎么写都行）。
     ///
-    /// Parses the copy-function signature: exactly two parameters — one `&mut Writer` and one
-    /// `&DataChunk` — plus a `DuckResult<...>` return type. It returns the writer type and the
+    /// Parses the COPY TO signature: exactly two parameters — one `&mut Writer` and one
+    /// `&[DuckDynamicRow]` — plus a `DuckResult<...>` return type. It returns the writer type and the
     /// argument sequence used to call the annotated function (`writer` at the writer position and
-    /// `chunk` at the chunk position, so the two may be written in either order).
-    fn copy_signature(&self) -> syn::Result<(Type, Vec<TokenStream2>)> {
+    /// `rows` at the batch position, so the two may be written in either order).
+    fn copy_to_signature(&self) -> syn::Result<(Type, Vec<TokenStream2>)> {
         let args = self.args();
         if args.len() != COPY_SIGNATURE_ARITY {
             return Err(syn::Error::new_spanned(
                 &self.item_fn.sig.inputs,
-                COPY_SIGNATURE_HINT,
+                COPY_TO_SIGNATURE_HINT,
             ));
         }
 
         let mut writer_type: Option<Type> = None;
-        let mut chunk_count = 0usize;
+        let mut rows_count = 0usize;
         let mut call_args: Vec<TokenStream2> = Vec::with_capacity(args.len());
         for arg in &args {
             if arg.is_agg_state() {
@@ -977,70 +1040,172 @@ impl ItemFnWrapper {
                 if writer_type.is_some() {
                     return Err(syn::Error::new_spanned(
                         &self.item_fn.sig.inputs,
-                        COPY_SIGNATURE_HINT,
+                        COPY_TO_SIGNATURE_HINT,
                     ));
                 }
                 writer_type = Some(arg.resolve_state_type()?.clone());
                 call_args.push(quote! { writer });
-            } else if Self::is_data_chunk_ref(arg.resolve_type()?) {
-                chunk_count += 1;
-                call_args.push(quote! { chunk });
+            } else if Self::is_dynamic_rows_ref(arg.resolve_type()?) {
+                rows_count += 1;
+                call_args.push(quote! { rows });
             } else {
                 return Err(syn::Error::new_spanned(
                     &self.item_fn.sig.inputs,
-                    COPY_SIGNATURE_HINT,
+                    COPY_TO_SIGNATURE_HINT,
                 ));
             }
         }
 
-        if writer_type.is_none() || chunk_count != 1 {
+        if writer_type.is_none() || rows_count != 1 {
             return Err(syn::Error::new_spanned(
                 &self.item_fn.sig.inputs,
-                COPY_SIGNATURE_HINT,
+                COPY_TO_SIGNATURE_HINT,
             ));
         }
 
-        self.copy_return_type()?;
+        self.copy_to_return_type()?;
         Ok((writer_type.expect("checked above"), call_args))
     }
 
-    /// 校验 COPY 函数的返回类型是 `DuckResult<...>`：sink 阶段出错要能让整条 `COPY` 失败。
+    /// 解析 COPY FROM 的签名：恰好两个参数 —— 一个 `&mut Reader` 和一个 `limit: usize` ——
+    /// 且返回类型是 `DuckResult<Vec<DuckDynamicRow>>`。
+    ///
+    /// 返回 reader 类型与调用被标注函数时的实参序列（reader 位置传 `reader`，limit 位置传 `limit`）。
+    ///
+    /// Parses the COPY FROM signature: exactly two parameters — one `&mut Reader` and one
+    /// `limit: usize` — plus a `DuckResult<Vec<DuckDynamicRow>>` return type. It returns the reader
+    /// type and the argument sequence used to call the annotated function.
+    fn copy_from_signature(&self) -> syn::Result<(Type, Vec<TokenStream2>)> {
+        let args = self.args();
+        if args.len() != COPY_SIGNATURE_ARITY {
+            return Err(syn::Error::new_spanned(
+                &self.item_fn.sig.inputs,
+                COPY_FROM_SIGNATURE_HINT,
+            ));
+        }
+
+        let mut reader_type: Option<Type> = None;
+        let mut limit_count = 0usize;
+        let mut call_args: Vec<TokenStream2> = Vec::with_capacity(args.len());
+        for arg in &args {
+            if arg.is_agg_state() {
+                // 第二个 `&mut` 参数没有意义：reader 只能有一个。
+                if reader_type.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        &self.item_fn.sig.inputs,
+                        COPY_FROM_SIGNATURE_HINT,
+                    ));
+                }
+                reader_type = Some(arg.resolve_state_type()?.clone());
+                call_args.push(quote! { reader });
+            } else if Self::is_usize_type(arg.resolve_type()?) {
+                limit_count += 1;
+                call_args.push(quote! { limit });
+            } else {
+                return Err(syn::Error::new_spanned(
+                    &self.item_fn.sig.inputs,
+                    COPY_FROM_SIGNATURE_HINT,
+                ));
+            }
+        }
+
+        if reader_type.is_none() || limit_count != 1 {
+            return Err(syn::Error::new_spanned(
+                &self.item_fn.sig.inputs,
+                COPY_FROM_SIGNATURE_HINT,
+            ));
+        }
+
+        self.copy_from_return_type()?;
+        Ok((reader_type.expect("checked above"), call_args))
+    }
+
+    /// 取返回类型 `DuckResult<T>` 里的 `T`；外层不是 `DuckResult` 时返回 `None`。
+    ///
+    /// Returns the `T` of a `DuckResult<T>` return type, or `None` when the outer type is something
+    /// else.
+    fn duck_result_inner(&self) -> Option<&Type> {
+        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
+            if let Type::Path(type_path) = &**ty {
+                if let Some(segment) = type_path.path.segments.last() {
+                    if segment.ident == "DuckResult" {
+                        return extract_generic_arg_type(segment);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// 校验 COPY TO 的返回类型是 `DuckResult<...>`：sink 阶段出错要能让整条 `COPY` 失败。
     ///
     /// Validates that the copy function returns `DuckResult<...>`: a sink-phase error must be able
     /// to fail the whole `COPY`.
-    fn copy_return_type(&self) -> syn::Result<()> {
-        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
-            if let Type::Path(type_path) = &**ty {
-                if type_path
-                    .path
-                    .segments
-                    .last()
-                    .is_some_and(|s| s.ident == "DuckResult")
-                {
-                    return Ok(());
+    fn copy_to_return_type(&self) -> syn::Result<()> {
+        if self.duck_result_inner().is_some() {
+            return Ok(());
+        }
+        Err(syn::Error::new_spanned(
+            &self.item_fn.sig.output,
+            COPY_TO_SIGNATURE_HINT,
+        ))
+    }
+
+    /// 校验 COPY FROM 的返回类型是 `DuckResult<Vec<DuckDynamicRow>>`。
+    ///
+    /// Validates that the COPY FROM function returns `DuckResult<Vec<DuckDynamicRow>>`.
+    fn copy_from_return_type(&self) -> syn::Result<()> {
+        if let Some(Type::Path(vec_path)) = self.duck_result_inner() {
+            if let Some(vec) = vec_path
+                .path
+                .segments
+                .last()
+                .filter(|segment| segment.ident == "Vec")
+            {
+                if let PathArguments::AngleBracketed(generic_args) = &vec.arguments {
+                    if let Some(GenericArgument::Type(Type::Path(item))) = generic_args.args.first()
+                    {
+                        if item
+                            .path
+                            .segments
+                            .last()
+                            .is_some_and(|segment| segment.ident == "DuckDynamicRow")
+                        {
+                            return Ok(());
+                        }
+                    }
                 }
             }
         }
         Err(syn::Error::new_spanned(
             &self.item_fn.sig.output,
-            COPY_SIGNATURE_HINT,
+            COPY_FROM_SIGNATURE_HINT,
         ))
     }
 
-    /// 判断类型是不是 `&DataChunk`（`DataChunk` 的引用，路径前缀不限）。
+    /// 判断类型是不是 `&[DuckDynamicRow]`（路径前缀不限，元素必须叫 `DuckDynamicRow`）。
     ///
-    /// Whether the type is `&DataChunk` (a reference to `DataChunk`, any path prefix).
-    fn is_data_chunk_ref(ty: &Type) -> bool {
+    /// Whether the type is `&[DuckDynamicRow]` (any path prefix, element named `DuckDynamicRow`).
+    fn is_dynamic_rows_ref(ty: &Type) -> bool {
         if let Type::Reference(type_ref) = ty {
-            if let Type::Path(type_path) = &*type_ref.elem {
-                return type_path
-                    .path
-                    .segments
-                    .last()
-                    .is_some_and(|s| s.ident == "DataChunk");
+            if let Type::Slice(slice) = &*type_ref.elem {
+                if let Type::Path(element) = &*slice.elem {
+                    return element
+                        .path
+                        .segments
+                        .last()
+                        .is_some_and(|segment| segment.ident == "DuckDynamicRow");
+                }
             }
         }
         false
+    }
+
+    /// 判断类型是不是 `usize`（路径前缀不限）。
+    ///
+    /// Whether the type is `usize` (any path prefix).
+    fn is_usize_type(ty: &Type) -> bool {
+        matches!(ty, Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "usize"))
     }
 
     /// 被标注函数的标识符（同时用作生成模块的名字）。
@@ -1630,11 +1795,15 @@ const CAST_SIGNATURE_HINT: &str = r#"Only like
     `fn my_cast(from: Option<SourceType>) -> TargetType`: NULL is passed in as None;
 is supported"#;
 
-/// COPY 函数签名要求恰好两个参数（writer + chunk）。
+/// COPY 函数签名要求恰好两个参数（writer/reader + 数据）。
 ///
-/// A copy-function signature takes exactly two parameters (writer + chunk).
+/// A copy-function signature takes exactly two parameters (writer/reader plus the data).
 const COPY_SIGNATURE_ARITY: usize = 2;
 
-const COPY_SIGNATURE_HINT: &str = r#"Only like
-    `fn my_copy(writer: &mut MyWriter, chunk: &DataChunk) -> DuckResult<()>`: the arguments are the copy writer (a `&mut` type implementing `duckfn::DuckCopyWriter`) and the data chunk to write, in either order, and the return type is `DuckResult<()>`;
+const COPY_TO_SIGNATURE_HINT: &str = r#"Only like
+    `fn my_copy(writer: &mut MyWriter, rows: &[DuckDynamicRow]) -> DuckResult<()>`: the arguments are the copy writer (a `&mut` type implementing `duckfn::DuckCopyToWriter`) and the batch of dynamic rows to write, in either order, and the return type is `DuckResult<()>`;
+is supported"#;
+
+const COPY_FROM_SIGNATURE_HINT: &str = r#"Only like
+    `fn my_read(reader: &mut MyReader, limit: usize) -> DuckResult<Vec<DuckDynamicRow>>`: the arguments are the reader state (a `&mut` type implementing `duckfn::DuckCopyFromReader`) and the maximum number of rows in this batch, in either order, and the return type is `DuckResult<Vec<DuckDynamicRow>>` (an empty `Vec` ends the stream);
 is supported"#;
