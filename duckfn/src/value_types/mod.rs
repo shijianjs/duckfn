@@ -53,6 +53,11 @@ pub(crate) mod duck_enum;
 /// Renders a logical type as SQL and registers it as a named DuckDB type at load time
 /// (`create_type`).
 pub(crate) mod named_types;
+/// `LIST` / `MAP` / `STRUCT` 的物理布局写法：静态类型通路与动态列通路共用同一份实现。
+///
+/// Physical-layout writes for `LIST` / `MAP` / `STRUCT`, shared by the static-type path and the
+/// dynamic-column path.
+pub(crate) mod vector_layout;
 
 pub use named_types::*;
 pub use duck_value_type::*;

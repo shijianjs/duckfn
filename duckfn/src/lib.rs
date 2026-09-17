@@ -93,7 +93,12 @@ pub use inventory::submit as inventory_submit;
 // Re-exported quack-rs types: custom `DuckValueType` implementations and macro-generated code both
 // need them, and going through `duckfn` means not having to depend on quack-rs directly.
 pub use quack_rs::connection::Connection;
-pub use quack_rs::prelude::{DataChunk, LogicalType, TypeId, Value};
+// `BindInfo` 也在再导出之列：`DuckBindArgs::read_bind_args` 的签名里就有它，手写该 trait 时
+// 不必再直接依赖 quack-rs。
+//
+// `BindInfo` is re-exported too: it appears in `DuckBindArgs::read_bind_args`'s signature, so
+// hand-writing that trait does not require depending on quack-rs directly.
+pub use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value};
 // COPY 函数（`COPY ... TO (FORMAT xxx)`）相关的 quack-rs 类型：DuckDB 1.5.0+ 的
 // C API 才提供，因此跟随 `duckdb-1-5` feature 一起开关。
 //

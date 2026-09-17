@@ -301,6 +301,54 @@ Note that DuckDB only inserts the implicit `VARCHAR → ENUM` cast for *constant
 expression has to be cast explicitly (`'low'::priority`). See [Attributes](./attributes.md) for the
 `#[duck(...)]` arguments.
 
+## Two type systems: static and dynamic
+
+Everything above is the **static** system: a Rust type is mapped to a DuckDB type once, at compile
+time, by implementing `DuckValueType` (`#[derive(DuckStruct)]` and `#[derive(DuckEnum)]` generate
+those implementations for you). It is what scalar functions, aggregate functions, casts, `COPY`, SQL
+macros and the ordinary table functions use — and it is the default choice: one Rust type ↔ one
+logical type, with no runtime dispatch.
+
+The **dynamic** system exists because a compile-time mapping structurally cannot answer "what are
+this query's columns?" when that is only known during bind (a file header, a dictionary table, a
+remote schema). It is not a replacement, and it does not duplicate the mapping above — it sits on top
+of it:
+
+| | Static (`DuckValueType`) | Dynamic (`DuckTypeDesc` / `DuckDynamicValue`) |
+| --- | --- | --- |
+| Type decided | compile time | bind time, at run time |
+| One Rust type ↔ | one logical type | any logical type, described per column |
+| Used by | scalar / aggregate / cast / `COPY` / SQL macro / ordinary table functions | table functions with `dynamic_columns = true`, or a hand-written `DynamicTableFunctionAdapter` |
+| Column names | the struct's field names | whatever the `DuckResultSchema` says |
+| Cost | none | one enum dispatch per cell, one `Vec` per row |
+
+What the dynamic side actually reuses, rather than re-implementing:
+
+- the scalar write path calls each primitive's `DuckValueType::write_valid_to_vector_writer`, so the
+  physical write is identical to the static one;
+- the `LIST` / `MAP` / `STRUCT` layout conventions (child vectors, entries, NULL rows, finishing) live
+  in one shared module used by both paths;
+- argument parsing is still `#[derive(DuckStruct)]` — a dynamic table function's `Args` is a
+  `DuckBindArgs`;
+- the scalar half of `DuckTypeDesc` is just a `TypeId` from the table at the top of this page.
+
+Two things the dynamic side deliberately does **not** cover, so keep using the static system for
+them: `ENUM` and `ARRAY` (as well as `UNION` / `BIT`) cannot be expressed as a `DuckTypeDesc`, because
+their parameters are not part of `TypeId`; and a schema that *is* known at compile time is always
+better served by a `#[derive(DuckStruct)]` row struct — the dynamic path pays an enum dispatch per
+cell and a `Vec` per row.
+
+### Reading a `Value`
+
+Bind arguments — and the children of a `LIST` / `MAP` / `STRUCT` value — arrive as `Value`s, and there
+is one rule worth knowing:
+
+- test them with `duckfn::duck_value_is_null(&value)`, **not** `value.is_null()`. quack-rs'
+  `is_null()` only looks at whether the handle pointer is null, so an explicit `arg = NULL` slips
+  through and the typed read that follows aborts the process with `fatal runtime error: Rust cannot
+  catch foreign exceptions`; only *omitting* the argument yields a null handle.
+- a `NULL` reads as `None`, and `Some(None)` is how nested reads say "this element is NULL".
+
 ## Known gaps
 
 | Gap | Detail |

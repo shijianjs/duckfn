@@ -25,12 +25,16 @@
 //! types — the schema is the single source of truth. [`DuckResultSchema`], [`DuckDynamicRow`] and
 //! [`DuckDynamicTable`] then carry that schema and a row iterator through the bind/scan phases.
 
-use crate::{DuckOptionResult, DuckResult, DuckValueType, DuckValueWriter, duck_error};
+use crate::value_types::vector_layout::{
+    element_child_vector, finish_elements, map_keys, map_values, reserve_elements, set_entry,
+    struct_field, write_null_row,
+};
+use crate::{
+    DuckOptionResult, DuckResult, DuckValueType, DuckValueWriter, duck_error, duck_value_is_null,
+};
 use libduckdb_sys::duckdb_vector;
 use quack_rs::interval::DuckInterval;
-use quack_rs::prelude::{
-    BindInfo, DataChunk, ListVector, LogicalType, MapVector, StructVector, TypeId, Value,
-};
+use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value};
 
 // ============================================================================
 // 运行时类型描述
@@ -619,7 +623,12 @@ impl DuckDynamicValue {
     /// Returns an error when the value's actual type does not match `desc`, or when `desc` is a
     /// shape that cannot be read from a `Value`.
     pub fn from_duck_value(value: &Value, desc: &DuckTypeDesc) -> DuckResult<Option<Self>> {
-        if value.is_null() {
+        // 不能只判 `value.is_null()`：SQL 里显式写 `arg = NULL` 时句柄并非空指针，
+        // 只判句柄会漏掉，随后按类型取值会撞上 FFI 的 foreign exception。
+        //
+        // Do not rely on `value.is_null()` alone: an explicit `arg = NULL` in SQL yields a non-null
+        // handle, and the type-specific read would then hit a foreign exception inside the FFI.
+        if duck_value_is_null(value) {
             return Ok(None);
         }
         let dynamic = match desc {
@@ -1263,8 +1272,8 @@ impl DynColumnWriter {
                         _ => None,
                     })
                     .sum();
-                unsafe { ListVector::reserve(vector, total) };
-                let child_vector = unsafe { ListVector::get_child(vector) };
+                reserve_elements(vector, total);
+                let child_vector = element_child_vector(vector);
                 let child_values: Vec<Option<&DuckDynamicValue>> = values
                     .iter()
                     .flatten()
@@ -1288,7 +1297,7 @@ impl DynColumnWriter {
                     .iter()
                     .enumerate()
                     .map(|(index, (_, field_desc))| {
-                        let child_vector = unsafe { StructVector::get_child(vector, index) };
+                        let child_vector = struct_field(vector, index);
                         let child_values = column_struct_values(values, index);
                         Self::prepare(child_vector, field_desc, &child_values)
                     })
@@ -1313,21 +1322,21 @@ impl DynColumnWriter {
                         _ => None,
                     })
                     .sum();
-                unsafe { ListVector::reserve(vector, total) };
-                let keys_vector = unsafe { MapVector::keys(vector) };
-                let values_vector = unsafe { MapVector::values(vector) };
+                reserve_elements(vector, total);
+                let keys_vector = map_keys(vector);
+                let values_vector = map_values(vector);
                 let mut key_values: Vec<Option<&DuckDynamicValue>> = Vec::new();
-                let mut map_values: Vec<Option<&DuckDynamicValue>> = Vec::new();
+                let mut entry_values: Vec<Option<&DuckDynamicValue>> = Vec::new();
                 for value in values.iter().flatten() {
                     if let DuckDynamicValue::Map(pairs) = value {
                         for (key, map_value) in pairs {
                             key_values.push(Some(key));
-                            map_values.push(Some(map_value));
+                            entry_values.push(Some(map_value));
                         }
                     }
                 }
                 let key_writer = Self::prepare(keys_vector, key_desc, &key_values);
-                let value_writer = Self::prepare(values_vector, value_desc, &map_values);
+                let value_writer = Self::prepare(values_vector, value_desc, &entry_values);
                 Self {
                     writer: DuckValueWriter::new_from_vector(vector),
                     desc: desc.clone(),
@@ -1350,14 +1359,7 @@ impl DynColumnWriter {
                     ));
                 }
                 let offset = self.offset;
-                unsafe {
-                    ListVector::set_entry(
-                        self.writer.c_duckdb_vector,
-                        idx,
-                        offset as u64,
-                        items.len() as u64,
-                    );
-                }
+                set_entry(self.writer.c_duckdb_vector, idx, offset, items.len());
                 for (index, item) in items.iter().enumerate() {
                     match item {
                         Some(item) => self.children[0].write_value(offset + index, item)?,
@@ -1390,14 +1392,7 @@ impl DynColumnWriter {
                     ));
                 }
                 let offset = self.offset;
-                unsafe {
-                    ListVector::set_entry(
-                        self.writer.c_duckdb_vector,
-                        idx,
-                        offset as u64,
-                        pairs.len() as u64,
-                    );
-                }
+                set_entry(self.writer.c_duckdb_vector, idx, offset, pairs.len());
                 for (index, (key, map_value)) in pairs.iter().enumerate() {
                     self.children[0].write_value(offset + index, key)?;
                     self.children[1].write_value(offset + index, map_value)?;
@@ -1423,17 +1418,19 @@ impl DynColumnWriter {
     /// - `LIST` / `MAP`: mark this vector NULL and write an explicit empty entry `(0, 0)`, matching
     ///   the static implementation.
     fn write_null(&mut self, idx: usize) -> DuckResult<()> {
-        unsafe { self.writer.vector_writer.set_null(idx) };
         match &self.desc {
-            DuckTypeDesc::Scalar(_) | DuckTypeDesc::Decimal { .. } => {}
+            DuckTypeDesc::Scalar(_) | DuckTypeDesc::Decimal { .. } => unsafe {
+                self.writer.vector_writer.set_null(idx);
+            },
             DuckTypeDesc::Struct(_) => {
+                unsafe { self.writer.vector_writer.set_null(idx) };
                 for child in &mut self.children {
                     child.write_null(idx)?;
                 }
             }
-            DuckTypeDesc::List(_) | DuckTypeDesc::Map(_, _) => unsafe {
-                ListVector::set_entry(self.writer.c_duckdb_vector, idx, 0, 0);
-            },
+            DuckTypeDesc::List(_) | DuckTypeDesc::Map(_, _) => {
+                write_null_row(&mut self.writer, idx);
+            }
         }
         Ok(())
     }
@@ -1451,12 +1448,12 @@ impl DynColumnWriter {
             }
             DuckTypeDesc::List(_) => {
                 self.children[0].finish();
-                unsafe { ListVector::set_size(self.writer.c_duckdb_vector, self.offset) };
+                finish_elements(self.writer.c_duckdb_vector, self.offset);
             }
             DuckTypeDesc::Map(_, _) => {
                 self.children[0].finish();
                 self.children[1].finish();
-                unsafe { MapVector::set_size(self.writer.c_duckdb_vector, self.offset) };
+                finish_elements(self.writer.c_duckdb_vector, self.offset);
             }
         }
     }

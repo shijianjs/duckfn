@@ -3,13 +3,14 @@
 //! The interface required by `#[derive(DuckStruct)]`-generated STRUCT structs, plus the
 //! blanket implementations wiring them into the adapters.
 
+use crate::value_types::vector_layout::struct_field;
 use crate::{
     DuckBindArgs, DuckColumns, DuckOptionResult, DuckResult, DuckValueReader, DuckValueType,
     DuckValueWriter, duck_error, vec_option_to_ref,
 };
 use libduckdb_sys::duckdb_vector;
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{BindInfo, LogicalType, StructVector, TypeId, Value};
+use quack_rs::prelude::{BindInfo, LogicalType, TypeId, Value};
 
 /// (列名, 逻辑类型构造函数)
 ///
@@ -130,13 +131,11 @@ pub trait DuckStructTrait: DuckValueType {
     ///
     /// Fetches the field vectors from a STRUCT vector.
     //
-    // 裸指针由 DuckDB FFI 提供，此处直接解引用
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn s_duckdb_vector_list_by_struct(
         struct_vector: ::libduckdb_sys::duckdb_vector,
     ) -> Vec<duckdb_vector> {
         (0..Self::s_fields_count())
-            .map(|i| unsafe { StructVector::get_child(struct_vector, i) })
+            .map(|i| struct_field(struct_vector, i))
             .collect()
     }
 

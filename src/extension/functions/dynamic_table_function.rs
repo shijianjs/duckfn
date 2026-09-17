@@ -12,9 +12,9 @@
 // `dynamic_columns = true` (or a hand-written `DynamicTableFunctionAdapter`).
 
 use duckfn::{
-    DuckDynamicRow, DuckDynamicTable, DuckDynamicValue, DuckOptionResult, DuckResult,
-    DuckResultSchema, DuckStruct, DuckTypeDesc, DynamicTableFunctionAdapter, duck_custom_register,
-    duck_error, duck_table_function,
+    BindInfo, DuckBindArgs, DuckDynamicRow, DuckDynamicTable, DuckDynamicValue, DuckOptionResult,
+    DuckResult, DuckResultSchema, DuckStruct, DuckTypeDesc, DynamicTableFunctionAdapter,
+    LogicalType, duck_custom_register, duck_error, duck_table_function,
 };
 use quack_rs::prelude::{Connection, Registrar, TypeId};
 
@@ -222,4 +222,77 @@ impl DynamicTableFunctionAdapter for DynamicCountdown {
 #[duck_custom_register]
 fn dfn_table_dynamic_manual_register(c: &Connection) -> DuckResult<()> {
     unsafe { c.register_table(DynamicCountdown::table_function_builder()?) }
+}
+
+// ============================================================================
+// 底层：手写 `DuckBindArgs`，用 `DuckDynamicValue` 读取原始 `Value`
+//
+// `#[derive(DuckStruct)]` 只能把参数读成「编译期已知的 Rust 类型」。当你希望按**运行时描述**读值
+// （值来自 `MAP` / `LIST` 的子元素，或类型到运行时才知道）时，手写 `DuckBindArgs` 即可：
+// 用一个 `DuckTypeDesc` 描述该参数，再交给 `DuckDynamicValue::from_duck_value` 转换 —— 它连
+// `arg = NULL` 这种情况都会正确读成 `None`。
+//
+// Low level: a hand-written `DuckBindArgs` reading the raw `Value` through `DuckDynamicValue`.
+// `#[derive(DuckStruct)]` can only read arguments into types known at compile time; when the value
+// should be read against a *runtime* description — it comes from a `MAP` / `LIST` child, or its
+// type is only known at run time — implement `DuckBindArgs` directly: describe the parameter with a
+// `DuckTypeDesc` and let `DuckDynamicValue::from_duck_value` convert it. That conversion also reads
+// an explicit `arg = NULL` as `None`.
+// ============================================================================
+
+/// 手写的 bind 参数：只声明类型（`BIGINT`），值按运行时描述读成动态值。
+///
+/// A hand-written bind argument: it only declares the type (`BIGINT`) and reads the value against a
+/// runtime description instead.
+#[derive(Default, Debug, Clone)]
+struct DynamicEchoArgs {
+    value: Option<DuckDynamicValue>,
+}
+
+impl DuckBindArgs for DynamicEchoArgs {
+    fn read_bind_args(bind: &BindInfo) -> DuckResult<Self> {
+        // SAFETY: 位置参数 0 已由 `bind_param_logical` 声明为 BIGINT。
+        //
+        // SAFETY: positional argument 0 is declared as BIGINT by `bind_param_logical`.
+        let raw = unsafe { bind.get_parameter_value(0) };
+        let desc = DuckTypeDesc::scalar(TypeId::BigInt);
+        Ok(Self {
+            value: DuckDynamicValue::from_duck_value(&raw, &desc)?,
+        })
+    }
+
+    fn bind_param_logical() -> Vec<(Option<String>, LogicalType)> {
+        vec![(None, LogicalType::new(TypeId::BigInt))]
+    }
+}
+
+/// 把这个 `BIGINT` 参数原样回显成一行一列，`NULL` 也原样回显。
+///
+/// ```sql
+/// SELECT * FROM dfn_table_dynamic_echo_arg(42);    -- 42
+/// SELECT * FROM dfn_table_dynamic_echo_arg(NULL);  -- NULL（显式 NULL 也能正确读成 None）
+/// ```
+///
+/// Echoes that `BIGINT` argument back as a single row and column, `NULL` included.
+struct DynamicEchoArg;
+
+impl DynamicTableFunctionAdapter for DynamicEchoArg {
+    const NAME: &'static str = "dfn_table_dynamic_echo_arg";
+    type Args = DynamicEchoArgs;
+
+    fn bind(args: Self::Args) -> DuckResult<DuckDynamicTable> {
+        let schema = DuckResultSchema::from_scalar_types([("v", TypeId::BigInt)]);
+        let rows = std::iter::once::<DuckOptionResult<DuckDynamicRow>>(Ok(Some(
+            DuckDynamicRow::new(vec![args.value]),
+        )));
+        Ok(DuckDynamicTable::new(schema, Box::new(rows)))
+    }
+}
+
+/// 手动注册「动态回显参数」表函数。
+///
+/// Manually registers the "echo a dynamically-read argument" table function.
+#[duck_custom_register]
+fn dfn_table_dynamic_echo_arg_register(c: &Connection) -> DuckResult<()> {
+    unsafe { c.register_table(DynamicEchoArg::table_function_builder()?) }
 }

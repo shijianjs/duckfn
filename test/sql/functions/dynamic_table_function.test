@@ -119,3 +119,18 @@ query T
 SELECT column_name FROM (DESCRIBE SELECT * FROM dfn_table_dynamic_manual(start=1)) WHERE column_name = 'n';
 ----
 n
+
+# ============================================================================
+# 底层：手写 DuckBindArgs + DuckDynamicValue::from_duck_value
+# 显式 `NULL` 必须被读成 None —— 只判 `Value::is_null()` 会漏掉，触发 FFI foreign exception
+# ============================================================================
+
+query I
+SELECT * FROM dfn_table_dynamic_echo_arg(42);
+----
+42
+
+query I
+SELECT * FROM dfn_table_dynamic_echo_arg(NULL);
+----
+NULL

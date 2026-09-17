@@ -283,6 +283,48 @@ pub enum Priority {
 注意 DuckDB 只对**常量**字符串做隐式 `VARCHAR → ENUM` 转换；列或表达式需要显式写 `'low'::priority`。
 `#[duck(...)]` 的完整参数见[属性参考](./attributes.md)。
 
+## 两套类型体系：静态与动态
+
+上面讲的全是**静态**体系：通过实现 `DuckValueType`，一个 Rust 类型在编译期就与一个 DuckDB 类型
+绑定（`#[derive(DuckStruct)]` / `#[derive(DuckEnum)]` 会替你生成实现）。标量函数、聚合函数、类型
+转换、`COPY`、SQL 宏和普通表函数用的都是它 —— 它也是默认选择：一个 Rust 类型 ↔ 一个逻辑类型，没有
+运行时分发。
+
+**动态**体系的存在，是因为编译期映射在结构上回答不了「这条查询的列是什么」——当列要等 bind 阶段
+读了文件头、字典表或远端 schema 才知道时。它不是替代品，也没有重复上面的映射，而是**建在它之上**：
+
+| | 静态（`DuckValueType`） | 动态（`DuckTypeDesc` / `DuckDynamicValue`） |
+| --- | --- | --- |
+| 类型何时确定 | 编译期 | bind 阶段（运行时） |
+| 一个 Rust 类型 ↔ | 一个逻辑类型 | 任意逻辑类型，按列描述 |
+| 使用者 | 标量 / 聚合 / cast / `COPY` / SQL 宏 / 普通表函数 | `dynamic_columns = true` 的表函数，或手写 `DynamicTableFunctionAdapter` |
+| 列名 | 结构体的字段名 | `DuckResultSchema` 里写什么就是什么 |
+| 开销 | 无 | 每格一次枚举分发、每行一次 `Vec` |
+
+动态侧真正复用的东西（而不是重写一遍）：
+
+- 标量写出直接调用各基础类型的 `DuckValueType::write_valid_to_vector_writer`，物理写入与静态路径
+  完全一致；
+- `LIST` / `MAP` / `STRUCT` 的布局约定（子向量、entry、NULL 行、收尾）集中在一个共享模块里，两条
+  通路共用；
+- 参数解析仍然是 `#[derive(DuckStruct)]` —— 动态表函数的 `Args` 就是一个 `DuckBindArgs`；
+- `DuckTypeDesc` 的标量分支，就是本页开头那张表里的 `TypeId`。
+
+有两件事动态侧**故意不做**，请继续用静态体系：`ENUM` 与 `ARRAY`（以及 `UNION` / `BIT`）无法用
+`DuckTypeDesc` 表达，因为它们的参数不在 `TypeId` 里；而编译期已知的 schema 永远更适合
+`#[derive(DuckStruct)]` 行结构体 —— 动态路径每格多一次枚举分发、每行多一次 `Vec`。
+
+### 读取 `Value` 的一条规则
+
+bind 参数、以及 `LIST` / `MAP` / `STRUCT` 值的子元素，都是以 `Value` 形式拿到的，有一条规则必须
+知道：
+
+- 用 `duckfn::duck_value_is_null(&value)` 判断，**不要**用 `value.is_null()`。quack-rs 的
+  `is_null()` 只看句柄指针是否为空，于是 SQL 里显式写的 `arg = NULL` 会漏过去，紧跟着的类型读取
+  会让进程以 `fatal runtime error: Rust cannot catch foreign exceptions` 中止；只有*省略*该参数
+  才会拿到空指针。
+- `NULL` 读成 `None`；嵌套读取用 `Some(None)` 表示「这个元素是 NULL」。
+
 ## 已知缺口
 
 | 缺口 | 说明 |

@@ -3,10 +3,13 @@
 //! Mappings between `IndexMap<K, V>` (aliased as `DuckMap`) and DuckDB `MAP` (preserving key
 //! insertion order).
 
+use crate::value_types::vector_layout::{
+    finish_elements, map_keys, map_values, reserve_elements, set_entry, write_null_row,
+};
 use crate::{DuckResult, DuckValueReader, DuckValueType, DuckValueWriter, duck_error};
 use indexmap::IndexMap;
 use libduckdb_sys::duckdb_vector;
-use quack_rs::prelude::{ListVector, LogicalType, MapVector, TypeId, Value};
+use quack_rs::prelude::{LogicalType, MapVector, TypeId, Value};
 use std::hash::Hash;
 
 /// `IndexMap<K, V>` 的别名，与 [`DuckList`](crate::DuckList) / [`DuckArray`](crate::DuckArray)
@@ -82,8 +85,8 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
             .iter()
             .filter_map(|x| x.as_ref().map(|v| v.len()))
             .sum();
-        unsafe { ListVector::reserve(vector, total_elements) };
-        let k_vector = unsafe { MapVector::keys(vector) };
+        reserve_elements(vector, total_elements);
+        let k_vector = map_keys(vector);
 
         // 值本身可能是 `None`（值类型为 `Option<U>`），但它仍占一对键值的位置，
         // 因此这里按下标全部保留，NULL 与否交给 `write_valid` 处理。
@@ -97,7 +100,7 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
             .collect();
         let k_writer = K::create_writer_batch(k_vector, &k_vec);
 
-        let v_vector = unsafe { MapVector::values(vector) };
+        let v_vector = map_values(vector);
         let v_vec: Vec<Option<&V>> = output_vec
             .iter()
             .filter_map(|x| x.as_ref().copied())
@@ -114,9 +117,7 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
 
         let len = v.len();
 
-        unsafe {
-            ListVector::set_entry(writer.c_duckdb_vector, idx, offset as u64, len as u64);
-        }
+        set_entry(writer.c_duckdb_vector, idx, offset, len);
 
         for (i, (k, v)) in v.iter().enumerate() {
             let k_writer = &mut writer.child_writer[0];
@@ -131,26 +132,21 @@ impl<K: DuckValueType + Hash + Eq, V: DuckValueType> DuckValueType for IndexMap<
 
     /// NULL 行：父向量置 NULL 之外，把 entry 显式写成空区间 `(0, 0)`。
     ///
-    /// MAP 物理上是 `LIST(STRUCT(key, value))`，与 LIST 同理：entry 不写也安全
-    /// （DuckDB 先查父 validity，子向量长度由 `set_size` 收窄），这里补上只是
-    /// 让 duckfn 不依赖那个前提，与 LIST / ARRAY 的处理保持一致。
+    /// MAP 物理上是 `LIST(STRUCT(key, value))`，与 LIST 走同一套约定；
+    /// 具体理由见 `vector_layout::write_null_row`。
     ///
-    /// NULL rows: besides marking the parent NULL, write an explicit empty entry
-    /// `(0, 0)`. MAP is physically `LIST(STRUCT(key, value))`, so this mirrors LIST.
+    /// NULL rows: besides marking the parent NULL, write an explicit empty entry `(0, 0)`. MAP is
+    /// physically `LIST(STRUCT(key, value))` and follows the same convention as LIST; see
+    /// `vector_layout::write_null_row` for the rationale.
     fn write_null(writer: &mut DuckValueWriter, idx: usize) {
-        unsafe {
-            writer.vector_writer.set_null(idx);
-            ListVector::set_entry(writer.c_duckdb_vector, idx, 0, 0);
-        }
+        write_null_row(writer, idx);
     }
 
     fn write_finish(writer: &mut DuckValueWriter) {
         K::write_finish(&mut writer.child_writer[0]);
         V::write_finish(&mut writer.child_writer[1]);
 
-        unsafe {
-            MapVector::set_size(writer.c_duckdb_vector, writer.offset);
-        }
+        finish_elements(writer.c_duckdb_vector, writer.offset);
     }
 
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {

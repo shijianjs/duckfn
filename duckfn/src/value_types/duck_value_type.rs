@@ -2,10 +2,11 @@
 //!
 //! The core `DuckValueType` trait plus the helpers for row-wise and batch read/write.
 
+use crate::value_types::vector_layout::struct_field;
 use crate::{DuckOptionResult, DuckResult};
 use libduckdb_sys::{duckdb_is_null_value, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
-use quack_rs::prelude::{LogicalType, StructVector, TypeId, Value, VectorReader, VectorWriter};
+use quack_rs::prelude::{LogicalType, TypeId, Value, VectorReader, VectorWriter};
 use std::fmt::Debug;
 use std::sync::{Arc, Weak};
 
@@ -215,7 +216,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     fn struct_field_reader(struct_reader: &DuckValueReader, field_index: usize) -> DuckValueReader {
         let row_count = struct_reader.vector_reader.row_count();
         let vector = struct_reader.c_duckdb_vector;
-        let field_vector = unsafe { StructVector::get_child(vector, field_index) };
+        let field_vector = struct_field(vector, field_index);
         Self::create_reader_from_vector(field_vector, row_count)
     }
 
@@ -228,7 +229,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
         output_vec: &[Option<&Self>],
     ) -> DuckValueWriter {
         let vector = struct_writer.c_duckdb_vector;
-        let field_vector = unsafe { StructVector::get_child(vector, field_index) };
+        let field_vector = struct_field(vector, field_index);
         Self::create_writer_batch(field_vector, output_vec)
     }
 
@@ -237,10 +238,7 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
     /// Reads a value from a [`Value`] (used when table functions parse their arguments); NULL
     /// yields `Ok(None)`.
     fn read_by_duck_value(value: &Value) -> DuckOptionResult<Self> {
-        if value.is_null() ||
-            // 解决 cargo duckdb-ext build; duckdb -unsigned -c "LOAD './target/debug/rusty_quack.duckdb_extension';
-            //   fatal runtime error: Rust cannot catch foreign exceptions, aborting
-            unsafe { duckdb_is_null_value(value.as_raw()) } {
+        if duck_value_is_null(value) {
             Ok(None)
         } else {
             Ok(Some(Self::read_by_duck_value_valid(value)?))
@@ -266,6 +264,34 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
 ///
 /// Used by the macros to assert at compile time that a type implements [`DuckValueType`].
 pub fn assert_impl_duck_value_type<T: DuckValueType>() {}
+
+/// 判断一个 [`Value`] 是否为 SQL NULL —— **只调 `Value::is_null()` 是不够的**。
+///
+/// quack-rs 的 `Value::is_null()` 只看句柄指针是否为空，这在表函数 bind 参数上有漏洞：SQL 里
+/// 显式写 `arg = NULL` 时句柄并非空指针，`is_null()` 返回 `false`，随后按类型取值就会撞上 FFI 里
+/// 的 foreign exception（`fatal runtime error: Rust cannot catch foreign exceptions, aborting`）；
+/// 只有**省略**该参数才会拿到空指针。这里补一次 `duckdb_is_null_value` 判定，两种情况都能识别。
+///
+/// 表函数参数的读取路径（[`DuckValueType::read_by_duck_value`]、动态列的
+/// `DuckDynamicValue::from_duck_value`）都必须走这里，不要各自判断。
+///
+/// Whether a [`Value`] is SQL NULL — **calling `Value::is_null()` alone is not enough**. That check
+/// only looks at whether the handle pointer is null, which is not the whole story for table-function
+/// bind arguments: writing `arg = NULL` in SQL yields a non-null handle, so `is_null()` reports
+/// `false` and the type-specific read then hits a foreign exception inside the FFI (`fatal runtime
+/// error: Rust cannot catch foreign exceptions, aborting`); only *omitting* the argument gives a
+/// null handle. Adding the `duckdb_is_null_value` check below covers both cases.
+///
+/// Every read path for table-function arguments ([`DuckValueType::read_by_duck_value`], the dynamic
+/// `DuckDynamicValue::from_duck_value`) goes through here instead of testing on its own.
+#[must_use]
+pub fn duck_value_is_null(value: &Value) -> bool {
+    value.is_null() ||
+        // SAFETY: value.as_raw() 是这个 Value 自己持有的有效句柄。
+        //
+        // SAFETY: value.as_raw() is the valid handle owned by this Value.
+        unsafe { duckdb_is_null_value(value.as_raw()) }
+}
 
 /// 一个 [`DuckValueReader`] 的存活凭证：reader 还在，凭证就在；reader 被释放后，
 /// 由它派生的 [`DuckLazy`](crate::DuckLazy) 才能发现自己已经失效。
