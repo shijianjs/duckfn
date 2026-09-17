@@ -115,7 +115,9 @@ Each registration kind has an adapter trait that turns Rust values into DuckDB's
 Reads one row at a time out of the input chunk, calls `apply_with_null`, writes the results as a
 batch. `apply_with_null` returns `Ok(None)` when any non-`Option` argument is `NULL`, which is what
 short-circuits the row. `null_handling()` defaults to `DefaultNullHandling` and is overridden to
-`SpecialNullHandling` by `special_null_handling = true`.
+`SpecialNullHandling` by `special_null_handling = true`. Likewise `volatile()` defaults to `false`
+and is overridden to `true` by `volatile = true`, which makes registration call
+`duckdb_scalar_function_set_volatile` (DuckDB 1.5+).
 
 ### Aggregate
 

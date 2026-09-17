@@ -622,6 +622,7 @@ impl ItemFnWrapper {
         let get_data = self.args_to_code(|x| x.build_get_data())?;
         let function_register = self.scalar_function_register()?;
         let null_handling = self.null_handling_override();
+        let volatile_override = self.volatile_override()?;
 
         Ok(quote! {
 
@@ -633,6 +634,8 @@ impl ItemFnWrapper {
                 type Output = #return_type;
 
                 #null_handling
+
+                #volatile_override
 
                 fn apply(args: Self::Args) -> duckfn::DuckOptionResult<Self::Output> {
                     let result = #name(
@@ -1289,6 +1292,50 @@ impl ItemFnWrapper {
                 quack_rs::prelude::NullHandling::SpecialNullHandling
             }
         }
+    }
+
+    /// `#[duck_scalar_function(volatile = true)]`
+    ///
+    /// 是否把标量函数标记为 volatile，默认 `false`。
+    ///
+    /// `#[duck_scalar_function(volatile = true)]`: whether to mark the scalar function volatile;
+    /// defaults to `false`.
+    fn volatile(&self) -> bool {
+        self.duck_args.volatile.unwrap_or(false)
+    }
+
+    /// 生成 `volatile()` 覆盖：只有显式开启时才覆盖适配层默认值。
+    ///
+    /// 适配层的默认实现返回 `false`；开启后返回 `true`，quack-rs 注册时会调用
+    /// `duckdb_scalar_function_set_volatile`，于是 DuckDB 不再缓存/复用相同参数的
+    /// 调用结果，每一行都重新求值。
+    ///
+    /// `volatile = true` 与 `overloads_name` 互斥：quack-rs 的 `ScalarOverloadBuilder`
+    /// 没有暴露 volatile 开关，同时写上只会让开关静默失效，因此在编译期直接报错。
+    ///
+    /// Emits a `volatile()` override, and only when explicitly enabled. The adapter default is
+    /// `false`; once enabled it becomes `true`, so quack-rs calls
+    /// `duckdb_scalar_function_set_volatile` and DuckDB stops caching/reusing calls with the same
+    /// arguments — every row is re-evaluated. `volatile = true` and `overloads_name` are mutually
+    /// exclusive: quack-rs' `ScalarOverloadBuilder` exposes no volatile switch, so combining them
+    /// would silently drop the flag, and is rejected at compile time instead.
+    fn volatile_override(&self) -> TokenStream2Result {
+        if !self.volatile() {
+            return Ok(quote! {});
+        }
+        if self.overloads_name().is_some() {
+            return Err(syn::Error::new_spanned(
+                self.name(),
+                "`volatile = true` cannot be combined with `overloads_name`: quack-rs' \
+                 `ScalarOverloadBuilder` exposes no volatile switch, so the flag would be \
+                 dropped silently. Register the function under its own name instead.",
+            ));
+        }
+        Ok(quote! {
+            fn volatile() -> bool {
+                true
+            }
+        })
     }
 
     /// 收集函数的所有参数（含 `&mut State`）。

@@ -76,6 +76,28 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         NullHandling::DefaultNullHandling
     }
 
+    /// 是否把函数标记为 volatile，默认 `false`。
+    ///
+    /// 返回 `true` 时注册期会调用 DuckDB 的 `duckdb_scalar_function_set_volatile`：DuckDB
+    /// 不会缓存或复用相同参数的调用结果，每一行都会重新求值（`random()` 这类函数需要它）。
+    /// 不开启时 DuckDB 可能把常量参数的调用折叠成只执行一次。
+    ///
+    /// 该开关走 quack-rs 的 `ScalarFunctionBuilder::volatile`，只有在 duckfn 打开
+    /// `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API）时才真正生效；未开启时本方法被忽略。
+    /// 函数集重载（[`Self::scalar_overload_builder`]）不支持该开关。
+    ///
+    /// Whether to mark the function volatile; defaults to `false`. Returning `true` makes the
+    /// registration call DuckDB's `duckdb_scalar_function_set_volatile`, so DuckDB neither caches
+    /// nor reuses the result of a call with the same arguments — every row is re-evaluated, which
+    /// is what functions like `random()` need. Without it DuckDB may fold constant-argument calls
+    /// into a single execution. The switch goes through quack-rs' `ScalarFunctionBuilder::volatile`
+    /// and only takes effect when duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API) is
+    /// enabled; otherwise it is ignored. Function-set overloads ([`Self::scalar_overload_builder`])
+    /// do not support it.
+    fn volatile() -> bool {
+        false
+    }
+
     /// 构造「独立函数」用的 builder（自带函数名）。
     ///
     /// Builds the builder for a standalone function (carrying its own name).
@@ -85,6 +107,9 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types());
+        if Self::volatile() {
+            builder = set_volatile(builder);
+        }
         if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
             // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；函数对象交给 DuckDB 后
             // 由 DuckDB 在销毁时调用 destroy。
@@ -98,7 +123,12 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
 
     /// 构造「函数集重载」用的 builder（不带函数名，由函数集决定）。
     ///
-    /// Builds the builder for a function-set overload (no name; the set provides it).
+    /// 注意：quack-rs 的 [`ScalarOverloadBuilder`] 没有暴露 volatile 开关，因此
+    /// [`Self::volatile`] 对重载无效；需要 volatile 时请注册成独立函数。
+    ///
+    /// Builds the builder for a function-set overload (no name; the set provides it). Note that
+    /// quack-rs' [`ScalarOverloadBuilder`] exposes no volatile switch, so [`Self::volatile`] has
+    /// no effect on overloads; register the function standalone when volatile is required.
     fn scalar_overload_builder() -> ScalarOverloadBuilder {
         let mut builder = ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
@@ -195,4 +225,24 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     ///
     /// Evaluates one row of non-NULL arguments; returning `Ok(None)` makes this row SQL NULL.
     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output>;
+}
+
+/// 把标量函数标记为 volatile（[`ScalarFunctionAdapter::volatile`] 的实现细节）。
+///
+/// `ScalarFunctionBuilder::volatile` 只在 quack-rs 的 `duckdb-1-5` feature 下存在，因此没有该
+/// feature 时这里原样返回 builder：开关被忽略，而不是让整个扩展编译失败。
+///
+/// Marks a scalar function volatile (the implementation detail behind
+/// [`ScalarFunctionAdapter::volatile`]). `ScalarFunctionBuilder::volatile` only exists under
+/// quack-rs' `duckdb-1-5` feature, so without it the builder is returned unchanged: the switch is
+/// ignored rather than failing the whole extension build.
+fn set_volatile(builder: ScalarFunctionBuilder) -> ScalarFunctionBuilder {
+    #[cfg(feature = "duckdb-1-5")]
+    {
+        builder.volatile()
+    }
+    #[cfg(not(feature = "duckdb-1-5"))]
+    {
+        builder
+    }
 }

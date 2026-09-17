@@ -135,6 +135,38 @@ This is the only observable difference. For a column of values both settings beh
 for a non-`Option` argument the flag changes nothing at all — the reader still short-circuits the row
 to `NULL` before the body is reached.
 
+### `volatile`
+
+A volatile function is re-evaluated for every row even when it is called with the same arguments.
+DuckDB may otherwise fold a constant-argument call into a single execution, which is wrong for
+functions such as `random()`. `volatile = true` makes registration call
+`duckdb_scalar_function_set_volatile`:
+
+```rust
+#[duck_scalar_function(volatile = true)]
+fn dfn_scalar_volatile_random(seed: i32) -> i64 {
+    i64::from(seed).wrapping_mul(2_654_435_761).wrapping_add(1)
+}
+
+#[duck_scalar_function(volatile = true, special_null_handling = true)]
+fn dfn_scalar_volatile_special(a: Option<i32>) -> i64 {
+    a.map(i64::from).unwrap_or(-1)
+}
+```
+
+```sql
+SELECT dfn_scalar_volatile_random(1);               -- 2654435762
+SELECT typeof(dfn_scalar_volatile_random(1));       -- BIGINT
+SELECT dfn_scalar_volatile_random(1) FROM range(3); -- re-evaluated for every row
+SELECT dfn_scalar_volatile_special(NULL::INTEGER);  -- -1 (the constant NULL is not folded)
+```
+
+The switch requires duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API); without it the flag is
+ignored. It applies to standalone scalar functions only — quack-rs' `ScalarOverloadBuilder` exposes
+no volatile switch, so combining `volatile = true` with `overloads_name` is rejected at compile
+time. The functions above are deterministic, so their values do not depend on the flag; what
+changes is how often DuckDB calls them.
+
 ## Overloads and function sets
 
 Several signatures can share one SQL name. The simplest way is `overloads_name`, which merges every

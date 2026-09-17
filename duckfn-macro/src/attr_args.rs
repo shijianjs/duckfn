@@ -89,6 +89,26 @@ pub(crate) struct DuckFunctionMacroArgs {
     /// Whether to enable DuckDB's `SpecialNullHandling` (NULL rows also reach the callback).
     pub special_null_handling: Option<bool>,
 
+    /// `#[duck_scalar_function(volatile = true)]`
+    ///
+    /// 是否把标量函数标记为 volatile，默认 `false`。
+    ///
+    /// 开启后注册期会调用 `duckdb_scalar_function_set_volatile`：DuckDB 不缓存、不复用相同参数的
+    /// 调用结果，每一行都重新求值（`random()` 这类函数需要它）；不开启时 DuckDB 可能把常量参数
+    /// 的调用折叠成只执行一次。需要 duckfn 打开 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API），
+    /// 未开启时该开关被忽略。仅对标量函数有效，且不能和 `overloads_name` 同用
+    /// （quack-rs 的 `ScalarOverloadBuilder` 没有暴露该开关）。
+    ///
+    /// `#[duck_scalar_function(volatile = true)]`: whether to mark the scalar function volatile;
+    /// defaults to `false`. Once enabled, registration calls
+    /// `duckdb_scalar_function_set_volatile`, so DuckDB neither caches nor reuses the result of a
+    /// call with the same arguments — each row is re-evaluated, which is what functions like
+    /// `random()` need; without it DuckDB may fold constant-argument calls into a single
+    /// execution. Requires duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API); the switch is
+    /// ignored otherwise. It only applies to scalar functions and cannot be combined with
+    /// `overloads_name` (quack-rs' `ScalarOverloadBuilder` does not expose it).
+    pub volatile: Option<bool>,
+
     /// `#[duck_cast_function(implicit_cost = 100)]`
     /// 隐式转换代价：设置后 DuckDB 可能自动插入该 cast，值越小优先级越高
     ///

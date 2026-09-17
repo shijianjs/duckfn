@@ -33,7 +33,8 @@
 | `duck_sql_macro_files!("a.sql", …)` | 注册写在 `.sql` 文件里的 SQL 宏。 |
 
 常用参数：`auto_register = false`（只生成 builder 不注册）、`named_param_from = "field"`
-（表函数命名参数的起点）、`special_null_handling`、`implicit_cost` 与 `overloads_name`。
+（表函数命名参数的起点）、`special_null_handling`、`volatile`（DuckDB 1.5+ 的标量函数）、
+`implicit_cost` 与 `overloads_name`。
 
 ## 示例
 

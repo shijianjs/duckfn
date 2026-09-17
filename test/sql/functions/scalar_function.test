@@ -413,3 +413,52 @@ query I
 SELECT dfn_scalar_null_handling_special_plain(NULL::INTEGER);
 ----
 NULL
+
+# ============================================================================
+# volatile：注册期调用 duckdb_scalar_function_set_volatile
+#
+# 适配层 volatile() 默认返回 false，注册时不开 volatile；属性写 volatile = true 时
+# 宏在 impl 块里覆盖成 true，quack-rs 注册时调用上面那个 FFI 设置函数。
+# DuckDB 侧的行为（不缓存 / 不复用相同参数的调用结果）无法从 SQL 直接观察，
+# 这里验证的是开关通路没有破坏注册与调用：值、类型都对，且可与其它属性共存。
+# ============================================================================
+
+query I
+SELECT dfn_scalar_volatile_random(1);
+----
+2654435762
+
+query T
+SELECT typeof(dfn_scalar_volatile_random(1));
+----
+BIGINT
+
+# 逐行求值：每个 seed 都算一遍
+query I
+SELECT dfn_scalar_volatile_random(i) FROM (VALUES (0), (1), (2)) t(i);
+----
+1
+2654435762
+5308871523
+
+# 常量参数：非 volatile 时 DuckDB 可能折叠成只执行一次，volatile 下每行都重新求值；
+# 本函数是纯函数，两者取值相同
+query I
+SELECT dfn_scalar_volatile_random(1) FROM range(3);
+----
+2654435762
+2654435762
+2654435762
+
+# volatile 与 special_null_handling 同用：常量 NULL 不折叠，哨兵值 -1 出现
+query I
+SELECT dfn_scalar_volatile_special(NULL::INTEGER);
+----
+-1
+
+query I
+SELECT dfn_scalar_volatile_special(NULL::INTEGER) FROM range(3);
+----
+-1
+-1
+-1

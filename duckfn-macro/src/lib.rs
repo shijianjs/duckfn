@@ -159,7 +159,11 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// - 返回类型可以是 `T`、`Option<T>`（`None` -> SQL NULL）或 `DuckOptionResult<T>`
 ///   （可失败、可为 NULL）；`T` 与 `Option<T>` 都直接作为该列的值类型，只有
 ///   `DuckOptionResult` 额外表示「可能失败」；
-/// - 函数体里的 panic 会被捕获并转成查询错误。
+/// - 函数体里的 panic 会被捕获并转成查询错误；
+/// - `volatile = true` 把函数标记为 volatile：注册时调用
+///   `duckdb_scalar_function_set_volatile`，DuckDB 不缓存也不复用相同参数的调用结果，每一行
+///   都重新求值（`random()` 这类函数需要它）。需要 duckfn 打开 `duckdb-1-5` feature
+///   （DuckDB 1.5.0+ 的 C API），且不能与 `overloads_name` 同用。
 ///
 /// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`，
 /// 便于手动注册重载或函数集。
@@ -172,9 +176,13 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// `None` and decides the semantics itself. The return type may be `T`, `Option<T>` (`None` maps
 /// to SQL NULL) or `DuckOptionResult<T>` (fallible and nullable): `T` and `Option<T>` are both
 /// used as the column's value type directly, and only `DuckOptionResult` adds a failure channel.
-/// Panics in the body are caught and turned into query errors. A module named after the function
-/// is generated, exporting `scalar_function_builder()` and `scalar_overload_builder()` for manual
-/// overload / function-set registration.
+/// Panics in the body are caught and turned into query errors. `volatile = true` marks the
+/// function volatile: registration then calls `duckdb_scalar_function_set_volatile`, so DuckDB
+/// neither caches nor reuses the result of a call with the same arguments and every row is
+/// re-evaluated (which is what functions like `random()` need). It requires duckfn's `duckdb-1-5`
+/// feature (the DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. A module named
+/// after the function is generated, exporting `scalar_function_builder()` and
+/// `scalar_overload_builder()` for manual overload / function-set registration.
 #[proc_macro_attribute]
 pub fn duck_scalar_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(_attr, item, |wrapper| wrapper.build_scalar_function())

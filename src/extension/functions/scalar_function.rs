@@ -351,3 +351,38 @@ fn dfn_scalar_null_handling_special_plain(a: i32) -> i32 {
     }
     a * 2
 }
+
+// ============================================================================
+// duck_scalar_function：volatile
+//
+// 适配层（duckfn/src/functions/scalar_function_adapter.rs::volatile）默认返回 false，
+// 注册时不调用 duckdb_scalar_function_set_volatile。
+// 属性里写 volatile = true 时，宏在 impl 块里覆盖 volatile() 返回 true，quack-rs
+// 注册时会调用上面那个 FFI 设置函数，告诉 DuckDB「不要缓存 / 复用相同参数的调用结果」：
+// 每一行都重新求值（random() 这类函数需要它）。
+//
+// 注意：该开关依赖 duckfn 的 duckdb-1-5 feature（DuckDB 1.5.0+ 的 C API）；
+// volatile = true 不能和 overloads_name 同用（quack-rs 的重载 builder 没暴露这个开关）。
+// 下面这个例子本身是纯函数，volatile 与否取值相同，测试只验证注册与调用通路。
+// ============================================================================
+
+/// 确定性伪随机：同一 seed 取值稳定，便于测试；volatile 的差别在「是否重新求值」而非取值。
+/// ```sql
+/// SELECT dfn_scalar_volatile_random(1);
+/// ```
+#[duck_scalar_function(volatile = true)]
+fn dfn_scalar_volatile_random(seed: i32) -> i64 {
+    i64::from(seed)
+        .wrapping_mul(2_654_435_761)
+        .wrapping_add(1)
+}
+
+/// volatile 与 special_null_handling 可以同时使用：
+/// 常量 NULL 不折叠（哨兵值 -1 会出现），同时每次调用都重新求值。
+/// ```sql
+/// SELECT dfn_scalar_volatile_special(NULL::INTEGER);
+/// ```
+#[duck_scalar_function(volatile = true, special_null_handling = true)]
+fn dfn_scalar_volatile_special(a: Option<i32>) -> i64 {
+    a.map(i64::from).unwrap_or(-1)
+}

@@ -131,6 +131,34 @@ SELECT dfn_scalar_null_handling_special(NULL::INTEGER + 0); -- -1
 这是该开关唯一能观察到的差异。对一列取值来说两种设置行为一致；而入参写成非 `Option` 类型时它完全不起作用 ——
 读取层仍会先把该行短路成 `NULL`，函数体根本执行不到。
 
+### `volatile`
+
+volatile 函数即使被相同参数调用，也会对每一行重新求值。否则 DuckDB 可能把常量参数的调用折叠成只执行一次，
+对 `random()` 这类函数来说就是错的。`volatile = true` 让注册时调用 `duckdb_scalar_function_set_volatile`：
+
+```rust
+#[duck_scalar_function(volatile = true)]
+fn dfn_scalar_volatile_random(seed: i32) -> i64 {
+    i64::from(seed).wrapping_mul(2_654_435_761).wrapping_add(1)
+}
+
+#[duck_scalar_function(volatile = true, special_null_handling = true)]
+fn dfn_scalar_volatile_special(a: Option<i32>) -> i64 {
+    a.map(i64::from).unwrap_or(-1)
+}
+```
+
+```sql
+SELECT dfn_scalar_volatile_random(1);               -- 2654435762
+SELECT typeof(dfn_scalar_volatile_random(1));       -- BIGINT
+SELECT dfn_scalar_volatile_random(1) FROM range(3); -- 每一行都重新求值
+SELECT dfn_scalar_volatile_special(NULL::INTEGER);  -- -1（常量 NULL 未被折叠）
+```
+
+该开关需要 duckfn 的 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API），未开启时会被忽略。它只适用于独立注册的
+标量函数 —— quack-rs 的 `ScalarOverloadBuilder` 没有暴露 volatile 开关，因此 `volatile = true` 与
+`overloads_name` 同时出现会在编译期直接报错。上面的函数是确定性的，取值不随开关变化，变的是 DuckDB 调用它的次数。
+
 ## 重载与函数集
 
 多个签名可以共用一个 SQL 名字。最简单的方式是 `overloads_name`：取值相同的签名会被合并成一个函数集，

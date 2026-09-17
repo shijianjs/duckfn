@@ -107,7 +107,8 @@ LOAD 'my_ext.duckdb_extension'
 
 每次从输入 chunk 读一行，调用 `apply_with_null`，再批量写出结果。任一非 `Option` 参数为 `NULL` 时，
 `apply_with_null` 返回 `Ok(None)`，这就是整行短路的来源。`null_handling()` 默认返回 `DefaultNullHandling`，
-`special_null_handling = true` 时被覆盖为 `SpecialNullHandling`。
+`special_null_handling = true` 时被覆盖为 `SpecialNullHandling`。类似地，`volatile()` 默认返回 `false`，
+`volatile = true` 时被覆盖为 `true`，注册期随之调用 `duckdb_scalar_function_set_volatile`（DuckDB 1.5+）。
 
 ### 聚合函数
 
