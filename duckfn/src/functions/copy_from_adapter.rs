@@ -46,8 +46,8 @@
 //! `#[duck_copy_from_function]`.
 
 use crate::{
-    DuckBindArgs, DuckDynamicRow, DuckResult, DuckResultSchema, DuckTypeDesc, duck_error,
-    panic_to_string,
+    DuckBindArgs, DuckDynamicRow, DuckExtraInfo, DuckResult, DuckResultSchema, DuckTypeDesc,
+    duck_error, panic_to_string, raw_extra_info,
 };
 use libduckdb_sys::{
     DuckDBSuccess, duckdb_bind_info, duckdb_copy_function, duckdb_copy_function_set_copy_from_function,
@@ -59,8 +59,8 @@ use libduckdb_sys::{
     duckdb_table_function_bind_get_result_column_count,
     duckdb_table_function_bind_get_result_column_name,
     duckdb_table_function_bind_get_result_column_type, duckdb_table_function_set_bind,
-    duckdb_table_function_set_function, duckdb_table_function_set_init,
-    duckdb_table_function_set_name,
+    duckdb_table_function_set_extra_info, duckdb_table_function_set_function,
+    duckdb_table_function_set_init, duckdb_table_function_set_name,
 };
 use quack_rs::connection::Connection;
 use quack_rs::data_chunk::DataChunk;
@@ -162,6 +162,23 @@ pub trait CopyFromFunctionAdapter: Sized + 'static {
     ///
     /// The reader type.
     type Reader: DuckCopyFromReader;
+
+    /// 注册期附加的数据（DuckDB 的 `extra_info`）；默认不附加。
+    ///
+    /// 它挂在 reader 表函数上：`open` / `next_batch` 拿不到它，需要时重写
+    /// [`Self::c_bind`] / [`Self::c_init`] / [`Self::c_scan`]，用
+    /// `unsafe { duckfn::extra_info_ref::<MyConfig>(&info) }` 取回。类型必须是
+    /// `Send + Sync + 'static`：reader 句柄跨查询共享，数据在句柄销毁时才释放。
+    ///
+    /// Function-level data attached at registration time (DuckDB's `extra_info`); nothing is
+    /// attached by default. It is attached to the reader table function: `open` / `next_batch` cannot
+    /// reach it, so override [`Self::c_bind`] / [`Self::c_init`] / [`Self::c_scan`] and call
+    /// `unsafe { duckfn::extra_info_ref::<MyConfig>(&info) }` to read it. The type must be
+    /// `Send + Sync + 'static`: the reader handle is shared across queries and the data is only
+    /// released when that handle is destroyed.
+    fn extra_info() -> Option<DuckExtraInfo> {
+        None
+    }
 
     /// scan 阶段：取下一批行；返回空 `Vec` 表示流结束。
     ///
@@ -379,6 +396,15 @@ pub trait CopyFromFunctionAdapter: Sized + 'static {
             duckdb_table_function_set_bind(function, Some(copy_from_bind::<Self>));
             duckdb_table_function_set_init(function, Some(copy_from_init::<Self>));
             duckdb_table_function_set_function(function, Some(copy_from_scan::<Self>));
+            if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
+                // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；reader 表函数句柄
+                // 交给 DuckDB 后由 DuckDB 在销毁它时调用 destroy。
+                //
+                // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it; once
+                // the reader table-function handle is handed to DuckDB, DuckDB calls `destroy` when
+                // it destroys it.
+                duckdb_table_function_set_extra_info(function, ptr, destroy);
+            }
         }
         Ok(function)
     }

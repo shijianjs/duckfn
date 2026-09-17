@@ -4,7 +4,10 @@
 //! cast function.
 
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{DuckOptionResult, DuckResult, panic_to_string, vec_option_to_ref};
+use crate::{
+    DuckExtraInfo, DuckOptionResult, DuckResult, erased_extra_info, panic_to_string, raw_extra_info,
+    vec_option_to_ref,
+};
 use libduckdb_sys::{duckdb_function_info, duckdb_vector, idx_t};
 use quack_rs::prelude::{CastFunctionBuilder, CastFunctionInfo, CastMode, Connection, Registrar};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -76,6 +79,19 @@ pub trait CastFunctionAdapter: Sized + 'static {
         None
     }
 
+    /// 注册期附加的数据（DuckDB 的 `extra_info`）；默认不附加。
+    ///
+    /// 数据在函数对象销毁时由 DuckDB 调用析构回调释放，因此类型必须是 `Send + Sync + 'static`
+    /// （函数对象可能被多线程、多查询共享，且应视为只读）。
+    ///
+    /// Function-level data attached at registration time (DuckDB's `extra_info`); nothing is
+    /// attached by default. DuckDB frees it through the destructor when the function object is
+    /// dropped, so the type must be `Send + Sync + 'static` (the function object may be shared
+    /// across threads and queries, and must be treated as read-only).
+    fn extra_info() -> Option<DuckExtraInfo> {
+        None
+    }
+
     /// 逐值转换：`None` 表示输入是 SQL NULL。
     ///
     /// 入参写成 `T` 还是 `Option<T>` 由宏生成的代码处理：写 `T` 时 NULL 输入
@@ -86,6 +102,31 @@ pub trait CastFunctionAdapter: Sized + 'static {
     /// directly (the body is not executed); with `Option<T>` the NULL enters the body as
     /// `None`.
     fn apply_with_null(value: Option<Self::Input>) -> DuckOptionResult<Self::Output>;
+
+    /// 逐值转换，并带上函数级附加数据。
+    ///
+    /// 默认忽略 `extra` 并转调 [`Self::apply_with_null`]；需要读 `extra_info` 时重写本方法：
+    ///
+    /// ```ignore
+    /// fn apply_with_extra(
+    ///     value: Option<Self::Input>,
+    ///     extra: Option<&duckfn::DuckExtraInfo>,
+    /// ) -> duckfn::DuckOptionResult<Self::Output> {
+    ///     let config = extra.and_then(|extra| extra.downcast_ref::<MyConfig>());
+    ///     // ...
+    /// }
+    /// ```
+    ///
+    /// Value-wise conversion together with the function-level extra data. By default it ignores
+    /// `extra` and delegates to [`Self::apply_with_null`]; override it to read the `extra_info` (see
+    /// the snippet above).
+    fn apply_with_extra(
+        value: Option<Self::Input>,
+        extra: Option<&DuckExtraInfo>,
+    ) -> DuckOptionResult<Self::Output> {
+        let _ = extra;
+        Self::apply_with_null(value)
+    }
 
     /// 构造 cast 函数 builder（含源/目标逻辑类型、回调与可选的隐式代价）。
     ///
@@ -101,6 +142,14 @@ pub trait CastFunctionAdapter: Sized + 'static {
         .function(Self::cast_function_wrapper);
         if let Some(cost) = Self::implicit_cost() {
             builder = builder.implicit_cost(cost);
+        }
+        if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
+            // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；cast 函数对象交给
+            // DuckDB 后由它在销毁时调用 destroy。
+            //
+            // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it; once the
+            // cast function object is handed to DuckDB, DuckDB calls `destroy` on destruction.
+            builder = unsafe { builder.extra_info(ptr, destroy) };
         }
         builder
     }
@@ -140,13 +189,13 @@ pub trait CastFunctionAdapter: Sized + 'static {
     }
 }
 
-/// 逐行转换：读输入向量、调用 [`CastFunctionAdapter::apply_with_null`]、写输出向量。
+/// 逐行转换：读输入向量、调用 [`CastFunctionAdapter::apply_with_extra`]、写输出向量。
 ///
 /// 私有函数（不是 trait 方法），这样 `output` 这个裸指针参数的解引用不会被
 /// `clippy::not_unsafe_ptr_arg_deref` 挂在公开 API 上。
 ///
 /// Row-by-row conversion: reads the input vector, calls
-/// [`CastFunctionAdapter::apply_with_null`] and writes the output vector. It is a private
+/// [`CastFunctionAdapter::apply_with_extra`] and writes the output vector. It is a private
 /// function (not a trait method) so that dereferencing the raw-pointer argument `output` does
 /// not surface `clippy::not_unsafe_ptr_arg_deref` on the public API.
 fn cast_batch<A: CastFunctionAdapter>(
@@ -157,11 +206,16 @@ fn cast_batch<A: CastFunctionAdapter>(
 ) -> bool {
     let reader = A::Input::create_reader_from_vector(input, count);
     let try_mode = info.cast_mode() == CastMode::Try;
+    // SAFETY: 回调期间 info 有效；extra_info 由 builder 在注册时挂上（没挂时为 None）。
+    //
+    // SAFETY: `info` is valid during the callback; the extra info was attached by the builder at
+    // registration time (None when nothing was attached).
+    let extra = unsafe { erased_extra_info(info) };
     let mut results: Vec<Option<A::Output>> = Vec::with_capacity(count);
 
     for row in 0..count {
         let value = A::Input::read(&reader, row);
-        match A::apply_with_null(value) {
+        match A::apply_with_extra(value, extra) {
             Ok(v) => results.push(v),
             Err(e) => {
                 if try_mode {

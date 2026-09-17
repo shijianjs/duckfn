@@ -5,7 +5,10 @@
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{DuckOptionResult, DuckResult, duck_scalar_unwind, vec_option_to_ref};
+use crate::{
+    DuckExtraInfo, DuckOptionResult, DuckResult, duck_scalar_unwind, erased_extra_info,
+    raw_extra_info, vec_option_to_ref,
+};
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo, ScalarOverloadBuilder};
@@ -15,7 +18,8 @@ use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo,
 /// 适配层把 quack-rs 的向量级回调拆成逐行的 Rust 代码：
 ///
 /// - 用 [`Self::Args`]（实现 [`DuckColumns`]）从输入 `DataChunk` 逐行取参；
-/// - 每行调用 [`Self::apply`]（或 NULL 时代替的 [`Self::apply_with_null`]）；
+/// - 每行调用 [`Self::apply`]（或 NULL 时代替的 [`Self::apply_with_null`]，以及带附加数据的
+///   [`Self::apply_with_extra`]）；
 /// - 收集成 `Vec<Option<Self::Output>>` 后一次性写入输出向量。
 ///
 /// 一般不用手写这个 impl，直接用 `#[duck_scalar_function]` 作用在普通函数上即可。
@@ -23,21 +27,26 @@ use quack_rs::prelude::{NullHandling, ScalarFunctionBuilder, ScalarFunctionInfo,
 /// Registers a plain Rust function `Args -> Output` as a DuckDB scalar function. The adapter
 /// splits quack-rs' vector-level callback into per-row Rust code: it reads arguments row by
 /// row through [`Self::Args`] (a [`DuckColumns`] implementation), calls [`Self::apply`] (or
-/// [`Self::apply_with_null`] for NULL rows) and finally writes the collected results into the
-/// output vector in one batch. Usually you do not implement this manually: just annotate a
+/// [`Self::apply_with_null`] for NULL rows, or [`Self::apply_with_extra`] when extra data is
+/// attached) and finally writes the collected results into the output vector in one batch. Usually you do not implement this manually: just annotate a
 /// plain function with `#[duck_scalar_function]`.
 pub trait ScalarFunctionAdapter: Sized + 'static {
     /// # Safety
     ///
-    /// 由 DuckDB 回调，`_info`/`input`/`output` 均由 DuckDB 保证有效。
+    /// 由 DuckDB 回调，`info`/`input`/`output` 均由 DuckDB 保证有效。
     ///
-    /// Called by DuckDB; `_info`, `input` and `output` are guaranteed valid by DuckDB.
+    /// Called by DuckDB; `info`, `input` and `output` are guaranteed valid by DuckDB.
     unsafe extern "C" fn scalar_function_wrapper(
-        _info: duckdb_function_info,
+        info: duckdb_function_info,
         input: duckdb_data_chunk,
         output: duckdb_vector,
     ) {
-        let info: ScalarFunctionInfo = unsafe { ScalarFunctionInfo::new(_info) };
+        let info: ScalarFunctionInfo = unsafe { ScalarFunctionInfo::new(info) };
+        // SAFETY: 回调期间 info 有效；extra_info 由 builder 在注册时挂上（没挂时为 None）。
+        //
+        // SAFETY: `info` is valid during the callback; the extra info was attached by the builder at
+        // registration time (None when nothing was attached).
+        let extra = unsafe { erased_extra_info(&info) };
         duck_scalar_unwind(&info,|| {
             let chunk: DataChunk = unsafe { DataChunk::from_raw(input) };
             let readers = Self::Args::create_column_readers(&chunk);
@@ -46,7 +55,7 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
             for row in 0..row_count {
                 let args = Self::Args::read_columns(&readers, row);
-                let result = Self::apply_with_null(args);
+                let result = Self::apply_with_extra(args, extra);
                 match result {
                     Ok(r) => output_vec.push(r),
                     Err(e) => {
@@ -71,22 +80,39 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     ///
     /// Builds the builder for a standalone function (carrying its own name).
     fn scalar_function_builder() -> ScalarFunctionBuilder {
-        ScalarFunctionBuilder::new(Self::NAME)
+        let mut builder = ScalarFunctionBuilder::new(Self::NAME)
             .function(Self::scalar_function_wrapper)
             .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
-            .with_params(Self::Args::column_types())
+            .with_params(Self::Args::column_types());
+        if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
+            // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；函数对象交给 DuckDB 后
+            // 由 DuckDB 在销毁时调用 destroy。
+            //
+            // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it; once the
+            // function object is handed to DuckDB, DuckDB calls `destroy` on destruction.
+            builder = unsafe { builder.extra_info(ptr, destroy) };
+        }
+        builder
     }
 
     /// 构造「函数集重载」用的 builder（不带函数名，由函数集决定）。
     ///
     /// Builds the builder for a function-set overload (no name; the set provides it).
     fn scalar_overload_builder() -> ScalarOverloadBuilder {
-        ScalarOverloadBuilder::new()
+        let mut builder = ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
             .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
-            .with_params(Self::Args::column_types())
+            .with_params(Self::Args::column_types());
+        if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
+            // SAFETY: 同上；重载句柄最终由函数集持有，析构时机由 DuckDB 决定。
+            //
+            // SAFETY: as above; the overload handle ends up owned by the function set and DuckDB
+            // decides when it is destroyed.
+            builder = unsafe { builder.extra_info(ptr, destroy) };
+        }
+        builder
     }
 
     /// # Safety
@@ -113,6 +139,21 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     /// written into the vector.
     type Output: DuckValueType;
 
+    /// 注册期附加的数据（DuckDB 的 `extra_info`）；默认不附加。
+    ///
+    /// 数据在函数对象销毁时由 DuckDB 调用析构回调释放，因此类型必须是 `Send + Sync + 'static`
+    /// （函数对象可能被多线程、多查询共享，且应视为只读）。需要「每次查询一份」的状态请改用表函数的
+    /// `with_state` 或 quack-rs 的 bind data。
+    ///
+    /// Function-level data attached at registration time (DuckDB's `extra_info`); nothing is
+    /// attached by default. DuckDB frees it through the destructor when the function object is
+    /// dropped, so the type must be `Send + Sync + 'static` (the function object may be shared
+    /// across threads and queries, and must be treated as read-only). For per-query state use a
+    /// table function's `with_state` or quack-rs' bind data instead.
+    fn extra_info() -> Option<DuckExtraInfo> {
+        None
+    }
+
     /// NULL 行的默认处理：入参为 `None`（本行有 NULL 且参数不可空）时直接输出 NULL。
     ///
     /// Default handling of NULL rows: when the arguments are `None` (a NULL in this row with
@@ -123,6 +164,31 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         } else {
             Ok(None)
         }
+    }
+
+    /// 对一行参数求值，并带上函数级附加数据。
+    ///
+    /// 默认忽略 `extra` 并转调 [`Self::apply_with_null`]；需要读 `extra_info` 时重写本方法：
+    ///
+    /// ```ignore
+    /// fn apply_with_extra(
+    ///     args: Option<Self::Args>,
+    ///     extra: Option<&duckfn::DuckExtraInfo>,
+    /// ) -> duckfn::DuckOptionResult<Self::Output> {
+    ///     let config = extra.and_then(|extra| extra.downcast_ref::<MyConfig>());
+    ///     // ...
+    /// }
+    /// ```
+    ///
+    /// Evaluates one row of arguments together with the function-level extra data. By default it
+    /// ignores `extra` and delegates to [`Self::apply_with_null`]; override it to read the
+    /// `extra_info` (see the snippet above).
+    fn apply_with_extra(
+        args: Option<Self::Args>,
+        extra: Option<&DuckExtraInfo>,
+    ) -> DuckOptionResult<Self::Output> {
+        let _ = extra;
+        Self::apply_with_null(args)
     }
 
     /// 对一行非 NULL 参数求值；返回 `Ok(None)` 表示该行输出 SQL NULL。

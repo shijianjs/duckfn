@@ -5,15 +5,19 @@
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::DuckValueType;
-use crate::{duck_aggregate_unwind, duck_error, vec_option_to_ref, DuckOptionResult, DuckResult};
+use crate::{
+    DuckExtraInfo, duck_aggregate_unwind, duck_error, erased_extra_info, raw_extra_info,
+    vec_option_to_ref, DuckOptionResult, DuckResult,
+};
 use libduckdb_sys::{
     DuckDBSuccess, duckdb_add_aggregate_function_to_set, duckdb_aggregate_function,
     duckdb_aggregate_function_add_parameter, duckdb_aggregate_function_set,
-    duckdb_aggregate_function_set_destructor, duckdb_aggregate_function_set_functions,
-    duckdb_aggregate_function_set_name, duckdb_aggregate_function_set_return_type,
-    duckdb_aggregate_function_set_special_handling, duckdb_aggregate_state, duckdb_connection,
-    duckdb_create_aggregate_function, duckdb_create_aggregate_function_set, duckdb_data_chunk,
-    duckdb_destroy_aggregate_function, duckdb_destroy_aggregate_function_set, duckdb_function_info,
+    duckdb_aggregate_function_set_destructor, duckdb_aggregate_function_set_extra_info,
+    duckdb_aggregate_function_set_functions, duckdb_aggregate_function_set_name,
+    duckdb_aggregate_function_set_return_type, duckdb_aggregate_function_set_special_handling,
+    duckdb_aggregate_state, duckdb_connection, duckdb_create_aggregate_function,
+    duckdb_create_aggregate_function_set, duckdb_data_chunk, duckdb_destroy_aggregate_function,
+    duckdb_destroy_aggregate_function_set, duckdb_function_info,
     duckdb_register_aggregate_function_set, duckdb_vector, idx_t,
 };
 use quack_rs::aggregate::builder::OverloadBuilder;
@@ -64,15 +68,20 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
 
     /// # Safety
     ///
-    /// 由 DuckDB 回调，`_info`/`input`/`states` 均由 DuckDB 保证有效。
+    /// 由 DuckDB 回调，`info`/`input`/`states` 均由 DuckDB 保证有效。
     ///
-    /// Called by DuckDB; `_info`, `input` and `states` are guaranteed valid by DuckDB.
+    /// Called by DuckDB; `info`, `input` and `states` are guaranteed valid by DuckDB.
     unsafe extern "C" fn c_update(
-        _info: duckdb_function_info,
+        info: duckdb_function_info,
         input: duckdb_data_chunk,
         states: *mut duckdb_aggregate_state,
     ) {
-        let info = unsafe { AggregateFunctionInfo::new(_info) };
+        let info = unsafe { AggregateFunctionInfo::new(info) };
+        // SAFETY: 回调期间 info 有效；extra_info 由 builder 在注册时挂上（没挂时为 None）。
+        //
+        // SAFETY: `info` is valid during the callback; the extra info was attached by the builder
+        // at registration time (None when nothing was attached).
+        let extra = unsafe { erased_extra_info(&info) };
         duck_aggregate_unwind(&info, || {
             let chunk = unsafe { DataChunk::from_raw(input) };
             let readers = Self::Args::create_column_readers(&chunk);
@@ -81,7 +90,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
                 let args = Self::Args::read_columns(&readers, row);
                 let state_ptr = unsafe { *states.add(row) };
                 if let Some(st) = unsafe { FfiState::<Self>::with_state_mut(state_ptr) } {
-                    let result = st.handle_row_with_null(args);
+                    let result = st.handle_row_with_extra(args, extra);
                     if let Err(e) = result {
                         info.set_error(e.as_str());
                         return;
@@ -97,12 +106,17 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     ///
     /// Called by DuckDB; `source` and `target` are guaranteed valid by DuckDB.
     unsafe extern "C" fn c_combine(
-        _info: duckdb_function_info,
+        info: duckdb_function_info,
         source: *mut duckdb_aggregate_state,
         target: *mut duckdb_aggregate_state,
         count: idx_t,
     ) {
-        let info = unsafe { AggregateFunctionInfo::new(_info) };
+        let info = unsafe { AggregateFunctionInfo::new(info) };
+        // SAFETY: 回调期间 info 有效；extra_info 由 builder 在注册时挂上（没挂时为 None）。
+        //
+        // SAFETY: `info` is valid during the callback; the extra info was attached by the builder
+        // at registration time (None when nothing was attached).
+        let extra = unsafe { erased_extra_info(&info) };
         duck_aggregate_unwind(&info, || {
             for i in 0..count as usize {
                 let src_ptr = unsafe { *source.add(i) };
@@ -110,7 +124,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
                 let src = unsafe { FfiState::<Self>::with_state(src_ptr) };
                 let tgt = unsafe { FfiState::<Self>::with_state_mut(tgt_ptr) };
                 if let (Some(s), Some(t)) = (src, tgt) {
-                    let result = t.combine(s);
+                    let result = t.combine_with_extra(s, extra);
                     if let Err(e) = result {
                         info.set_error(e.as_str());
                         return;
@@ -122,17 +136,22 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
 
     /// # Safety
     ///
-    /// 由 DuckDB 回调，`_info`/`source`/`result` 均由 DuckDB 保证有效。
+    /// 由 DuckDB 回调，`info`/`source`/`result` 均由 DuckDB 保证有效。
     ///
-    /// Called by DuckDB; `_info`, `source` and `result` are guaranteed valid by DuckDB.
+    /// Called by DuckDB; `info`, `source` and `result` are guaranteed valid by DuckDB.
     unsafe extern "C" fn c_finalize(
-        _info: duckdb_function_info,
+        info: duckdb_function_info,
         source: *mut duckdb_aggregate_state,
         result: duckdb_vector,
         count: idx_t,
         offset: idx_t,
     ) {
-        let info = unsafe { AggregateFunctionInfo::new(_info) };
+        let info = unsafe { AggregateFunctionInfo::new(info) };
+        // SAFETY: 回调期间 info 有效；extra_info 由 builder 在注册时挂上（没挂时为 None）。
+        //
+        // SAFETY: `info` is valid during the callback; the extra info was attached by the builder
+        // at registration time (None when nothing was attached).
+        let extra = unsafe { erased_extra_info(&info) };
         duck_aggregate_unwind(&info, || {
             if offset != 0 {
                 info.set_error(
@@ -150,7 +169,7 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
                 let state_ptr = unsafe { *source.add(i) };
                 match unsafe { FfiState::<Self>::with_state(state_ptr) } {
                     Some(st) => {
-                        let result1 = st.result();
+                        let result1 = st.result_with_extra(extra);
                         match result1 {
                             Ok(r) => output_vec.push(r),
                             Err(e) => {
@@ -183,11 +202,30 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         NullHandling::DefaultNullHandling
     }
 
+    /// 注册期附加的数据（DuckDB 的 `extra_info`）；默认不附加。
+    ///
+    /// 数据在函数对象销毁时由 DuckDB 调用析构回调释放，因此类型必须是 `Send + Sync + 'static`
+    /// （函数对象可能被多线程、多查询共享，且应视为只读）。
+    ///
+    /// 生效范围：`aggregate_function_builder()`（独立聚合函数）与 duckfn 自建的聚合函数集
+    /// （`aggregate_function_guard()`）；quack-rs 的 `OverloadBuilder` 没有该接口，走那条路时本方法无效。
+    ///
+    /// Function-level data attached at registration time (DuckDB's `extra_info`); nothing is
+    /// attached by default. DuckDB frees it through the destructor when the function object is
+    /// dropped, so the type must be `Send + Sync + 'static` (the function object may be shared
+    /// across threads and queries, and must be treated as read-only). It applies to
+    /// `aggregate_function_builder()` (standalone aggregates) and duckfn's own aggregate function
+    /// set (`aggregate_function_guard()`); quack-rs' `OverloadBuilder` has no such interface, so this
+    /// method has no effect on that path.
+    fn extra_info() -> Option<DuckExtraInfo> {
+        None
+    }
+
     /// 构造「独立函数」用的 aggregate builder（自带函数名）。
     ///
     /// Builds the aggregate builder for a standalone function (carrying its own name).
     fn aggregate_function_builder() -> AggregateFunctionBuilder {
-        AggregateFunctionBuilder::new(Self::NAME)
+        let mut builder = AggregateFunctionBuilder::new(Self::NAME)
             .state_size(Self::c_state_size)
             .init(Self::c_state_init)
             .update(Self::c_update)
@@ -196,13 +234,29 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             .destructor(Self::c_state_destroy)
             .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
-            .with_params(Self::Args::column_types())
+            .with_params(Self::Args::column_types());
+        if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
+            // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；函数对象交给 DuckDB 后
+            // 由 DuckDB 在销毁时调用 destroy。
+            //
+            // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it; once the
+            // function object is handed to DuckDB, DuckDB calls `destroy` on destruction.
+            builder = unsafe { builder.extra_info(ptr, destroy) };
+        }
+        builder
     }
 
     /// 往「函数集重载」用的 [`OverloadBuilder`] 上补齐本签名的回调与参数表。
     ///
     /// Complements the given [`OverloadBuilder`] (used for function-set overloads) with this
     /// signature's callbacks and parameter list.
+    ///
+    /// 注意：quack-rs 的 `OverloadBuilder` **没有** `extra_info` 接口，因此 [`Self::extra_info`] 在这条
+    /// 路径上不会生效（要用附加数据请走 duckfn 自建的函数集，或 `aggregate_function_builder`）。
+    ///
+    /// Note: quack-rs' `OverloadBuilder` has **no** `extra_info` interface, so [`Self::extra_info`] is
+    /// ignored on this path (use duckfn's own function set, or `aggregate_function_builder`, if you
+    /// need attached data).
     fn aggregate_overload_builder(builder: OverloadBuilder) -> OverloadBuilder {
         builder
             .state_size(Self::c_state_size)
@@ -261,6 +315,15 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
             unsafe { duckdb_aggregate_function_set_special_handling(func) };
         }
 
+        if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
+            // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；func 是刚创建的有效句柄，
+            // 交给 DuckDB 注册后由 DuckDB 在销毁句柄时调用 destroy。
+            //
+            // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it; `func` is a
+            // freshly created valid handle, and DuckDB calls `destroy` when it destroys the handle.
+            unsafe { duckdb_aggregate_function_set_extra_info(func, ptr, destroy) };
+        }
+
         AggregateFunctionGuard {
             name: Self::NAME.to_string(),
             c_agg: func,
@@ -308,6 +371,34 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
         }
         Ok(())
     }
+
+    /// 用一行（可能为 NULL）输入更新状态，并带上函数级附加数据。
+    ///
+    /// 默认忽略 `extra` 并转调 [`Self::handle_row_with_null`]；需要读 `extra_info` 时重写本方法：
+    ///
+    /// ```ignore
+    /// fn handle_row_with_extra(
+    ///     &mut self,
+    ///     args: Option<Self::Args>,
+    ///     extra: Option<&duckfn::DuckExtraInfo>,
+    /// ) -> duckfn::DuckResult<()> {
+    ///     let config = extra.and_then(|extra| extra.downcast_ref::<MyConfig>());
+    ///     // ...
+    /// }
+    /// ```
+    ///
+    /// Updates the state with one (possibly NULL) input row together with the function-level extra
+    /// data. By default it ignores `extra` and delegates to [`Self::handle_row_with_null`]; override
+    /// it to read the `extra_info`.
+    fn handle_row_with_extra(
+        &mut self,
+        args: Option<Self::Args>,
+        extra: Option<&DuckExtraInfo>,
+    ) -> DuckResult<()> {
+        let _ = extra;
+        self.handle_row_with_null(args)
+    }
+
     /// 用一行非 NULL 输入更新状态。
     ///
     /// Updates the state with one row of non-NULL input.
@@ -320,6 +411,32 @@ pub trait AggregateFunctionAdapter: AggregateState + Sized + 'static {
     ///
     /// Emits the current aggregate result; `Ok(None)` means an empty (SQL NULL) result.
     fn result(&self) -> DuckOptionResult<Self::Output>;
+
+    /// 合并另一个状态到自身，并带上函数级附加数据。
+    ///
+    /// 默认忽略 `extra` 并转调 [`Self::combine`]；需要读 `extra_info` 时重写本方法。
+    ///
+    /// Merges another state into this one together with the function-level extra data. By default it
+    /// ignores `extra` and delegates to [`Self::combine`]; override it to read the `extra_info`.
+    fn combine_with_extra(
+        &mut self,
+        other: &Self,
+        extra: Option<&DuckExtraInfo>,
+    ) -> DuckResult<()> {
+        let _ = extra;
+        self.combine(other)
+    }
+
+    /// 输出当前聚合结果，并带上函数级附加数据。
+    ///
+    /// 默认忽略 `extra` 并转调 [`Self::result`]；需要读 `extra_info` 时重写本方法。
+    ///
+    /// Emits the current aggregate result together with the function-level extra data. By default it
+    /// ignores `extra` and delegates to [`Self::result`]; override it to read the `extra_info`.
+    fn result_with_extra(&self, extra: Option<&DuckExtraInfo>) -> DuckOptionResult<Self::Output> {
+        let _ = extra;
+        self.result()
+    }
 }
 
 /// 聚合状态的简化接口：用「自合并 + 自身求值」描述一个聚合函数。

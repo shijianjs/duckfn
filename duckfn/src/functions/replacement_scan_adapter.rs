@@ -3,7 +3,7 @@
 //! Replacement-scan adapter: redirects table names unknown to DuckDB (usually file paths) to
 //! a table function.
 
-use crate::{DuckOptionResult, DuckResult, panic_to_string};
+use crate::{DuckExtraInfo, DuckOptionResult, DuckResult, panic_to_string, raw_extra_info};
 use libduckdb_sys::duckdb_replacement_scan_info;
 use quack_rs::prelude::{Connection, ReplacementScanInfo};
 use std::panic::catch_unwind;
@@ -74,17 +74,36 @@ pub trait ReplacementScanAdapter: Sized + 'static {
     /// Registration itself cannot currently fail; the `DuckResult` return type exists to
     /// match the inventory `DuckRegisterFn` signature (`fn(&Connection) -> DuckResult<()>`).
     fn register(c: &Connection) -> DuckResult<()> {
-        // Low-level: pass raw extra_data and an optional delete callback.
+        // 附加数据走注册参数 extra_data：回调的第 3 个参数就是它（见 [`Self::scan_callback`]）。
+        //
+        // The extra data travels as the registration argument `extra_data`: it is the third
+        // parameter of the callback (see [`Self::scan_callback`]).
+        let (extra_data, delete_callback) = match raw_extra_info(Self::extra_info()) {
+            Some((ptr, destroy)) => (ptr, destroy),
+            None => (std::ptr::null_mut(), None),
+        };
         // SAFETY: c.as_raw_database() 是 DuckDB 交给扩展的有效 duckdb_database，
-        // Self::scan_callback 的签名满足 ReplacementScanFn 的要求。
+        // Self::scan_callback 的签名满足 ReplacementScanFn 的要求；extra_data 由
+        // `DuckExtraInfo::into_raw` 产生，delete_callback 与它配对。
+        //
+        // SAFETY: c.as_raw_database() is a valid `duckdb_database` handed to the extension by
+        // DuckDB, Self::scan_callback matches ReplacementScanFn, `extra_data` comes from
+        // `DuckExtraInfo::into_raw` and `delete_callback` matches it.
         unsafe {
-            c.register_replacement_scan(
-                Self::scan_callback,  // ReplacementScanFn
-                std::ptr::null_mut(), // extra_data
-                None,                 // delete_callback
-            );
+            c.register_replacement_scan(Self::scan_callback, extra_data, delete_callback);
         }
         Ok(())
+    }
+
+    /// 注册期附加的数据（DuckDB replacement scan 的 `extra_data`）；默认不附加。
+    ///
+    /// 数据在数据库关闭时由 DuckDB 调用析构回调释放，因此类型必须是 `Send + Sync + 'static`。
+    ///
+    /// Function-level data attached at registration time (a DuckDB replacement scan's `extra_data`);
+    /// nothing is attached by default. DuckDB frees it through the destructor when the database is
+    /// closed, so the type must be `Send + Sync + 'static`.
+    fn extra_info() -> Option<DuckExtraInfo> {
+        None
     }
 
     /// # Safety
@@ -95,7 +114,7 @@ pub trait ReplacementScanAdapter: Sized + 'static {
     unsafe extern "C" fn scan_callback(
         info: duckdb_replacement_scan_info,
         table_name: *const ::std::os::raw::c_char,
-        _data: *mut ::std::os::raw::c_void,
+        data: *mut ::std::os::raw::c_void,
     ) {
         // SAFETY: table_name 是 DuckDB 传入的以 NUL 结尾的 C 字符串。
         let path = unsafe { std::ffi::CStr::from_ptr(table_name) };
@@ -105,9 +124,15 @@ pub trait ReplacementScanAdapter: Sized + 'static {
             return;
         };
 
+        // SAFETY: data 是注册时交出去的 `DuckExtraInfo` 裸指针（没挂附加数据时为 null）。
+        //
+        // SAFETY: `data` is the raw `DuckExtraInfo` pointer handed to DuckDB at registration time
+        // (null when nothing was attached).
+        let extra = unsafe { DuckExtraInfo::from_raw(data) };
+
         // SAFETY: info 由 DuckDB 传入，在回调期间有效。
         let scan_info = unsafe { ReplacementScanInfo::new(info) };
-        match catch_unwind(|| Self::handle_info(&scan_info, path)) {
+        match catch_unwind(|| Self::handle_info_with_extra(&scan_info, path, extra)) {
             Ok(Ok(())) => {}
             // 业务错误：交给 DuckDB 变成查询错误。
             Ok(Err(e)) => scan_info.set_error(e.as_str()),
@@ -130,6 +155,22 @@ pub trait ReplacementScanAdapter: Sized + 'static {
             info.set_function(&table_fn).add_varchar_parameter(path);
         }
         Ok(())
+    }
+
+    /// 同 [`Self::handle_info`]，但带上 [`Self::extra_info`] 挂的附加数据。
+    ///
+    /// 默认忽略 `extra` 并转调 [`Self::handle_info`]；需要读 `extra_info` 时重写本方法。
+    ///
+    /// Same as [`Self::handle_info`] but carrying the data attached through [`Self::extra_info`].
+    /// By default it ignores `extra` and delegates to [`Self::handle_info`]; override it to read the
+    /// `extra_info`.
+    fn handle_info_with_extra(
+        info: &ReplacementScanInfo,
+        path: &str,
+        extra: Option<&DuckExtraInfo>,
+    ) -> DuckResult<()> {
+        let _ = extra;
+        Self::handle_info(info, path)
     }
 
     /// 决定表名（路径）由哪个表函数接管：

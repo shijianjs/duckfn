@@ -225,6 +225,13 @@ pub trait DuckCopyToWriter: Sized + 'static {
 /// column), boxes the writer and hands it to DuckDB through `set_global_state` with a destructor
 /// callback that drops it, and wraps every phase in `catch_unwind` so that panics and `Err`s become
 /// query errors (`set_error`) instead of unwinding across FFI.
+///
+/// 这里**没有** `extra_info` 钩子：quack-rs 的 `CopyFunctionBuilder` 不暴露该接口，而句柄在
+/// `register` 内部创建并销毁、拿不到手。需要函数级共享数据时用标准库的 `OnceLock` / `LazyLock`。
+///
+/// There is **no** `extra_info` hook here: quack-rs' `CopyFunctionBuilder` does not expose the
+/// interface, and the handle is created and destroyed inside `register`, so it cannot be reached.
+/// Use the standard library's `OnceLock` / `LazyLock` for function-level shared data.
 pub trait CopyToFunctionAdapter: Sized + 'static {
     /// 回调名称，同时用作 `COPY ... (FORMAT <name>)` 里的格式名。
     ///

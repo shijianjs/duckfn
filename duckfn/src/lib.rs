@@ -45,6 +45,11 @@ pub(crate) mod value_types;
 /// Registration collector: gathers entries submitted by the macros and registers them at
 /// initialisation time.
 pub(crate) mod register;
+/// 函数级附加数据（DuckDB C API 的 `extra_info`）：`DuckExtraInfo` 与读取辅助。
+///
+/// Function-level extra data (the DuckDB C API's `extra_info`): [`DuckExtraInfo`] and the read
+/// helpers.
+pub(crate) mod extra_info;
 /// 各类函数（标量/聚合/表/cast/SQL 宏/replacement scan）的适配层 trait。
 ///
 /// Adapter traits for every function kind (scalar/aggregate/table/cast/SQL macro/
@@ -84,6 +89,10 @@ pub use utils::*;
 //
 // Registration entry point and registration-item types.
 pub use register::*;
+// 函数级附加数据（`extra_info`）。
+//
+// Function-level extra data (`extra_info`).
+pub use extra_info::*;
 // `inventory::submit!` 的再导出，供宏生成的代码调用。
 //
 // Re-export of `inventory::submit!` so that macro-generated code can call it.

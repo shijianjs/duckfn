@@ -65,6 +65,19 @@ pub type DuckFullIteratorResult<T> = DuckResult<DuckFullIterator<T>>;
 /// state, writes them into the output chunk and sets the batch size. Usually you do not
 /// implement this manually: annotate a function returning an iterator with
 /// `#[duck_table_function]`.
+///
+/// 这里**没有** `extra_info` 钩子：本适配层走 quack-rs 的 typed 表函数 builder，而该 builder 把
+/// `extra_info` 槽位用来存它自己的 bind/scan 闭包了。表函数本来就以 per-query 状态传数据
+/// （[`Self::with_state`] 返回的迭代器），需要跨查询共享的只读数据用标准库的
+/// `OnceLock` / `LazyLock` 即可。需要读 `extra_info` 又愿意自己接管注册的话，可以重写
+/// [`Self::table_function_builder`]。
+///
+/// There is **no** `extra_info` hook here: this adapter goes through quack-rs' typed table-function
+/// builder, which uses the `extra_info` slot for its own bind/scan closures. Table functions already
+/// pass their data as per-query state (the iterator returned by [`Self::with_state`]); use the
+/// standard library's `OnceLock` / `LazyLock` for read-only data shared across queries. If you need
+/// `extra_info` and are willing to own the registration, override
+/// [`Self::table_function_builder`].
 pub trait TableFunctionAdapter: Sized + 'static {
     /// 构造表函数 builder，并挂上 bind/scan 两个闭包。
     ///
@@ -245,6 +258,11 @@ pub struct DuckDynamicState {
 /// so a panic becomes a query error.
 ///
 /// 一般不需要手写 `table_function_builder()` / `with_state` / `scan`，只实现 [`Self::bind`] 即可：
+///
+/// 这里**没有** `extra_info` 钩子，原因同 [`TableFunctionAdapter`]（typed builder 占用了该槽位）。
+///
+/// There is **no** `extra_info` hook here, for the same reason as [`TableFunctionAdapter`] (the
+/// typed builder occupies that slot).
 ///
 /// Usually only [`Self::bind`] has to be implemented; `table_function_builder()` / `with_state` /
 /// `scan` come with defaults:
