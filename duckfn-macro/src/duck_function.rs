@@ -789,6 +789,9 @@ impl ItemFnWrapper {
     /// Generates the table-function implementation: `TableFunctionImpl` (returning the row
     /// iterator), the builder export and the automatic registration.
     fn build_table_function_impl(&self) -> TokenStream2Result {
+        if self.dynamic_columns() {
+            return self.build_dynamic_table_function_impl();
+        }
         let name = self.name();
 
         let (_, return_type) = self.table_return_type()?;
@@ -823,6 +826,102 @@ impl ItemFnWrapper {
             #function_register
 
         })
+    }
+
+    /// 生成动态列表函数实现体：`DynamicTableFunctionAdapter`（返回「schema + 行迭代器」）+
+    /// builder 导出 + 自动注册。
+    ///
+    /// 与静态列表函数同构：`bind` 阶段解析参数、调用被标注函数拿到 `DuckDynamicTable`，把它拆成
+    /// schema（用来声明结果列）与行迭代器（作为 scan 状态）；scan 阶段按 schema 批量写行。
+    ///
+    /// Generates the dynamic-column table-function implementation:
+    /// `DynamicTableFunctionAdapter` (returning "schema + row iterator"), the builder export and the
+    /// automatic registration. It mirrors the static flavour: bind parses the arguments and calls
+    /// the annotated function to get a `DuckDynamicTable`, splitting it into a schema (used to
+    /// declare the result columns) and the row iterator (the scan state); scan writes rows out by
+    /// that schema.
+    fn build_dynamic_table_function_impl(&self) -> TokenStream2Result {
+        let name = self.name();
+        let return_clause = self.build_dynamic_table_return_clause()?;
+        let get_data = self.args_to_code(|x| x.build_get_data())?;
+        let function_register = self.table_function_register()?;
+
+        Ok(quote! {
+            use duckfn::DynamicTableFunctionAdapter;
+
+            pub struct TableFunctionImpl;
+
+            impl duckfn::DynamicTableFunctionAdapter for TableFunctionImpl {
+                const NAME: &'static str = stringify!(#name);
+                type Args = DuckArgsImpl;
+
+                fn bind(
+                    args: Self::Args,
+                ) -> duckfn::DuckResult<duckfn::DuckDynamicTable> {
+                    let result = #name(
+                        #(#get_data),*
+                    );
+                    #return_clause
+                }
+            }
+
+            pub fn table_function_builder() -> duckfn::DuckResult<quack_rs::prelude::TableFunctionBuilder> {
+                TableFunctionImpl::table_function_builder()
+            }
+
+            #function_register
+
+        })
+    }
+
+    /// 按动态表函数返回类型生成收尾代码，统一收敛成 `DuckResult<DuckDynamicTable>`。
+    ///
+    /// - `-> DuckDynamicTable`：直接 `Ok(result)`；
+    /// - `-> DuckResult<DuckDynamicTable>`：原样返回。
+    ///
+    /// Generates the epilogue for a dynamic table-function return type, normalising it into
+    /// `DuckResult<DuckDynamicTable>`: `-> DuckDynamicTable` becomes `Ok(result)` while
+    /// `-> DuckResult<DuckDynamicTable>` is returned as is.
+    fn build_dynamic_table_return_clause(&self) -> TokenStream2Result {
+        match self.dynamic_table_return_type()? {
+            DuckDynamicTableResult::Plain => Ok(quote! { Ok(result) }),
+            DuckDynamicTableResult::Result => Ok(quote! { result }),
+        }
+    }
+
+    /// 解析动态表函数的返回类型：只接受 `-> DuckDynamicTable` 与
+    /// `-> DuckResult<DuckDynamicTable>`，其他形式报编译错误（附上动态模式的用法提示）。
+    ///
+    /// Parses a dynamic table-function return type: only `-> DuckDynamicTable` and
+    /// `-> DuckResult<DuckDynamicTable>` are accepted; anything else is a compile error carrying
+    /// the dynamic-mode usage hint.
+    fn dynamic_table_return_type(&self) -> syn::Result<DuckDynamicTableResult> {
+        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
+            if let Type::Path(type_path) = &**ty {
+                if let Some(segment) = type_path.path.segments.last() {
+                    if segment.ident == "DuckDynamicTable" {
+                        return Ok(DuckDynamicTableResult::Plain);
+                    }
+                    if segment.ident == "DuckResult" {
+                        if let Some(Type::Path(inner_path)) = extract_generic_arg_type(segment) {
+                            if inner_path
+                                .path
+                                .segments
+                                .last()
+                                .is_some_and(|s| s.ident == "DuckDynamicTable")
+                            {
+                                return Ok(DuckDynamicTableResult::Result);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Err(syn::Error::new_spanned(
+            &self.item_fn.sig.output,
+            DYNAMIC_TABLE_RETURN_TYPE_HINT,
+        ))
     }
 
     /// 生成表函数的注册代码；`auto_register = false` 时输出空内容。
@@ -963,6 +1062,16 @@ impl ItemFnWrapper {
     /// Whether to auto-register; defaults to `true`.
     fn auto_register(&self) -> bool {
         self.duck_args.auto_register.unwrap_or(true)
+    }
+
+    /// `#[duck_table_function(dynamic_columns = true)]`
+    ///
+    /// 是否走「bind 阶段动态确定输出列」的通路，默认 `false`（沿用编译期静态列）。
+    ///
+    /// `#[duck_table_function(dynamic_columns = true)]`: whether to take the "output columns decided
+    /// during bind" path; defaults to `false` (the compile-time static columns).
+    fn dynamic_columns(&self) -> bool {
+        self.duck_args.dynamic_columns.unwrap_or(false)
     }
 
     /// `#[duck_scalar_function(overloads_name = "xxx")]` /
@@ -1439,6 +1548,29 @@ const SQL_MACRO_RETURN_TYPE_HINT: &str = r#"Only like
     `-> String` / `-> &'static str`: plain sql string, executed directly;
     `-> DuckResult<String>` / `-> DuckResult<&'static str>`;
 is supported"#;
+
+/// 动态列表函数返回类型的外层形式。
+///
+/// The outer form of a dynamic-column table-function return type.
+#[derive(Clone, Copy)]
+enum DuckDynamicTableResult {
+    /// `-> DuckDynamicTable`：直接把结果包成 `Ok`。
+    ///
+    /// `-> DuckDynamicTable`: the result is wrapped in `Ok`.
+    Plain,
+    /// `-> DuckResult<DuckDynamicTable>`：原样返回。
+    ///
+    /// `-> DuckResult<DuckDynamicTable>`: returned as is.
+    Result,
+}
+
+const DYNAMIC_TABLE_RETURN_TYPE_HINT: &str = r#"With `#[duck_table_function(dynamic_columns = true)]` the function must build the result table
+    (schema + row iterator) itself, so only these return types are supported:
+    `-> DuckDynamicTable`: the schema and rows are produced directly;
+    `-> DuckResult<DuckDynamicTable>`: same, but the bind step may fail;
+    Build the schema with `duckfn::DuckResultSchema` and the rows with
+    `duckfn::DuckDynamicRow` / `duckfn::DuckDynamicValue`, then return
+    `duckfn::DuckDynamicTable::new(schema, Box::new(rows))`."#;
 
 /// 表函数返回类型的外层形式。
 ///

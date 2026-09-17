@@ -212,11 +212,113 @@ Rows are produced lazily, one DuckDB vector at a time, so large result sets do n
 materialised. `SELECT count(*) FROM dfn_table_range(2048)` returns `2048`, and so does the next
 matching size — the iterator is simply pulled until it is exhausted.
 
+## Dynamic columns
+
+Sometimes the columns are not known until bind time — a file header, a dictionary table or a remote
+schema decides them. `dynamic_columns = true` moves the whole schema decision into bind:
+
+```rust
+#[duck_table_function(dynamic_columns = true)]
+fn dfn_table_dynamic(source: String, n: i64) -> DuckResult<DuckDynamicTable> {
+    // bind phase: read the external metadata and pin the schema down
+    let schema = DuckResultSchema::new(vec![
+        ("id".to_string(), DuckTypeDesc::scalar(TypeId::BigInt)),
+        (
+            "tags".to_string(),
+            DuckTypeDesc::list(DuckTypeDesc::scalar(TypeId::Varchar)),
+        ),
+    ]);
+
+    let rows = (0..n.max(0)).map(|i| -> DuckOptionResult<DuckDynamicRow> {
+        Ok(Some(DuckDynamicRow::new(vec![
+            Some(DuckDynamicValue::BigInt(i)),
+            Some(DuckDynamicValue::list([
+                Some(DuckDynamicValue::Varchar("t".to_string())),
+            ])),
+        ])))
+    });
+
+    Ok(DuckDynamicTable::new(schema, Box::new(rows)))
+}
+```
+
+The return type is `DuckDynamicTable` (or `DuckResult<DuckDynamicTable>`): the schema plus a row
+iterator. `bind` reads the metadata, declares the columns and hands the iterator to scan, which
+still writes one DuckDB vector at a time.
+
+- `DuckTypeDesc` is the `Send`-friendly recursive type description (`Scalar`, `Decimal`, `List`,
+  `Struct`, `Map`). `to_logical_type()` turns it into a DuckDB logical type for
+  `add_result_column_with_type`, while `from_logical_type()` goes the other way when the schema comes
+  from DuckDB itself.
+- `DuckDynamicValue` carries data only — the type always comes from the schema, so there is a single
+  source of truth. Every cell is an `Option`: `None` is SQL NULL.
+- `DuckDynamicRow::write_batch` validates each value against the column description before writing,
+  so a type mismatch is a readable error instead of a corrupted vector.
+
+```sql
+DESCRIBE SELECT * FROM dfn_table_dynamic('sales', 1);
+-- id      BIGINT
+-- region  VARCHAR
+-- amount  DOUBLE
+-- tags    VARCHAR[]
+-- info    STRUCT(host VARCHAR, code BIGINT)
+-- attrs   MAP(VARCHAR, BIGINT)
+
+SELECT id, len(tags), info.host FROM dfn_table_dynamic('sales', 6);
+-- 0 0   host-0
+-- 1 1   host-1
+-- 2 2   NULL
+-- 3 3   host-0
+-- 4 NULL host-1
+-- 5 1   NULL
+```
+
+An empty result still declares its columns, because the schema comes from the metadata alone and
+never from the data.
+
+### Low level
+
+`DuckDynamicTable` can also be produced by hand: implement `DynamicTableFunctionAdapter` (only
+`NAME`, `Args` and `bind` are required — the builder, `with_state` and `scan` have defaults) and
+register it yourself.
+
+```rust
+struct MyDynamic;
+
+impl DynamicTableFunctionAdapter for MyDynamic {
+    const NAME: &'static str = "my_dynamic";
+    type Args = MyArgs;
+
+    fn bind(args: Self::Args) -> DuckResult<DuckDynamicTable> {
+        // build the schema from the arguments / external metadata, then the row iterator
+        /* … */
+    }
+}
+
+#[duck_custom_register]
+fn my_dynamic_register(c: &Connection) -> DuckResult<()> {
+    unsafe { c.register_table(MyDynamic::table_function_builder()?) }
+}
+```
+
+:::note[Limitations]
+
+- `ENUM`, `ARRAY`, `UNION` and `BIT` cannot be described by `DuckTypeDesc` (their parameters are not
+  part of `TypeId`), so they are rejected with an error rather than silently truncated.
+- Dynamic columns cost one enum dispatch per cell and one `Vec` per row. Whenever the schema *is*
+  known at compile time, prefer the static `#[derive(DuckStruct)]` row struct — it stays the fastest
+  path.
+- Arguments behave exactly as in the static flavour (positional / named / optional / complex).
+:::
+
 ## Source and tests
 
 - [`src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/table_function.rs) — the example table functions and their row structs
 - [`test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/table_function.test) — the expected results
 - [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) — the runtime side
+- [`src/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/dynamic_table_function.rs) — the dynamic-column examples (macro and low level)
+- [`test/sql/functions/dynamic_table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/dynamic_table_function.test) — their expected results
+- [`duckfn/src/duck_dynamic.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/duck_dynamic.rs) — the runtime side of dynamic columns
 
 ## Next
 

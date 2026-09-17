@@ -17,7 +17,7 @@ duckdb_ext sql: ext_build
 duckdb_ext_debug sql: ext_build
     duckdb -unsigned -cmd "LOAD '{{extension}}'; {{sql}}"
 
-# 这个just命令可以跑所有.text测试
+# 这个just命令可以跑所有test/sql/**/*.text测试
 test:
     make configure debug test
 

@@ -206,11 +206,109 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
 行是惰性产出的，一次一个 DuckDB vector，因此大结果集不必整体物化。
 `SELECT count(*) FROM dfn_table_range(2048)` 返回 `2048`，再大一号的规模也一样 —— 迭代器被一直拉到穷尽为止。
 
+## 动态列
+
+有时列直到 bind 阶段才知道 —— 由文件头、字典表或远端 schema 决定。`dynamic_columns = true`
+把整个 schema 的决定权搬进 bind：
+
+```rust
+#[duck_table_function(dynamic_columns = true)]
+fn dfn_table_dynamic(source: String, n: i64) -> DuckResult<DuckDynamicTable> {
+    // bind 阶段：读外部元数据、把 schema 定下来
+    let schema = DuckResultSchema::new(vec![
+        ("id".to_string(), DuckTypeDesc::scalar(TypeId::BigInt)),
+        (
+            "tags".to_string(),
+            DuckTypeDesc::list(DuckTypeDesc::scalar(TypeId::Varchar)),
+        ),
+    ]);
+
+    let rows = (0..n.max(0)).map(|i| -> DuckOptionResult<DuckDynamicRow> {
+        Ok(Some(DuckDynamicRow::new(vec![
+            Some(DuckDynamicValue::BigInt(i)),
+            Some(DuckDynamicValue::list([
+                Some(DuckDynamicValue::Varchar("t".to_string())),
+            ])),
+        ])))
+    });
+
+    Ok(DuckDynamicTable::new(schema, Box::new(rows)))
+}
+```
+
+返回类型是 `DuckDynamicTable`（或 `DuckResult<DuckDynamicTable>`）：schema 加一个行迭代器。`bind`
+负责读元数据、声明列，并把迭代器交给 scan；scan 依旧一次写一个 DuckDB vector，不整表物化。
+
+- `DuckTypeDesc` 是可跨线程保存的递归类型描述（`Scalar` / `Decimal` / `List` / `Struct` /
+  `Map`）。`to_logical_type()` 把它转成 DuckDB 逻辑类型交给 `add_result_column_with_type`；
+  `from_logical_type()` 则反过来，用于 schema 本身就来自 DuckDB 的场景。
+- `DuckDynamicValue` 只携带数据 —— 类型一律来自 schema，因此只有一处真相。每个单元格都是
+  `Option`：`None` 就是 SQL NULL。
+- `DuckDynamicRow::write_batch` 在写向量前会按列描述校验每个值，因此类型错配是可读的错误，
+  而不是写坏向量。
+
+```sql
+DESCRIBE SELECT * FROM dfn_table_dynamic('sales', 1);
+-- id      BIGINT
+-- region  VARCHAR
+-- amount  DOUBLE
+-- tags    VARCHAR[]
+-- info    STRUCT(host VARCHAR, code BIGINT)
+-- attrs   MAP(VARCHAR, BIGINT)
+
+SELECT id, len(tags), info.host FROM dfn_table_dynamic('sales', 6);
+-- 0 0    host-0
+-- 1 1    host-1
+-- 2 2    NULL
+-- 3 3    host-0
+-- 4 NULL host-1
+-- 5 1    NULL
+```
+
+零行结果同样会声明出列，因为 schema 只来自元数据、从不来自数据。
+
+### 底层用法
+
+`DuckDynamicTable` 也可以手写产出：实现 `DynamicTableFunctionAdapter`（只要求 `NAME` / `Args` /
+`bind`，builder、`with_state`、`scan` 都有默认实现），再自行注册。
+
+```rust
+struct MyDynamic;
+
+impl DynamicTableFunctionAdapter for MyDynamic {
+    const NAME: &'static str = "my_dynamic";
+    type Args = MyArgs;
+
+    fn bind(args: Self::Args) -> DuckResult<DuckDynamicTable> {
+        // 由参数 / 外部元数据算出 schema，再造出行迭代器
+        /* … */
+    }
+}
+
+#[duck_custom_register]
+fn my_dynamic_register(c: &Connection) -> DuckResult<()> {
+    unsafe { c.register_table(MyDynamic::table_function_builder()?) }
+}
+```
+
+:::note[限制]
+
+- `ENUM`、`ARRAY`、`UNION`、`BIT` 无法用 `DuckTypeDesc` 描述（它们的参数不在 `TypeId` 里），
+  会直接报错，而不是给出一个残缺的类型。
+- 动态列每个单元格多一次枚举分发、每行多一次 `Vec` 分配。只要 schema 在编译期已知，就优先用静态的
+  `#[derive(DuckStruct)]` 行结构体 —— 它仍是最快的通路。
+- 参数行为与静态通路完全一致（位置 / 命名 / 可空 / 复杂类型）。
+
+:::
+
 ## 源码与测试
 
 - [`src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/table_function.rs) —— 示例表函数及其行结构体
 - [`test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/table_function.test) —— 期望结果
 - [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) —— 运行时侧
+- [`src/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/dynamic_table_function.rs) —— 动态列示例（宏层与底层）
+- [`test/sql/functions/dynamic_table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/dynamic_table_function.test) —— 对应的期望结果
+- [`duckfn/src/duck_dynamic.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/duck_dynamic.rs) —— 动态列的运行时侧
 
 ## 接下来
 

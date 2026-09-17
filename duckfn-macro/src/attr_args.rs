@@ -58,6 +58,20 @@ pub(crate) struct DuckFunctionMacroArgs {
     /// The field name from which table-function named parameters start.
     pub named_param_from: Option<String>,
 
+    /// `#[duck_table_function(dynamic_columns = true)]`：输出列在 bind 阶段动态确定。
+    ///
+    /// 开启后函数不再返回行迭代器，而是返回「schema + 行迭代器」的
+    /// `duckfn::DuckDynamicTable`（或 `DuckResult<DuckDynamicTable>`）：列名与列类型可以来自
+    /// 文件头、字典表、远端 schema 等外部元数据。默认 `false`，保持原有的静态列行为。
+    ///
+    /// `#[duck_table_function(dynamic_columns = true)]`: the output columns are decided dynamically
+    /// during bind. With this on, the function no longer returns a row iterator but a
+    /// `duckfn::DuckDynamicTable` (or `DuckResult<DuckDynamicTable>`) carrying "schema + row
+    /// iterator": the column names and types may come from external metadata such as a file header,
+    /// a dictionary table or a remote schema. Defaults to `false`, keeping the static-column
+    /// behaviour.
+    pub dynamic_columns: Option<bool>,
+
     /// Whether to auto register the function
     /// - Default to true
     ///
