@@ -318,7 +318,7 @@ fn my_dynamic_register(c: &Connection) -> DuckResult<()> {
 - [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) — the runtime side
 - [`src/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/dynamic_table_function.rs) — the dynamic-column examples (macro and low level)
 - [`test/sql/functions/dynamic_table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/dynamic_table_function.test) — their expected results
-- [`duckfn/src/duck_dynamic.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/duck_dynamic.rs) — the runtime side of dynamic columns
+- [`duckfn/src/dynamic`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/duck_dynamic/mod.rs) — the runtime side of dynamic columns
 
 ## Next
 

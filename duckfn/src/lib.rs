@@ -35,7 +35,7 @@ pub(crate) mod duck_columns;
 ///
 /// Runtime dynamic columns: [`DuckTypeDesc`] / [`DuckDynamicValue`] / [`DuckResultSchema`] /
 /// [`DuckDynamicRow`] / [`DuckDynamicTable`].
-pub(crate) mod duck_dynamic;
+pub(crate) mod dynamic;
 /// DuckDB 值类型映射：基础类型、`LIST` / `MAP` / `ARRAY` / `STRUCT` 及包装类型。
 ///
 /// DuckDB value-type mappings: primitives, `LIST` / `MAP` / `ARRAY` / `STRUCT` and wrappers.
@@ -72,7 +72,7 @@ pub use duck_columns::*;
 // 运行时动态列能力。
 //
 // Runtime dynamic-column capability.
-pub use duck_dynamic::*;
+pub use dynamic::*;
 // 各类函数适配层 trait。
 //
 // Adapter traits for every function kind.

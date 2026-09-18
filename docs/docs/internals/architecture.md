@@ -149,7 +149,7 @@ Both are wrapped in `catch_unwind`, so a panic in either becomes a query error. 
 ### Copy
 
 `COPY ... TO` and `COPY ... FROM` are both built on the runtime dynamic columns
-(`duckfn/src/duck_dynamic.rs`) rather than on `DuckValueType`, because a copy function's columns are
+(`duckfn/src/dynamic`) rather than on `DuckValueType`, because a copy function's columns are
 only known during bind.
 
 `COPY ... TO` is driven through four callbacks: `bind` turns the output columns into a

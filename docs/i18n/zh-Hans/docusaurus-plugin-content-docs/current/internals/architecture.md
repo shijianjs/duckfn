@@ -136,7 +136,7 @@ DuckDB 的六个回调都实现在状态类型上：
 
 ### COPY 函数
 
-`COPY ... TO` 与 `COPY ... FROM` 都建立在运行时动态列（`duckfn/src/duck_dynamic.rs`）之上，而不是
+`COPY ... TO` 与 `COPY ... FROM` 都建立在运行时动态列（`duckfn/src/dynamic`）之上，而不是
 `DuckValueType` —— 因为 COPY 函数的列要到 bind 阶段才知道。
 
 `COPY ... TO` 由四个回调驱动：`bind` 把输出列逐列反推成 `DuckResultSchema`（每列一次
