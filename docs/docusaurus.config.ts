@@ -121,6 +121,15 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          // GitHub Pages is slow to reach from mainland China, so EdgeOne serves the same build
+          // from a domain the reader can actually open. The English label is the source string;
+          // the translation lives in i18n/zh-Hans/docusaurus-theme-classic/navbar.json.
+          type: 'link',
+          label: 'China mirror',
+          href: 'https://duckfn-l4g2uraj.edgeone.cool/',
+          position: 'right',
+        },
+        {
           type: 'localeDropdown',
           position: 'right',
         },
@@ -224,7 +233,9 @@ const config: Config = {
       // /zh-Hans/docs/intro/. Without it, a root-served deployment links to
       // /zh-Hans/duckfn/zh-Hans/docs/intro/.
       replaceSearchResultPathname: {
-        from: new RegExp(`^${algoliaIndexBaseUrl}`),
+        // `from` is the source of a regular expression (Docusaurus builds it with `new RegExp`),
+        // anchored so only the leading Pages sub-path is dropped.
+        from: `^${algoliaIndexBaseUrl}`,
         to: '/',
       },
 
