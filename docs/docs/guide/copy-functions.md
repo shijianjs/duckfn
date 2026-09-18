@@ -40,7 +40,7 @@ fn dfn_copy_tsv(writer: &mut TsvWriter, rows: &[DuckDynamicRow]) -> DuckResult<(
 
 | Part | Meaning |
 | --- | --- |
-| `&mut MyWriter` | The format's writer state, implementing [`DuckCopyToWriter`](#duckcopywriter). |
+| `&mut MyWriter` | The format's writer state, implementing [`DuckCopyToWriter`](#duckcopytowriter). |
 | `&[DuckDynamicRow]` | This chunk's rows: at most `2048`, one cell per schema column, `None` for SQL NULL. |
 | `-> DuckResult<()>` | `Err` fails the whole `COPY`; panics become query errors too. |
 
