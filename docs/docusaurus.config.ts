@@ -122,9 +122,9 @@ const config: Config = {
         },
         {
           // GitHub Pages is slow to reach from mainland China, so EdgeOne serves the same build
-          // from a domain the reader can actually open. The English label is the source string;
-          // the translation lives in i18n/zh-Hans/docusaurus-theme-classic/navbar.json.
-          type: 'link',
+          // from a domain the reader can actually open. No `type` means the default (plain link)
+          // item; the English label is the source string, the translation lives in
+          // i18n/zh-Hans/docusaurus-theme-classic/navbar.json.
           label: 'China mirror',
           href: 'https://duckfn-l4g2uraj.edgeone.cool/',
           position: 'right',
