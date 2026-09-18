@@ -34,10 +34,16 @@ runtime.
 | `duckfn_entrypoint!("name")` | The extension entry point symbol. |
 | `duck_sql_macro_files!("a.sql", …)` | Register SQL macros kept in `.sql` files. |
 
-Common arguments: `auto_register = false` (generate the builders without registering),
-`named_param_from = "field"` (where named parameters start in a table function),
-`special_null_handling`, `volatile` and `varargs` (scalar functions on DuckDB 1.5+),
-`implicit_cost` and `overloads_name`.
+Each macro accepts only the arguments it needs — an unknown key is a compile error:
+
+- every attribute: `auto_register = false` (generate the builders without registering);
+- `#[duck_table_function]`: `named_param_from = "field"` (where named parameters start),
+  `dynamic_columns`;
+- `#[duck_scalar_function]`: `special_null_handling`, `volatile`, `varargs` (DuckDB 1.5+) and
+  `overloads_name`;
+- `#[duck_aggregate_function]`: `special_null_handling`, `overloads_name`;
+- `#[duck_cast_function]`: `implicit_cost`;
+- the derives: `named_param_from`, `rename_all`, `sql_name`, `create_type`.
 
 ## Example
 

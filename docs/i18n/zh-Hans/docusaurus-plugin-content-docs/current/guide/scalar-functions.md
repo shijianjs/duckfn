@@ -249,7 +249,7 @@ SELECT dfn_scalar_reg_named_param(b := 2, a := 1); -- 21（a 拿到 2，b 拿到
 SELECT dfn_scalar_reg_named_param(x := 1, y := 2); -- 12（不存在的名字也不会报错）
 ```
 
-`named_param_from` 只对表函数有意义，对标量函数没有可观察效果。
+`named_param_from` 是表函数专用的键，其它属性宏会直接拒绝它；标量函数始终按位置注册，因此 `名字 := 值` 里的名字会被忽略。
 
 ## 源码与测试
 

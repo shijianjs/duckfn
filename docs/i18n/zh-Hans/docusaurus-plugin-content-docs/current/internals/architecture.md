@@ -210,8 +210,8 @@ quack-rs 的再导出都在 `duckdb-1-5` feature 后面。
 
 | 问题 | 文件 |
 | --- | --- |
-| 属性接受哪些参数？ | `duckfn-macro/src/attr_args.rs` |
-| 宏生成了什么？ | `duckfn-macro/src/duck_function.rs`、`duck_struct_derive.rs` |
+| 属性接受哪些参数？ | 该宏自己的文件，如 `duckfn-macro/src/scalar_function.rs` |
+| 宏生成了什么？ | 同一个文件加上公共的 `common.rs`；derive 在 `duck_struct_derive.rs` / `duck_enum_derive.rs` |
 | 入口点怎么生成？ | `duckfn-macro/src/entrypoint.rs` |
 | 注册是怎么工作的？ | `duckfn/src/register.rs` |
 | 回调是怎么实现的？ | `duckfn/src/functions/*_adapter.rs` |

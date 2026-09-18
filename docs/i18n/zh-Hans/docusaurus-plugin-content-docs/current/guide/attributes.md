@@ -28,19 +28,21 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 
 ## 参数
 
-所有函数属性共用同一套参数：
+每个宏只声明自己真正会用到的参数，写在宏上但不在其参数列表里的键会直接报编译错误。
+`#[duck_custom_register]` 与 `#[duck_sql_macro]` 不接受任何参数。
 
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `auto_register` | `true` | 设为 `false` 时只生成 builder，不注册该函数。 |
-| `named_param_from` | — | 表函数用：从该参数起（含）全部作为命名参数。 |
-| `special_null_handling` | `false` | 让 DuckDB 把 `NULL` 入参交给回调，而不是在 bind 阶段折叠掉。见[标量函数](./scalar-functions.md#null-的处理)。 |
-| `volatile` | `false` | 标量函数用：标记为 volatile，注册时调用 `duckdb_scalar_function_set_volatile`，DuckDB 不缓存、不复用相同参数的调用结果。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#volatile)。 |
-| `varargs` | `false` | 标量函数用：开启可变参数。函数签名最后一个参数必须是 `Vec<T>`，其元素类型 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#可变参数)。 |
-| `implicit_cost` | — | 类型转换用：隐式转换代价。 |
-| `overloads_name` | — | 以该函数集的重载形式注册，而不是注册自身的函数名。 |
+| 参数 | 适用的宏 | 默认值 | 含义 |
+| --- | --- | --- | --- |
+| `auto_register` | 所有 `#[duck_*]` 属性宏 | `true` | 设为 `false` 时只生成 builder，不注册该函数。 |
+| `named_param_from` | `#[duck_table_function]`、`#[derive(DuckStruct)]` | — | 表函数用：从该参数起（含）全部作为命名参数。 |
+| `special_null_handling` | `#[duck_scalar_function]`、`#[duck_aggregate_function]` | `false` | 让 DuckDB 把 `NULL` 入参交给回调，而不是在 bind 阶段折叠掉。见[标量函数](./scalar-functions.md#null-的处理)。 |
+| `volatile` | `#[duck_scalar_function]` | `false` | 标量函数用：标记为 volatile，注册时调用 `duckdb_scalar_function_set_volatile`，DuckDB 不缓存、不复用相同参数的调用结果。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#volatile)。 |
+| `varargs` | `#[duck_scalar_function]` | `false` | 标量函数用：开启可变参数。函数签名最后一个参数必须是 `Vec<T>`，其元素类型 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#可变参数)。 |
+| `implicit_cost` | `#[duck_cast_function]` | — | 类型转换用：隐式转换代价。 |
+| `overloads_name` | `#[duck_scalar_function]`、`#[duck_aggregate_function]` | — | 以该函数集的重载形式注册，而不是注册自身的函数名。 |
 
-`#[derive(DuckStruct)]` 通过 `#[duck(...)]` 属性支持同一套参数，结构体式表函数就靠它声明命名参数的起点：
+`#[derive(DuckStruct)]` 有自己的一套参数（`named_param_from`，以及下文「Catalog 里的命名类型」里的
+`sql_name` / `create_type`），通过结构体上的 `#[duck(...)]` 声明 —— 结构体式表函数就靠它声明命名参数的起点：
 
 ```rust
 #[derive(Default, Debug, Clone, DuckStruct)]
@@ -269,6 +271,5 @@ duck_sql_macro_files!(
 
 ## 源码与测试
 
-- [`duckfn-macro/src/attr_args.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/attr_args.rs) —— 所有属性共用的参数定义
-- [`duckfn-macro/src/duck_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/duck_function.rs) —— 各宏展开成什么
+- [`duckfn-macro/src/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-macro/src) —— 每个宏一个文件，各自维护参数与展开逻辑；公共脚手架在 `common.rs`
 - [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) 与 [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 手动注册的示例

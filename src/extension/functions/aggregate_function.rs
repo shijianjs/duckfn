@@ -12,7 +12,7 @@ use quack_rs::prelude::{AggregateFunctionSetBuilder, Connection, LogicalType, Re
 //   - 状态参数必须写成 `&mut MyState`，位置任意（可以在中间，见下文的
 //     dfn_agg_state_first）；
 //   - 输入参数按顺序生成 DuckArgsImpl 的字段，注册时作为位置参数列表
-//     （duck_function.rs::build_aggregate_function_impl -> aggregate_function_adapter.rs
+//     （aggregate_function.rs::build_aggregate_function_impl -> aggregate_function_adapter.rs
 //     的 Args::column_types）；
 //   - 每个输入参数每行读一次，读取失败（NULL 且参数不是 Option）就整行跳过，
 //     update 不执行 —— 语义见下面「入参可空性」一节。

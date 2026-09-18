@@ -140,8 +140,9 @@ npm run build            # must pass for both locales; broken links fail the bui
   `dfn_table_checked: n must be >= 0`.
 - User-facing code stays free of `unsafe`; the only accepted exceptions are the explicit
   registration paths, which need `unsafe { c.register_scalar(…) }` and friends.
-- New attribute arguments go into the single struct in `duckfn-macro/src/attr_args.rs`, which both
-  the attribute macros and `#[derive(DuckStruct)]` share.
+- New attribute arguments go into the argument struct of the macro that actually needs them
+  (`duckfn-macro/src/<macro>.rs`); each macro declares only its own keys and no longer forwards its
+  arguments to the derive macros.
 - When behaviour changes, update the sqllogictest expectation first, then the docs page that quotes
   it, then the READMEs.
 

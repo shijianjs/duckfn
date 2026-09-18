@@ -29,19 +29,21 @@ are supported.
 
 ## Arguments
 
-Every function attribute shares one argument list:
+Each macro declares only the arguments it actually uses; a key that the macro does not know is a
+compile error. `#[duck_custom_register]` and `#[duck_sql_macro]` take no arguments at all.
 
-| Argument | Default | Meaning |
-| --- | --- | --- |
-| `auto_register` | `true` | `false` generates the builders but does not register the function. |
-| `named_param_from` | — | For table functions: the argument from which on everything is a named parameter. |
-| `special_null_handling` | `false` | Ask DuckDB to hand `NULL` arguments to the callback instead of folding them away. See [Scalar functions](./scalar-functions.md#null-handling). |
-| `volatile` | `false` | For scalar functions: mark the function volatile, so registration calls `duckdb_scalar_function_set_volatile` and DuckDB neither caches nor reuses calls with the same arguments. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#volatile). |
-| `varargs` | `false` | For scalar functions: enable variadic arguments. The last parameter must be `Vec<T>` and `T`'s logical type is passed to `duckdb_scalar_function_set_varargs`. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#variadic-arguments). |
-| `implicit_cost` | — | For casts: the implicit conversion cost. |
-| `overloads_name` | — | Register as an overload of this function set instead of under the function's own name. |
+| Argument | Used by | Default | Meaning |
+| --- | --- | --- | --- |
+| `auto_register` | every `#[duck_*]` attribute | `true` | `false` generates the builders but does not register the function. |
+| `named_param_from` | `#[duck_table_function]`, `#[derive(DuckStruct)]` | — | For table functions: the argument from which on everything is a named parameter. |
+| `special_null_handling` | `#[duck_scalar_function]`, `#[duck_aggregate_function]` | `false` | Ask DuckDB to hand `NULL` arguments to the callback instead of folding them away. See [Scalar functions](./scalar-functions.md#null-handling). |
+| `volatile` | `#[duck_scalar_function]` | `false` | Mark the function volatile, so registration calls `duckdb_scalar_function_set_volatile` and DuckDB neither caches nor reuses calls with the same arguments. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#volatile). |
+| `varargs` | `#[duck_scalar_function]` | `false` | Enable variadic arguments. The last parameter must be `Vec<T>` and `T`'s logical type is passed to `duckdb_scalar_function_set_varargs`. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#variadic-arguments). |
+| `implicit_cost` | `#[duck_cast_function]` | — | For casts: the implicit conversion cost. |
+| `overloads_name` | `#[duck_scalar_function]`, `#[duck_aggregate_function]` | — | Register as an overload of this function set instead of under the function's own name. |
 
-`#[derive(DuckStruct)]` accepts the same arguments through its `#[duck(...)]` attribute, which is how
+`#[derive(DuckStruct)]` has its own argument set (`named_param_from`, plus `sql_name` / `create_type`
+from "Named types in the catalog" below) declared through `#[duck(...)]` on the struct, which is how
 struct-based table functions declare where their named parameters start:
 
 ```rust
@@ -283,6 +285,5 @@ see [SQL macros](./sql-macros.md).
 
 ## Source and tests
 
-- [`duckfn-macro/src/attr_args.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/attr_args.rs) — the argument list every attribute shares
-- [`duckfn-macro/src/duck_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-macro/src/duck_function.rs) — what each macro expands to
+- [`duckfn-macro/src/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-macro/src) — one file per macro holding its own arguments and expansion, plus `common.rs` for the shared scaffolding
 - [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) and [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the manual-registration examples

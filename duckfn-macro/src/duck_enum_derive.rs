@@ -12,13 +12,133 @@
 //! struct derive already own a blanket `impl<T: …> DuckValueType for T` each, and a third one
 //! would conflict with them (E0119).
 
-use crate::attr_args::{CreateTypeMode, DuckEnumMacroArgs};
+use crate::common::CreateTypeMode;
 use crate::macro_utils::{TokenStream2Result, to_snake_case};
-use darling::FromDeriveInput;
+use darling::{FromDeriveInput, FromMeta};
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Fields, Variant};
+
+/// `#[derive(DuckEnum)]` 在枚举上 `#[duck(...)]` 可用的全部参数。
+///
+/// 参数只声明本 derive 自己需要、自己认识的键；属性宏那边各有各的参数结构体，不再共用，也不再把
+/// 自己的参数原样透传过来。变体级只支持 `#[duck(rename = "...")]`（在 derive 里就地解析）。
+///
+/// Every argument `#[duck(...)]` accepts on `#[derive(DuckEnum)]`. It declares only the keys this
+/// derive needs and knows; the attribute macros each own their own argument struct, no longer share
+/// one and no longer forward their arguments verbatim. At variant level only
+/// `#[duck(rename = "...")]` is supported (parsed in the derive itself).
+#[derive(Debug, FromDeriveInput)]
+#[darling(attributes(duck))]
+struct DuckEnumDeriveArgs {
+    /// `#[duck(rename_all = "snake_case")]`：变体名 → SQL 字典标签的命名规则，默认原样使用。
+    ///
+    /// `#[duck(rename_all = "snake_case")]`: how variant names map onto SQL dictionary labels;
+    /// by default the variant name is used verbatim.
+    rename_all: Option<RenameRule>,
+
+    /// `#[duck(sql_name = "priority")]`：SQL 侧的类型名，默认用类型名的小写蛇形。
+    ///
+    /// `#[duck(sql_name = "priority")]`: the SQL-side type name; defaults to the type name in
+    /// lowercase snake_case.
+    sql_name: Option<String>,
+
+    /// `#[duck(create_type = ...)]`：加载期如何处理这个命名类型，默认 `false`。
+    ///
+    /// `#[duck(create_type = ...)]`: how the named type is handled at load time; defaults to
+    /// `false`.
+    create_type: Option<CreateTypeMode>,
+}
+
+/// 变体名 → SQL 字典标签的命名规则（`#[duck(rename_all = "...")]`）。
+///
+/// `#[derive(DuckEnum)]` 用它把 Rust 变体名（`HttpError` 这种 PascalCase）映射成 SQL 侧的
+/// ENUM 标签；单个变体可以用 `#[duck(rename = "...")]` 覆盖。
+///
+/// The naming rule mapping a variant name onto its SQL dictionary label. `#[derive(DuckEnum)]`
+/// uses it to turn a PascalCase variant name into the SQL-side ENUM label, and a single variant
+/// can override it with `#[duck(rename = "...")]`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum RenameRule {
+    /// 原样使用变体名（默认）。/ The variant name as written (the default).
+    #[default]
+    Verbatim,
+    /// `Red` -> `red`；选 `"lowercase"`。
+    ///
+    /// `Red` -> `red`; written as `"lowercase"`.
+    Lower,
+    /// `Red` -> `RED`；选 `"UPPERCASE"`。
+    ///
+    /// `Red` -> `RED`; written as `"UPPERCASE"`.
+    Upper,
+    /// `HttpError` -> `http_error`；选 `"snake_case"`。
+    ///
+    /// `HttpError` -> `http_error`; written as `"snake_case"`.
+    Snake,
+    /// `HttpError` -> `HTTP_ERROR`；选 `"SCREAMING_SNAKE_CASE"`。
+    ///
+    /// `HttpError` -> `HTTP_ERROR`; written as `"SCREAMING_SNAKE_CASE"`.
+    ScreamingSnake,
+    /// `HttpError` -> `httpError`（只把首字母小写）；选 `"camelCase"`。
+    ///
+    /// `HttpError` -> `httpError` (only the first letter is lowered); written as `"camelCase"`.
+    Camel,
+    /// 保持 PascalCase；选 `"PascalCase"`。
+    ///
+    /// Keeps PascalCase; written as `"PascalCase"`.
+    Pascal,
+    /// `HttpError` -> `http-error`；选 `"kebab-case"`。
+    ///
+    /// `HttpError` -> `http-error`; written as `"kebab-case"`.
+    Kebab,
+    /// `HttpError` -> `HTTP-ERROR`；选 `"SCREAMING-KEBAB-CASE"`。
+    ///
+    /// `HttpError` -> `HTTP-ERROR`; written as `"SCREAMING-KEBAB-CASE"`.
+    ScreamingKebab,
+}
+
+impl RenameRule {
+    /// 把一个变体名按规则转成标签。
+    ///
+    /// Applies the rule to a variant name.
+    #[must_use]
+    fn apply(self, variant: &str) -> String {
+        match self {
+            RenameRule::Verbatim | RenameRule::Pascal => variant.to_owned(),
+            RenameRule::Lower => variant.to_lowercase(),
+            RenameRule::Upper => variant.to_uppercase(),
+            RenameRule::Snake => to_snake_case(variant),
+            RenameRule::ScreamingSnake => to_snake_case(variant).to_uppercase(),
+            RenameRule::Camel => {
+                let mut chars = variant.chars();
+                match chars.next() {
+                    Some(first) => first.to_lowercase().chain(chars).collect(),
+                    None => String::new(),
+                }
+            }
+            RenameRule::Kebab => to_snake_case(variant).replace('_', "-"),
+            RenameRule::ScreamingKebab => to_snake_case(variant).to_uppercase().replace('_', "-"),
+        }
+    }
+}
+
+impl FromMeta for RenameRule {
+    fn from_string(value: &str) -> darling::Result<Self> {
+        Ok(match value {
+            "verbatim" => RenameRule::Verbatim,
+            "lowercase" => RenameRule::Lower,
+            "UPPERCASE" => RenameRule::Upper,
+            "snake_case" => RenameRule::Snake,
+            "SCREAMING_SNAKE_CASE" => RenameRule::ScreamingSnake,
+            "camelCase" => RenameRule::Camel,
+            "PascalCase" => RenameRule::Pascal,
+            "kebab-case" => RenameRule::Kebab,
+            "SCREAMING-KEBAB-CASE" => RenameRule::ScreamingKebab,
+            other => return Err(darling::Error::unknown_value(other)),
+        })
+    }
+}
 
 /// `#[derive(DuckEnum)]` 的入口。
 ///
@@ -61,7 +181,7 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
         ));
     }
 
-    let macro_args = DuckEnumMacroArgs::from_derive_input(&input)?;
+    let macro_args = DuckEnumDeriveArgs::from_derive_input(&input)?;
     let rename_all = macro_args.rename_all.unwrap_or_default();
 
     let mut variants: Vec<Ident> = Vec::with_capacity(data.variants.len());
@@ -90,7 +210,6 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
     let enum_ident = &input.ident;
     let module_ident = format_ident!("__duck_enum_{}", to_snake_case(&enum_ident.to_string()));
     let sql_name = macro_args
-        .args
         .sql_name
         .clone()
         .unwrap_or_else(|| to_snake_case(&enum_ident.to_string()));
@@ -100,7 +219,7 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
     //
     // The registration function and the inventory submission only exist for a `create_type` other
     // than `false`: `true` creates the type, `"print"` only prints the DDL.
-    let create_type = macro_args.args.create_type.unwrap_or_default();
+    let create_type = macro_args.create_type.unwrap_or_default();
 
     let register = match create_type {
         CreateTypeMode::Create => Some(quote! {

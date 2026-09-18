@@ -259,7 +259,8 @@ SELECT dfn_scalar_reg_named_param(b := 2, a := 1); -- 21  (a gets 2, b gets 1)
 SELECT dfn_scalar_reg_named_param(x := 1, y := 2); -- 12  (unknown names are not rejected)
 ```
 
-`named_param_from` only affects table functions; on a scalar function it has no observable effect.
+`named_param_from` is a table-function-only key and is rejected by the other attribute macros;
+scalar functions are always registered positionally, so the `name := value` names are ignored.
 
 ## Source and tests
 

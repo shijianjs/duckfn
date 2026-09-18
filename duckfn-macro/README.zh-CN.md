@@ -32,9 +32,15 @@
 | `duckfn_entrypoint!("name")` | 扩展入口符号。 |
 | `duck_sql_macro_files!("a.sql", …)` | 注册写在 `.sql` 文件里的 SQL 宏。 |
 
-常用参数：`auto_register = false`（只生成 builder 不注册）、`named_param_from = "field"`
-（表函数命名参数的起点）、`special_null_handling`、`volatile` 与 `varargs`（DuckDB 1.5+ 的标量函数）、
-`implicit_cost` 与 `overloads_name`。
+每个宏只接受自己需要的参数 —— 写了它不认识的键会直接报编译错误：
+
+- 所有属性宏：`auto_register = false`（只生成 builder 不注册）；
+- `#[duck_table_function]`：`named_param_from = "field"`（命名参数起点）、`dynamic_columns`；
+- `#[duck_scalar_function]`：`special_null_handling`、`volatile`、`varargs`（DuckDB 1.5+）、
+  `overloads_name`；
+- `#[duck_aggregate_function]`：`special_null_handling`、`overloads_name`；
+- `#[duck_cast_function]`：`implicit_cost`；
+- 两个 derive：`named_param_from`、`rename_all`、`sql_name`、`create_type`。
 
 ## 示例
 

@@ -129,8 +129,8 @@ npm run build            # 两种语言都必须通过；断链会直接让构�
 - 错误信息以产生它的函数名开头，例如 `dfn_table_checked: n must be >= 0`。
 - 面向使用者的代码保持无 `unsafe`；唯一接受的例外是显式注册路径，那里需要
   `unsafe { c.register_scalar(…) }` 这类调用。
-- 新增属性参数统一加到 `duckfn-macro/src/attr_args.rs` 里那个结构体上 —— 属性宏与
-  `#[derive(DuckStruct)]` 共用它。
+- 新增属性参数加到真正需要它的那个宏自己的参数结构体里（`duckfn-macro/src/<宏>.rs`）；每个宏只声明
+  自己的键，也不再把自己的参数透传给 derive 宏。
 - 行为变化时，更新顺序是：先改 sqllogictest 的期望值，再改引用它的文档页，最后改 README。
 
 ## 接下来

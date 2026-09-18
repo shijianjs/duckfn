@@ -7,12 +7,11 @@
 //! derive and function-like macros that wrap an ordinary Rust function or struct into an object
 //! registerable with DuckDB; the runtime lives in the `duckfn` crate.
 
-/// `#[duck_scalar_function]` / `#[duck_aggregate_function]` / `#[duck_table_function]` 等
-/// 属性宏共同使用的代码生成逻辑。
+/// 各属性宏共用的脚手架：入口调度、函数/参数包装、共用的类型与返回值解析。
 ///
-/// Shared code generation for the `#[duck_scalar_function]` / `#[duck_aggregate_function]` /
-/// `#[duck_table_function]` and other attribute macros.
-mod duck_function;
+/// Shared scaffolding for the attribute macros: entry dispatch, the function / argument wrappers
+/// and the shared types plus return-type parsing.
+mod common;
 /// `#[derive(DuckStruct)]` 的实现：把具名结构体映射为 DuckDB `STRUCT`。
 ///
 /// Implementation of `#[derive(DuckStruct)]`: maps a named struct onto a DuckDB `STRUCT`.
@@ -29,21 +28,51 @@ pub(crate) mod macro_utils;
 ///
 /// Implementation of `duckfn_entrypoint!`: generates the extension entry-point symbol.
 mod entrypoint;
-/// 各属性宏共用的参数解析（`auto_register`、`named_param_from`、`overloads_name` 等）。
-///
-/// Argument parsing shared by the attribute macros (`auto_register`, `named_param_from`,
-/// `overloads_name`, ...).
-mod attr_args;
 /// `duck_sql_macro_files!` 的实现：把若干 `.sql` 文件编译期内联并注册。
 ///
 /// Implementation of `duck_sql_macro_files!`: inlines several `.sql` files at compile time and
 /// registers them.
 mod sql_macro_files;
+/// `#[duck_scalar_function]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_scalar_function]` (with the arguments it needs).
+mod scalar_function;
+/// `#[duck_aggregate_function]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_aggregate_function]` (with the arguments it needs).
+mod aggregate_function;
+/// `#[duck_table_function]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_table_function]` (with the arguments it needs).
+mod table_function;
+/// `#[duck_copy_function]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_copy_function]` (with the arguments it needs).
+mod copy_function;
+/// `#[duck_copy_from_function]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_copy_from_function]` (with the arguments it needs).
+mod copy_from_function;
+/// `#[duck_cast_function]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_cast_function]` (with the arguments it needs).
+mod cast_function;
+/// `#[duck_sql_macro]` 的实现（本宏不接受参数）。
+///
+/// Implementation of `#[duck_sql_macro]` (this macro takes no arguments).
+mod sql_macro;
+/// `#[duck_replacement_scan]` 的实现（含它自己需要的参数）。
+///
+/// Implementation of `#[duck_replacement_scan]` (with the arguments it needs).
+mod replacement_scan;
+/// `#[duck_custom_register]` 的实现（本宏不接受参数）。
+///
+/// Implementation of `#[duck_custom_register]` (this macro takes no arguments).
+mod custom_register;
 
 use crate::macro_utils::handle_token_stream2_result;
 use proc_macro::TokenStream;
 use syn::{DeriveInput, parse_macro_input};
-use crate::attr_args::handle_duck_function;
 
 /// 把一个具名结构体映射成 DuckDB `STRUCT`（嵌套 LIST / MAP / ARRAY / STRUCT 均支持）。
 ///
@@ -192,8 +221,8 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// function is generated, exporting `scalar_function_builder()` and `scalar_overload_builder()`
 /// for manual overload / function-set registration.
 #[proc_macro_attribute]
-pub fn duck_scalar_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_scalar_function())
+pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    scalar_function::build(attr, item)
 }
 
 /// 把普通 Rust 函数注册成 DuckDB 聚合函数。
@@ -213,8 +242,8 @@ pub fn duck_scalar_function(_attr: TokenStream, item: TokenStream) -> TokenStrea
 /// `aggregate_function_builder()`, `aggregate_overload_builder()` and
 /// `aggregate_function_guard()`.
 #[proc_macro_attribute]
-pub fn duck_aggregate_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_aggregate_function())
+pub fn duck_aggregate_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    aggregate_function::build(attr, item)
 }
 
 /// 把返回迭代器的 Rust 函数注册成 DuckDB 表函数。
@@ -235,8 +264,8 @@ pub fn duck_aggregate_function(_attr: TokenStream, item: TokenStream) -> TokenSt
 /// and a row may be NULL). `Row` must implement `DuckColumns` (typically via
 /// `#[derive(DuckStruct)]`) and its columns become the result columns.
 #[proc_macro_attribute]
-pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_table_function())
+pub fn duck_table_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    table_function::build(attr, item)
 }
 
 /// 把「按批写行」的 Rust 函数注册成 DuckDB 的 COPY 函数，为 `COPY ... TO` 提供自定义文件格式。
@@ -316,8 +345,8 @@ pub fn duck_table_function(_attr: TokenStream, item: TokenStream) -> TokenStream
 /// generated, exporting `copy_function_builder()` and `copy_function_register(connection)`; with
 /// `auto_register = false` they are generated but nothing is registered.
 #[proc_macro_attribute]
-pub fn duck_copy_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_copy_function())
+pub fn duck_copy_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    copy_function::build(attr, item)
 }
 
 /// 把「按批取行」的 Rust 函数注册成 DuckDB 的 COPY 读取格式，为 `COPY ... FROM` 提供自定义文件格式。
@@ -388,8 +417,8 @@ pub fn duck_copy_function(_attr: TokenStream, item: TokenStream) -> TokenStream 
 /// `copy_from_register(connection)`; with `auto_register = false` it is generated but nothing is
 /// registered.
 #[proc_macro_attribute]
-pub fn duck_copy_from_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_copy_from_function())
+pub fn duck_copy_from_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    copy_from_function::build(attr, item)
 }
 
 /// 手动注册入口：把 `fn(&Connection) -> DuckResult<()>` 交给扩展初始化时调用。
@@ -410,8 +439,8 @@ pub fn duck_copy_from_function(_attr: TokenStream, item: TokenStream) -> TokenSt
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_custom_register())
+pub fn duck_custom_register(attr: TokenStream, item: TokenStream) -> TokenStream {
+    custom_register::build(attr, item)
 }
 
 /// 把 `fn(源值) -> 目标值` 注册成 DuckDB 的 cast 函数，覆盖 `CAST(源 AS 目标)`。
@@ -446,8 +475,8 @@ pub fn duck_custom_register(_attr: TokenStream, item: TokenStream) -> TokenStrea
 /// `implicit_cost = N`, and the generated module exports `cast_function_builder()` and
 /// `cast_function_register()` for manual registration.
 #[proc_macro_attribute]
-pub fn duck_cast_function(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_cast_function())
+pub fn duck_cast_function(attr: TokenStream, item: TokenStream) -> TokenStream {
+    cast_function::build(attr, item)
 }
 
 /// 注册一个 SQL 宏：函数返回 SQL 文本（或 builder），扩展初始化时执行/注册。
@@ -464,8 +493,8 @@ pub fn duck_cast_function(_attr: TokenStream, item: TokenStream) -> TokenStream 
 /// `DuckResult<...>` (executed as SQL text, which may contain several
 /// `CREATE OR REPLACE MACRO` statements).
 #[proc_macro_attribute]
-pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_sql_macro())
+pub fn duck_sql_macro(attr: TokenStream, item: TokenStream) -> TokenStream {
+    sql_macro::build(attr, item)
 }
 
 /// 把 `SELECT * FROM 'data.myformat'` 这类「未知表名/文件路径」重定向到某个表函数。
@@ -496,8 +525,8 @@ pub fn duck_sql_macro(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// `Err(..)` or a panic fails the whole query. The return type may be `Option<String>` /
 /// `Option<&'static str>` / `DuckOptionResult<String>` / `DuckOptionResult<&'static str>`.
 #[proc_macro_attribute]
-pub fn duck_replacement_scan(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    handle_duck_function(_attr, item, |wrapper| wrapper.build_replacement_scan())
+pub fn duck_replacement_scan(attr: TokenStream, item: TokenStream) -> TokenStream {
+    replacement_scan::build(attr, item)
 }
 
 /// Generate DuckDB extension entry point.

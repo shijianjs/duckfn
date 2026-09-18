@@ -8,7 +8,7 @@ use quack_rs::prelude::{Connection, Registrar};
 // ============================================================================
 // duck_table_function：表函数由「返回类型 + 输出结构体 + 参数」三段决定
 //
-//   返回类型（duckfn-macro/src/duck_function.rs::table_return_type）：
+//   返回类型（duckfn-macro/src/table_function.rs::table_return_type）：
 //     -> impl Iterator<Item = Out>              SimpleIterator
 //          参数解析成功后不会再失败，也不会产生 NULL
 //     -> DuckResult<impl Iterator<Item = Out>>  ResultIterator

@@ -6,7 +6,7 @@ use quack_rs::prelude::SqlMacro;
 //
 // SQL 宏不是 C++/FFI 回调，而是扩展初始化阶段执行的一条
 // `CREATE OR REPLACE MACRO ...` 语句，之后由 DuckDB 的 SQL 层解析。
-// duckfn-macro/src/duck_function.rs::build_sql_macro 按「函数返回类型」选四种收尾：
+// duckfn-macro/src/sql_macro.rs::build_sql_macro 按「函数返回类型」选四种收尾：
 //
 //   -> SqlMacro                    直接构造 SqlMacro，register_sql_macro(builder)
 //   -> DuckResult<SqlMacro>        同上，构造失败会中止注册并冒泡错误

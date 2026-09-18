@@ -4,8 +4,7 @@ use quack_rs::prelude::{Connection, Registrar, ScalarFunctionSetBuilder};
 // ============================================================================
 // duck_scalar_function：三种返回类型形式
 //
-// 宏按返回类型生成不同的收尾代码（duckfn-macro/src/duck_function.rs::
-// build_scalar_return_clause）：
+// 宏按返回类型生成不同的收尾代码（duckfn-macro/src/common.rs::build_scalar_return_clause）：
 //   -> T                    朴素值，永不为 NULL   => Ok(Some(result))
 //   -> Option<T>            可空值                => Ok(result)
 //   -> DuckOptionResult<T>  可空值 + 可报错       => result
@@ -292,14 +291,15 @@ fn dfn_scalar_ovl_int_int(a: i32, b: i32) -> i64 {
     i64::from(a) * i64::from(b)
 }
 
-/// `named_param_from = "b"` 会被写进生成结构体的 `s_named_param_from()`（表函数用它
-/// 划命名参数区），而 scalar 的注册只用 `column_types()` 的位置参数列表，因此该属性对
-/// scalar function 没有可观察效果：`:=` 里的名字会被 DuckDB 直接忽略，参数按书写顺序
-/// 绑定到位置参数（名字对不上也不报错），见同名 .test。
+/// 标量函数始终按位置注册：DuckDB 的 `名字 := 值` 写法会被直接忽略，值按书写顺序绑定到位置参数
+/// （名字与参数名对不上、甚至完全不存在都不报错），见同名 .test。
+///
+/// `named_param_from` 是**表函数专用**的键，写在标量函数上会直接报编译错误 —— 每个属性宏只接受
+/// 自己需要的参数。
 /// ```sql
 /// SELECT dfn_scalar_reg_named_param(1, 2);
 /// ```
-#[duck_scalar_function(named_param_from = "b")]
+#[duck_scalar_function]
 fn dfn_scalar_reg_named_param(a: i32, b: i32) -> i32 {
     a * 10 + b
 }

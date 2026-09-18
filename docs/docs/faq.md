@@ -92,8 +92,8 @@ Some DuckDB 1.5 types only need a Cargo feature instead — `TIME_NS` ships behi
 ### Why are named arguments ignored on scalar functions?
 
 duckfn registers scalar functions by position, so DuckDB binds the values in the order written and
-ignores the names — `f(b := 2, a := 1)` passes `2` first. `named_param_from` only takes effect for
-table functions.
+ignores the names — `f(b := 2, a := 1)` passes `2` first. `named_param_from` is a table-function-only
+key; the other attribute macros reject it.
 
 ### How do I test an extension?
 

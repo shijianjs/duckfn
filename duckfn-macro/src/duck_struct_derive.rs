@@ -3,7 +3,7 @@
 //! Implementation of `#[derive(DuckStruct)]`: maps every field of a named struct onto a column /
 //! a STRUCT child field.
 
-use crate::attr_args::{CreateTypeMode, DuckFunctionMacroArgs};
+use crate::common::CreateTypeMode;
 use crate::macro_utils::{TokenStream2Result, to_snake_case};
 use darling::FromDeriveInput;
 use proc_macro2::Ident;
@@ -12,25 +12,34 @@ use syn::__private::TokenStream2;
 use syn::spanned::Spanned;
 use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
 
-/// `#[duck(...)]` 属性的解析结果。
+/// `#[derive(DuckStruct)]` 上 `#[duck(...)]` 可用的全部参数。
 ///
-/// 这里只提供 `FromDeriveInput` 的「外壳」，真正的字段配置全部通过
-/// `#[darling(flatten)]` 委托给 [`DuckFunctionMacroArgs`]（[`darling::FromMeta`]）——被函数属性宏
-/// 写穿到 `DuckArgsImpl` 上的 `#[duck(...)]` 属性因此在 `DuckArgs` 中只定义一次。
+/// 参数只声明本 derive 自己需要、自己认识的键；属性宏那边各有各的参数结构体，不再共用，也不再把
+/// 自己的参数原样透传过来（属性宏只把 `named_param_from` 转写成 `#[duck(named_param_from = ...)]`）。
 ///
-/// Parse result of the `#[duck(...)]` attribute. This only provides the `FromDeriveInput`
-/// shell; every field configuration is delegated to [`DuckFunctionMacroArgs`] ([`darling::FromMeta`])
-/// through `#[darling(flatten)]`, so the `#[duck(...)]` written through onto `DuckArgsImpl` by
-/// the attribute macros is declared only once, in `DuckArgs`.
+/// Every argument `#[duck(...)]` accepts on `#[derive(DuckStruct)]`. It declares only the keys this
+/// derive needs and knows; the attribute macros each own their own argument struct, no longer share
+/// one and no longer forward their arguments verbatim (an attribute macro only rewrites
+/// `named_param_from` into `#[duck(named_param_from = ...)]`).
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(duck))]
-struct DuckDeriveMacroArgs {
-    /// `#[duck(...)]` 的字段配置，复用属性宏侧的唯一配置源。
+struct DuckStructDeriveArgs {
+    /// 表函数的命名参数从哪个字段开始。
     ///
-    /// The field configuration of `#[duck(...)]`, reusing the single source of truth shared with
-    /// the attribute macros.
-    #[darling(flatten)]
-    args: DuckFunctionMacroArgs,
+    /// The field name from which table-function named parameters start.
+    named_param_from: Option<String>,
+
+    /// `#[duck(sql_name = "ticket")]`：SQL 侧的类型名，默认用类型名的小写蛇形。
+    ///
+    /// `#[duck(sql_name = "ticket")]`: the SQL-side type name; defaults to the type name in
+    /// lowercase snake_case.
+    sql_name: Option<String>,
+
+    /// `#[duck(create_type = ...)]`：加载期如何处理这个命名类型，默认 `false`。
+    ///
+    /// `#[duck(create_type = ...)]`: how the named type is handled at load time; defaults to
+    /// `false`.
+    create_type: Option<CreateTypeMode>,
 }
 
 /// `#[derive(DuckStruct)]` 的入口。
@@ -59,14 +68,14 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
             "Only named fields are allowed",
         ));
     };
-    let macro_args = DuckDeriveMacroArgs::from_derive_input(&input)?;
+    let macro_args = DuckStructDeriveArgs::from_derive_input(&input)?;
     let mut start_named_param = false;
     let mut fields: Vec<FieldWrapper> = Vec::new();
     for (index, f) in named.into_iter().enumerate() {
         let mut wrapper = FieldWrapper::new(f, index);
         if start_named_param {
             wrapper.is_named_param = true;
-        } else if let Some(named_param_from) = &macro_args.args.named_param_from {
+        } else if let Some(named_param_from) = &macro_args.named_param_from {
             if wrapper.require_field_name()? == named_param_from {
                 start_named_param = true;
                 wrapper.is_named_param = true;
@@ -74,12 +83,12 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
         }
         fields.push(wrapper)
     }
-    if macro_args.args.named_param_from.is_some() && !start_named_param {
+    if macro_args.named_param_from.is_some() && !start_named_param {
         return Err(syn::Error::new(
             input.span(),
             format!(
                 "named_param_from field `{}` not found",
-                macro_args.args.named_param_from.as_ref().unwrap()
+                macro_args.named_param_from.as_ref().unwrap()
             ),
         ));
     }
@@ -106,7 +115,7 @@ struct DuckStructContext {
     /// 解析后的 `#[duck(...)]` 参数。
     ///
     /// The parsed `#[duck(...)]` arguments.
-    macro_args: DuckDeriveMacroArgs,
+    macro_args: DuckStructDeriveArgs,
 }
 
 impl DuckStructContext {
@@ -144,7 +153,7 @@ impl DuckStructContext {
     /// field types work. The `"print"` mode hands the very same rendering to
     /// `duckfn::queue_named_type_ddl`, which queues it for the entry point to print as one block.
     fn build_type_registration(&self) -> TokenStream2Result {
-        let create_type = self.macro_args.args.create_type.unwrap_or_default();
+        let create_type = self.macro_args.create_type.unwrap_or_default();
         if create_type == CreateTypeMode::Off {
             return Ok(quote!());
         }
@@ -160,7 +169,6 @@ impl DuckStructContext {
         let module_ident = format_ident!("__duck_struct_{}", to_snake_case(&struct_name.to_string()));
         let sql_name = self
             .macro_args
-            .args
             .sql_name
             .clone()
             .unwrap_or_else(|| to_snake_case(&struct_name.to_string()));
@@ -299,7 +307,7 @@ impl DuckStructContext {
     ///
     /// Generates the `s_named_param_from` body: `Some("field")` when configured, otherwise `None`.
     fn s_named_param_from(&self) -> TokenStream2Result {
-        if let Some(name) = self.macro_args.args.named_param_from.as_ref() {
+        if let Some(name) = self.macro_args.named_param_from.as_ref() {
             Ok(quote! {
                 Some(#name.to_string())
             })

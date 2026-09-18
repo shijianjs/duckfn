@@ -235,8 +235,8 @@ row), and `DuckBindArgs` (usable as a table function's arguments).
 
 | Question | File |
 | --- | --- |
-| Which arguments does an attribute accept? | `duckfn-macro/src/attr_args.rs` |
-| What does a macro emit? | `duckfn-macro/src/duck_function.rs`, `duck_struct_derive.rs` |
+| Which arguments does an attribute accept? | the macro's own file under `duckfn-macro/src/` (e.g. `scalar_function.rs`) |
+| What does a macro emit? | that same file plus the shared `common.rs`; the derives are in `duck_struct_derive.rs` / `duck_enum_derive.rs` |
 | How is the entry point generated? | `duckfn-macro/src/entrypoint.rs` |
 | How does registration work? | `duckfn/src/register.rs` |
 | How is a callback implemented? | `duckfn/src/functions/*_adapter.rs` |

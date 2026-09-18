@@ -14,7 +14,7 @@ use quack_rs::prelude::Connection;
 //   Ok(None)                  不接管：DuckDB 继续尝试下一个回调（最终可能报「表不存在」）
 //   Err / panic               整条查询报错（panic 由适配层 catch_unwind 转成错误）
 //
-// 返回形式（duckfn-macro/src/duck_function.rs::replacement_scan_return_type）：
+// 返回形式（duckfn-macro/src/replacement_scan.rs::replacement_scan_return_type）：
 //   -> Option<String>                    命中才重定向
 //   -> Option<&'static str>              同上，名字是静态字符串
 //   -> DuckOptionResult<String>          命中才重定向，且可以报错
