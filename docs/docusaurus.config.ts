@@ -11,6 +11,12 @@ import remarkVersionPlaceholder from './plugins/remark-version-placeholder';
 const url = process.env.DOCS_URL ?? 'http://localhost:3000';
 const baseUrl = process.env.DOCS_BASE_URL ?? '/';
 
+// The Algolia index is crawled from the GitHub Pages deployment, so every record's URL carries the
+// Pages sub-path: https://shijianjs.github.io/duckfn/zh-Hans/docs/intro/. A deployment served from
+// a domain root (the EdgeOne mirror, `npm start`) has to drop it again — see the
+// `replaceSearchResultPathname` comment below.
+const algoliaIndexBaseUrl = '/duckfn/';
+
 const config: Config = {
   title: 'duckfn',
   tagline: 'Write DuckDB extensions in plain Rust',
@@ -210,11 +216,17 @@ const config: Config = {
       // Optional: Specify domains where the navigation should occur through window.location instead on history.push. Useful when our Algolia config crawls multiple documentation sites and we want to navigate with window.location.href to them.
       // externalUrlRegex: 'external\\.com|domain\\.com',
 
-      // Optional: Replace parts of the item URLs from Algolia. Useful when using the same search index for multiple deployments using a different baseUrl. You can use regexp or string in the `from` param. For example: localhost:3000 vs myCompany.com/docs
-      // replaceSearchResultPathname: {
-      //   from: '/docs/', // or as RegExp: /\/docs\//
-      //   to: '/',
-      // },
+      // Replace parts of the item URLs from Algolia: the index is crawled from GitHub Pages, so
+      // every hit carries `algoliaIndexBaseUrl` (e.g. /duckfn/zh-Hans/docs/intro/), while this
+      // deployment may be served from a domain root (the EdgeOne mirror, `npm start`).
+      // Docusaurus strips it here and re-adds *this* build's baseUrl right afterwards, so the same
+      // index serves both: GitHub Pages gets /duckfn/zh-Hans/docs/intro/ back, EdgeOne gets
+      // /zh-Hans/docs/intro/. Without it, a root-served deployment links to
+      // /zh-Hans/duckfn/zh-Hans/docs/intro/.
+      replaceSearchResultPathname: {
+        from: new RegExp(`^${algoliaIndexBaseUrl}`),
+        to: '/',
+      },
 
       // Optional: Algolia search parameters
       // searchParameters: {},
