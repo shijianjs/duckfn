@@ -24,9 +24,18 @@
 
 .hero {
   position: relative;
-  /* Contains the glow pseudo-elements below without needing a z-index race. */
+  /* Contains the glow pseudo-elements below without needing a z-index race, and
+     clips them on the horizontal axis only: their offsets (the 52rem circle centred
+     with `left: 50%`, and the warm one at `right: -10rem`) reach past the viewport,
+     which would otherwise widen the page and add a scrollbar.
+     `clip`, not `hidden`. Both keep the page narrow, but `hidden` also made this
+     section a scroll container and clipped the vertical axis, slicing the warm glow
+     in half along this section's bottom edge. `clip` leaves the other axis visible,
+     so the glow fades out over the next section instead of ending on a straight
+     line. It is also what makes the clip invisible: the horizontal cut lands on the
+     viewport edge, where there is nothing to see anyway. */
   isolation: isolate;
-  overflow: hidden;
+  overflow-x: clip;
   padding: 4.5rem 1.5rem 4rem;
   text-align: center;
 }
