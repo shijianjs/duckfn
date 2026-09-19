@@ -11,10 +11,6 @@
     "message": "文档",
     "description": "Navbar item with label Docs"
   },
-  "item.label.China mirror": {
-    "message": "国内访问",
-    "description": "Navbar item with label China mirror"
-  },
   "item.label.GitHub": {
     "message": "GitHub",
     "description": "Navbar item with label GitHub"

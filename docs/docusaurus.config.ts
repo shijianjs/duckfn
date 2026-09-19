@@ -13,7 +13,7 @@ const baseUrl = process.env.DOCS_BASE_URL ?? '/';
 
 // The Algolia index is crawled from the GitHub Pages deployment, so every record's URL carries the
 // Pages sub-path: https://shijianjs.github.io/duckfn/zh-Hans/docs/intro/. A deployment served from
-// a domain root (the EdgeOne mirror, `npm start`) has to drop it again — see the
+// a domain root (`npm start`, or a mirror on its own domain) has to drop it again — see the
 // `replaceSearchResultPathname` comment below.
 const algoliaIndexBaseUrl = '/duckfn/';
 
@@ -121,15 +121,6 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          // GitHub Pages is slow to reach from mainland China, so EdgeOne serves the same build
-          // from a domain the reader can actually open. No `type` means the default (plain link)
-          // item; the English label is the source string, the translation lives in
-          // i18n/zh-Hans/docusaurus-theme-classic/navbar.json.
-          label: 'China mirror',
-          href: 'https://duckfn-l4g2uraj.edgeone.cool/',
-          position: 'right',
-        },
-        {
           type: 'localeDropdown',
           position: 'right',
         },
@@ -227,10 +218,10 @@ const config: Config = {
 
       // Replace parts of the item URLs from Algolia: the index is crawled from GitHub Pages, so
       // every hit carries `algoliaIndexBaseUrl` (e.g. /duckfn/zh-Hans/docs/intro/), while this
-      // deployment may be served from a domain root (the EdgeOne mirror, `npm start`).
+      // deployment may be served from a domain root (`npm start`).
       // Docusaurus strips it here and re-adds *this* build's baseUrl right afterwards, so the same
-      // index serves both: GitHub Pages gets /duckfn/zh-Hans/docs/intro/ back, EdgeOne gets
-      // /zh-Hans/docs/intro/. Without it, a root-served deployment links to
+      // index serves both: GitHub Pages gets /duckfn/zh-Hans/docs/intro/ back, a root-served
+      // deployment gets /zh-Hans/docs/intro/. Without it, a root-served deployment links to
       // /zh-Hans/duckfn/zh-Hans/docs/intro/.
       replaceSearchResultPathname: {
         // `from` is the source of a regular expression (Docusaurus builds it with `new RegExp`),
