@@ -259,10 +259,16 @@ const NEXT_STEPS: {to: string; title: ReactNode; details: ReactNode}[] = [
   },
 ];
 
+/**
+ * The shields.io badges ask for `style=flat`, which is the rounded style; the default
+ * `flat-square` draws square corners and would clash with the docs.rs badge, whose own
+ * SVG is already rounded. The row has to look like one set, so the shape is decided at
+ * the source rather than patched with CSS.
+ */
 const BADGES = [
   {
     href: 'https://crates.io/crates/duckfn',
-    src: 'https://img.shields.io/crates/v/duckfn.svg?style=flat-square',
+    src: 'https://img.shields.io/crates/v/duckfn.svg?style=flat',
     alt: 'duckfn on crates.io',
   },
   {
@@ -272,12 +278,12 @@ const BADGES = [
   },
   {
     href: 'https://github.com/shijianjs/duckfn/blob/main/LICENSE',
-    src: 'https://img.shields.io/badge/license-MIT-14459b.svg?style=flat-square',
+    src: 'https://img.shields.io/badge/license-MIT-14459b.svg?style=flat',
     alt: 'MIT license',
   },
   {
     href: 'https://github.com/shijianjs/duckfn',
-    src: 'https://img.shields.io/badge/Rust-1.86%2B-14459b.svg?style=flat-square',
+    src: 'https://img.shields.io/badge/Rust-1.86%2B-14459b.svg?style=flat',
     alt: 'Rust 1.86 or newer',
   },
 ];
