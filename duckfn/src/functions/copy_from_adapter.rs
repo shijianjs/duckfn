@@ -393,9 +393,9 @@ pub trait CopyFromFunctionAdapter: Sized + 'static {
                     logical_type.as_raw(),
                 );
             }
-            duckdb_table_function_set_bind(function, Some(copy_from_bind::<Self>));
-            duckdb_table_function_set_init(function, Some(copy_from_init::<Self>));
-            duckdb_table_function_set_function(function, Some(copy_from_scan::<Self>));
+            duckdb_table_function_set_bind(function, Some(Self::c_bind));
+            duckdb_table_function_set_init(function, Some(Self::c_init));
+            duckdb_table_function_set_function(function, Some(Self::c_scan));
             if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
                 // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；reader 表函数句柄
                 // 交给 DuckDB 后由 DuckDB 在销毁它时调用 destroy。
@@ -619,58 +619,6 @@ unsafe extern "C" fn destroy_copy_from_state<A: CopyFromFunctionAdapter>(ptr: *m
         );
     }
     drop(state);
-}
-
-/// 进入 `CopyFromFunctionAdapter::c_bind` / `c_init` 的跳板（把关联类型补进去）。
-///
-/// The trampolines entering `CopyFromFunctionAdapter::c_bind` / `c_init` (filling in the associated
-/// types).
-///
-/// 这三个函数只是为了让 `duckdb_table_function_set_*` 拿到具体的 `extern "C" fn` 指针：trait 的
-/// 关联函数本身不能直接当函数指针传给 C。
-///
-/// These three exist only so that `duckdb_table_function_set_*` receives a concrete `extern "C" fn`
-/// pointer: a trait's associated function cannot be passed to C directly.
-///
-/// # Safety
-///
-/// 由 DuckDB 调用，参数由 DuckDB 保证有效。
-///
-/// Called by DuckDB; the arguments are guaranteed valid by DuckDB.
-unsafe extern "C" fn copy_from_bind<A: CopyFromFunctionAdapter>(info: duckdb_bind_info) {
-    // SAFETY: 由 DuckDB 保证 info 有效。
-    unsafe { A::c_bind(info) };
-}
-
-/// `CopyFromFunctionAdapter::c_init` 的跳板。
-///
-/// The trampoline for `CopyFromFunctionAdapter::c_init`.
-///
-/// # Safety
-///
-/// 同 [`copy_from_bind`]。
-///
-/// Same as [`copy_from_bind`].
-unsafe extern "C" fn copy_from_init<A: CopyFromFunctionAdapter>(info: duckdb_init_info) {
-    // SAFETY: 由 DuckDB 保证 info 有效。
-    unsafe { A::c_init(info) };
-}
-
-/// `CopyFromFunctionAdapter::c_scan` 的跳板。
-///
-/// The trampoline for `CopyFromFunctionAdapter::c_scan`.
-///
-/// # Safety
-///
-/// 同 [`copy_from_bind`]。
-///
-/// Same as [`copy_from_bind`].
-unsafe extern "C" fn copy_from_scan<A: CopyFromFunctionAdapter>(
-    info: duckdb_function_info,
-    output: duckdb_data_chunk,
-) {
-    // SAFETY: 由 DuckDB 保证 info 与 output 有效。
-    unsafe { A::c_scan(info, output) };
 }
 
 /// 跑一个生命周期阶段：把 `Err` 与 panic 都交给 `set_error`，正常结束什么都不做。
