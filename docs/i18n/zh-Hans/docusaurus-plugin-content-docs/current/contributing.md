@@ -50,7 +50,7 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 
 ```bash
 make debug                               # 构建扩展
-just duckdb_ext "SELECT double_it5(21);" # 重新构建并执行一条语句
+just sql "SELECT double_it5(21);"        # 重新构建并执行一条语句
 make test                                # 跑 sqllogictest 套件
 just doc                                 # 生成 duckfn 的 rustdoc
 ```
@@ -71,7 +71,7 @@ just doc                                 # 生成 duckfn 的 rustdoc
 5. 在函数里打断点，然后执行调用它的 SQL，例如 `SELECT double_it(21);`。
 
 动态库是在 `LOAD` 那一刻才进入进程的，所以更早设置的断点会从那一刻起才开始解析。调试器已附加时，
-`just duckdb_ext "<SQL>"` 是手动执行一条语句的快捷方式。
+`just sql "<SQL>"` 是手动执行一条语句的快捷方式。
 
 ## 测试
 

@@ -52,7 +52,7 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 
 ```bash
 make debug                              # build the extension
-just duckdb_ext "SELECT double_it5(21);" # rebuild and run one statement
+just sql "SELECT double_it5(21);"        # rebuild and run one statement
 make test                               # run the sqllogictest suite
 just doc                                # build the rustdoc for duckfn
 ```
@@ -75,7 +75,7 @@ instead of launching something yourself:
 5. Set a breakpoint in your function and run the SQL that calls it, e.g. `SELECT double_it(21);`.
 
 The shared library only enters the process at `LOAD`, so a breakpoint set earlier starts resolving
-from that point on. `just duckdb_ext "<SQL>"` is a quick way to run one statement by hand while the
+from that point on. `just sql "<SQL>"` is a quick way to run one statement by hand while the
 debugger is attached.
 
 ## Tests

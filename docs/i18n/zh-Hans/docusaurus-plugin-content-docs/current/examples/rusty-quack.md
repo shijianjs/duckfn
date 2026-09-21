@@ -23,7 +23,7 @@ SELECT rusty_echo('Jane');
 "
 ```
 
-开发时用 `just duckdb_ext "<SQL>"` 可以一步完成重新构建并执行语句，`just test` 跑完整的 sqllogictest 套件。
+开发时用 `just sql "<SQL>"` 可以一步完成重新构建并执行语句，`just test` 跑完整的 sqllogictest 套件。
 
 ## 源码组织
 

@@ -24,7 +24,7 @@ SELECT rusty_echo('Jane');
 "
 ```
 
-During development `just duckdb_ext "<SQL>"` rebuilds and runs a statement in one step, and
+During development `just sql "<SQL>"` rebuilds and runs a statement in one step, and
 `just test` runs the whole sqllogictest suite.
 
 ## How the source is organised

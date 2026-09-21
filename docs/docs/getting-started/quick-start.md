@@ -75,7 +75,7 @@ cargo duckdb-ext build   # -> target/debug/my_ext.duckdb_extension
 ```
 
 The repository wraps both flows in its `Justfile`, for example
-`just duckdb_ext "SELECT double_it(21);"`.
+`just sql "SELECT double_it(21);"`.
 
 ## 4. Load and call it
 

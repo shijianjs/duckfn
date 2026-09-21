@@ -69,7 +69,7 @@ make debug       # -> build/debug/extension/my_ext/my_ext.duckdb_extension
 cargo duckdb-ext build   # -> target/debug/my_ext.duckdb_extension
 ```
 
-本仓库用 `Justfile` 把两种流程都封装了，例如 `just duckdb_ext "SELECT double_it(21);"`。
+本仓库用 `Justfile` 把两种流程都封装了，例如 `just sql "SELECT double_it(21);"`。
 
 ## 4. 加载并调用
 
