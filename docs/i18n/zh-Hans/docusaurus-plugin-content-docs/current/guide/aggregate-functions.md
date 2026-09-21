@@ -177,30 +177,50 @@ FROM (VALUES (1, 2), (NULL, 5), (3, NULL), (4, 6)) t(a, b);
 ## 多行不变的昂贵参数
 
 参数结构体每一行都会重建，所以一个「从不变化」的参数在 5000 行上也要完整解析 5000 次。当这个参数很贵
-—— 比如比被聚合的值重十多倍的配置结构 —— 用 [`DuckLazy<T>`](./types.md#懒加载参数) 包一层，它就只解析一次：
+—— 比如比被聚合的值重十多倍的配置结构 —— 用 [`DuckLazy<T>`](./types.md#懒加载参数) 包一层，并把解析结果
+交给 `DuckLazySlot<T>` 保管：
 
 ```rust
 #[derive(Default, Debug, Clone)]
 struct WeightedState {
-    config: Option<Config>,
+    config: DuckLazySlot<Config>,
     sum: f64,
 }
 
 #[duck_aggregate_function]
 fn dfn_agg_weighted(cfg: DuckLazy<Config>, v: i64, state: &mut WeightedState) -> DuckResult<()> {
-    // 第一行解析一次；后续每一行复用这个值。
-    if state.config.is_none() {
-        state.config = Some(cfg.get());
-    }
-    state.sum += state.config.as_ref().unwrap().weight(v);
+    // 第一行解析一次；后续每一行只做一次引用计数递增。
+    let config = state.config.resolve(&cfg)?;
+    state.sum += config.weight(v);
     Ok(())
+}
+
+impl DuckAggregateState for WeightedState {
+    type Output = f64;
+
+    fn simple_combine(&mut self, other: &Self) {
+        // 两边解析的是同一列：直接把结果搬过来，不重新解析。
+        self.config.combine(&other.config);
+        self.sum += other.sum;
+    }
+
+    fn simple_result(&self) -> f64 {
+        self.sum
+    }
 }
 ```
 
-状态里缓存**解析后的值**，不要缓存凭证：`DuckLazy<T>` 只在产生它的那次回调内有效，回调之外 `.get()`
-会让查询失败（报 `DuckLazy<T> is stale: ...`），而不是去读一块失效的向量。示例扩展在
-`test/sql/demo/lazy_config_demo.test` 里把两种写法都量了一遍：5000 行下 `DuckLazy` 入参解析配置
-**1 次**，eager 的 `Config` 入参解析 **5000 次**，两者结果完全相同。
+`resolve` **只解析一次**并返回 `Arc<Config>`，之后每一行都只是引用计数递增。槽里缓存的是**解析后的
+值**，而不是凭证：`DuckLazy<T>` 只在产生它的那次回调内有效，把凭证留在状态里，回调之外再取值会让查询
+失败（报 `DuckLazy<T> is stale: ...`），而不是去读一块失效的向量。
+
+参数可空时写成 `Option<DuckLazy<Config>>` 并用 `resolve_optional` 读取，单元格是 `NULL` 时它返回
+`Ok(None)`；`result()` 里用 `get()` 取回槽（返回 `Option<Arc<Config>>`，`None` 同时覆盖「从未解析」与
+「解析成 NULL」两种情况）。
+
+示例扩展在 `test/sql/demo/lazy_config_demo.test` 里把两种写法都量了一遍：5000 行下 `DuckLazy` 入参解析
+配置 **1 次**，eager 的 `Config` 入参解析 **5000 次**，两者结果完全相同。同一个文件还覆盖了可空参数，以及
+`PRAGMA threads=4` 下合并局部状态的场景 —— 合并要把配置搬过去，既不能重新解析、也不能丢掉它。
 
 ## 重载
 
@@ -214,6 +234,7 @@ fn dfn_agg_weighted(cfg: DuckLazy<Config>, v: i64, state: &mut WeightedState) ->
 - [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
 - [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 期望结果
 - [`duckfn/src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/aggregate_function_adapter.rs) —— 运行时侧
+- [`duckfn/src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/value_types/duck_lazy_slot.rs) —— 上面用到的 `DuckLazySlot<T>`（只解析一次的槽）
 
 ## 接下来
 

@@ -248,13 +248,18 @@ real work. It is for arguments that stay constant across many rows yet cost far 
 values next to them, such as an aggregate's configuration argument:
 
 ```rust
+#[derive(Default, Debug, Clone)]
+struct MyState {
+    cfg: DuckLazySlot<Config>,
+    sum: f64,
+}
+
 #[duck_aggregate_function]
 fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> {
-    // Parse once, on the first row; every later row reuses the parsed value.
-    if state.cfg.is_none() {
-        state.cfg = Some(cfg.get());
-    }
-    // ... use state.cfg
+    // Parse once, on the first row; every later row only bumps a refcount.
+    let cfg = state.cfg.resolve(&cfg)?;
+    state.sum += cfg.weight(v);
+    Ok(())
 }
 ```
 
@@ -269,6 +274,9 @@ Rules worth knowing:
   live inside the bind callback.
 - A `NULL` cell reads as `None` like everywhere else — write `Option<DuckLazy<T>>` when the argument
   may be `NULL`.
+- `DuckLazySlot<T>` is where the parsed value goes when the consumer is an aggregate state: `resolve`
+  parses once (and `resolve_optional` is the nullable flavour), `combine` carries the result over when
+  DuckDB merges parallel states — without re-parsing it — and `get` reads it back from `result()`.
 
 ## Enums
 

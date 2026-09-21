@@ -236,13 +236,18 @@ pub struct DuckStructWithList {
 得多」的参数，典型就是聚合函数的配置项：
 
 ```rust
+#[derive(Default, Debug, Clone)]
+struct MyState {
+    cfg: DuckLazySlot<Config>,
+    sum: f64,
+}
+
 #[duck_aggregate_function]
 fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> {
-    // 第一行解析一次；后续每一行复用解析结果。
-    if state.cfg.is_none() {
-        state.cfg = Some(cfg.get());
-    }
-    // ... 使用 state.cfg
+    // 第一行解析一次；后续每一行只做一次引用计数递增。
+    let cfg = state.cfg.resolve(&cfg)?;
+    state.sum += cfg.weight(v);
+    Ok(())
 }
 ```
 
@@ -254,6 +259,8 @@ fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> 
 - `DuckLazy<T>` **只读**：作为返回类型或输出字段使用会直接报错。
 - bind/`Value` 路径（表函数参数）显式拒绝：那类值只在 bind 回调内有效。
 - 单元格为 `NULL` 时和其它类型一样读到 `None` —— 参数可能为 `NULL` 就写 `Option<DuckLazy<T>>`。
+- 解析出来的值交给 `DuckLazySlot<T>` 保管：`resolve` 只解析一次（可空参数用 `resolve_optional`），
+  DuckDB 并行合并状态时用 `combine` 把结果搬过去（不重新解析），`result()` 里用 `get` 取回。
 
 ## 枚举
 

@@ -8,14 +8,15 @@
 //! #[duck_aggregate_function]
 //! fn my_agg(cfg: DuckLazy<Config>, v: i64, state: &mut MyState) -> DuckResult<()> {
 //!     // 只在第一行解析一次，之后所有行复用解析结果
-//!     let cfg = match &state.cfg {
-//!         Some(cfg) => cfg,
-//!         None => state.cfg.insert(cfg.get()),
-//!     };
+//!     let cfg = state.cfg.resolve(&cfg)?;
 //!     state.sum += cfg.weight(v);
 //!     Ok(())
 //! }
 //! ```
+//!
+//! 上面的 `state.cfg` 就是 [`DuckLazySlot<T>`](crate::DuckLazySlot)：聚合状态用不着自己写
+//! 「未解析 / 已解析 / 解析成 NULL」这套判断，`resolve` 负责解析一次、`combine` 负责在并行
+//! 聚合时搬运结果、`get` 负责在 `result()` 里取值。
 //!
 //! 收益来自「凭证构造是 O(1)」：聚合函数每行都会重建一次参数结构体，eager 参数每行都要完整
 //! 解析一遍，而 `DuckLazy<T>` 每行只拷几个字；真正的解析由用户决定只做一次。
@@ -34,7 +35,9 @@
 //! `DuckLazy<T>` and its contract in English: the value is read lazily, only inside the callback
 //! that produced it. It only records the column handle plus the row index, so constructing it is
 //! O(1) — which is what makes it useful for an aggregate function whose configuration argument is
-//! far more expensive to parse than the values it aggregates. The token inside the value keeps a
+//! far more expensive to parse than the values it aggregates. Keep the parsed value in a
+//! [`DuckLazySlot<T>`](crate::DuckLazySlot) state field: it parses once, carries the result across
+//! `combine` and reads it back in `result`. The token inside the value keeps a
 //! `Weak` to the source reader's liveness token plus the creating thread id, so consuming a stale
 //! value reports an error (and `get()` panics, which the adapters turn into a query error) instead
 //! of dereferencing a stale vector. Writing is not supported, and the bind/`Value` path is

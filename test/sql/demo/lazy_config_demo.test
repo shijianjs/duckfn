@@ -1,15 +1,16 @@
 # name: test/sql/demo/lazy_config_demo.test
-# description: DuckLazy<T> 的聚合场景：复杂配置项多行不变、只解析一次（与 eager 入参对照，并固化跨回调误用的守卫行为）
+# description: DuckLazy<T> 的聚合场景：复杂配置项多行不变、只解析一次（由 DuckLazySlot 承载解析结果，与 eager 入参对照，并固化跨回调误用的守卫行为）
 # group: [demo]
 
 require rusty_quack
 
 # 场景：聚合函数的配置参数多行不变，却比被聚合的值复杂十多倍。
-#   - lazy 组：入参写 DuckLazy<Config>，首行 get() 一次并把**解析结果**存进聚合状态 → 解析 1 次
+#   - lazy 组：入参写 DuckLazy<Config>，首行 resolve() 一次并把**解析结果**存进聚合状态 → 解析 1 次
 #   - eager 组：入参写 Config → 每行都完整解析一次 → 解析 N 次
 # 配置类型自带全局解析计数器，这里用「差值」断言，避免计数器跨测试文件累积。
 #
-# 线程数固定为 1：多线程下 DuckDB 会为每个并行状态各解析一次，差值断言需要确定性。
+# 除「并行合并」那一节外，线程数固定为 1：多线程下 DuckDB 会为每个并行状态各解析一次，
+# 差值断言需要确定性。
 
 statement ok
 SET threads=1;
@@ -55,6 +56,105 @@ query I
 SELECT dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base);
 ----
 5001
+
+# ============================================================================
+# 可空参数（DuckLazySlot::resolve_optional）：参数为 NULL 的行也会进回调，槽退化成「没有配置」
+#
+#   组 1：第一行就给真值，之后都是 NULL —— 解析 1 次，后面的 NULL 不会把已解析的值清掉；
+#   组 2：真值出现在最后一行 —— 前两行先停在「已解析为 NULL」，真值出现时才解析，仍是 1 次。
+# ============================================================================
+
+statement ok
+CREATE OR REPLACE TABLE lazy_parse_base AS SELECT dfn_lazy_config_parse_count(0) AS c;
+
+query TT
+SELECT CAST(x.rows AS VARCHAR), CAST(x.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_lazy_config_demo_n(
+        CASE WHEN v = 0 THEN {'scale': 2.0, 'offset': 1, 'weights': [1, 2], 'labels': []} END, v) AS x
+    FROM range(3) t(v)
+);
+----
+3	2.0
+
+query I
+SELECT dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base);
+----
+1
+
+statement ok
+CREATE OR REPLACE TABLE lazy_parse_base AS SELECT dfn_lazy_config_parse_count(0) AS c;
+
+query TT
+SELECT CAST(x.rows AS VARCHAR), CAST(x.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_lazy_config_demo_n(
+        CASE WHEN v = 2 THEN {'scale': 3.0, 'offset': 1, 'weights': [1], 'labels': []} END, v) AS x
+    FROM range(3) t(v)
+);
+----
+3	3.0
+
+query I
+SELECT dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base);
+----
+1
+
+# 整列都是 NULL：一次都不解析，scale 退化成默认值 0
+statement ok
+CREATE OR REPLACE TABLE lazy_parse_base AS SELECT dfn_lazy_config_parse_count(0) AS c;
+
+query TT
+SELECT CAST(x.rows AS VARCHAR), CAST(x.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_lazy_config_demo_n(NULL, v) AS x
+    FROM range(2) t(v)
+);
+----
+2	0.0
+
+query I
+SELECT dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base);
+----
+0
+
+# ============================================================================
+# 并行合并（DuckLazySlot::combine）：表足够大时 DuckDB 会为每个线程各建一个局部状态，各自解析
+# 一次配置，再把这些状态合并成最终结果 —— 合并只搬运已解析的值，既不重新解析、也不会把配置丢掉。
+#
+# 断言两点：
+#   - 行数与 scale 必须与单线程一致（合并丢掉配置的话 scale 会是 0）；
+#   - 解析次数远小于行数（若合并退化成「合并出来的状态重新解析」，这里会逼近 1000000）。
+#
+# 用真实表而不是 range()：range 的扫描不会拆成多个并行任务，那样只会有一个状态，combine 根本不会被调用。
+# ============================================================================
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE lazy_parallel AS SELECT i AS v FROM range(1000000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE lazy_parse_base AS SELECT dfn_lazy_config_parse_count(0) AS c;
+
+query TT
+SELECT CAST(x.rows AS VARCHAR), CAST(x.scale AS VARCHAR)
+FROM (
+    SELECT dfn_agg_lazy_config_demo(
+        {'scale': 2.0, 'offset': 1, 'weights': [1, 2], 'labels': ['a', 'b']}, v) AS x
+    FROM lazy_parallel
+);
+----
+1000000	2.0
+
+query I
+SELECT (dfn_lazy_config_parse_count(0) - (SELECT c FROM lazy_parse_base)) < 100;
+----
+true
+
+statement ok
+SET threads=1;
 
 # ============================================================================
 # 空输入：配置从未被解析，结果为 0 行 / scale 0

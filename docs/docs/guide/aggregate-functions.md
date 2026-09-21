@@ -187,32 +187,53 @@ folding constant `NULL`s, so the body still runs. `dfn_agg_seen_default` and
 
 The argument struct is rebuilt for every row, so an argument that never changes still pays its full
 parse cost 5000 times over 5000 rows. When that argument is expensive — a configuration struct ten times
-heavier than the values being aggregated — wrap it in [`DuckLazy<T>`](./types.md#lazy-arguments) and pay
-it once:
+heavier than the values being aggregated — wrap it in [`DuckLazy<T>`](./types.md#lazy-arguments) and keep
+the parsed value in a `DuckLazySlot<T>`:
 
 ```rust
 #[derive(Default, Debug, Clone)]
 struct WeightedState {
-    config: Option<Config>,
+    config: DuckLazySlot<Config>,
     sum: f64,
 }
 
 #[duck_aggregate_function]
 fn dfn_agg_weighted(cfg: DuckLazy<Config>, v: i64, state: &mut WeightedState) -> DuckResult<()> {
-    // Parsed once, on the first row; every later row reuses this value.
-    if state.config.is_none() {
-        state.config = Some(cfg.get());
-    }
-    state.sum += state.config.as_ref().unwrap().weight(v);
+    // Parsed once, on the first row; every later row only bumps a refcount.
+    let config = state.config.resolve(&cfg)?;
+    state.sum += config.weight(v);
     Ok(())
+}
+
+impl DuckAggregateState for WeightedState {
+    type Output = f64;
+
+    fn simple_combine(&mut self, other: &Self) {
+        // Both sides parsed the same column: carry the result over, never re-parse.
+        self.config.combine(&other.config);
+        self.sum += other.sum;
+    }
+
+    fn simple_result(&self) -> f64 {
+        self.sum
+    }
 }
 ```
 
-Cache the **parsed value** in the state, never the token: `DuckLazy<T>` is only valid inside the
-callback that produced it, and `.get()` outside it fails the query (with a `DuckLazy<T> is stale: ...`
-error) instead of reading a stale vector. The example extension measures both spellings in
-`test/sql/demo/lazy_config_demo.test`: over 5000 rows the `DuckLazy` argument parses the configuration
-**once** while the eager `Config` argument parses it **5000 times**, with identical results.
+`resolve` parses **once** and hands back an `Arc<Config>`; every later row is a refcount bump. The slot
+caches the **parsed value**, never the token, because `DuckLazy<T>` is only valid inside the callback
+that produced it — a token kept in the state fails the query later (with a `DuckLazy<T> is stale: ...`
+error) instead of reading a stale vector.
+
+A nullable argument is written `Option<DuckLazy<Config>>` and read with `resolve_optional`, which
+returns `Ok(None)` when the cell is `NULL`; `get()` reads the slot back from `result()` (it yields
+`Option<Arc<Config>>`, and `None` covers both "never parsed" and "parsed as `NULL`").
+
+The example extension measures both spellings in `test/sql/demo/lazy_config_demo.test`: over 5000 rows
+the `DuckLazy` argument parses the configuration **once** while the eager `Config` argument parses it
+**5000 times**, with identical results. The same file also covers the nullable argument and a
+`PRAGMA threads=4` run, where merging the partial states must carry the configuration over rather than
+re-parse (or lose) it.
 
 ## Overloads
 
@@ -227,6 +248,7 @@ function and therefore keeps each `Output`.
 - [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) — the example aggregates and their state types
 - [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the expected results
 - [`duckfn/src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/aggregate_function_adapter.rs) — the runtime side
+- [`duckfn/src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/value_types/duck_lazy_slot.rs) — `DuckLazySlot<T>`, the parse-once slot used above
 
 ## Next
 

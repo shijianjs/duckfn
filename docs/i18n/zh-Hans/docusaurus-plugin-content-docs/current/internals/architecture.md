@@ -201,7 +201,9 @@ quack-rs 的再导出都在 `duckdb-1-5` feature 后面。
 
 `DuckValueReader` 还带一个存活凭证（`Arc<ChunkToken>`，通过 `alive_weak()` 暴露成 `Weak`），
 `DuckLazy<T>` 正是靠它把读取推迟：拿到 reader 就等于拿到「这块向量此刻有效」的证明，于是延迟值能区分
-「还在回调里」与「chunk 已经没了」，后者给出报错而不是解引用一块失效的向量。
+「还在回调里」与「chunk 已经没了」，后者给出报错而不是解引用一块失效的向量。`DuckLazySlot<T>` 是这套
+设计的使用端：它把延迟值解析一次、留在聚合状态里，`combine` 时搬运解析结果、`result()` 里取回 ——
+凭证本身始终不出回调。
 
 `DuckStructTrait` 是生成的结构体接口，三个 blanket impl 把它接入系统其余部分：`DuckValueType`（可作为值）、
 `DuckColumns`（可作为表函数的输出行）、`DuckBindArgs`（可作为表函数的参数）。
