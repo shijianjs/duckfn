@@ -46,7 +46,7 @@ This repository is a Cargo workspace:
 
 ```toml
 [dependencies]
-duckfn = "0.0.5"
+duckfn = "0.0.6"
 
 # duckfn is built on these two crates; add them explicitly when you use their
 # types or builders directly (the example extension below does).
