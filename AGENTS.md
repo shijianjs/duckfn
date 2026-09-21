@@ -154,5 +154,6 @@ just release_dev 0.0.6-dev.0
 - `templates/`：给下游扩展项目的两层模板。`AGENTS.md` 是项目层（复制过去只填两个值：项目目标与 duckfn clone 路径），
   `duckfn-conventions.md` 是共享层（知识源、硬约束、开发循环），由本仓库维护。
   项目层只引用共享层、不复制内容，因此 duckfn 升级时下游 `git pull` 即可，不用重做模板。
+  另有 `Justfile` 可直接复制到新项目根目录，只改 `extension_name` 一处。
 - [`docs/docs/build-and-release.md`](docs/docs/build-and-release.md)：面向读者的构建与发布说明。
 - [`docs/docs/contributing.md`](docs/docs/contributing.md)：本地开发流程与约定。

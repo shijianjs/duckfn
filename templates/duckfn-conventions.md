@@ -106,6 +106,9 @@ duckdb -unsigned -c "LOAD './target/debug/<扩展名>.duckdb_extension'; SELECT 
 - 跑 sqllogictest 用 `make test`（等价 `make configure debug test`）。
   **Windows 上 `make` 必须在 Git Bash 里跑**，PowerShell 里跑不起来。
 - 提交前：`cargo clippy --all-targets -- -D warnings`，有 warning 先修。
+- duckfn 仓库的 `./Justfile` 是给下游项目准备的快捷入口，复制到项目根目录即可，
+  只需把 `extension_name` 改成自己的扩展名。常用：`just build`、`just sql "SELECT my_fn(1)"`、
+  `just repl`、`just test`（后者会先跑 `make configure` / `make debug`）。
 
 ## 5. 新增一个函数的标准流程
 

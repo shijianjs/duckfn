@@ -82,6 +82,10 @@ SELECT double_it(21);
 
 本仓库用 `Justfile` 封装了两种流程，见[快速开始](./quick-start.md#3-构建)。
 
+[`templates/Justfile`](https://github.com/shijianjs/duckfn/blob/main/templates/Justfile) 是给下游项目的
+精简版：复制进新项目、把 `extension_name` 改成与 `duckfn_entrypoint!` 一致，之后日常就用
+`just build`、`just sql "SELECT …"`、`just repl`、`just test`。
+
 ## 什么时候仍然需要官方流程
 
 用 Cargo 构建足以覆盖开发，但有两件事仍然依赖 `make`：

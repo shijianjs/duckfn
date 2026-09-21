@@ -91,6 +91,11 @@ SELECT double_it(21);
 
 The repository wraps both flows in its `Justfile`; see [Quick start](./quick-start.md#3-build-it).
 
+[`templates/Justfile`](https://github.com/shijianjs/duckfn/blob/main/templates/Justfile) is a trimmed
+version aimed at downstream projects: copy it in, set `extension_name` to whatever
+`duckfn_entrypoint!` declares, and drive the day-to-day loop with `just build`,
+`just sql "SELECT …"`, `just repl` and `just test`.
+
 ## When the official flow is still needed
 
 Building with Cargo covers development, but two things expect `make`:
