@@ -38,3 +38,36 @@ git clone https://github.com/shijianjs/duckfn
 2. `git -C {{DUCKFN_REPO}} fetch --tags && git -C {{DUCKFN_REPO}} checkout v<新版本>`，
    让文档与示例跟依赖对齐；约定文件随这次切换一起更新。
 3. 本文件不用改。
+
+
+## 仓库约定
+
+### 临时文件放到 target/
+
+生成的临时文件（脚本、数据、日志、一次性验证代码等）一律放到 `target/` 下，
+不要放在仓库根目录或其它已跟踪的目录里。`target/` 已被 git 忽略，不会污染工作区，
+用完顺手删掉。
+
+### 文本文件一律用 LF
+
+所有新增或修改的文本文件使用 LF（`\n`）换行，不要 CRLF（`\r\n`）。
+
+任务结束时，对本次新增的文本文件**机械地跑一遍替换命令即可，不需要先检测**
+里面是否真的有 CRLF：
+
+```powershell
+# PowerShell：逐个文件把 CRLF 换成 LF（保持 UTF-8 无 BOM）
+foreach ($f in @('path/to/new-file.md', 'path/to/new-script.sh')) {
+    $p = Join-Path (Get-Location) $f
+    $c = [IO.File]::ReadAllText($p)
+    [IO.File]::WriteAllText($p, ($c -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+}
+```
+
+```bash
+# Git Bash / Linux / macOS
+sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
+```
+
+> 仓库开启了 `core.autocrlf`，所以 `git diff` 偶尔会提示 "LF will be replaced by CRLF"，
+> 那是检出到工作区时的行为，提交进仓库的内容始终是 LF。
