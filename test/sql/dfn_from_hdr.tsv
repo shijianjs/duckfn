@@ -1,4 +1,0 @@
-column_0	column_1	column_2	column_3	column_4	column_5	column_6
-1	a,b	[1, 2]	{'k': 1, 'v': 'q'}	{'m'=1}	\x01\x02	1.5
-2	\N	\N	\N	{}	\N	\N
-3	tab\ttab	[NULL, 4]	{'k': NULL, 'v': NULL}	{'n'=7}	\xFF	3.5
