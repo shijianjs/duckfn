@@ -13,3 +13,4 @@ test/sql/dfn_copy_*.tsv
 test/sql/dfn_fs_*.csv
 # file_util.test 写出的读写用例数据
 test/sql/dfn_file_*
+test/sql/*.*
