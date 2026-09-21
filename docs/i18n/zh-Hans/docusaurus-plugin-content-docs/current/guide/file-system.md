@@ -104,6 +104,49 @@ SELECT dfn_agg_file_size(path) FROM (VALUES ('a.csv'), ('b.csv')) t(path);
 再导出 `FileSystem` / `FileHandle` / `FileOpenOptions` / `FileFlag` / `ClientContext` / `ErrorData`，
 因此下游不必直接依赖 `quack-rs`。
 
+## 便捷读写（`duckfn::file`）
+
+上面那套是底层形态：自己挑打开选项、自己持有句柄、自己推字节。日常用起来啰嗦，所以
+`duckfn::file` 提供了一套 Hutool `FileUtil` 风格的一行式接口：
+
+| 调用 | 作用 |
+| --- | --- |
+| `file::read(path)` | 整个文件读成 `Vec<u8>` |
+| `file::read_string(path)` | 按 UTF-8 读成 `String`（非法字节报错） |
+| `file::read_string_lossy(path)` | 同上，非法字节换成 `U+FFFD` |
+| `file::read_lines(path)` | 按行读（`\n` 分行、行尾 `\r` 去掉、末尾换行不产生空行） |
+| `file::write(path, bytes)` / `file::write_string(path, text)` | 用这些字节替换文件内容 |
+| `file::write_with(path, bytes, mode)` / `file::write_string_with(path, text, mode)` | 同上，显式指定 `WriteMode` |
+| `file::append(path, bytes)` / `file::append_string(path, text)` | 追加；文件不存在则创建 |
+| `file::size(path)` / `file::exists(path)` | 字节数 / 是否存在 |
+
+有意思的是 `WriteMode`：
+
+| 模式 | 语义 |
+| --- | --- |
+| `Replace`（默认） | 文件内容**精确**等于这次写进去的字节 —— 旧文件更长也一样。C API 没有 truncate 这件事就藏在这里：旧文件更长时先用一条零行 `COPY ... TO` 把它清零，再写正文。 |
+| `FailIfExists` | 文件已存在就报错，且不改动它。存在性由显式检查决定，另外叠上 `EXCLUSIVE_CREATE` 作为并发下的保险 —— DuckDB 只在 POSIX 本地文件系统上把它真正落成 `O_EXCL`，Windows 分支不处理它（缺文件时甚至会报「找不到文件」），所以光靠这个 flag 不够。 |
+| `Append` | 追加到末尾；文件不存在则创建。 |
+
+```rust
+use duckfn::file::{self, WriteMode};
+
+file::write_string("report.html", render())?;                        // 覆盖
+file::append_string("report.log", "one more line\n")?;               // 追加
+file::write_string_with("once.txt", "x", WriteMode::FailIfExists)?;  // 已存在就报错
+
+let text = file::read_string("report.html")?;
+let lines = file::read_lines("report.log")?;
+let bytes = file::size("report.html")?;
+```
+
+这一层下面的一切 —— 共用连接、C 字符串转换、清零用的 `COPY` —— 都是实现细节；调用方依赖的是
+**行为**：将来 DuckDB 的 C API 支持 truncate 了，也只需改 `duckfn::file`。
+
+没有 `delete`：C API 既没有 remove 也没有 move，DuckDB 也没有 `remove_file` 函数 —— 想「清空」
+就用空内容覆盖一次。每次调用都会自己取一次共用连接，所以不要在 `with_file_system` 的闭包里调
+`file::*`（会死锁），并发调用之间也是串行的。
+
 ## 并发与开销
 
 guard 持有那条自有连接上的互斥锁：
@@ -132,4 +175,6 @@ guard 持有那条自有连接上的互斥锁：
 - **需要 DuckDB 1.5.0+ 与 `duckdb-1-5` feature**，否则这些函数不存在。
 
 示例扩展在聚合函数里用了它（`src/extension/functions/file_system.rs` 的 `dfn_agg_file_size`），
-`test/sql/functions/file_system.test` 用 DuckDB 自己的 `read_blob` 对照校验结果。
+`test/sql/functions/file_system.test` 用 DuckDB 自己的 `read_blob` 对照校验结果；`duckfn::file`
+ 这一层（往返读写、覆盖更长的旧文件、追加、已存在就报错、非法 UTF-8、按行读）由
+`test/sql/functions/file_util.test` 覆盖。

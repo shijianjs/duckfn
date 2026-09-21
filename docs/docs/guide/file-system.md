@@ -111,6 +111,52 @@ Three entry points are available:
 drop. `duckfn` re-exports `FileSystem`, `FileHandle`, `FileOpenOptions`, `FileFlag`, `ClientContext`
 and `ErrorData`, so you do not have to depend on `quack-rs` directly.
 
+## Convenience helpers (`duckfn::file`)
+
+Everything above is the raw form: you pick the open flags, hold the handle and push the bytes. Day to
+day that is more ceremony than most callers want, so `duckfn::file` offers Hutool-`FileUtil`-style
+one-liners:
+
+| Call | What it does |
+| --- | --- |
+| `file::read(path)` | Whole file as `Vec<u8>` |
+| `file::read_string(path)` | Whole file as UTF-8 (invalid bytes are an error) |
+| `file::read_string_lossy(path)` | Same, with invalid bytes replaced by `U+FFFD` |
+| `file::read_lines(path)` | UTF-8 lines (`\n` split, trailing `\r` stripped, no empty last line) |
+| `file::write(path, bytes)` / `file::write_string(path, text)` | Replace the file with exactly these bytes |
+| `file::write_with(path, bytes, mode)` / `file::write_string_with(path, text, mode)` | Same, with an explicit `WriteMode` |
+| `file::append(path, bytes)` / `file::append_string(path, text)` | Append, creating the file when missing |
+| `file::size(path)` / `file::exists(path)` | Byte count / existence |
+
+`WriteMode` is the interesting part:
+
+| Mode | Semantics |
+| --- | --- |
+| `Replace` (default) | The file ends up holding **exactly** what you wrote — even when the old file was longer. This is where the C API's missing truncate is hidden: a longer file is zeroed with a zero-row `COPY ... TO` first, then the contents are written. |
+| `FailIfExists` | Error when the file already exists, leaving it untouched. Existence is decided by an explicit check, with `EXCLUSIVE_CREATE` added on top as a guard against concurrent creators — DuckDB only turns that flag into a real `O_EXCL` on POSIX local file systems, and its Windows branch ignores it (it even reports "file not found" for a missing file), so the flag alone would not do. |
+| `Append` | Append to the end, creating the file when missing. |
+
+```rust
+use duckfn::file::{self, WriteMode};
+
+file::write_string("report.html", render())?;                        // replace
+file::append_string("report.log", "one more line\n")?;               // append
+file::write_string_with("once.txt", "x", WriteMode::FailIfExists)?;  // error if it exists
+
+let text = file::read_string("report.html")?;
+let lines = file::read_lines("report.log")?;
+let bytes = file::size("report.html")?;
+```
+
+Everything under this layer — the shared connection, the C-string conversion, the zeroing `COPY` —
+is an implementation detail, and the behaviour is what callers should rely on: if DuckDB ever grows
+truncate in the C API, only `duckfn::file` changes.
+
+There is no `delete`: the C API has neither remove nor move, and DuckDB ships no `remove_file`
+function — overwrite with empty contents to clear a file. Each call takes the shared connection for
+itself, so do not call `file::*` from inside a `with_file_system` closure (that deadlocks), and
+concurrent calls serialize against each other.
+
 ## Concurrency and cost
 
 The guard holds the mutex on the owned connection:
@@ -146,4 +192,6 @@ handler returning `Err` fails the query (the adapter reports it through
 
 The example extension uses this from an aggregate (`dfn_agg_file_size` in
 `src/extension/functions/file_system.rs`), and `test/sql/functions/file_system.test` checks the
-results against DuckDB's own `read_blob`.
+results against DuckDB's own `read_blob`. The `duckfn::file` helpers — round-trips, overwriting a
+longer file, append, fail-if-exists, invalid UTF-8, line splitting — are covered by
+`test/sql/functions/file_util.test`.

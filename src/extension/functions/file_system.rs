@@ -41,7 +41,8 @@
 use std::ffi::CString;
 
 use duckfn::{
-    DuckAggregateState, DuckResult, ErrorData, FileOpenOptions, duck_aggregate_function, duck_error,
+    DuckAggregateState, DuckBlob, DuckOptionResult, DuckResult, ErrorData, FileOpenOptions,
+    duck_aggregate_function, duck_error, duck_scalar_function,
 };
 
 /// 文件字节数求和状态：只累计已读到的大小。
@@ -145,4 +146,129 @@ fn read_error(path: &str, error: ErrorData) -> quack_rs::error::ExtensionError {
             .message()
             .unwrap_or_else(|| String::from("unknown file system error"))
     ))
+}
+
+// ============================================================================
+// 便捷读写（duckfn::file）：Hutool FileUtil 风格
+//
+//   上面是底层形态：自己 open、自己挑 FileOpenOptions、自己 write_all，句柄和细节都在眼前。
+//   日常更常用的是 duckfn::file 这一层：
+//
+//     dfn_file_write_text(path, text)       覆盖写（旧文件更长也能写对）
+//     dfn_file_write_text_new(path, text)   文件已存在就报错
+//     dfn_file_append_text(path, text)      追加（不存在则创建）
+//     dfn_file_write_bytes(path, blob)      写字节
+//     dfn_file_read_text / _bytes / _lines  读文本 / 读字节 / 按行读
+//     dfn_file_size / dfn_file_exists       字节数 / 是否存在
+//
+//   「C API 没有 truncate」「必要时先用 COPY 把旧文件清零」「路径要转 C 字符串」这些细节都在
+//   duckfn::file 内部处理，调用方只表达意图（覆盖 / 不许覆盖 / 追加，文本 / 字节）。
+//
+//   The convenience layer (`duckfn::file`, Hutool `FileUtil` style) sits on top of the raw form
+//   above: callers state intent (replace / fail if exists / append, text or bytes) and duckfn::file
+//   deals with the rest — the C API's missing truncate, the zeroing COPY, and C-string paths.
+//
+//   写函数都标了 volatile：DuckDB 不会把常量参数的调用折叠成只执行一次，否则
+//   `SELECT dfn_file_write_text('a.txt', 'x')` 可能只在一个分片里执行。
+//
+//   The writing functions are marked volatile so DuckDB neither caches nor folds constant-argument
+//   calls into a single execution.
+// ============================================================================
+
+/// 读 UTF-8 文本；非法字节报错（想容忍脏字节用 `dfn_file_read_text_lossy`）。
+/// ```sql
+/// SELECT dfn_file_read_text('report.html');
+/// ```
+#[duck_scalar_function]
+fn dfn_file_read_text(path: String) -> DuckOptionResult<String> {
+    Ok(Some(duckfn::file::read_string(&path)?))
+}
+
+/// 读原始字节（BLOB）。
+/// ```sql
+/// SELECT dfn_file_read_bytes('report.html');
+/// ```
+#[duck_scalar_function]
+fn dfn_file_read_bytes(path: String) -> DuckOptionResult<DuckBlob> {
+    Ok(Some(DuckBlob {
+        value: duckfn::file::read(&path)?,
+    }))
+}
+
+/// 读 UTF-8 文本，非法字节换成 `U+FFFD`。
+/// ```sql
+/// SELECT dfn_file_read_text_lossy('mixed.bin');
+/// ```
+#[duck_scalar_function]
+fn dfn_file_read_text_lossy(path: String) -> DuckOptionResult<String> {
+    Ok(Some(duckfn::file::read_string_lossy(&path)?))
+}
+
+/// 按行读文本：`\n` 分行、行尾 `\r` 去掉、末尾换行不产生空行。
+/// ```sql
+/// SELECT dfn_file_read_lines('notes.txt');
+/// ```
+#[duck_scalar_function]
+fn dfn_file_read_lines(path: String) -> DuckOptionResult<Vec<String>> {
+    Ok(Some(duckfn::file::read_lines(&path)?))
+}
+
+/// 覆盖写 UTF-8 文本，返回写入的字节数。
+/// ```sql
+/// SELECT dfn_file_write_text('report.html', '<h1>hi</h1>');
+/// ```
+#[duck_scalar_function(volatile = true)]
+fn dfn_file_write_text(path: String, text: String) -> DuckOptionResult<i64> {
+    duckfn::file::write_string(&path, &text)?;
+    Ok(Some(text.len() as i64))
+}
+
+/// 覆盖写字节（BLOB），返回写入的字节数。
+/// ```sql
+/// SELECT dfn_file_write_bytes('a.bin', '\xFF\xFE'::BLOB);
+/// ```
+#[duck_scalar_function(volatile = true)]
+fn dfn_file_write_bytes(path: String, data: DuckBlob) -> DuckOptionResult<i64> {
+    duckfn::file::write(&path, &data.value)?;
+    Ok(Some(data.value.len() as i64))
+}
+
+/// 只在文件不存在时写文本；已存在则报错且不改动原文件。
+/// ```sql
+/// SELECT dfn_file_write_text_new('once.txt', 'first');
+/// ```
+#[duck_scalar_function(volatile = true)]
+fn dfn_file_write_text_new(path: String, text: String) -> DuckOptionResult<i64> {
+    duckfn::file::write_string_with(&path, &text, duckfn::file::WriteMode::FailIfExists)?;
+    Ok(Some(text.len() as i64))
+}
+
+/// 追加 UTF-8 文本（不存在则创建），返回本次写入的字节数。
+/// ```sql
+/// SELECT dfn_file_append_text('log.txt', 'line' || chr(10));
+/// ```
+#[duck_scalar_function(volatile = true)]
+fn dfn_file_append_text(path: String, text: String) -> DuckOptionResult<i64> {
+    duckfn::file::append_string(&path, &text)?;
+    Ok(Some(text.len() as i64))
+}
+
+/// 文件字节数；文件不存在或打不开时报错。
+/// ```sql
+/// SELECT dfn_file_size('report.html');
+/// ```
+#[duck_scalar_function]
+fn dfn_file_size(path: String) -> DuckOptionResult<i64> {
+    Ok(Some(
+        i64::try_from(duckfn::file::size(&path)?).unwrap_or(i64::MAX),
+    ))
+}
+
+/// 文件是否存在（能否只读打开；打不开也算不存在，包括扩展未完成注册时）。
+/// ```sql
+/// SELECT dfn_file_exists('report.html');
+/// ```
+#[duck_scalar_function]
+fn dfn_file_exists(path: String) -> bool {
+    duckfn::file::exists(&path)
 }

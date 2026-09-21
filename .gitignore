@@ -11,3 +11,5 @@ venv
 test/sql/dfn_copy_*.tsv
 # file_system.test 写在 __TEST_DIR__ 下的两个待读文件
 test/sql/dfn_fs_*.csv
+# file_util.test 写出的读写用例数据
+test/sql/dfn_file_*

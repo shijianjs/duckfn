@@ -26,7 +26,7 @@
 - 无需编译 DuckDB，无需 C/C++ 代码
 - 属性驱动、基于 `inventory` 的自动注册
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
-- 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），由 `duckdb-1-5` feature 提供
+- 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::file::read_string` / `write_string` / `append_string` 这类一行式接口，由 `duckdb-1-5` feature 提供
 - 可直接复用 DuckDB 官方多平台扩展 CI
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。

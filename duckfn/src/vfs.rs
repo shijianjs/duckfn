@@ -281,6 +281,15 @@ impl DuckFileSystem {
     pub fn connection_id(&self) -> u64 {
         self.context.connection_id()
     }
+
+    /// 内部用：那条自有连接（[`crate::file`] 的写工具借它跑一条 `COPY` 来清零文件）。
+    ///
+    /// Internal: the owned connection (the write helpers in [`crate::file`] borrow it to zero a
+    /// file with `COPY`). Not public: running SQL from a callback is a decision each caller should
+    /// take deliberately.
+    pub(crate) fn connection(&self) -> &OwnedConnection {
+        &self._connection
+    }
 }
 
 impl Deref for DuckFileSystem {
@@ -347,25 +356,33 @@ fn take_connection() -> DuckResult<MutexGuard<'static, OwnedConnection>> {
 ///
 /// Builds the "not ready" error, distinguishing "capture failed" from "not registered yet".
 fn not_ready_error() -> quack_rs::error::ExtensionError {
-    CAPTURE_ERROR.get().map_or_else(
+    duck_error(not_ready_message(CAPTURE_ERROR.get().map(String::as_str)))
+}
+
+/// [`not_ready_error`] 的纯逻辑部分：拿得到捕获失败原因就用它，否则说「尚未注册」。
+///
+/// The pure part of [`not_ready_error`]: report the captured failure when there is one, otherwise
+/// say "not registered yet". Kept free of global state so it can be tested deterministically.
+fn not_ready_message(capture_error: Option<&str>) -> String {
+    capture_error.map_or_else(
         || {
-            duck_error(
+            String::from(
                 "duckfn: the DuckDB file system is not available (the extension has not finished \
                  registering)",
             )
         },
         |reason| {
-            duck_error(format!(
+            format!(
                 "duckfn: the DuckDB file system is not available (opening a connection during \
                  registration failed: {reason})"
-            ))
+            )
         },
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CAPTURE_ERROR, VFS_CONNECTION, client_context, file_system, not_ready_error};
+    use super::{VFS_CONNECTION, client_context, file_system, not_ready_message};
 
     // 这些测试只覆盖纯 Rust 逻辑：真正的句柄需要 DuckDB 运行时（见 `test/sql` 里的
     // sqllogictest），单测不去碰 FFI。
@@ -375,28 +392,26 @@ mod tests {
 
     #[test]
     fn taking_the_file_system_before_registration_is_an_error() {
-        assert!(VFS_CONNECTION.get().is_none(), "this test must run first");
+        // 不假设全局捕获状态：无论另一个测试是否记录过捕获失败，错误文案都以这段开头。
+        //
+        // No assumption about global capture state: whichever branch `not_ready_error` takes, the
+        // message starts like this.
+        assert!(VFS_CONNECTION.get().is_none(), "no DuckDB runtime in unit tests");
         let error = file_system().expect_err("nothing was captured yet");
         assert!(error.as_str().contains("not available"), "{error}");
-        assert!(error.as_str().contains("has not finished"), "{error}");
         assert!(client_context().is_err());
     }
 
     #[test]
-    fn not_ready_error_reports_a_capture_failure_when_there_is_one() {
-        assert!(CAPTURE_ERROR.get().is_none(), "this test must run first");
-        // `not_ready_error` 在没有捕获失败时说的是「尚未注册」。
-        //
-        // Without a recorded failure, `not_ready_error` talks about "not registered yet".
-        assert!(not_ready_error().as_str().contains("has not finished"));
+    fn not_ready_message_separates_not_registered_yet_from_a_capture_failure() {
+        let never_registered = not_ready_message(None);
+        assert!(
+            never_registered.contains("has not finished registering"),
+            "{never_registered}"
+        );
 
-        // 记录一次失败后，错误里带上原因。
-        //
-        // After recording a failure, the reason shows up in the message.
-        CAPTURE_ERROR
-            .set(String::from("duckdb_connect failed"))
-            .expect("only this test sets it");
-        let error = not_ready_error();
-        assert!(error.as_str().contains("duckdb_connect failed"), "{error}");
+        let failed = not_ready_message(Some("duckdb_connect failed"));
+        assert!(failed.contains("duckdb_connect failed"), "{failed}");
+        assert!(failed.contains("registration failed"), "{failed}");
     }
 }

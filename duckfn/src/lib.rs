@@ -65,6 +65,15 @@ pub(crate) mod utils;
 /// access from any callback. Requires DuckDB 1.5.0+.
 #[cfg(feature = "duckdb-1-5")]
 pub(crate) mod vfs;
+/// 宿主文件的便捷读写（Hutool `FileUtil` 风格）：`duckfn::file::read_string` /
+/// `write_string` / `append_string` / `size` / `exists` 等，内部封装 VFS 与「C API 没有 truncate」
+/// 这些细节。需要 DuckDB 1.5.0+。
+///
+/// Convenience host-file helpers (in the spirit of Hutool's `FileUtil`): `duckfn::file::read_string`
+/// / `write_string` / `append_string` / `size` / `exists` and friends, hiding the VFS details — and
+/// the fact that the C API has no truncate — from callers. Requires DuckDB 1.5.0+.
+#[cfg(feature = "duckdb-1-5")]
+pub mod file;
 
 // 过程宏（属性宏、derive、函数式宏）的再导出；由 `duckfn-macro` crate 提供。
 //
