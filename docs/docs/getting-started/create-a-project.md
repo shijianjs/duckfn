@@ -103,6 +103,34 @@ The usual arrangement is therefore: get `make configure` working once, build wit
 iterating, and run `make test` before pushing. On Windows that means running `make` from Git Bash
 rather than PowerShell — see [Contributing](../contributing.md#windows).
 
+## Brief your coding agent
+
+If an AI agent writes the extension, give it a project-level `AGENTS.md`. This repository ships a
+template: [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md).
+
+It exists because of what a dependency does and does not carry. `cargo` unpacks `duckfn` and
+`duckfn-macro` into the local registry, so the runtime and the macro implementations — the ground
+truth for which attribute accepts which arguments and which return shapes it allows — are on disk
+and readable. What is *not* in the published crate is everything else: the user guide under `docs/`,
+the example extension under `src/extension/` and the sqllogictest suite under `test/sql` never reach
+a downstream project, and neither does any of it enter the agent's context by itself.
+
+The template therefore ranks its sources — a local clone of this repository first, the local cargo
+registry second, the documentation site only as a last resort — and tells the agent to stop and ask
+rather than invent an attribute it cannot find.
+
+It is split in two on purpose:
+
+- [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md) is the
+  project layer. Copy it into the new project as `AGENTS.md` and fill in two values: what the
+  extension does, and where the duckfn clone lives. Everything that can be read out of the code —
+  extension name, crate name, duckfn version — is deliberately *not* duplicated there, so it cannot
+  go stale.
+- [`templates/duckfn-conventions.md`](https://github.com/shijianjs/duckfn/blob/main/templates/duckfn-conventions.md)
+  is the shared layer: knowledge sources, hard constraints, the build loop and the checklist for
+  adding a function. The project `AGENTS.md` points at it instead of copying it, which is what keeps
+  the template from being a one-off — `git pull` in the clone is all a duckfn upgrade needs.
+
 ## Next
 
 - [Installation](./installation.md) — add duckfn to the crate.

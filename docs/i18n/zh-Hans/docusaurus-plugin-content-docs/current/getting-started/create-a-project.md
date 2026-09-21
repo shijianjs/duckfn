@@ -92,6 +92,30 @@ SELECT double_it(21);
 所以常见的搭配是：先让 `make configure` 跑通一次，迭代时用 Cargo 构建，推送前跑 `make test`。
 在 Windows 上，这意味着 `make` 要在 Git Bash 里运行，而不是 PowerShell —— 见[贡献指南](../contributing.md#windows)。
 
+## 让 AI 助手写代码
+
+如果扩展交给 AI 助手来写，就在项目里放一份 `AGENTS.md`。本仓库提供了模板：
+[`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md)。
+
+它要解决的问题是「依赖能带过去什么、带不过去什么」。`cargo` 会把 `duckfn` 与 `duckfn-macro`
+解包到本地 registry，因此运行时与宏的实现 —— 也就是「某个属性收哪些参数、允许哪些返回形状」的
+真相来源 —— 就在磁盘上，可以直接读。但发布出去的包里只有 `src/` 和 `README.md`：`docs/` 下的
+用户文档、`src/extension/` 下的示例扩展、`test/sql/` 下的 sqllogictest 套件，都不会跟着依赖进入
+下游项目，也不会自动进入助手的上下文。
+
+所以模板把知识源排了序：先本仓库的本地 clone（看文档、示例与测试），再本地 registry，
+文档站只作兜底；并明确要求助手查不到时就停下来问，而不是凭印象编一个属性出来。
+
+模板刻意拆成了两层：
+
+- [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md)
+  是**项目层**：复制到新项目根目录命名为 `AGENTS.md`，只填两个值 —— 这个扩展做什么、
+  duckfn 的 clone 在哪。凡是能从代码里读出来的（扩展名、crate 名、duckfn 版本）一律不抄进来，
+  这样它就不会变成第二份会过期的真相。
+- [`templates/duckfn-conventions.md`](https://github.com/shijianjs/duckfn/blob/main/templates/duckfn-conventions.md)
+  是**共享层**：知识源、硬约束、开发循环、新增函数的流程。项目层的 `AGENTS.md` 只指向它、不复制它
+  —— 这正是模板不会被用成一次性的原因：duckfn 升级时，clone 里 `git pull` 一下就同步了。
+
 ## 接下来
 
 - [安装](./installation.md) —— 把 duckfn 加进 crate。
