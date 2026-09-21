@@ -28,6 +28,7 @@ C/C++ glue code, and no local DuckDB build required.
 - No DuckDB build required, no C/C++ code
 - Attribute-driven registration through `inventory`
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
+- Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included (`duckdb-1-5` feature)
 - Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.
@@ -51,8 +52,8 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
-`duckfn` has a single feature, `duckdb-1-5`, which enables the logical types DuckDB added in 1.5
-(currently `TIME_NS`):
+`duckfn` has a single feature, `duckdb-1-5`, which enables what DuckDB's 1.5 C API added: the logical
+types from DuckDB 1.5 (currently `TIME_NS`), copy functions, and host file-system access:
 
 ```toml
 duckfn = { version = "0.0.5", features = ["duckdb-1-5"] }

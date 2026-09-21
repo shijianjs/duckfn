@@ -34,6 +34,16 @@ inventory::collect!(DuckFunctionItem);
 
 /// 注册本扩展收集到的全部 DuckDB 函数（扩展初始化入口）。
 ///
+/// 开跑之前先 best-effort 捕获宿主文件系统入口（`duckdb-1-5` feature 下会打开一条自有长连接
+/// 存进进程级静态，供 `duckfn::with_file_system` / `duckfn::file_system` 使用）：聚合函数这类
+/// 回调在调用期拿不到客户端上下文，注册期是唯一窗口；捕获失败只记原因，不影响注册成败。
+///
+/// Before anything else it captures the host file-system entry point, best-effort (under the
+/// `duckdb-1-5` feature it opens an owned long-lived connection and stores it in a process-level
+/// static, backing `duckfn::with_file_system` / `duckfn::file_system`): callbacks such as aggregates
+/// cannot obtain a client context at call time, so registration is the only window. A failed
+/// capture is only recorded — it never decides whether registration succeeds.
+///
 /// 顺序为：先按提交顺序执行所有 `DuckFunctionItem`（标量函数、表函数、cast、SQL 宏、
 /// replacement scan、自定义注册等），再分组注册聚合函数集重载，最后分组注册标量函数集
 /// 重载。全部跑完后统一把 `create_type = "print"` 收集到的 DDL 打印一次（见
@@ -54,6 +64,14 @@ inventory::collect!(DuckFunctionItem);
 /// Returns the first error encountered; remaining functions are then left unregistered (the
 /// collected DDL is printed either way).
 pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
+    // 注册期是拿到 DuckDB 数据库句柄的唯一窗口：这里留一条自有长连接，供聚合等回调
+    // 通过 `duckfn::with_file_system` / `duckfn::file_system` 使用宿主文件系统。
+    //
+    // Registration time is the only window onto DuckDB's database handle: keep an owned,
+    // long-lived connection here so callbacks such as aggregates can use the host file system
+    // through `duckfn::with_file_system` / `duckfn::file_system`.
+    #[cfg(feature = "duckdb-1-5")]
+    crate::vfs::capture(connection);
     let result = register_collected_items(connection);
     // 注册失败也把 `create_type = "print"` 的 DDL 打出来：它只是「预览」，与注册成败无关，
     // 出问题时反而更需要看到。

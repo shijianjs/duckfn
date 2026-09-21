@@ -219,3 +219,4 @@ fn dfn_agg_weighted(cfg: DuckLazy<Config>, v: i64, state: &mut WeightedState) ->
 
 - [表函数](./table-functions.md)
 - [类型映射](./types.md) —— 状态的 `Output` 可以是哪些类型。
+- [文件系统访问](./file-system.md) —— 在行处理函数或 `finalize` 里读文件（`s3://`、`http(s)://`、本地磁盘）。

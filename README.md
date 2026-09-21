@@ -27,6 +27,7 @@ cast, or a nested type — no C/C++ glue code, and no local DuckDB build require
 - No DuckDB build required, no C/C++ code
 - Attribute-driven registration through `inventory`
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
+- Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included (`duckdb-1-5` feature)
 - Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.

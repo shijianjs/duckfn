@@ -9,3 +9,5 @@ venv
 
 # COPY 测试写出的临时数据文件（测试运行器的 __TEST_DIR__ 就是 test/sql）
 test/sql/dfn_copy_*.tsv
+# file_system.test 写在 __TEST_DIR__ 下的两个待读文件
+test/sql/dfn_fs_*.csv

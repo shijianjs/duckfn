@@ -3,6 +3,7 @@ mod cast_function;
 mod copy_from_function;
 mod copy_function;
 mod dynamic_table_function;
+mod file_system;
 mod replacement_scan;
 mod scalar_function;
 mod sql_macro;

@@ -232,3 +232,4 @@ function and therefore keeps each `Output`.
 
 - [Table functions](./table-functions.md)
 - [Type mapping](./types.md) — what a state's `Output` may be.
+- [File system access](./file-system.md) — reading files (`s3://`, `http(s)://`, local disk) from a row handler or `finalize`.

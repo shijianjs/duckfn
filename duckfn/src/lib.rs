@@ -59,6 +59,12 @@ pub(crate) mod functions;
 ///
 /// Internal utilities: error conversion, panic catching and builder extensions.
 pub(crate) mod utils;
+/// 宿主文件系统（DuckDB 的 VFS）：注册期捕获的全局上下文 + 回调期取用的文件系统。
+///
+/// Host file system (DuckDB's VFS): a global context captured at registration plus file-system
+/// access from any callback. Requires DuckDB 1.5.0+.
+#[cfg(feature = "duckdb-1-5")]
+pub(crate) mod vfs;
 
 // 过程宏（属性宏、derive、函数式宏）的再导出；由 `duckfn-macro` crate 提供。
 //
@@ -118,3 +124,17 @@ pub use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value};
 pub use quack_rs::prelude::{
     CopyBindInfo, CopyFinalizeInfo, CopyFunctionBuilder, CopyGlobalInitInfo, CopySinkInfo,
 };
+// 宿主文件系统访问：`with_file_system` / `file_system` / `client_context` 是入口，
+// 其余是它们签名与返回值里出现的 quack-rs 类型（下游不必直接依赖 quack-rs 就能用）。
+//
+// Host file-system access: `with_file_system` / `file_system` / `client_context` are the entry
+// points; the rest are the quack-rs types those signatures mention, so downstream code does not
+// have to depend on quack-rs directly.
+#[cfg(feature = "duckdb-1-5")]
+pub use quack_rs::client_context::ClientContext;
+#[cfg(feature = "duckdb-1-5")]
+pub use quack_rs::error_data::ErrorData;
+#[cfg(feature = "duckdb-1-5")]
+pub use quack_rs::file_system::{FileFlag, FileHandle, FileOpenOptions, FileSystem};
+#[cfg(feature = "duckdb-1-5")]
+pub use vfs::{DuckClientContext, DuckFileSystem, client_context, file_system, with_file_system};
