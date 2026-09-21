@@ -138,6 +138,24 @@ just release_publish   # publish_macro_dry → publish_macro → publish_dry →
 `failed to select a version for the requirement duckfn-macro = "=X.Y.Z"`，
 说明宏包还没在 crates.io 索引里可见，稍等片刻重试即可。
 
+#### 网络报错就原样重试，不要动代理
+
+`cargo publish`（以及 `git push`）访问 crates.io / GitHub 时可能报：
+
+```
+warning: spurious network error (N tries remaining): [35] SSL connect error
+error: ... (schannel: failed to receive handshake, SSL/TLS connection failed)
+```
+
+这是**间歇性**的，**原样重试一两次即可通过**（实测 `just release_publish` 重跑即两个 crate 全部
+上传成功，`git push` 也是第二次成功；过程中 cargo 自己会打印若干 `spurious network error` 后继续，属正常）。
+
+**不要擅自更改网络 / 代理状态**：
+
+- 本机 `git` 是**全局配置了代理**的，`github.com` 不走代理基本用不了 —— 动代理设置会直接
+  让 `release_tag` 的推送失败。
+- 代理一般比直连更不稳定，遇到报错先重试，不要改用或切换代理去"绕"。
+
 ### 5. 切到下一开发版本
 
 ```bash
