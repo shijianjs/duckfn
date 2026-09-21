@@ -1,6 +1,7 @@
-//! 宿主文件系统（DuckDB 的 VFS）：注册期捕获、回调期随时取用。
+//! 宿主文件系统（DuckDB 的 VFS）访问的底层半边：注册期捕获、回调期随时取用。
 //!
-//! Host file system (DuckDB's VFS): captured at registration time, usable from any callback.
+//! The low-level half of host file system (DuckDB's VFS) access: captured at registration time,
+//! usable from any callback. The convenience file helpers live in [`crate::duck_vfs`] too.
 //!
 //! # 为什么需要它 / Why this exists
 //!
@@ -58,10 +59,10 @@
 //!
 //! ```ignore
 //! use duckfn::{DuckResult, duck_error};
-//! use duckfn::FileOpenOptions;
+//! use duckfn::duck_vfs::{FileOpenOptions, ErrorData};
 //!
 //! fn file_len(path: &std::ffi::CStr) -> DuckResult<i64> {
-//!     duckfn::with_file_system(|fs| {
+//!     duckfn::duck_vfs::with_file_system(|fs| {
 //!         let options = FileOpenOptions::read_only();
 //!         let handle = fs.open(path, &options).map_err(file_error)?;
 //!         let mut buffer = Vec::new();
@@ -70,9 +71,11 @@
 //!     })
 //! }
 //!
-//! // `ErrorData` 是 quack-rs 的结构化错误（`message()` 取 DuckDB 给的消息）。
-//! // `ErrorData` is quack-rs' structured error (`message()` returns DuckDB's message).
-//! fn file_error(error: duckfn::ErrorData) -> quack_rs::error::ExtensionError {
+//! // `ErrorData` 是 quack-rs 的结构化错误（`message()` 取 DuckDB 给的消息），
+//! // 也由 `duckfn::duck_vfs` 再导出。
+//! // `ErrorData` is quack-rs' structured error (`message()` returns DuckDB's message), also
+//! // re-exported by `duckfn::duck_vfs`.
+//! fn file_error(error: ErrorData) -> quack_rs::error::ExtensionError {
 //!     duck_error(error.message().unwrap_or_else(|| "file system error".to_string()))
 //! }
 //! ```
@@ -282,9 +285,9 @@ impl DuckFileSystem {
         self.context.connection_id()
     }
 
-    /// 内部用：那条自有连接（[`crate::file`] 的写工具借它跑一条 `COPY` 来清零文件）。
+    /// 内部用：那条自有连接（[`crate::duck_vfs`] 的写工具借它跑一条 `COPY` 来清零文件）。
     ///
-    /// Internal: the owned connection (the write helpers in [`crate::file`] borrow it to zero a
+    /// Internal: the owned connection (the write helpers in [`crate::duck_vfs`] borrow it to zero a
     /// file with `COPY`). Not public: running SQL from a callback is a decision each caller should
     /// take deliberately.
     pub(crate) fn connection(&self) -> &OwnedConnection {

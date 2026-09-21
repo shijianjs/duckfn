@@ -59,21 +59,16 @@ pub(crate) mod functions;
 ///
 /// Internal utilities: error conversion, panic catching and builder extensions.
 pub(crate) mod utils;
-/// 宿主文件系统（DuckDB 的 VFS）：注册期捕获的全局上下文 + 回调期取用的文件系统。
-///
-/// Host file system (DuckDB's VFS): a global context captured at registration plus file-system
-/// access from any callback. Requires DuckDB 1.5.0+.
+// 宿主文件系统（DuckDB 的 VFS）访问与便捷文件读写：模块文档见 `duckfn/src/duck_vfs/mod.rs`。
+// 这里用普通注释而不是 `///`，避免外层文档与模块内文档合并后，内层的 intra-doc 链接在
+// crate 根作用域里解析失败。需要 DuckDB 1.5.0+ 与 `duckdb-1-5` feature。
+//
+// Host file system (DuckDB's VFS) access plus convenience file reads and writes: the module docs
+// live in `duckfn/src/duck_vfs/mod.rs`. A plain comment instead of `///` keeps the outer doc from
+// merging with the inner one, which would make the inner intra-doc links resolve in the crate root
+// scope and fail. Requires DuckDB 1.5.0+ and the `duckdb-1-5` feature.
 #[cfg(feature = "duckdb-1-5")]
-pub(crate) mod vfs;
-/// 宿主文件的便捷读写（Hutool `FileUtil` 风格）：`duckfn::file::read_string` /
-/// `write_string` / `append_string` / `size` / `exists` 等，内部封装 VFS 与「C API 没有 truncate」
-/// 这些细节。需要 DuckDB 1.5.0+。
-///
-/// Convenience host-file helpers (in the spirit of Hutool's `FileUtil`): `duckfn::file::read_string`
-/// / `write_string` / `append_string` / `size` / `exists` and friends, hiding the VFS details — and
-/// the fact that the C API has no truncate — from callers. Requires DuckDB 1.5.0+.
-#[cfg(feature = "duckdb-1-5")]
-pub mod file;
+pub mod duck_vfs;
 
 // 过程宏（属性宏、derive、函数式宏）的再导出；由 `duckfn-macro` crate 提供。
 //
@@ -133,17 +128,3 @@ pub use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value};
 pub use quack_rs::prelude::{
     CopyBindInfo, CopyFinalizeInfo, CopyFunctionBuilder, CopyGlobalInitInfo, CopySinkInfo,
 };
-// 宿主文件系统访问：`with_file_system` / `file_system` / `client_context` 是入口，
-// 其余是它们签名与返回值里出现的 quack-rs 类型（下游不必直接依赖 quack-rs 就能用）。
-//
-// Host file-system access: `with_file_system` / `file_system` / `client_context` are the entry
-// points; the rest are the quack-rs types those signatures mention, so downstream code does not
-// have to depend on quack-rs directly.
-#[cfg(feature = "duckdb-1-5")]
-pub use quack_rs::client_context::ClientContext;
-#[cfg(feature = "duckdb-1-5")]
-pub use quack_rs::error_data::ErrorData;
-#[cfg(feature = "duckdb-1-5")]
-pub use quack_rs::file_system::{FileFlag, FileHandle, FileOpenOptions, FileSystem};
-#[cfg(feature = "duckdb-1-5")]
-pub use vfs::{DuckClientContext, DuckFileSystem, client_context, file_system, with_file_system};

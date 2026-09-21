@@ -8,7 +8,7 @@
 //   ClientContext，也就拿不到 FileSystem。
 //
 //   duckfn 因此在扩展加载时（duckfn::register_all_duckfn）就用注册期那份 database 句柄开了
-//   一条自有长连接，之后任何回调都能通过 duckfn::with_file_system / duckfn::file_system 取用
+//   一条自有长连接，之后任何回调都能通过 duckfn::duck_vfs::with_file_system / duckfn::duck_vfs::file_system 取用
 //   宿主文件系统：httpfs 注册的 s3:// / http(s)://、内存文件与本地磁盘走同一条通路，
 //   而不是退化成只能看本地磁盘的 std::fs。
 //
@@ -23,7 +23,7 @@
 //
 //   duckfn therefore opens an owned, long-lived connection at extension load time
 //   (duckfn::register_all_duckfn) from the registration-time database handle, so any later callback
-//   can use the host file system through duckfn::with_file_system / duckfn::file_system: httpfs'
+//   can use the host file system through duckfn::duck_vfs::with_file_system / duckfn::duck_vfs::file_system: httpfs'
 //   s3:// / http(s)://, in-memory files and local disk all go the same way, instead of degrading to
 //   std::fs, which only ever sees local disk.
 //
@@ -40,9 +40,10 @@
 
 use std::ffi::CString;
 
+use duckfn::duck_vfs::{ErrorData, FileOpenOptions};
 use duckfn::{
-    DuckAggregateState, DuckBlob, DuckOptionResult, DuckResult, ErrorData, FileOpenOptions,
-    duck_aggregate_function, duck_error, duck_scalar_function,
+    DuckAggregateState, DuckBlob, DuckOptionResult, DuckResult, duck_aggregate_function, duck_error,
+    duck_scalar_function,
 };
 
 /// 文件字节数求和状态：只累计已读到的大小。
@@ -97,7 +98,7 @@ fn dfn_agg_file_size(path: String, state: &mut FileSizeState) -> DuckResult<()> 
 ///
 /// - 路径要先转成 `CStr`（DuckDB 的 C API 收 C 字符串），含 NUL 字节的路径直接报错；
 /// - `with_file_system` 的 guard 持有那条自有连接上的互斥锁，**别嵌套取用**（会死锁）；
-///   要一次读多个文件就把读取放进同一次 `with_file_system`，或改用 `duckfn::file_system()`
+///   要一次读多个文件就把读取放进同一次 `with_file_system`，或改用 `duckfn::duck_vfs::file_system()`
 ///   自己持有 guard；
 /// - 多线程聚合时，guard 会串行化对这条连接的访问。这里每个文件只做一次 open + size，
 ///   持锁时间极短；真正昂贵的读取适合放到 `finalize`（每组一次）并把结果缓存进自己的状态。
@@ -108,7 +109,7 @@ fn dfn_agg_file_size(path: String, state: &mut FileSizeState) -> DuckResult<()> 
 ///   byte is rejected outright;
 /// - the `with_file_system` guard holds the mutex on that owned connection, so **never nest it**
 ///   (that deadlocks); to read several files, do it inside a single `with_file_system`, or hold
-///   the guard yourself with `duckfn::file_system()`;
+///   the guard yourself with `duckfn::duck_vfs::file_system()`;
 /// - with parallel aggregation the guard serializes access to that connection. Here each file
 ///   costs one open plus one size call, so the lock is held for a moment; genuinely expensive reads
 ///   belong in `finalize` (once per group) with the result cached in your own state.
@@ -118,7 +119,7 @@ fn file_size(path: &str) -> DuckResult<i64> {
             "dfn_agg_file_size: path contains a NUL byte: {path:?}"
         ))
     })?;
-    duckfn::with_file_system(|fs| {
+    duckfn::duck_vfs::with_file_system(|fs| {
         let options = FileOpenOptions::read_only();
         let handle = fs
             .open(&c_path, &options)
@@ -149,10 +150,10 @@ fn read_error(path: &str, error: ErrorData) -> quack_rs::error::ExtensionError {
 }
 
 // ============================================================================
-// 便捷读写（duckfn::file）：Hutool FileUtil 风格
+// 便捷读写（duckfn::duck_vfs）：Hutool FileUtil 风格
 //
 //   上面是底层形态：自己 open、自己挑 FileOpenOptions、自己 write_all，句柄和细节都在眼前。
-//   日常更常用的是 duckfn::file 这一层：
+//   日常更常用的是 duckfn::duck_vfs 这一层：
 //
 //     dfn_file_write_text(path, text)       覆盖写（旧文件更长也能写对）
 //     dfn_file_write_text_new(path, text)   文件已存在就报错
@@ -162,11 +163,12 @@ fn read_error(path: &str, error: ErrorData) -> quack_rs::error::ExtensionError {
 //     dfn_file_size / dfn_file_exists       字节数 / 是否存在
 //
 //   「C API 没有 truncate」「必要时先用 COPY 把旧文件清零」「路径要转 C 字符串」这些细节都在
-//   duckfn::file 内部处理，调用方只表达意图（覆盖 / 不许覆盖 / 追加，文本 / 字节）。
+//   duckfn::duck_vfs 内部处理，调用方只表达意图（覆盖 / 不许覆盖 / 追加，文本 / 字节）。
 //
-//   The convenience layer (`duckfn::file`, Hutool `FileUtil` style) sits on top of the raw form
-//   above: callers state intent (replace / fail if exists / append, text or bytes) and duckfn::file
-//   deals with the rest — the C API's missing truncate, the zeroing COPY, and C-string paths.
+//   The convenience layer (`duckfn::duck_vfs`, Hutool `FileUtil` style) sits on top of the raw form
+//   above: callers state intent (replace / fail if exists / append, text or bytes) and
+//   duckfn::duck_vfs deals with the rest — the C API's missing truncate, the zeroing COPY, and
+//   C-string paths.
 //
 //   写函数都标了 volatile：DuckDB 不会把常量参数的调用折叠成只执行一次，否则
 //   `SELECT dfn_file_write_text('a.txt', 'x')` 可能只在一个分片里执行。
@@ -181,7 +183,7 @@ fn read_error(path: &str, error: ErrorData) -> quack_rs::error::ExtensionError {
 /// ```
 #[duck_scalar_function]
 fn dfn_file_read_text(path: String) -> DuckOptionResult<String> {
-    Ok(Some(duckfn::file::read_string(&path)?))
+    Ok(Some(duckfn::duck_vfs::read_string(&path)?))
 }
 
 /// 读原始字节（BLOB）。
@@ -191,7 +193,7 @@ fn dfn_file_read_text(path: String) -> DuckOptionResult<String> {
 #[duck_scalar_function]
 fn dfn_file_read_bytes(path: String) -> DuckOptionResult<DuckBlob> {
     Ok(Some(DuckBlob {
-        value: duckfn::file::read(&path)?,
+        value: duckfn::duck_vfs::read(&path)?,
     }))
 }
 
@@ -201,7 +203,7 @@ fn dfn_file_read_bytes(path: String) -> DuckOptionResult<DuckBlob> {
 /// ```
 #[duck_scalar_function]
 fn dfn_file_read_text_lossy(path: String) -> DuckOptionResult<String> {
-    Ok(Some(duckfn::file::read_string_lossy(&path)?))
+    Ok(Some(duckfn::duck_vfs::read_string_lossy(&path)?))
 }
 
 /// 按行读文本：`\n` 分行、行尾 `\r` 去掉、末尾换行不产生空行。
@@ -210,7 +212,7 @@ fn dfn_file_read_text_lossy(path: String) -> DuckOptionResult<String> {
 /// ```
 #[duck_scalar_function]
 fn dfn_file_read_lines(path: String) -> DuckOptionResult<Vec<String>> {
-    Ok(Some(duckfn::file::read_lines(&path)?))
+    Ok(Some(duckfn::duck_vfs::read_lines(&path)?))
 }
 
 /// 覆盖写 UTF-8 文本，返回写入的字节数。
@@ -219,7 +221,7 @@ fn dfn_file_read_lines(path: String) -> DuckOptionResult<Vec<String>> {
 /// ```
 #[duck_scalar_function(volatile = true)]
 fn dfn_file_write_text(path: String, text: String) -> DuckOptionResult<i64> {
-    duckfn::file::write_string(&path, &text)?;
+    duckfn::duck_vfs::write_string(&path, &text)?;
     Ok(Some(text.len() as i64))
 }
 
@@ -229,7 +231,7 @@ fn dfn_file_write_text(path: String, text: String) -> DuckOptionResult<i64> {
 /// ```
 #[duck_scalar_function(volatile = true)]
 fn dfn_file_write_bytes(path: String, data: DuckBlob) -> DuckOptionResult<i64> {
-    duckfn::file::write(&path, &data.value)?;
+    duckfn::duck_vfs::write(&path, &data.value)?;
     Ok(Some(data.value.len() as i64))
 }
 
@@ -239,7 +241,7 @@ fn dfn_file_write_bytes(path: String, data: DuckBlob) -> DuckOptionResult<i64> {
 /// ```
 #[duck_scalar_function(volatile = true)]
 fn dfn_file_write_text_new(path: String, text: String) -> DuckOptionResult<i64> {
-    duckfn::file::write_string_with(&path, &text, duckfn::file::WriteMode::FailIfExists)?;
+    duckfn::duck_vfs::write_string_with(&path, &text, duckfn::duck_vfs::WriteMode::FailIfExists)?;
     Ok(Some(text.len() as i64))
 }
 
@@ -249,7 +251,7 @@ fn dfn_file_write_text_new(path: String, text: String) -> DuckOptionResult<i64> 
 /// ```
 #[duck_scalar_function(volatile = true)]
 fn dfn_file_append_text(path: String, text: String) -> DuckOptionResult<i64> {
-    duckfn::file::append_string(&path, &text)?;
+    duckfn::duck_vfs::append_string(&path, &text)?;
     Ok(Some(text.len() as i64))
 }
 
@@ -260,7 +262,7 @@ fn dfn_file_append_text(path: String, text: String) -> DuckOptionResult<i64> {
 #[duck_scalar_function]
 fn dfn_file_size(path: String) -> DuckOptionResult<i64> {
     Ok(Some(
-        i64::try_from(duckfn::file::size(&path)?).unwrap_or(i64::MAX),
+        i64::try_from(duckfn::duck_vfs::size(&path)?).unwrap_or(i64::MAX),
     ))
 }
 
@@ -270,5 +272,5 @@ fn dfn_file_size(path: String) -> DuckOptionResult<i64> {
 /// ```
 #[duck_scalar_function]
 fn dfn_file_exists(path: String) -> bool {
-    duckfn::file::exists(&path)
+    duckfn::duck_vfs::exists(&path)
 }

@@ -22,13 +22,13 @@ default = []
 
 # DuckDB 1.5 新增能力的支持：开启 quack-rs 的 duckdb-1-5，从而拿到 1.5 的新逻辑类型
 # （TypeId::TimeNs / Value::as_time_ns）、COPY 函数相关的 *Info 类型，以及客户端上下文 /
-# 宿主文件系统（duckfn::with_file_system 等，见 duckfn/src/vfs.rs）。
+# 宿主文件系统（duckfn::duck_vfs::with_file_system 等，见 duckfn/src/duck_vfs/）。
 # 要求 libduckdb-sys 使用 >= 1.5 的头文件。
 #
 # Support for what DuckDB 1.5 added: forwards to quack-rs' `duckdb-1-5` feature, which exposes the
 # new logical types (`TypeId::TimeNs` / `Value::as_time_ns`), the copy-function `*Info` types, and
-# the client context / host file system (`duckfn::with_file_system` and friends, see
-# duckfn/src/vfs.rs). Requires libduckdb-sys with >= 1.5 headers.
+# the client context / host file system (`duckfn::duck_vfs::with_file_system` and friends, see
+# duckfn/src/duck_vfs/). Requires libduckdb-sys with >= 1.5 headers.
 duckdb-1-5 = ["quack-rs/duckdb-1-5"]
 
 [dependencies]

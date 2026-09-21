@@ -54,9 +54,8 @@ take-ups report the recorded reason.
 ```rust
 use std::ffi::CString;
 
-use duckfn::{
-    DuckAggregateState, DuckResult, ErrorData, FileOpenOptions, duck_aggregate_function, duck_error,
-};
+use duckfn::duck_vfs::{ErrorData, FileOpenOptions};
+use duckfn::{DuckAggregateState, DuckResult, duck_aggregate_function, duck_error};
 
 #[derive(Default, Debug, Clone)]
 struct FileSizeState {
@@ -79,7 +78,7 @@ impl DuckAggregateState for FileSizeState {
 fn dfn_agg_file_size(path: String, state: &mut FileSizeState) -> DuckResult<()> {
     let path = CString::new(path)
         .map_err(|_| duck_error("dfn_agg_file_size: path contains a NUL byte"))?;
-    state.total += duckfn::with_file_system(|fs| {
+    state.total += duckfn::duck_vfs::with_file_system(|fs| {
         let handle = fs
             .open(&path, &FileOpenOptions::read_only())
             .map_err(file_error)?;
@@ -102,31 +101,31 @@ Three entry points are available:
 
 | Entry point | Use it when |
 | --- | --- |
-| `duckfn::with_file_system(\|fs\| …)` | You read inside one closure and nothing escapes — the least error-prone form |
-| `duckfn::file_system()` | You want to hold the guard; it implements `Deref<Target = FileSystem>`, so `open()` is available directly |
-| `duckfn::client_context()` | You need connection-level configuration or the connection ID (note that `catalog` needs an active transaction and returns `None` on an idle connection) |
+| `duckfn::duck_vfs::with_file_system(\|fs\| …)` | You read inside one closure and nothing escapes — the least error-prone form |
+| `duckfn::duck_vfs::file_system()` | You want to hold the guard; it implements `Deref<Target = FileSystem>`, so `open()` is available directly |
+| `duckfn::duck_vfs::client_context()` | You need connection-level configuration or the connection ID (note that `catalog` needs an active transaction and returns `None` on an idle connection) |
 
 `FileSystem::open` takes a `&CStr`, and the `FileHandle` it returns implements `read` / `read_exact` /
 `read_to_end` / `write` / `write_all` / `seek` / `tell` / `size` / `sync` / `close`, closing itself on
-drop. `duckfn` re-exports `FileSystem`, `FileHandle`, `FileOpenOptions`, `FileFlag`, `ClientContext`
-and `ErrorData`, so you do not have to depend on `quack-rs` directly.
+drop. `duckfn::duck_vfs` re-exports `FileSystem`, `FileHandle`, `FileOpenOptions`, `FileFlag`,
+`ClientContext` and `ErrorData`, so you do not have to depend on `quack-rs` directly.
 
-## Convenience helpers (`duckfn::file`)
+## Convenience helpers (`duckfn::duck_vfs`)
 
 Everything above is the raw form: you pick the open flags, hold the handle and push the bytes. Day to
-day that is more ceremony than most callers want, so `duckfn::file` offers Hutool-`FileUtil`-style
+day that is more ceremony than most callers want, so `duckfn::duck_vfs` offers Hutool-`FileUtil`-style
 one-liners:
 
 | Call | What it does |
 | --- | --- |
-| `file::read(path)` | Whole file as `Vec<u8>` |
-| `file::read_string(path)` | Whole file as UTF-8 (invalid bytes are an error) |
-| `file::read_string_lossy(path)` | Same, with invalid bytes replaced by `U+FFFD` |
-| `file::read_lines(path)` | UTF-8 lines (`\n` split, trailing `\r` stripped, no empty last line) |
-| `file::write(path, bytes)` / `file::write_string(path, text)` | Replace the file with exactly these bytes |
-| `file::write_with(path, bytes, mode)` / `file::write_string_with(path, text, mode)` | Same, with an explicit `WriteMode` |
-| `file::append(path, bytes)` / `file::append_string(path, text)` | Append, creating the file when missing |
-| `file::size(path)` / `file::exists(path)` | Byte count / existence |
+| `duck_vfs::read(path)` | Whole file as `Vec<u8>` |
+| `duck_vfs::read_string(path)` | Whole file as UTF-8 (invalid bytes are an error) |
+| `duck_vfs::read_string_lossy(path)` | Same, with invalid bytes replaced by `U+FFFD` |
+| `duck_vfs::read_lines(path)` | UTF-8 lines (`\n` split, trailing `\r` stripped, no empty last line) |
+| `duck_vfs::write(path, bytes)` / `duck_vfs::write_string(path, text)` | Replace the file with exactly these bytes |
+| `duck_vfs::write_with(path, bytes, mode)` / `duck_vfs::write_string_with(path, text, mode)` | Same, with an explicit `WriteMode` |
+| `duck_vfs::append(path, bytes)` / `duck_vfs::append_string(path, text)` | Append, creating the file when missing |
+| `duck_vfs::size(path)` / `duck_vfs::exists(path)` | Byte count / existence |
 
 `WriteMode` is the interesting part:
 
@@ -137,24 +136,24 @@ one-liners:
 | `Append` | Append to the end, creating the file when missing. |
 
 ```rust
-use duckfn::file::{self, WriteMode};
+use duckfn::duck_vfs::{self, WriteMode};
 
-file::write_string("report.html", render())?;                        // replace
-file::append_string("report.log", "one more line\n")?;               // append
-file::write_string_with("once.txt", "x", WriteMode::FailIfExists)?;  // error if it exists
+duck_vfs::write_string("report.html", render())?;                        // replace
+duck_vfs::append_string("report.log", "one more line\n")?;               // append
+duck_vfs::write_string_with("once.txt", "x", WriteMode::FailIfExists)?;  // error if it exists
 
-let text = file::read_string("report.html")?;
-let lines = file::read_lines("report.log")?;
-let bytes = file::size("report.html")?;
+let text = duck_vfs::read_string("report.html")?;
+let lines = duck_vfs::read_lines("report.log")?;
+let bytes = duck_vfs::size("report.html")?;
 ```
 
 Everything under this layer — the shared connection, the C-string conversion, the zeroing `COPY` —
 is an implementation detail, and the behaviour is what callers should rely on: if DuckDB ever grows
-truncate in the C API, only `duckfn::file` changes.
+truncate in the C API, only `duckfn::duck_vfs` changes.
 
 There is no `delete`: the C API has neither remove nor move, and DuckDB ships no `remove_file`
 function — overwrite with empty contents to clear a file. Each call takes the shared connection for
-itself, so do not call `file::*` from inside a `with_file_system` closure (that deadlocks), and
+itself, so do not call `duck_vfs::*` from inside a `with_file_system` closure (that deadlocks), and
 concurrent calls serialize against each other.
 
 ## Concurrency and cost
@@ -192,6 +191,6 @@ handler returning `Err` fails the query (the adapter reports it through
 
 The example extension uses this from an aggregate (`dfn_agg_file_size` in
 `src/extension/functions/file_system.rs`), and `test/sql/functions/file_system.test` checks the
-results against DuckDB's own `read_blob`. The `duckfn::file` helpers — round-trips, overwriting a
+results against DuckDB's own `read_blob`. The `duckfn::duck_vfs` helpers — round-trips, overwriting a
 longer file, append, fail-if-exists, invalid UTF-8, line splitting — are covered by
 `test/sql/functions/file_util.test`.

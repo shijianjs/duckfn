@@ -1,10 +1,10 @@
 # name: test/sql/functions/file_util.test
-# description: duckfn::file 便捷读写（Hutool FileUtil 风格）：UTF-8 字符串 / 字节数组的读与写、覆盖策略 Replace / FailIfExists / Append、size / exists / read_lines，含覆盖更长旧文件（C API 没有 truncate）与非法 UTF-8
+# description: duckfn::duck_vfs 便捷读写（Hutool FileUtil 风格）：UTF-8 字符串 / 字节数组的读与写、覆盖策略 Replace / FailIfExists / Append、size / exists / read_lines，含覆盖更长旧文件（C API 没有 truncate）与非法 UTF-8
 # group: [functions]
 
 require rusty_quack
 
-# 这一组测 duckfn::file 这层便利 API（调用方只表达意图）；底层 VFS 形态（with_file_system、
+# 这一组测 duckfn::duck_vfs 这层便利 API（调用方只表达意图）；底层 VFS 形态（with_file_system、
 # 聚合里读文件）在 file_system.test 里。比对一律用 DuckDB 内置的 read_text / read_blob，
 # 读写走同一套文件系统；长度用 octet_length / length 现推，不写死平台相关字节数。
 # __TEST_DIR__ 是测试运行器提供的目录（就是 test/sql）。
@@ -42,7 +42,7 @@ SELECT dfn_file_write_text('__TEST_DIR__/dfn_file_a.txt', 'hello 世界');
 12
 
 # ============================================================================
-# 不存在的文件：exists 为 false，读与取长度报错（错误文案带 duckfn::file:: 前缀）
+# 不存在的文件：exists 为 false，读与取长度报错（错误文案带 duckfn::duck_vfs:: 前缀）
 # ============================================================================
 
 query I
@@ -53,18 +53,18 @@ SELECT dfn_file_exists(p)::INT FROM (VALUES ('__TEST_DIR__/dfn_file_missing.txt'
 statement error
 SELECT dfn_file_read_text(p) FROM (VALUES ('__TEST_DIR__/dfn_file_missing.txt')) t(p);
 ----
-duckfn::file::read
+duckfn::duck_vfs::read
 
 statement error
 SELECT dfn_file_size(p) FROM (VALUES ('__TEST_DIR__/dfn_file_missing.txt')) t(p);
 ----
-duckfn::file::size
+duckfn::duck_vfs::size
 
 # 路径含 NUL 字节：转 C 字符串时就挡住，exists 也直接给 false
 statement error
 SELECT dfn_file_read_text(p) FROM (VALUES ('a' || chr(0) || 'b')) t(p);
 ----
-duckfn::file::read: the path contains a NUL byte
+duckfn::duck_vfs::read: the path contains a NUL byte
 
 query I
 SELECT dfn_file_exists(p)::INT FROM (VALUES ('a' || chr(0) || 'b')) t(p);
@@ -153,7 +153,7 @@ SELECT dfn_file_write_text('__TEST_DIR__/dfn_file_existing.txt', 'first');
 statement error
 SELECT dfn_file_write_text_new('__TEST_DIR__/dfn_file_existing.txt', 'second');
 ----
-duckfn::file::write
+duckfn::duck_vfs::write
 
 # 报错之后原文件必须原封不动
 query I

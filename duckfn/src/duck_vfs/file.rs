@@ -1,6 +1,7 @@
-//! 宿主文件的便捷读写（Hutool `FileUtil` 风格）。
+//! 宿主文件的便捷读写（Hutool `FileUtil` 风格）：[`crate::duck_vfs`] 的便捷层。
 //!
-//! Convenience helpers for reading and writing host files (in the spirit of Hutool's `FileUtil`).
+//! Convenience helpers for reading and writing host files (in the spirit of Hutool's `FileUtil`):
+//! the convenience layer of [`crate::duck_vfs`].
 //!
 //! 这里只做四件事：**读字节 / 读字符串 / 写字节 / 写字符串**，外加 `append`、`size`、`exists`；
 //! 全部经 DuckDB 的虚拟文件系统（VFS），所以本地磁盘、内存文件系统、`httpfs` 的
@@ -14,16 +15,16 @@
 //! # 用法 / Usage
 //!
 //! ```ignore
-//! use duckfn::file::{self, WriteMode};
+//! use duckfn::duck_vfs::{self, WriteMode};
 //!
-//! file::write_string("report.html", "<h1>hi</h1>")?;          // 覆盖写（默认）
-//! file::append_string("report.html", "\n<!-- tail -->")?;     // 追加
-//! file::write_string_with("report.html", "x", WriteMode::FailIfExists)?;  // 已存在就报错
+//! duck_vfs::write_string("report.html", "<h1>hi</h1>")?;          // 覆盖写（默认）
+//! duck_vfs::append_string("report.html", "\n<!-- tail -->")?;     // 追加
+//! duck_vfs::write_string_with("report.html", "x", WriteMode::FailIfExists)?;  // 已存在就报错
 //!
-//! let text = file::read_string("report.html")?;
-//! let bytes = file::read("report.html")?;
-//! let lines = file::read_lines("report.html")?;
-//! assert!(file::exists("report.html"));
+//! let text = duck_vfs::read_string("report.html")?;
+//! let bytes = duck_vfs::read("report.html")?;
+//! let lines = duck_vfs::read_lines("report.html")?;
+//! assert!(duck_vfs::exists("report.html"));
 //! # let _ = (text, bytes, lines);
 //! ```
 //!
@@ -36,8 +37,9 @@
 //!   用 `OverwriteExistingFile` 真替换目标），再写正文。**行为是「覆盖」，与未来 C API 支持
 //!   truncate 后应当完全一致**，届时内部实现可以整体换掉而不影响调用方。
 //! - **路径转 C 字符串**：DuckDB 的 C API 收 `CStr`，含 NUL 字节的路径在这里就被拒绝。
-//! - **并发**：每次调用都借 duckfn 注册期留下的那条自有连接（详见 `duckfn::with_file_system`
-//!   的文档），同一时刻只有一条线程经由此连接做 I/O，读多个文件时不要嵌套调用。
+//! - **并发**：每次调用都借 duckfn 注册期留下的那条自有连接（详见
+//!   `duckfn::duck_vfs::with_file_system` 的文档），同一时刻只有一条线程经由此连接做 I/O，
+//!   读多个文件时不要嵌套调用。
 //!
 //! - **Overwriting a longer file**: DuckDB's C API has no truncate (`DUCKDB_FILE_FLAG_CREATE` only
 //!   maps to POSIX `O_CREAT` / Windows `OPEN_ALWAYS`; the flag that maps to `O_TRUNC` /
@@ -50,8 +52,8 @@
 //! - **Paths become C strings**: DuckDB's C API takes `CStr`, so a path containing a NUL byte is
 //!   rejected here.
 //! - **Concurrency**: every call borrows the owned connection duckfn keeps from registration time
-//!   (see `duckfn::with_file_system`); one thread at a time goes through it, and nested take-ups
-//!   deadlock.
+//!   (see `duckfn::duck_vfs::with_file_system`); one thread at a time goes through it, and nested
+//!   take-ups deadlock.
 //!
 //! # 已知限制 / Known limitations
 //!
@@ -72,7 +74,7 @@ use std::str::Utf8Error;
 use quack_rs::error::ExtensionError;
 use quack_rs::file_system::{FileFlag, FileOpenOptions};
 
-use crate::vfs::DuckFileSystem;
+use super::capture::{DuckFileSystem, file_system, with_file_system};
 use crate::{DuckResult, duck_error};
 
 /// 写文件时如何对待已存在的文件。
@@ -126,7 +128,7 @@ const ZERO_FILE_SQL: &str = "COPY (SELECT 1 AS i WHERE false) TO ? (FORMAT csv, 
 /// read.
 pub fn read(path: &str) -> DuckResult<Vec<u8>> {
     let c_path = path_c_string("read", path)?;
-    crate::vfs::with_file_system(|file_system| {
+    with_file_system(|file_system| {
         let handle = file_system
             .open(&c_path, &FileOpenOptions::read_only())
             .map_err(|error| file_error("read", path, error))?;
@@ -227,7 +229,7 @@ pub fn write_string(path: &str, text: &str) -> DuckResult<()> {
 /// the write fails; with `WriteMode::FailIfExists` an existing file is an error too.
 pub fn write_with(path: &str, bytes: &[u8], mode: WriteMode) -> DuckResult<()> {
     let c_path = path_c_string("write", path)?;
-    let file_system = crate::vfs::file_system()?;
+    let file_system = file_system()?;
     match mode {
         WriteMode::FailIfExists => {
             // 用手里这个 guard 做检查（不能再调 `exists`：那会二次上锁 → 死锁）。
@@ -239,7 +241,7 @@ pub fn write_with(path: &str, bytes: &[u8], mode: WriteMode) -> DuckResult<()> {
                 .is_ok()
             {
                 return Err(duck_error(format!(
-                    "duckfn::file::write: '{path}' already exists and WriteMode::FailIfExists was \
+                    "duckfn::duck_vfs::write: '{path}' already exists and WriteMode::FailIfExists was \
                      requested; delete it or write to another path"
                 )));
             }
@@ -327,7 +329,7 @@ pub fn append_string(path: &str, text: &str) -> DuckResult<()> {
 /// cannot be read.
 pub fn size(path: &str) -> DuckResult<u64> {
     let c_path = path_c_string("size", path)?;
-    crate::vfs::with_file_system(|file_system| {
+    with_file_system(|file_system| {
         let handle = file_system
             .open(&c_path, &FileOpenOptions::read_only())
             .map_err(|error| file_error("size", path, error))?;
@@ -353,7 +355,7 @@ pub fn exists(path: &str) -> bool {
         return false;
     };
     matches!(
-        crate::vfs::with_file_system(|file_system| Ok(file_system
+        with_file_system(|file_system| Ok(file_system
             .open(&c_path, &FileOpenOptions::read_only())
             .is_ok())),
         Ok(true)
@@ -409,7 +411,7 @@ fn existing_len(file_system: &DuckFileSystem, c_path: &CString, path: &str) -> D
 fn zero_file(file_system: &DuckFileSystem, path: &str) -> DuckResult<()> {
     let explanation = || {
         format!(
-            "duckfn::file: cannot replace '{path}': the file already exists and is longer than the \
+            "duckfn::duck_vfs: cannot replace '{path}': the file already exists and is longer than the \
              new contents, and zeroing it with COPY failed"
         )
     };
@@ -432,7 +434,7 @@ fn zero_file(file_system: &DuckFileSystem, path: &str) -> DuckResult<()> {
 fn path_c_string(operation: &str, path: &str) -> DuckResult<CString> {
     CString::new(path).map_err(|_| {
         duck_error(format!(
-            "duckfn::file::{operation}: the path contains a NUL byte: {path:?}"
+            "duckfn::duck_vfs::{operation}: the path contains a NUL byte: {path:?}"
         ))
     })
 }
@@ -442,7 +444,7 @@ fn path_c_string(operation: &str, path: &str) -> DuckResult<CString> {
 /// Turns the file system's structured error into a query error tagged with the operation and path.
 fn file_error(operation: &str, path: &str, error: quack_rs::error_data::ErrorData) -> ExtensionError {
     duck_error(format!(
-        "duckfn::file::{operation}: '{path}': {}",
+        "duckfn::duck_vfs::{operation}: '{path}': {}",
         error
             .message()
             .unwrap_or_else(|| String::from("unknown file system error"))
@@ -454,7 +456,7 @@ fn file_error(operation: &str, path: &str, error: quack_rs::error_data::ErrorDat
 /// Turns invalid UTF-8 into a query error that names the offending byte.
 fn utf8_error(path: &str, error: Utf8Error) -> ExtensionError {
     duck_error(format!(
-        "duckfn::file::read_string: '{path}' is not valid UTF-8 (invalid byte at offset {}); use \
+        "duckfn::duck_vfs::read_string: '{path}' is not valid UTF-8 (invalid byte at offset {}); use \
          read_string_lossy to replace it or read for raw bytes",
         error.valid_up_to()
     ))
@@ -497,7 +499,7 @@ mod tests {
     #[test]
     fn path_with_nul_byte_is_rejected() {
         let error = path_c_string("read", "a\0b").expect_err("NUL must be rejected");
-        assert!(error.as_str().contains("duckfn::file::read"), "{error}");
+        assert!(error.as_str().contains("duckfn::duck_vfs::read"), "{error}");
         assert!(error.as_str().contains("NUL"), "{error}");
         assert!(path_c_string("read", "plain/path.txt").is_ok());
     }
