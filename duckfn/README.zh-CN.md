@@ -35,7 +35,7 @@
 
 ```toml
 [dependencies]
-duckfn = "0.0.6"
+duckfn = "0.0.7"
 
 # duckfn 本身就建立在下面两个 crate 之上；需要直接使用它们的类型或 builder 时显式加上。
 quack-rs = "0.16.0"
@@ -52,7 +52,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 （目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问：
 
 ```toml
-duckfn = { version = "0.0.6", features = ["duckdb-1-5"] }
+duckfn = { version = "0.0.7", features = ["duckdb-1-5"] }
 ```
 
 ## 快速开始
