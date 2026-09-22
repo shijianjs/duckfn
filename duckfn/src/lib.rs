@@ -50,6 +50,11 @@ pub(crate) mod register;
 /// Function-level extra data (the DuckDB C API's `extra_info`): [`DuckExtraInfo`] and the read
 /// helpers.
 pub(crate) mod extra_info;
+/// 函数文档元数据的收集与导出（社区扩展文档页需要的 `function_descriptions.csv`）。
+///
+/// Collection and export of the function documentation metadata (the
+/// `function_descriptions.csv` the community-extension doc pages need).
+pub(crate) mod doc;
 /// 各类函数（标量/聚合/表/cast/SQL 宏/replacement scan）的适配层 trait。
 ///
 /// Adapter traits for every function kind (scalar/aggregate/table/cast/SQL macro/
@@ -103,6 +108,10 @@ pub use register::*;
 //
 // Function-level extra data (`extra_info`).
 pub use extra_info::*;
+// 函数文档元数据的收集与导出。
+//
+// Collection and export of the function documentation metadata.
+pub use doc::*;
 // `inventory::submit!` 的再导出，供宏生成的代码调用。
 //
 // Re-export of `inventory::submit!` so that macro-generated code can call it.

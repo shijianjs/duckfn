@@ -3,7 +3,8 @@
 //! Code generation behind `#[duck_scalar_function]`.
 
 use crate::common::{
-    FnArgWrapper, ItemFnWrapper, handle_duck_function, null_handling_override,
+    DuckDocArgs, DuckDocArgsProvider, FnArgWrapper, ItemFnWrapper, handle_duck_function,
+    null_handling_override,
 };
 use crate::macro_utils::{TokenStream2Result, extract_generic_arg_type};
 use darling::FromMeta;
@@ -53,6 +54,21 @@ pub(crate) struct DuckScalarFunctionArgs {
     /// 指定重载函数集的名称：设置后不注册自身的函数名，只把本签名作为重载挂到该函数集上
     /// （同名重载由 `duckfn::register_all_scalar_overload` 分组注册）。
     pub(crate) overloads_name: Option<String>,
+
+    /// 文档参数：`description` / `comment` / `example`（`examples`）。
+    ///
+    /// Documentation arguments: `description` / `comment` / `example` (`examples`).
+    #[darling(flatten)]
+    pub(crate) doc: DuckDocArgs,
+}
+
+/// 让公共代码拿到 `#[duck_scalar_function]` 的文档参数。
+///
+/// Hands `#[duck_scalar_function]`'s documentation arguments to the shared code.
+impl DuckDocArgsProvider for DuckScalarFunctionArgs {
+    fn duck_doc(&self) -> DuckDocArgs {
+        self.doc.clone()
+    }
 }
 
 /// `#[duck_scalar_function]` 的入口：解析自己的参数后生成代码。

@@ -20,7 +20,17 @@ use quack_rs::prelude::{Connection, Registrar, ScalarFunctionSetBuilder};
 /// ```sql
 /// SELECT dfn_scalar_ret_plain(21);
 /// ```
-#[duck_scalar_function]
+///
+/// `description` / `example` 是给社区扩展文档页用的元数据：它们不参与注册，只被收集进
+/// `function_descriptions.csv`（见 `docs/docs/community-extension-docs.md`）。
+///
+/// `description` / `example` are metadata for the community-extension doc pages: they take no
+/// part in registration and are only collected into `function_descriptions.csv` (see
+/// `docs/docs/community-extension-docs.md`).
+#[duck_scalar_function(
+    description = "Doubles an INTEGER, the simplest possible scalar function",
+    example = "SELECT dfn_scalar_ret_plain(21)"
+)]
 fn dfn_scalar_ret_plain(i: i32) -> i32 {
     i * 2
 }

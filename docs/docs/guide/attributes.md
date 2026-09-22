@@ -30,12 +30,16 @@ are supported.
 ## Arguments
 
 Each macro declares only the arguments it actually uses; a key that the macro does not know is a
-compile error. `#[duck_custom_register]` and `#[duck_sql_macro]` take no arguments at all.
+compile error. `#[duck_custom_register]` takes no arguments at all.
 
 | Argument | Used by | Default | Meaning |
 | --- | --- | --- | --- |
 | `auto_register` | every `#[duck_*]` attribute | `true` | `false` generates the builders but does not register the function. |
 | `named_param_from` | `#[duck_table_function]`, `#[derive(DuckStruct)]` | — | For table functions: the argument from which on everything is a named parameter. |
+| `description` | every `#[duck_*]` attribute that registers a function | — | One-line summary of the function, exported to `function_descriptions.csv`. See [Community extension docs](../community-extension-docs.md). |
+| `comment` | every `#[duck_*]` attribute that registers a function | — | Extra remarks, exported as the CSV's `comment` column. |
+| `example` | every `#[duck_*]` attribute that registers a function | — | A single usage example: `example = "SELECT ..."`. |
+| `examples` | every `#[duck_*]` attribute that registers a function | — | Several usage examples: `examples = ["SELECT ...", "..."]`. Cannot be combined with `example`. |
 | `special_null_handling` | `#[duck_scalar_function]`, `#[duck_aggregate_function]` | `false` | Ask DuckDB to hand `NULL` arguments to the callback instead of folding them away. See [Scalar functions](./scalar-functions.md#null-handling). |
 | `volatile` | `#[duck_scalar_function]` | `false` | Mark the function volatile, so registration calls `duckdb_scalar_function_set_volatile` and DuckDB neither caches nor reuses calls with the same arguments. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#volatile). |
 | `varargs` | `#[duck_scalar_function]` | `false` | Enable variadic arguments. The last parameter must be `Vec<T>` and `T`'s logical type is passed to `duckdb_scalar_function_set_varargs`. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#variadic-arguments). |

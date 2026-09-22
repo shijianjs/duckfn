@@ -56,6 +56,15 @@ config_env:
 doc:
     cargo doc -p duckfn
 
+# 生成社区扩展文档页用的 function_descriptions.csv：just docs_csv
+# （描述写在 #[duck_*] 属性上，加载扩展时由 duckfn 导出）
+docs_csv out="docs/function_descriptions.csv":
+    bash scripts/function_descriptions.sh gen "{{out}}"
+
+# 校验已提交的 CSV 与当前扩展是否一致；有差异非零退出，可接 CI
+docs_csv_check csv="docs/function_descriptions.csv":
+    bash scripts/function_descriptions.sh check "{{csv}}"
+
 # ==== 官方 makefile 流程：sqllogictest 与 CI 走这条 ====
 
 # 初始化 extension-ci-tools（生成 configure/ 与 python venv）；只需一次

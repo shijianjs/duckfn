@@ -2,7 +2,7 @@
 //!
 //! Code generation behind `#[duck_copy_function]`.
 
-use crate::common::{ItemFnWrapper, handle_duck_function};
+use crate::common::{DuckDocArgs, DuckDocArgsProvider, ItemFnWrapper, handle_duck_function};
 use crate::macro_utils::TokenStream2Result;
 use darling::FromMeta;
 use proc_macro::TokenStream;
@@ -25,6 +25,21 @@ pub(crate) struct DuckCopyFunctionArgs {
     /// 是否自动注册，默认 `true`；设为 `false` 时只生成 builder，交给
     /// `#[duck_custom_register]` 手动注册。
     pub(crate) auto_register: Option<bool>,
+
+    /// 文档参数：`description` / `comment` / `example`（`examples`）。
+    ///
+    /// Documentation arguments: `description` / `comment` / `example` (`examples`).
+    #[darling(flatten)]
+    pub(crate) doc: DuckDocArgs,
+}
+
+/// 让公共代码拿到 `#[duck_copy_function]` 的文档参数。
+///
+/// Hands `#[duck_copy_function]`'s documentation arguments to the shared code.
+impl DuckDocArgsProvider for DuckCopyFunctionArgs {
+    fn duck_doc(&self) -> DuckDocArgs {
+        self.doc.clone()
+    }
 }
 
 /// `#[duck_copy_function]` 的入口：解析自己的参数后生成代码。
@@ -61,6 +76,7 @@ impl ItemFnWrapper<DuckCopyFunctionArgs> {
         let item_fn = &self.item_fn;
         let (writer_type, call_args) = self.copy_to_signature()?;
         let function_register = self.copy_function_register()?;
+        let doc_submit = self.doc_inventory_submit(&name.to_string())?;
 
         Ok(quote! {
             #item_fn
@@ -104,6 +120,8 @@ impl ItemFnWrapper<DuckCopyFunctionArgs> {
 
                 #function_register
             }
+
+            #doc_submit
         })
     }
 

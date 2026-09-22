@@ -44,6 +44,7 @@
 | 错误与 panic | `../docs/docs/guide/errors-and-panics.md` | — |
 | 构建与发布 | `../docs/docs/build-and-release.md` | — |
 | 排错 | `../docs/docs/troubleshooting.md` | — |
+| 社区扩展文档页（`function_descriptions.csv`） | `../docs/docs/community-extension-docs.md` | `../src/extension/functions/*.rs`（带 `description` / `example` 的那几个） |
 
 ### 1.2 本地 cargo registry（没有 clone 时的替代品）
 
@@ -118,7 +119,10 @@ duckdb -unsigned -c "LOAD './target/debug/<扩展名>.duckdb_extension'; SELECT 
    `wasm_lib.rs` 仍然镜像。
 4. 加测试：`test/sql/<分类>/<名字>.test`，参照 `../test/sql/**/*.test` 的写法，
    至少覆盖：正常值、`NULL`、边界值、错误路径（`statement error`）。
-5. `cargo duckdb-ext build` → 手动 `LOAD` 跑一遍 → `make test`。
+5. 顺手写上 `description` / `example`：DuckDB 的 C API 没有设置函数描述与示例的接口，
+   社区扩展文档页全靠导出的 `docs/function_descriptions.csv` 覆盖，不写就是一片空白。
+6. `cargo duckdb-ext build` → 手动 `LOAD` 跑一遍 → `make test`。
+7. 扩展要作为社区扩展发布时：`just docs_csv` 重新生成 CSV，`just docs_csv_check` 确认没漏。
 
 ## 6. 代码约定
 

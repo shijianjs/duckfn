@@ -52,7 +52,10 @@ pub struct NamedValue {
 /// ```sql
 /// SELECT * FROM dfn_table_range(3);
 /// ```
-#[duck_table_function]
+#[duck_table_function(
+    description = "Emits n rows of (i, i*i), the simplest possible table function",
+    example = "SELECT * FROM dfn_table_range(3)"
+)]
 fn dfn_table_range(n: i64) -> impl Iterator<Item = RangeRow> {
     (0..n.max(0)).map(|i| RangeRow {
         n: i,

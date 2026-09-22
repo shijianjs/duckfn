@@ -76,6 +76,86 @@ pub(crate) struct ItemFnWrapper<A> {
     pub(crate) args: A,
 }
 
+/// `#[duck_*]` 属性上共享的「文档」参数：`description` / `comment` / `example` / `examples`。
+///
+/// 它们不参与注册，只被 [`ItemFnWrapper::doc_inventory_submit`] 收集成
+/// `duckfn::DuckFunctionDocItem`，供导出社区扩展文档页需要的
+/// `docs/function_descriptions.csv`（见 `duckfn::write_function_descriptions_csv`）。
+///
+/// DuckDB 的 C 扩展 API 没有设置函数 description / example 的接口（只有 name / varargs /
+/// return_type / volatile 这些），所以这类文本没法随扩展注册进 catalog，只能靠
+/// community-extensions 仓里的 CSV 覆盖 —— 这里是它们的唯一来源。
+///
+/// The documentation arguments shared by the `#[duck_*]` attributes: `description` / `comment` /
+/// `example` / `examples`. They take no part in registration; [`ItemFnWrapper::doc_inventory_submit`]
+/// collects them into a `duckfn::DuckFunctionDocItem`, which backs the
+/// `docs/function_descriptions.csv` needed by the community-extension doc pages (see
+/// `duckfn::write_function_descriptions_csv`). DuckDB's C extension API has no way to set a
+/// function's description or examples, so this is the only source for that text.
+#[derive(Debug, Default, Clone, FromMeta)]
+pub(crate) struct DuckDocArgs {
+    /// 函数的一句话说明，落在 CSV 的 `description` 列。
+    ///
+    /// One-line summary of the function; becomes the CSV's `description` column.
+    pub(crate) description: Option<String>,
+    /// 补充说明，落在 CSV 的 `comment` 列。
+    ///
+    /// Extra remarks; becomes the CSV's `comment` column.
+    pub(crate) comment: Option<String>,
+    /// 单条示例：`example = "SELECT ..."`。
+    ///
+    /// A single example: `example = "SELECT ..."`.
+    pub(crate) example: Option<String>,
+    /// 多条示例：`examples = ["SELECT ...", "SELECT ..."]`，导出时用 `, ` 拼进同一个字段。
+    ///
+    /// 用 `syn::LitStr` 而不是 `String`：darling 只为 `Vec<LitStr>` 这类具体类型实现了
+    /// `FromMeta`，没有 `Vec<String>` 的 blanket 实现。
+    ///
+    /// Several examples: `examples = ["SELECT ...", "SELECT ..."]`, joined with `", "` into the
+    /// single CSV field when exported. `syn::LitStr` rather than `String` because darling only
+    /// implements `FromMeta` for concrete types such as `Vec<LitStr>` — there is no blanket
+    /// `Vec<String>` impl.
+    pub(crate) examples: Option<Vec<syn::LitStr>>,
+}
+
+impl DuckDocArgs {
+    /// 四个键一个都没写时为 `true`：此时不产出文档项。
+    ///
+    /// `true` when none of the four keys was written; no documentation entry is emitted then.
+    fn is_empty(&self) -> bool {
+        self.description.is_none()
+            && self.comment.is_none()
+            && self.example.is_none()
+            && self.examples.is_none()
+    }
+
+    /// 最终的示例列表：`examples` 优先，其次单条 `example`。
+    ///
+    /// The resulting example list: `examples` wins, otherwise the single `example`.
+    fn example_list(&self) -> Vec<String> {
+        if let Some(many) = &self.examples {
+            return many.iter().map(|x| x.value()).collect();
+        }
+        self.example.clone().into_iter().collect()
+    }
+}
+
+/// 让公共代码（[`ItemFnWrapper::common_build`] 等）拿到某个宏的文档参数。
+///
+/// 只为「catalog 里会留下函数条目」的宏实现；`#[duck_replacement_scan]` 与
+/// `#[duck_custom_register]` 不实现，因此不会出现在导出的 CSV 里。
+///
+/// Lets shared code ([`ItemFnWrapper::common_build`] and friends) read a macro's documentation
+/// arguments. Implemented only by the macros that leave a function entry in the catalog;
+/// `#[duck_replacement_scan]` and `#[duck_custom_register]` do not implement it, so they never
+/// show up in the exported CSV.
+pub(crate) trait DuckDocArgsProvider {
+    /// 该宏解析到的文档参数。
+    ///
+    /// The documentation arguments parsed by this macro.
+    fn duck_doc(&self) -> DuckDocArgs;
+}
+
 impl<A> ItemFnWrapper<A> {
     /// 被标注函数的标识符（同时用作生成模块的名字）。
     ///
@@ -162,58 +242,6 @@ impl<A> ItemFnWrapper<A> {
         self.inventory_submit(quote! {
             use quack_rs::prelude::Registrar;
             #content
-        })
-    }
-
-    /// 把 `duck_function_impl` 包进与函数同名的模块，并先插入参数结构体 `DuckArgsImpl` 与
-    /// SQL 注册名常量 `SQL_NAME`。
-    ///
-    /// `fields` 是参与参数结构体的参数（标量函数的可变参数集合不入内），`named_param_from` 会
-    /// 转写成 `#[duck(named_param_from = "...")]` —— 各宏只把 derive 宏真正需要的键透传过去。
-    /// `sql_name` 是该函数注册进 DuckDB 时真正用的名字，由各宏给出（设了 `overloads_name` 时是
-    /// 函数集名，否则是函数名）。
-    ///
-    /// Wraps `duck_function_impl` in a module named after the function, prepending the argument
-    /// struct `DuckArgsImpl` and the `SQL_NAME` constant holding the SQL registration name.
-    /// `fields` are the parameters taking part in it (a scalar function's variadic collection is
-    /// left out) and `named_param_from` is written as `#[duck(named_param_from = "...")]` — each
-    /// macro forwards only the keys the derive macro actually needs. `sql_name` is the name the
-    /// function is really registered under, supplied by each macro (the function-set name when
-    /// `overloads_name` is set, the function name otherwise).
-    pub(crate) fn common_build(
-        &self,
-        fields: &[FnArgWrapper],
-        named_param_from: Option<&str>,
-        sql_name: &str,
-        duck_function_impl: TokenStream2,
-    ) -> TokenStream2Result {
-        let name = self.name();
-        let vis = self.visibility();
-        let duck_args = build_duck_args(fields, named_param_from)?;
-        let item_fn = &self.item_fn;
-        Ok(quote! {
-            #item_fn
-
-            #vis mod #name{
-                use super::*;
-
-                /// 本函数注册到 DuckDB 时使用的 SQL 名字。
-                ///
-                /// 与 `NAME` 的区别：`NAME` 是 Rust 函数名（只用于标识回调），当签名通过
-                /// `overloads_name = "..."` 挂到函数集上时，`NAME` 与真正的 SQL 名字并不相同。
-                /// 错误信息前缀、日志、以及需要在别处引用这个函数名时，读这里。
-                ///
-                /// The SQL name this function is registered under. Unlike `NAME`, which is the Rust
-                /// function name (only used to identify the callback), this is the name SQL actually
-                /// uses — and it differs from `NAME` when the signature is attached to a function
-                /// set through `overloads_name = "..."`. Read this for error prefixes, logging, or
-                /// whenever the function name is needed elsewhere.
-                pub const SQL_NAME: &str = #sql_name;
-
-                #duck_args
-
-                #duck_function_impl
-            }
         })
     }
 
@@ -313,6 +341,128 @@ impl<A> ItemFnWrapper<A> {
             DuckScalarResult::Plain | DuckScalarResult::Option => Ok(quote! { Ok(Some(result)) }),
             DuckScalarResult::DuckOptionResult => Ok(quote! { result }),
         }
+    }
+}
+
+/// 文档元数据 + 模块包装的公共生成逻辑。
+///
+/// 这一块单独带 `A: DuckDocArgsProvider` 约束，而不是给上面的 `impl<A> ItemFnWrapper<A>` 整块
+/// 加：后者还被 `#[duck_replacement_scan]`、`#[duck_custom_register]` 这些不需要文档参数的宏
+/// 用到，加了约束就得为它们也实现 trait。
+///
+/// Shared generation for the documentation metadata and the module wrapper. This block carries the
+/// `A: DuckDocArgsProvider` bound on its own rather than constraining the
+/// `impl<A> ItemFnWrapper<A>` block above: that one is also used by `#[duck_replacement_scan]` and
+/// `#[duck_custom_register]`, which need no documentation arguments and would otherwise have to
+/// implement the trait as well.
+impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
+    /// 把 `duck_function_impl` 包进与函数同名的模块，并先插入参数结构体 `DuckArgsImpl` 与
+    /// SQL 注册名常量 `SQL_NAME`；模块后面再挂上本函数的文档元数据提交（没写文档参数时为空）。
+    ///
+    /// `fields` 是参与参数结构体的参数（标量函数的可变参数集合不入内），`named_param_from` 会
+    /// 转写成 `#[duck(named_param_from = "...")]` —— 各宏只把 derive 宏真正需要的键透传过去。
+    /// `sql_name` 是该函数注册进 DuckDB 时真正用的名字，由各宏给出（设了 `overloads_name` 时是
+    /// 函数集名，否则是函数名）。
+    ///
+    /// Wraps `duck_function_impl` in a module named after the function, prepending the argument
+    /// struct `DuckArgsImpl` and the `SQL_NAME` constant holding the SQL registration name, and
+    /// appending this function's documentation-metadata submission (empty when no documentation
+    /// argument was written). `fields` are the parameters taking part in it (a scalar function's
+    /// variadic collection is left out) and `named_param_from` is written as
+    /// `#[duck(named_param_from = "...")]` — each macro forwards only the keys the derive macro
+    /// actually needs. `sql_name` is the name the function is really registered under, supplied by
+    /// each macro (the function-set name when `overloads_name` is set, the function name
+    /// otherwise).
+    pub(crate) fn common_build(
+        &self,
+        fields: &[FnArgWrapper],
+        named_param_from: Option<&str>,
+        sql_name: &str,
+        duck_function_impl: TokenStream2,
+    ) -> TokenStream2Result {
+        let name = self.name();
+        let vis = self.visibility();
+        let duck_args = build_duck_args(fields, named_param_from)?;
+        let item_fn = &self.item_fn;
+        let doc_submit = self.doc_inventory_submit(sql_name)?;
+        Ok(quote! {
+            #item_fn
+
+            #vis mod #name{
+                use super::*;
+
+                /// 本函数注册到 DuckDB 时使用的 SQL 名字。
+                ///
+                /// 与 `NAME` 的区别：`NAME` 是 Rust 函数名（只用于标识回调），当签名通过
+                /// `overloads_name = "..."` 挂到函数集上时，`NAME` 与真正的 SQL 名字并不相同。
+                /// 错误信息前缀、日志、以及需要在别处引用这个函数名时，读这里。
+                ///
+                /// The SQL name this function is registered under. Unlike `NAME`, which is the Rust
+                /// function name (only used to identify the callback), this is the name SQL actually
+                /// uses — and it differs from `NAME` when the signature is attached to a function
+                /// set through `overloads_name = "..."`. Read this for error prefixes, logging, or
+                /// whenever the function name is needed elsewhere.
+                pub const SQL_NAME: &str = #sql_name;
+
+                #duck_args
+
+                #duck_function_impl
+            }
+
+            #doc_submit
+        })
+    }
+
+    /// 生成 `duckfn::DuckFunctionDocItem` 的 inventory 提交：把 `description` / `comment` /
+    /// `example`（`examples`）连同该函数在 DuckDB 里的名字一起记下来，供导出
+    /// `docs/function_descriptions.csv` 使用。
+    ///
+    /// 四个键一个都没写时输出空内容（不占编译产物空间）；`example` 与 `examples` 同时出现是
+    /// 编译错误。
+    ///
+    /// Emits the `duckfn::DuckFunctionDocItem` inventory submission, recording `description` /
+    /// `comment` / `example` (`examples`) together with the name the function is registered under,
+    /// for the exported `docs/function_descriptions.csv`. Nothing is emitted when none of the four
+    /// keys was written; writing both `example` and `examples` is a compile error.
+    pub(crate) fn doc_inventory_submit(&self, sql_name: &str) -> TokenStream2Result {
+        let doc = self.args.duck_doc();
+        if doc.is_empty() {
+            return Ok(quote! {});
+        }
+        if doc.example.is_some() && doc.examples.is_some() {
+            return Err(syn::Error::new_spanned(
+                self.item_fn.sig.ident.to_owned(),
+                "`example` and `examples` are mutually exclusive: keep only one of them",
+            ));
+        }
+        let description = option_tokens(doc.description.clone());
+        let comment = option_tokens(doc.comment.clone());
+        let examples = doc.example_list();
+        Ok(quote! {
+            duckfn::inventory_submit! {
+                duckfn::DuckFunctionDocItem{
+                    function: #sql_name,
+                    description: #description,
+                    comment: #comment,
+                    examples: &[#(#examples),*],
+                }
+            }
+        })
+    }
+}
+
+/// 把 `Option<String>` 渲染成 `Some("...")` / `None`。
+///
+/// 不能直接用 `Option` 的 `ToTokens`：它在 `None` 时什么都不输出，结构体字面量会变成
+/// `comment: ,` 这样的语法错误。
+///
+/// Renders an `Option<String>` as `Some("...")` / `None`. `Option`'s `ToTokens` cannot be used
+/// directly: it emits nothing for `None`, which would turn the struct literal into a syntax error
+/// like `comment: ,`.
+fn option_tokens(value: Option<String>) -> TokenStream2 {
+    match value {
+        Some(value) => quote! { Some(#value) },
+        None => quote! { None },
     }
 }
 

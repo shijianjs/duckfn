@@ -48,7 +48,19 @@ impl DuckAggregateState for SumState {
 /// ```sql
 /// SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x);
 /// ```
-#[duck_aggregate_function]
+///
+/// 多条示例用 `examples = [...]`，导出时用 `, ` 拼进 CSV 的 `example` 列。
+///
+/// Several examples go into `examples = [...]`, joined with `", "` into the CSV's `example`
+/// column on export.
+#[duck_aggregate_function(
+    description = "Sums a BIGINT column, the simplest possible aggregate function",
+    comment = "NULL inputs are skipped, so an empty group yields NULL rather than 0",
+    examples = [
+        "SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x)",
+        "SELECT dfn_agg_sum(x) FROM range(10) t(x)"
+    ]
+)]
 fn dfn_agg_sum(input: i64, state: &mut SumState) {
     state.total += input;
     state.rows += 1;

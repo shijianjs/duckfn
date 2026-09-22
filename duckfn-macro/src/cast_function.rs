@@ -2,7 +2,7 @@
 //!
 //! Code generation behind `#[duck_cast_function]`.
 
-use crate::common::{ItemFnWrapper, handle_duck_function};
+use crate::common::{DuckDocArgs, DuckDocArgsProvider, ItemFnWrapper, handle_duck_function};
 use crate::macro_utils::TokenStream2Result;
 use darling::FromMeta;
 use proc_macro::TokenStream;
@@ -32,6 +32,21 @@ pub(crate) struct DuckCastFunctionArgs {
     /// `#[duck_cast_function(implicit_cost = 100)]`. Implicit-cast cost: once set, DuckDB may
     /// insert this cast automatically, and a smaller value means higher priority.
     pub(crate) implicit_cost: Option<i64>,
+
+    /// 文档参数：`description` / `comment` / `example`（`examples`）。
+    ///
+    /// Documentation arguments: `description` / `comment` / `example` (`examples`).
+    #[darling(flatten)]
+    pub(crate) doc: DuckDocArgs,
+}
+
+/// 让公共代码拿到 `#[duck_cast_function]` 的文档参数。
+///
+/// Hands `#[duck_cast_function]`'s documentation arguments to the shared code.
+impl DuckDocArgsProvider for DuckCastFunctionArgs {
+    fn duck_doc(&self) -> DuckDocArgs {
+        self.doc.clone()
+    }
 }
 
 /// `#[duck_cast_function]` 的入口：解析自己的参数后生成代码。
@@ -62,6 +77,7 @@ impl ItemFnWrapper<DuckCastFunctionArgs> {
         let return_clause = self.build_scalar_return_clause()?;
         let implicit_cost = self.implicit_cost_override();
         let function_register = self.cast_function_register()?;
+        let doc_submit = self.doc_inventory_submit(&name.to_string())?;
 
         // 入参的可空性由参数类型自己决定，判据是 `DuckValueType::from_null`：
         // 写成 `T` 时 `from_null()` 给不出值 → NULL 直接短路成 NULL（函数体不执行）；
@@ -122,6 +138,8 @@ impl ItemFnWrapper<DuckCastFunctionArgs> {
 
                 #function_register
             }
+
+            #doc_submit
         })
     }
 

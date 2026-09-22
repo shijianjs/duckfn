@@ -2,25 +2,48 @@
 //!
 //! Code generation behind `#[duck_sql_macro]`.
 
-use crate::common::{ItemFnWrapper, handle_duck_function};
+use crate::common::{DuckDocArgs, DuckDocArgsProvider, ItemFnWrapper, handle_duck_function};
 use crate::macro_utils::{TokenStream2Result, extract_generic_arg_type};
+use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::ReturnType;
 use syn::Type;
 
-/// `#[duck_sql_macro]` 的入口：本宏不接受任何参数。
+/// `#[duck_sql_macro(...)]` 支持的全部参数（目前只有文档参数）。
 ///
-/// The `#[duck_sql_macro]` entry point: this macro accepts no arguments.
+/// Every argument `#[duck_sql_macro(...)]` accepts (so far only the documentation ones).
+#[derive(Debug, FromMeta)]
+#[darling(derive_syn_parse)]
+pub(crate) struct DuckSqlMacroArgs {
+    /// 文档参数：`description` / `comment` / `example`（`examples`）。
+    ///
+    /// Documentation arguments: `description` / `comment` / `example` (`examples`).
+    #[darling(flatten)]
+    pub(crate) doc: DuckDocArgs,
+}
+
+/// 让公共代码拿到 `#[duck_sql_macro]` 的文档参数。
+///
+/// Hands `#[duck_sql_macro]`'s documentation arguments to the shared code.
+impl DuckDocArgsProvider for DuckSqlMacroArgs {
+    fn duck_doc(&self) -> DuckDocArgs {
+        self.doc.clone()
+    }
+}
+
+/// `#[duck_sql_macro]` 的入口：解析自己的参数后生成代码。
+///
+/// The `#[duck_sql_macro]` entry point: parses its own arguments and generates the code.
 pub(crate) fn build(attr: TokenStream, item: TokenStream) -> TokenStream {
     handle_duck_function(
         attr,
         item,
-        |wrapper: ItemFnWrapper<syn::parse::Nothing>| wrapper.build_sql_macro(),
+        |wrapper: ItemFnWrapper<DuckSqlMacroArgs>| wrapper.build_sql_macro(),
     )
 }
 
-impl<A> ItemFnWrapper<A> {
+impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
     /// 生成 `#[duck_sql_macro]`：原函数 + 一条 inventory 提交，初始化时注册/执行返回的 SQL。
     ///
     /// 按返回类型分四种收尾方式：`SqlMacro` / `DuckResult<SqlMacro>` 直接交给
@@ -58,6 +81,7 @@ impl<A> ItemFnWrapper<A> {
             },
         };
 
+        let doc_submit = self.doc_inventory_submit(&name.to_string())?;
         Ok(quote! {
             #item_fn
             duckfn::inventory_submit! {
@@ -67,6 +91,7 @@ impl<A> ItemFnWrapper<A> {
                     }
                 }
             }
+            #doc_submit
         })
     }
 

@@ -29,12 +29,16 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 ## 参数
 
 每个宏只声明自己真正会用到的参数，写在宏上但不在其参数列表里的键会直接报编译错误。
-`#[duck_custom_register]` 与 `#[duck_sql_macro]` 不接受任何参数。
+`#[duck_custom_register]` 不接受任何参数。
 
 | 参数 | 适用的宏 | 默认值 | 含义 |
 | --- | --- | --- | --- |
 | `auto_register` | 所有 `#[duck_*]` 属性宏 | `true` | 设为 `false` 时只生成 builder，不注册该函数。 |
 | `named_param_from` | `#[duck_table_function]`、`#[derive(DuckStruct)]` | — | 表函数用：从该参数起（含）全部作为命名参数。 |
+| `description` | 所有「会注册出函数」的 `#[duck_*]` 属性宏 | — | 函数的一句话说明，会被导出到 `function_descriptions.csv`。见[社区扩展文档页](../community-extension-docs.md)。 |
+| `comment` | 所有「会注册出函数」的 `#[duck_*]` 属性宏 | — | 补充说明，导出为 CSV 的 `comment` 列。 |
+| `example` | 所有「会注册出函数」的 `#[duck_*]` 属性宏 | — | 单条使用示例：`example = "SELECT ..."`。 |
+| `examples` | 所有「会注册出函数」的 `#[duck_*]` 属性宏 | — | 多条使用示例：`examples = ["SELECT ...", "..."]`，不能与 `example` 同用。 |
 | `special_null_handling` | `#[duck_scalar_function]`、`#[duck_aggregate_function]` | `false` | 让 DuckDB 把 `NULL` 入参交给回调，而不是在 bind 阶段折叠掉。见[标量函数](./scalar-functions.md#null-的处理)。 |
 | `volatile` | `#[duck_scalar_function]` | `false` | 标量函数用：标记为 volatile，注册时调用 `duckdb_scalar_function_set_volatile`，DuckDB 不缓存、不复用相同参数的调用结果。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#volatile)。 |
 | `varargs` | `#[duck_scalar_function]` | `false` | 标量函数用：开启可变参数。函数签名最后一个参数必须是 `Vec<T>`，其元素类型 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#可变参数)。 |

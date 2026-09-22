@@ -2,7 +2,7 @@
 //!
 //! Code generation behind `#[duck_table_function]`.
 
-use crate::common::{ItemFnWrapper, handle_duck_function};
+use crate::common::{DuckDocArgs, DuckDocArgsProvider, ItemFnWrapper, handle_duck_function};
 use crate::macro_utils::{TokenStream2Result, extract_generic_arg_type, iterator_item_type};
 use darling::FromMeta;
 use proc_macro::TokenStream;
@@ -43,6 +43,21 @@ pub(crate) struct DuckTableFunctionArgs {
     /// a dictionary table or a remote schema. Defaults to `false`, keeping the static-column
     /// behaviour.
     pub(crate) dynamic_columns: Option<bool>,
+
+    /// 文档参数：`description` / `comment` / `example`（`examples`）。
+    ///
+    /// Documentation arguments: `description` / `comment` / `example` (`examples`).
+    #[darling(flatten)]
+    pub(crate) doc: DuckDocArgs,
+}
+
+/// 让公共代码拿到 `#[duck_table_function]` 的文档参数。
+///
+/// Hands `#[duck_table_function]`'s documentation arguments to the shared code.
+impl DuckDocArgsProvider for DuckTableFunctionArgs {
+    fn duck_doc(&self) -> DuckDocArgs {
+        self.doc.clone()
+    }
 }
 
 /// `#[duck_table_function]` 的入口：解析自己的参数后生成代码。
