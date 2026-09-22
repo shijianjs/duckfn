@@ -71,3 +71,7 @@ sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
 
 > 仓库开启了 `core.autocrlf`，所以 `git diff` 偶尔会提示 "LF will be replaced by CRLF"，
 > 那是检出到工作区时的行为，提交进仓库的内容始终是 LF。
+
+### 尽量用成熟三方库实现，不要自己造轮子
+
+写任何「通用」逻辑之前先问一句：这件事是不是已经有 crate（或 std API）在做
