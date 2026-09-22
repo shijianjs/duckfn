@@ -31,9 +31,13 @@ macros without the runtime.
 | --- | --- | --- |
 | `duckdb-1-5` | Logical types added in DuckDB 1.5 — today `TIME_NS` (`DuckTimeNs`). | `libduckdb-sys` headers from DuckDB 1.5 or newer. |
 | `chrono` | Conversions between the time wrapper types and [`chrono`](https://crates.io/crates/chrono) (`DuckDate::to_naive_date` and friends), so the epoch arithmetic lives in duckfn. | An optional `chrono` dependency, pulled in by this feature. |
+| `uuid` | Conversions between `DuckUuid` and [`uuid`](https://crates.io/crates/uuid) (`to_uuid` / `from_uuid`). | An optional `uuid` dependency. |
+| `rust_decimal` | Conversions between `DuckDecimal<W, S>` and [`rust_decimal`](https://crates.io/crates/rust_decimal); out-of-range and digit-losing values are errors. | An optional `rust_decimal` dependency. |
+
+The three interop features are independent — enable only the crates you actually use:
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
 
 `loadable-extension` is a feature of `libduckdb-sys`, not of `duckfn`, and it has to be enabled by

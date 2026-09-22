@@ -53,15 +53,19 @@ quack-rs = "0.16.0"
 #libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 libduckdb-sys = { version = "1.10505.0", features = ["loadable-extension"] }
 tuple-transpose = "0.1.0"
-# 示例 crate 打开 duckfn 的 chrono feature（时间包装类型 <-> chrono 互转）；duckfn 不 re-export
-# chrono，因此用到 chrono 类型的地方要自己依赖它。chrono 这里同样只要核心类型 + std：不需要
-# clock（取系统时间，会带上 iana-time-zone / wasm-bindgen 等一串依赖，wasm 构建也更容易出岔子）。
+# 示例 crate 打开 duckfn 的互转 feature（时间包装类型 <-> chrono、DuckUuid <-> uuid、
+# DuckDecimal <-> rust_decimal）；duckfn 不 re-export 这三个 crate，因此用到它们类型的地方要自己
+# 依赖。chrono 这里同样只要核心类型 + std：不需要 clock（取系统时间，会带上 iana-time-zone /
+# wasm-bindgen 等一串依赖，wasm 构建也更容易出岔子）。
 #
-# The example crate enables duckfn's `chrono` feature (time wrapper types <-> chrono). duckfn does
-# not re-export chrono, so depending on it directly is up to the crate that names chrono types.
-# chrono is trimmed the same way here — core types plus `std`, no `clock` (system time, which drags
-# in iana-time-zone / wasm-bindgen and complicates the wasm build).
-duckfn = { path = "duckfn", features = ["duckdb-1-5", "chrono"] }
+# The example crate enables duckfn's interop features (time wrapper types <-> chrono, DuckUuid <->
+# uuid, DuckDecimal <-> rust_decimal). duckfn re-exports none of those three crates, so depending on
+# them directly is up to the crate that names their types. chrono is trimmed the same way here —
+# core types plus `std`, no `clock` (system time, which drags in iana-time-zone / wasm-bindgen and
+# complicates the wasm build).
+duckfn = { path = "duckfn", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+uuid = "1"
+rust_decimal = "1"
 indexmap = "2"
 

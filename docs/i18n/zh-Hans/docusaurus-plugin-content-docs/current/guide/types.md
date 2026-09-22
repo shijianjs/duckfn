@@ -76,25 +76,30 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 `TIME_NS` 是 DuckDB 1.5 新增的类型，因此需要开启
 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。
 
-### 与 `chrono` 互转
+### 与其它 crate 互转
 
-包装类型里只有「原始标量 + 单位」—— 裸 `TIMESTAMP` 是自纪元起的微秒数、`TIMESTAMP_MS` 是毫秒数 ——
-所以把它变成可读、可算的日期时间所需的纪元数学，默认都得调用方自己写。`chrono` feature 把这件事按类型
-各给了一对方法：
+包装类型里往往只剩「原始标量」—— `TIMESTAMP` 是自纪元起的微秒数、`DuckUuid` 是 128 位、
+`DuckDecimal` 是「未缩放整数 + 标度」。把它们变成代码里真正要用的类型，就是下面三个可选 feature 干的事；
+每个都只是给**已有类型**加固有方法，开了也不会改变你现在的 API：
 
-| 方向 | 方法 |
-| --- | --- |
-| `DuckDate` ↔ `chrono::NaiveDate` | `to_naive_date` / `from_naive_date` |
-| `DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` ↔ `chrono::NaiveDateTime` | `to_naive_datetime` / `from_naive_datetime` |
-| `DuckTimestampTz` ↔ `chrono::DateTime<Utc>` | `to_datetime_utc` / `from_datetime_utc` |
-| `DuckTime` / `DuckTimeNs` ↔ `chrono::NaiveTime` | `to_naive_time` / `from_naive_time` |
+| feature | crate | 转换 |
+| --- | --- | --- |
+| `chrono` | [`chrono`](https://crates.io/crates/chrono) | `DuckDate` ↔ `NaiveDate`；`DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` ↔ `NaiveDateTime`；`DuckTimestampTz` ↔ `DateTime<Utc>`；`DuckTime` / `DuckTimeNs` ↔ `NaiveTime` |
+| `uuid` | [`uuid`](https://crates.io/crates/uuid) | `DuckUuid` ↔ `Uuid` |
+| `rust_decimal` | [`rust_decimal`](https://crates.io/crates/rust_decimal) | `DuckDecimal<W, S>` ↔ `Decimal` |
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["chrono"] }
-# duckfn 不 re-export chrono，用到哪些类型就自己加依赖。核心类型加 std 就够；
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["chrono", "uuid", "rust_decimal"] }
+# duckfn 不 re-export 这三个 crate，用到哪些类型就自己加依赖。chrono 核心类型加 std 就够；
 # 只有自己调 Utc::now() 才需要 clock（取系统时间）。
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+uuid = "1"
+rust_decimal = "1"
 ```
+
+#### `chrono`
+
+把原始刻度变成可读、可算的日期时间所需的纪元数学，默认都得调用方自己写；`chrono` feature 把它接过来了：
 
 ```rust
 use chrono::{Days, NaiveDate};
@@ -119,6 +124,46 @@ fn dfn_date_add(d: DuckDate, days: i64) -> DuckOptionResult<DuckDate> {
   **向零截断**。
 
 四对里最常用的就是 `DuckDate` ↔ `NaiveDate`：SQL 给你的是一个日期，而计算要的是一份日历。
+
+#### `uuid`
+
+`DuckUuid` 的 `value` 是 DuckDB **渲染出来的**那 128 位：`UUID` 列物理上是 `HUGEINT`，DuckDB 又给最高位
+做了翻转，好让有符号整数的排序与 UUID 文本排序一致；quack-rs 的 `read_uuid` / `write_uuid` /
+`Value::as_uuid` 已经把这层翻转撤销了。而 `Uuid::as_u128` / `Uuid::from_u128` 用的正是同一套大端规范字节序，
+所以这一对是**无损**的，两个方向都不返回 `DuckResult`：
+
+```rust
+#[duck_scalar_function]
+fn dfn_uuid_to_text(u: DuckUuid) -> String {
+    u.to_uuid().to_string()          // 与 CAST(u AS VARCHAR) 逐字相同
+}
+
+#[duck_scalar_function]
+fn dfn_uuid_parse(text: String) -> DuckOptionResult<DuckUuid> {
+    let uuid = Uuid::parse_str(&text)?;                 // 会失败的是解析这一半
+    Ok(Some(DuckUuid::from_uuid(uuid)))
+}
+```
+
+#### `rust_decimal`
+
+这一对两边的能力**并不对等**：DuckDB 的 `DECIMAL(W, S)` 是「`i128` 未缩放整数 + 标度」，`W` 最大 38；
+而 rust_decimal 的尾数是 96 位（约 28~29 位有效数字），标度上限 28。因此两个方向都返回 `DuckResult`：
+
+- `to_decimal` 把未缩放整数与标度原样交给 rust_decimal，由它报错说明放不下 —— `DECIMAL(38, 0)` 里的
+  大值，或任何大于 28 的标度；
+- `from_decimal` 先把标度调到 `S`（变细则补零；变粗必须**整除**，否则会丢位），再检查结果是否在 `W` 位以内。
+
+```rust
+#[duck_scalar_function]
+fn dfn_decimal_double(d: DuckDecimal<18, 3>) -> DuckOptionResult<DuckDecimal<18, 3>> {
+    let doubled = d.to_decimal()? * Decimal::TWO;      // DECIMAL(18, 3) -> Decimal
+    Ok(Some(DuckDecimal::from_decimal(doubled)?))      // Decimal -> DECIMAL(18, 3)
+}
+```
+
+精度超出 rust_decimal 能承受的范围时（比如 `DECIMAL(38, 0)` 的极端值）没有桥可走：直接读 `unscaled`
+字段（`i128`）自己算。
 
 ## 列表
 
@@ -388,7 +433,7 @@ bind 参数、以及 `LIST` / `MAP` / `STRUCT` 值的子元素，都是以 `Valu
 
 | 缺口 | 说明 |
 | --- | --- |
-| 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)；[与 `chrono` 互转](#与-chrono-互转) 需要 `chrono` feature。 |
+| 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)；[与其它 crate 互转](#与其它-crate-互转) 需要 `chrono` / `uuid` / `rust_decimal`。 |
 | 未映射，但可以自己实现 | `UNION`、`BIT`、`VARINT`、`GEOMETRY`、`VARIANT`：quack-rs 没有它们的读写方法，但你可以[自己实现 `DuckValueType`](./custom-types.md)，通过裸向量句柄直接调用 DuckDB 的 C API。`ENUM` 则由 [`#[derive(DuckEnum)]`](#枚举) 生成。 |
 | 不可存储类型 | `ANY`、`SQLNULL` 以及整数/字符串字面量类型只存在于 DuckDB 自身的函数签名与字面量中，不能作为扩展的参数或返回类型。 |
 | 没有专用的 `DuckList` / `DuckMap` 包装类型 | `DuckList<T>` / `DuckMap<K, V>` 只是 `Vec<T>` / `IndexMap<K, V>` 的别名，真正的类型是标准库 / `indexmap` 的那个。 |
@@ -403,6 +448,8 @@ bind 参数、以及 `LIST` / `MAP` / `STRUCT` 值的子元素，都是以 `Valu
 - [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) —— 类型实现本身
 - [`src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/chrono_bridge.rs) —— `chrono` 转换的实际用法
 - [`test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/chrono_bridge.test) —— 期望结果，含 `infinity` 报错
+- [`src/extension/functions/uuid_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/uuid_bridge.rs) · [`test/sql/functions/uuid_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/uuid_bridge.test) —— `uuid` 一对，与 DuckDB 自己的渲染对照
+- [`src/extension/functions/rust_decimal_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/rust_decimal_bridge.rs) · [`test/sql/functions/rust_decimal_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/rust_decimal_bridge.test) —— `rust_decimal` 一对，含越界的情形
 
 ## 接下来
 

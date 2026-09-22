@@ -32,6 +32,20 @@ pub(crate) mod wrapper_types;
 // `duckfn/src/value_types/chrono_bridge.rs`.
 #[cfg(feature = "chrono")]
 pub(crate) mod chrono_bridge;
+// `DuckUuid` 与 uuid crate 的互操作（`to_uuid` / `from_uuid`），由 `uuid` feature 开关；
+// 模块文档见 `duckfn/src/value_types/uuid_bridge.rs`。
+//
+// Interop between `DuckUuid` and the uuid crate (`to_uuid` / `from_uuid`), behind the `uuid`
+// feature; the module docs live in `duckfn/src/value_types/uuid_bridge.rs`.
+#[cfg(feature = "uuid")]
+pub(crate) mod uuid_bridge;
+// `DuckDecimal<W, S>` 与 rust_decimal 的互操作（`to_decimal` / `from_decimal`），由
+// `rust_decimal` feature 开关；模块文档见 `duckfn/src/value_types/rust_decimal_bridge.rs`。
+//
+// Interop between `DuckDecimal<W, S>` and rust_decimal (`to_decimal` / `from_decimal`), behind the
+// `rust_decimal` feature; the module docs live in `duckfn/src/value_types/rust_decimal_bridge.rs`.
+#[cfg(feature = "rust_decimal")]
+pub(crate) mod rust_decimal_bridge;
 /// `Option<T>` 与可空值的映射：可空性由值承载，逻辑类型与 `T` 相同。
 ///
 /// Mappings between `Option<T>` and nullable values: nullability is carried by the value and the

@@ -41,6 +41,24 @@ duckdb-1-5 = ["quack-rs/duckdb-1-5"]
 # chrono; enabling it adds one optional dependency to duckfn.
 chrono = ["dep:chrono"]
 
+# 与 uuid crate 的互操作：DuckUuid <-> uuid::Uuid（见 duckfn/src/value_types/uuid_bridge.rs）。
+# 这一对是无损的（两边都是 128 位），因此不像时间桥那样返回 DuckResult。
+#
+# Interop with the `uuid` crate: DuckUuid <-> uuid::Uuid (see
+# duckfn/src/value_types/uuid_bridge.rs). The pair is lossless — both sides are 128 bits — so unlike
+# the time bridge these conversions do not return a DuckResult.
+uuid = ["dep:uuid"]
+
+# 与 rust_decimal 的互操作：DuckDecimal<W, S> <-> rust_decimal::Decimal（见
+# duckfn/src/value_types/decimal_bridge.rs）。注意 rust_decimal 的尾数是 96 位（约 28~29 位有效数字），
+# 装不下 DuckDB 允许的 DECIMAL(38, ...)，越界会返回错误。
+#
+# Interop with `rust_decimal`: DuckDecimal<W, S> <-> rust_decimal::Decimal (see
+# duckfn/src/value_types/decimal_bridge.rs). Note that rust_decimal's mantissa is 96 bits (about
+# 28-29 significant digits), so it cannot hold every DECIMAL(38, ...) DuckDB allows; out-of-range
+# values come back as an error.
+rust_decimal = ["dep:rust_decimal"]
+
 [dependencies]
 quack-rs = "0.16.0"
 
@@ -50,6 +68,17 @@ quack-rs = "0.16.0"
 # Optional dependency of the `chrono` feature: only the core date/time types are needed, not
 # `clock` (system time) or `oldtime`, so the default features are off and only `std` is kept.
 chrono = { version = "0.4.31", default-features = false, features = ["std"], optional = true }
+
+# uuid feature 用的可选依赖：默认 feature 为空，不需要 uuid 的 v4 / fast-rng / serde 等。
+#
+# Optional dependency of the `uuid` feature: its default feature set is empty, and the `v4` /
+# `fast-rng` / `serde` features are not needed here.
+uuid = { version = "1", optional = true }
+
+# rust_decimal feature 用的可选依赖。
+#
+# Optional dependency of the `rust_decimal` feature.
+rust_decimal = { version = "1", optional = true }
 
 # loadable-extension 功能
 # libduckdb-sys 加上 features = ["loadable-extension"] 从根本上改变了 DuckDB API 函数的工作方式：

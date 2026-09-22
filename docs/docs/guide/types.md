@@ -77,26 +77,32 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 `TIME_NS` was added in DuckDB 1.5, so it needs the
 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled.
 
-### Conversions with `chrono`
+### Conversions with other crates
 
-A wrapper type holds a raw scalar plus a unit and nothing else — plain `TIMESTAMP` is microseconds
-since the epoch, `TIMESTAMP_MS` is milliseconds — so the epoch arithmetic needed to turn one into a
-readable, computable date-time is on the caller. The `chrono` feature adds that as a pair of methods
-per time type:
+A wrapper type often holds nothing more than a raw scalar — `TIMESTAMP` is microseconds since the
+epoch, `DuckUuid` is 128 bits, `DuckDecimal` is an unscaled `i128` plus a scale. Turning those into
+the types the rest of your code uses is what three optional features are for; each one only adds
+inherent methods to types that already exist, so enabling it never changes an API you have today:
 
-| Direction | Methods |
-| --- | --- |
-| `DuckDate` ↔ `chrono::NaiveDate` | `to_naive_date` / `from_naive_date` |
-| `DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` ↔ `chrono::NaiveDateTime` | `to_naive_datetime` / `from_naive_datetime` |
-| `DuckTimestampTz` ↔ `chrono::DateTime<Utc>` | `to_datetime_utc` / `from_datetime_utc` |
-| `DuckTime` / `DuckTimeNs` ↔ `chrono::NaiveTime` | `to_naive_time` / `from_naive_time` |
+| Feature | Crate | Conversions |
+| --- | --- | --- |
+| `chrono` | [`chrono`](https://crates.io/crates/chrono) | `DuckDate` ↔ `NaiveDate`; `DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` ↔ `NaiveDateTime`; `DuckTimestampTz` ↔ `DateTime<Utc>`; `DuckTime` / `DuckTimeNs` ↔ `NaiveTime` |
+| `uuid` | [`uuid`](https://crates.io/crates/uuid) | `DuckUuid` ↔ `Uuid` |
+| `rust_decimal` | [`rust_decimal`](https://crates.io/crates/rust_decimal) | `DuckDecimal<W, S>` ↔ `Decimal` |
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["chrono"] }
-# duckfn does not re-export chrono, so add it for the types you name. Core types plus `std` is
-# enough; `clock` (system time) is only needed if you call `Utc::now()` yourself.
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["chrono", "uuid", "rust_decimal"] }
+# duckfn re-exports none of these, so add the ones whose types you name. For chrono, the core types
+# plus `std` are enough; `clock` (system time) is only needed if you call `Utc::now()` yourself.
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+uuid = "1"
+rust_decimal = "1"
 ```
+
+#### `chrono`
+
+The epoch arithmetic needed to turn a raw tick count into a readable, computable date-time is on the
+caller by default, so the `chrono` feature hands it over:
 
 ```rust
 use chrono::{Days, NaiveDate};
@@ -124,6 +130,49 @@ Two rules the conversions follow:
 
 `DuckDate` ↔ `NaiveDate` is the pair that comes up most often, because a date is what SQL hands you
 and a calendar is what the calculation needs.
+
+#### `uuid`
+
+`DuckUuid`'s `value` is the 128 bits DuckDB *renders*: a `UUID` column is physically a `HUGEINT` and
+DuckDB flips its top bit so that signed-integer ordering matches UUID string ordering, a flip
+quack-rs' `read_uuid` / `write_uuid` / `Value::as_uuid` already undo. `Uuid::as_u128` /
+`Uuid::from_u128` use that same big-endian, canonical byte order, so the pair is **lossless** and
+neither direction returns a `DuckResult`:
+
+```rust
+#[duck_scalar_function]
+fn dfn_uuid_to_text(u: DuckUuid) -> String {
+    u.to_uuid().to_string()          // identical to CAST(u AS VARCHAR)
+}
+
+#[duck_scalar_function]
+fn dfn_uuid_parse(text: String) -> DuckOptionResult<DuckUuid> {
+    let uuid = Uuid::parse_str(&text)?;                 // parsing is the fallible half
+    Ok(Some(DuckUuid::from_uuid(uuid)))
+}
+```
+
+#### `rust_decimal`
+
+Here the two sides are **not** equally capable: DuckDB's `DECIMAL(W, S)` is an unscaled `i128` with
+`W` up to 38, while `rust_decimal`'s mantissa is 96 bits (about 28-29 significant digits) and its
+scale is capped at 28. Both directions therefore return a `DuckResult`:
+
+- `to_decimal` passes the unscaled value and the scale straight to `rust_decimal` and reports its
+  error when they do not fit — a large `DECIMAL(38, 0)`, or any scale above 28;
+- `from_decimal` first adjusts the scale to `S` (refining pads with zeros; coarsening must divide
+  **exactly**, otherwise the value would lose digits) and then checks the result against `W` digits.
+
+```rust
+#[duck_scalar_function]
+fn dfn_decimal_double(d: DuckDecimal<18, 3>) -> DuckOptionResult<DuckDecimal<18, 3>> {
+    let doubled = d.to_decimal()? * Decimal::TWO;      // DECIMAL(18, 3) -> Decimal
+    Ok(Some(DuckDecimal::from_decimal(doubled)?))      // Decimal -> DECIMAL(18, 3)
+}
+```
+
+Values that need more precision than `rust_decimal` can hold (`DECIMAL(38, 0)` at its extremes) have
+no bridge: read the raw `unscaled` field (`i128`) and do the arithmetic yourself.
 
 ## Lists
 
@@ -418,7 +467,7 @@ is one rule worth knowing:
 
 | Gap | Detail |
 | --- | --- |
-| Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled; the [`chrono` conversions](#conversions-with-chrono) need the `chrono` feature. |
+| Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled; the [conversions with other crates](#conversions-with-other-crates) need `chrono` / `uuid` / `rust_decimal`. |
 | Not mapped, but implementable | `UNION`, `BIT`, `VARINT`, `GEOMETRY`, `VARIANT`: quack-rs has no read/write for them, but a [`DuckValueType` implementation of your own](./custom-types.md) can call the DuckDB C API through the raw vector handle. `ENUM` is generated for you by [`#[derive(DuckEnum)]`](#enums). |
 | Not storable types | `ANY`, `SQLNULL` and the integer/string literal types exist only in DuckDB's own signatures and literals; they cannot be an extension's argument or return type. |
 | No dedicated `DuckList` / `DuckMap` wrappers | `DuckList<T>` / `DuckMap<K, V>` are only aliases for `Vec<T>` / `IndexMap<K, V>`; the real types are the standard library / `indexmap` ones. |
@@ -433,6 +482,8 @@ is one rule worth knowing:
 - [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) — the type implementations themselves
 - [`src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/chrono_bridge.rs) — the `chrono` conversions in use
 - [`test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/chrono_bridge.test) — their expected results, including the `infinity` errors
+- [`src/extension/functions/uuid_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/uuid_bridge.rs) · [`test/sql/functions/uuid_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/uuid_bridge.test) — the `uuid` pair, checked against DuckDB's own rendering
+- [`src/extension/functions/rust_decimal_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/rust_decimal_bridge.rs) · [`test/sql/functions/rust_decimal_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/rust_decimal_bridge.test) — the `rust_decimal` pair, including where it runs out of range
 
 ## Next
 

@@ -29,7 +29,7 @@ C/C++ glue code, and no local DuckDB build required.
 - Attribute-driven registration through `inventory`
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
 - Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included — plus one-line helpers such as `duckfn::duck_vfs::read_string` / `write_string` / `append_string` (`duckdb-1-5` feature)
-- Time interop: the time wrapper types (`DuckDate`, `DuckTimestamp` / `_S` / `_Ms` / `_Ns`, `DuckTimestampTz`, `DuckTime`) convert to and from [`chrono`](https://crates.io/crates/chrono) — `to_naive_date` / `from_naive_date` and friends, out-of-range values and `infinity` included as errors (`chrono` feature)
+- Interop with other crates: the time wrapper types (`DuckDate`, `DuckTimestamp` / `_S` / `_Ms` / `_Ns`, `DuckTimestampTz`, `DuckTime`) convert to and from [`chrono`](https://crates.io/crates/chrono), `DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid), and `DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal) (`chrono` / `uuid` / `rust_decimal` features) — out-of-range values, DuckDB's `infinity` and digit-losing conversions come back as errors, never as a panic or a silent truncation
 - Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.
@@ -53,13 +53,16 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
-`duckfn` has two optional features. `duckdb-1-5` enables what DuckDB's 1.5 C API added: the logical
-types from DuckDB 1.5 (currently `TIME_NS`), copy functions, and host file-system access. `chrono`
-adds conversions between the time wrapper types and [`chrono`](https://crates.io/crates/chrono), so
-the epoch arithmetic lives in duckfn rather than in every extension:
+`duckfn` has four optional features. `duckdb-1-5` enables what DuckDB's 1.5 C API added: the logical
+types from DuckDB 1.5 (currently `TIME_NS`), copy functions, and host file-system access. The other
+three are interop and independent of each other: `chrono` converts the time wrapper types to and from
+[`chrono`](https://crates.io/crates/chrono), `uuid` converts `DuckUuid` to and from
+[`uuid`](https://crates.io/crates/uuid), and `rust_decimal` converts `DuckDecimal<W, S>` to and from
+[`rust_decimal`](https://crates.io/crates/rust_decimal) — so the epoch / 128-bit / scaled-integer
+arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.0.7", features = ["duckdb-1-5", "chrono"] }
+duckfn = { version = "0.0.7", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
 
 ## Quick start

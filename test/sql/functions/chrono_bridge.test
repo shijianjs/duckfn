@@ -5,44 +5,44 @@
 require rusty_quack
 
 # 这一组只测 `chrono` feature 加在时间包装类型上的那批转换方法
-# （duckfn/src/value_types/chrono_bridge.rs）。取值一律用 SQL 侧可读的日期文本表示，
-# 不写死「自纪元起的微秒数」这类内部表示。
+# （duckfn/src/value_types/chrono_bridge.rs）。日期本身不是 VARCHAR，按仓库惯例先 CAST 成文本再比对，
+# 也不写死「自纪元起的微秒数」这类内部表示。
 
 # ============================================================================
 # DATE：to_naive_date + from_naive_date 两个方向
 # ============================================================================
 
-query I
-SELECT dfn_chrono_date_add(DATE '2024-01-31', 1);
+query T
+SELECT CAST(dfn_chrono_date_add(DATE '2024-01-31', 1) AS VARCHAR);
 ----
 2024-02-01
 
 # 闰年：3 月 1 日往前一天是 2 月 29 日
-query I
-SELECT dfn_chrono_date_add(DATE '2024-03-01', -1);
+query T
+SELECT CAST(dfn_chrono_date_add(DATE '2024-03-01', -1) AS VARCHAR);
 ----
 2024-02-29
 
-query I
-SELECT dfn_chrono_date_add(DATE '1970-01-01', 0);
+query T
+SELECT CAST(dfn_chrono_date_add(DATE '1970-01-01', 0) AS VARCHAR);
 ----
 1970-01-01
 
 # 跨过纪元往前：负天数同样是合法的 DATE
-query I
-SELECT dfn_chrono_date_add(DATE '1970-01-01', -1);
+query T
+SELECT CAST(dfn_chrono_date_add(DATE '1970-01-01', -1) AS VARCHAR);
 ----
 1969-12-31
 
 # 2000 年是闰年（而 1900 年不是）
-query I
-SELECT dfn_chrono_date_add(DATE '2000-02-28', 1);
+query T
+SELECT CAST(dfn_chrono_date_add(DATE '2000-02-28', 1) AS VARCHAR);
 ----
 2000-02-29
 
 # 跨一个世纪的加天数
-query I
-SELECT dfn_chrono_date_add(DATE '1900-01-01', 36524);
+query T
+SELECT CAST(dfn_chrono_date_add(DATE '1900-01-01', 36524) AS VARCHAR);
 ----
 2000-01-01
 
@@ -50,18 +50,18 @@ SELECT dfn_chrono_date_add(DATE '1900-01-01', 36524);
 # TIMESTAMP：微秒这一层的单位换算由 to_naive_datetime 负责
 # ============================================================================
 
-query I
+query T
 SELECT dfn_chrono_timestamp_iso(TIMESTAMP '2024-01-02 03:04:05.123456');
 ----
 2024-01-02 03:04:05.123456
 
 # 1970 之前是负的微秒数，转换同样要对
-query I
+query T
 SELECT dfn_chrono_timestamp_iso(TIMESTAMP '1969-07-20 20:17:40');
 ----
 1969-07-20 20:17:40.000000
 
-query I
+query T
 SELECT dfn_chrono_timestamp_iso(TIMESTAMP '1970-01-01 00:00:00');
 ----
 1970-01-01 00:00:00.000000
@@ -70,13 +70,13 @@ SELECT dfn_chrono_timestamp_iso(TIMESTAMP '1970-01-01 00:00:00');
 # TIMESTAMPTZ：与 TIMESTAMP 共用 i64 存储（微秒，UTC），渲染出来就是 UTC
 # ============================================================================
 
-query I
+query T
 SELECT dfn_chrono_timestamptz_utc(TIMESTAMPTZ '2024-01-02 03:04:05.123456+00');
 ----
 2024-01-02 03:04:05.123456+00:00
 
 # 带偏移的字面量先归一到 UTC 再渲染
-query I
+query T
 SELECT dfn_chrono_timestamptz_utc(TIMESTAMPTZ '2024-01-02 11:04:05.123456+08');
 ----
 2024-01-02 03:04:05.123456+00:00
@@ -85,18 +85,18 @@ SELECT dfn_chrono_timestamptz_utc(TIMESTAMPTZ '2024-01-02 11:04:05.123456+08');
 # TIME：to_naive_time 之后就是 chrono 的常规取值方式
 # ============================================================================
 
-query I
-SELECT dfn_chrono_time_parts(TIME '03:04:05.123456');
+query T
+SELECT CAST(dfn_chrono_time_parts(TIME '03:04:05.123456') AS VARCHAR);
 ----
 [3, 4, 5, 123456000]
 
-query I
-SELECT dfn_chrono_time_parts(TIME '00:00:00');
+query T
+SELECT CAST(dfn_chrono_time_parts(TIME '00:00:00') AS VARCHAR);
 ----
 [0, 0, 0, 0]
 
-query I
-SELECT dfn_chrono_time_parts(TIME '23:59:59.999999');
+query T
+SELECT CAST(dfn_chrono_time_parts(TIME '23:59:59.999999') AS VARCHAR);
 ----
 [23, 59, 59, 999999000]
 

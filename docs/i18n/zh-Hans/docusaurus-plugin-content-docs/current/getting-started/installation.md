@@ -29,9 +29,13 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | --- | --- | --- |
 | `duckdb-1-5` | 支持 DuckDB 1.5 新增的逻辑类型 —— 目前是 `TIME_NS`（`DuckTimeNs`）。 | `libduckdb-sys` 使用 DuckDB 1.5 及以上的头文件。 |
 | `chrono` | 时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 的互转（`DuckDate::to_naive_date` 等），把纪元换算交给 duckfn。 | 由本 feature 引入的可选 `chrono` 依赖。 |
+| `uuid` | `DuckUuid` 与 [`uuid`](https://crates.io/crates/uuid) 的互转（`to_uuid` / `from_uuid`）。 | 可选的 `uuid` 依赖。 |
+| `rust_decimal` | `DuckDecimal<W, S>` 与 [`rust_decimal`](https://crates.io/crates/rust_decimal) 的互转；越界与丢位都以错误返回。 | 可选的 `rust_decimal` 依赖。 |
+
+三个互转 feature 各自独立，用到哪个开哪个：
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
 
 `loadable-extension` 是 `libduckdb-sys` 的 feature，不是 `duckfn` 的，需要你自己开启。
