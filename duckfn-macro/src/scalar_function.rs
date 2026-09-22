@@ -75,8 +75,9 @@ impl ItemFnWrapper<DuckScalarFunctionArgs> {
         // With `varargs = true` the last parameter is the variadic collection and does not belong
         // to `DuckArgsImpl`.
         let (fixed_args, _) = self.split_varargs()?;
+        let sql_name = self.sql_name(self.overloads_name());
         let duck_function_impl = self.build_scalar_function_impl()?;
-        self.common_build(&fixed_args, None, duck_function_impl)
+        self.common_build(&fixed_args, None, &sql_name, duck_function_impl)
     }
 
     /// 生成标量函数实现体：`ScalarFunctionImpl` + 各种 builder 导出 + 自动注册。

@@ -218,6 +218,23 @@ impl DuckAggregateState for WeightedState {
 `Ok(None)`；`result()` 里用 `get()` 取回槽（返回 `Option<Arc<Config>>`，`None` 同时覆盖「从未解析」与
 「解析成 NULL」两种情况）。
 
+最后这一点正是 `result()` 里最容易踩的地方：**空组**与「参数是 `NULL`」都会让 `get()` 得到 `None`，
+但两者意思相反。所以要先按行数判断，再读槽，否则「一行都没有」会被悄悄当成「配置是 `NULL`」：
+
+```rust
+fn result(&self) -> DuckOptionResult<f64> {
+    if self.rows == 0 {
+        return Ok(None);                    // 空组：本来就没有结果
+    }
+    let config = self.config.get()          // 到这里 None 才真的是「参数为 NULL」
+        .ok_or_else(|| duck_error("dfn_agg_weighted: config must not be NULL"))?;
+    Ok(Some(self.sum * config.scale()))
+}
+```
+
+槽本身区分不了这两种情形 —— 它只记录行处理回调看到过什么，而空组里行处理回调一次都没跑。区分发生在
+`result()`：靠行数（`self.rows`，也就是上面用来区分「没有行」与「真有值」的那个计数器）。
+
 示例扩展在 `test/sql/demo/lazy_config_demo.test` 里把两种写法都量了一遍：5000 行下 `DuckLazy` 入参解析
 配置 **1 次**，eager 的 `Config` 入参解析 **5000 次**，两者结果完全相同。同一个文件还覆盖了可空参数，以及
 `PRAGMA threads=4` 下合并局部状态的场景 —— 合并要把配置搬过去，既不能重新解析、也不能丢掉它。
@@ -228,6 +245,10 @@ impl DuckAggregateState for WeightedState {
 `quack-rs` 的 `AggregateFunctionSetBuilder` 只能在整个函数集上设一个返回类型 —— 此时应改用
 `duckfn::DuckfnAggregateFunctionSetBuilder` 配合宏生成的 `aggregate_function_guard()`，它把每个重载注册成
 独立的 DuckDB 函数，因此各自保留自己的 `Output`。
+
+宏生成的模块还会导出常量 `SQL_NAME`：设了 `overloads_name` 时它是**函数集名**，否则是函数名。给用户看的
+错误信息前缀应该读它（`format!("{}: ...", duckfn_agg_html::SQL_NAME)`），而不是自己再抄一份属性里的字符串
+字面量 —— 那份拷贝正是会失效的那份。
 
 ## 源码与测试
 

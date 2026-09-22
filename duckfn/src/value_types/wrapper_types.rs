@@ -50,19 +50,24 @@ impl DuckValueType for DuckTimestamp {
     }
 }
 
-/// DuckDB `TIMESTAMP WITH TIME ZONE`（毫秒精度）。
+/// DuckDB `TIMESTAMP WITH TIME ZONE`（微秒精度，UTC）。
 ///
-/// DuckDB `TIMESTAMP WITH TIME ZONE` (millisecond precision).
+/// `TIMESTAMPTZ` 与 `TIMESTAMP` 共用同一种 `i64` 存储，单位也是**微秒**（不是毫秒）：
+/// quack-rs 的 `read_timestamp_tz` / `Value::as_timestamp_tz` 都按微秒返回。
+///
+/// DuckDB `TIMESTAMP WITH TIME ZONE` (microsecond precision, UTC). `TIMESTAMPTZ` shares
+/// `TIMESTAMP`'s `i64` storage and its unit is **microseconds**, not milliseconds: quack-rs'
+/// `read_timestamp_tz` and `Value::as_timestamp_tz` both return microseconds.
 // TypeId::TimestampTz
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DuckTimestampTz {
-    /// 自 Unix 纪元起的毫秒数（UTC）。
+    /// 自 Unix 纪元起的微秒数（UTC）。
     ///
-    /// Milliseconds since the Unix epoch (UTC).
-    pub millis_since_epoch: i64,
+    /// Microseconds since the Unix epoch (UTC).
+    pub micros_since_epoch: i64,
 }
 
-// pub const unsafe fn write_timestamp_ms(&mut self, idx: usize, millis_since_epoch: i64) {
+// pub const unsafe fn write_timestamp_tz(&mut self, idx: usize, micros_since_epoch: i64) {
 
 /// `DuckValueType` 实现：按 `TIMESTAMP WITH TIME ZONE` 读写。
 ///
@@ -73,15 +78,15 @@ impl DuckValueType for DuckTimestampTz {
     }
     fn read_valid_by_vector_reader(reader: &VectorReader, row: usize) -> Self {
         Self {
-            millis_since_epoch: unsafe { reader.read_timestamp_tz(row) },
+            micros_since_epoch: unsafe { reader.read_timestamp_tz(row) },
         }
     }
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
-        unsafe { writer.write_timestamp_ms(idx, v.millis_since_epoch) }
+        unsafe { writer.write_timestamp_tz(idx, v.micros_since_epoch) }
     }
     fn read_by_duck_value_valid_simple(value: &Value) -> Self {
         Self{
-            millis_since_epoch:value.as_timestamp_tz()
+            micros_since_epoch:value.as_timestamp_tz()
         }
     }
 

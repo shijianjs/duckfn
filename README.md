@@ -28,6 +28,7 @@ cast, or a nested type — no C/C++ glue code, and no local DuckDB build require
 - Attribute-driven registration through `inventory`
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
 - Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included — plus one-line helpers such as `duckfn::duck_vfs::read_string` / `write_string` / `append_string` (`duckdb-1-5` feature)
+- Time interop: the time wrapper types (`DuckDate`, `DuckTimestamp` / `_S` / `_Ms` / `_Ns`, `DuckTimestampTz`, `DuckTime`) convert to and from [`chrono`](https://crates.io/crates/chrono) — `to_naive_date` / `from_naive_date` and friends, out-of-range values and `infinity` included as errors (`chrono` feature)
 - Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.

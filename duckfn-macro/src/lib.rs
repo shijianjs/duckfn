@@ -198,8 +198,9 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 ///   每一列都按 `T` 读出来、组成 `Vec<T>` 传给函数体。比如
 ///   `fn my_sum(values: Vec<i64>) -> i64`。同样需要 `duckdb-1-5`，也不能与 `overloads_name` 同用。
 ///
-/// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`，
-/// 便于手动注册重载或函数集。
+/// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`（便于手动注册
+/// 重载或函数集），以及常量 `SQL_NAME` —— 该签名注册到 DuckDB 时真正使用的 SQL 名字（设了
+/// `overloads_name` 时是函数集名，否则是函数名）。
 ///
 /// Registers an ordinary Rust function as a DuckDB scalar function. Each parameter maps to one
 /// SQL parameter whose type determines both the DuckDB logical type and nullability: `T` means
@@ -219,7 +220,9 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// `fn my_sum(values: Vec<i64>) -> i64`. Both switches require duckfn's `duckdb-1-5` feature (the
 /// DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. A module named after the
 /// function is generated, exporting `scalar_function_builder()` and `scalar_overload_builder()`
-/// for manual overload / function-set registration.
+/// for manual overload / function-set registration, plus the `SQL_NAME` constant holding the SQL
+/// name this signature is really registered under (the function-set name when `overloads_name` is
+/// set, the function name otherwise).
 #[proc_macro_attribute]
 pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     scalar_function::build(attr, item)
@@ -232,7 +235,9 @@ pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream
 /// 返回值规则与标量函数一致，通常直接返回 `()`。
 ///
 /// 宏生成同名模块并导出 `aggregate_function_builder()` / `aggregate_overload_builder()` /
-/// `aggregate_function_guard()`。
+/// `aggregate_function_guard()`，以及常量 `SQL_NAME` —— 该签名注册到 DuckDB 时真正使用的 SQL 名字
+/// （设了 `overloads_name` 时是函数集名，否则是函数名）；写错误信息前缀时读它，不必再手抄一遍属性
+/// 字面量。
 ///
 /// Registers an ordinary Rust function as a DuckDB aggregate function. The function takes one
 /// `&mut XxxState` parameter that accumulates state across rows (`XxxState` must implement
@@ -240,7 +245,9 @@ pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream
 /// parameters are the per-row inputs. Return-type rules match scalar functions, though in
 /// practice `()` is returned. A module named after the function is generated, exporting
 /// `aggregate_function_builder()`, `aggregate_overload_builder()` and
-/// `aggregate_function_guard()`.
+/// `aggregate_function_guard()`, plus the `SQL_NAME` constant holding the SQL name this signature is
+/// really registered under (the function-set name when `overloads_name` is set, the function name
+/// otherwise) — read it for error-message prefixes instead of copying the attribute literal.
 #[proc_macro_attribute]
 pub fn duck_aggregate_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     aggregate_function::build(attr, item)

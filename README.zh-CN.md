@@ -27,6 +27,7 @@
 - 属性驱动、基于 `inventory` 的自动注册
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
 - 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::duck_vfs::read_string` / `write_string` / `append_string` 这类一行式接口，由 `duckdb-1-5` feature 提供
+- 时间互转：时间包装类型（`DuckDate`、`DuckTimestamp` / `_S` / `_Ms` / `_Ns`、`DuckTimestampTz`、`DuckTime`）与 [`chrono`](https://crates.io/crates/chrono) 双向转换 —— `to_naive_date` / `from_naive_date` 等，越界与 `infinity` 都以错误返回，由 `chrono` feature 提供
 - 可直接复用 DuckDB 官方多平台扩展 CI
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。

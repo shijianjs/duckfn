@@ -194,12 +194,17 @@ provides:
 
 | Macro | Generated items |
 | --- | --- |
-| `#[duck_scalar_function]` | `ScalarFunctionImpl`, `scalar_function_builder()`, `scalar_overload_builder()` |
-| `#[duck_aggregate_function]` | `AggregateFunctionImpl`, `aggregate_function_builder()`, `aggregate_overload_builder(builder)`, `aggregate_function_guard()` |
-| `#[duck_table_function]` | `TableFunctionImpl`, `table_function_builder()` (returns a `DuckResult`) |
+| `#[duck_scalar_function]` | `ScalarFunctionImpl`, `SQL_NAME`, `scalar_function_builder()`, `scalar_overload_builder()` |
+| `#[duck_aggregate_function]` | `AggregateFunctionImpl`, `SQL_NAME`, `aggregate_function_builder()`, `aggregate_overload_builder(builder)`, `aggregate_function_guard()` |
+| `#[duck_table_function]` | `TableFunctionImpl`, `SQL_NAME`, `table_function_builder()` (returns a `DuckResult`) |
 | `#[duck_copy_function]` | `CopyFunctionImpl`, `copy_function_builder()` (returns a `DuckResult`), `copy_function_register(connection)` — no `DuckArgsImpl` |
 | `#[duck_cast_function]` | `CastFunctionImpl`, `cast_function_builder()`, `cast_function_register(connection)` |
 | `#[duck_replacement_scan]` | `ReplacementScanImpl`, `replacement_scan_register(connection)` — no `DuckArgsImpl` |
+
+`SQL_NAME` is the name SQL actually uses: the function name, or the **function-set name** when the
+signature is registered through `overloads_name`. It differs from the adapter's `NAME`, which is the
+Rust function name and only identifies the callback. Read `SQL_NAME` when an error message or a log
+line has to carry the function name, instead of repeating the attribute's string literal.
 
 `#[duck_custom_register]` and `#[duck_sql_macro]` generate no module at all: they keep the function
 as written and submit it to the registry.

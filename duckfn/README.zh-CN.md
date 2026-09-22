@@ -27,6 +27,7 @@
 - 属性驱动、基于 `inventory` 的自动注册
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
 - 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::duck_vfs::read_string` / `write_string` / `append_string` 这类一行式接口，由 `duckdb-1-5` feature 提供
+- 时间互转：时间包装类型（`DuckDate`、`DuckTimestamp` / `_S` / `_Ms` / `_Ns`、`DuckTimestampTz`、`DuckTime`）与 [`chrono`](https://crates.io/crates/chrono) 双向转换 —— `to_naive_date` / `from_naive_date` 等，越界与 `infinity` 都以错误返回，由 `chrono` feature 提供
 - 可直接复用 DuckDB 官方多平台扩展 CI
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。
@@ -48,11 +49,12 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 如果只想用宏、不要运行时，可以直接依赖
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
-`duckfn` 只有一个 feature：`duckdb-1-5`，用于开启 DuckDB 1.5 C API 带来的能力：1.5 新增的逻辑类型
-（目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问：
+`duckfn` 有两个可选 feature。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5 新增的逻辑类型
+（目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问。`chrono` 提供时间包装类型与
+[`chrono`](https://crates.io/crates/chrono) 的互转，把纪元换算收进 duckfn，而不是留给每个扩展各写一遍：
 
 ```toml
-duckfn = { version = "0.0.7", features = ["duckdb-1-5"] }
+duckfn = { version = "0.0.7", features = ["duckdb-1-5", "chrono"] }
 ```
 
 ## 快速开始

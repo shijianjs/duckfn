@@ -28,9 +28,10 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | feature | 作用 | 要求 |
 | --- | --- | --- |
 | `duckdb-1-5` | 支持 DuckDB 1.5 新增的逻辑类型 —— 目前是 `TIME_NS`（`DuckTimeNs`）。 | `libduckdb-sys` 使用 DuckDB 1.5 及以上的头文件。 |
+| `chrono` | 时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 的互转（`DuckDate::to_naive_date` 等），把纪元换算交给 duckfn。 | 由本 feature 引入的可选 `chrono` 依赖。 |
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono"] }
 ```
 
 `loadable-extension` 是 `libduckdb-sys` 的 feature，不是 `duckfn` 的，需要你自己开启。

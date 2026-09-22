@@ -102,9 +102,9 @@ pub enum DuckDynamicValue {
     ///
     /// `TIMESTAMP` (microseconds since the epoch).
     Timestamp(i64),
-    /// `TIMESTAMP WITH TIME ZONE`（自纪元的毫秒数）。
+    /// `TIMESTAMP WITH TIME ZONE`（自纪元的微秒数，UTC）。
     ///
-    /// `TIMESTAMP WITH TIME ZONE` (milliseconds since the epoch).
+    /// `TIMESTAMP WITH TIME ZONE` (microseconds since the epoch, UTC).
     TimestampTz(i64),
     /// `TIMESTAMP_S`。
     ///
@@ -671,7 +671,7 @@ impl DuckDynamicValue {
             Self::TimeTz(value) => unsafe { writer.vector_writer.write_time_tz(idx, *value) },
             Self::Timestamp(value) => unsafe { writer.vector_writer.write_timestamp(idx, *value) },
             Self::TimestampTz(value) => unsafe {
-                writer.vector_writer.write_timestamp_ms(idx, *value)
+                writer.vector_writer.write_timestamp_tz(idx, *value)
             },
             Self::TimestampS(value) => unsafe {
                 writer.vector_writer.write_timestamp_s(idx, *value)

@@ -98,6 +98,21 @@ impl<A> ItemFnWrapper<A> {
         &self.item_fn.sig.output
     }
 
+    /// 该签名注册进 DuckDB 时真正使用的 SQL 名字。
+    ///
+    /// 设了 `overloads_name` 时是函数集名（此时本签名不注册自己的函数名），否则就是函数名。
+    /// 生成的 `SQL_NAME` 常量与它一致。
+    ///
+    /// The SQL name this signature is actually registered under: the function-set name when
+    /// `overloads_name` is set (the signature is then not registered under its own name), the
+    /// function name otherwise. The generated `SQL_NAME` constant holds the same value.
+    pub(crate) fn sql_name(&self, overloads_name: Option<&str>) -> String {
+        match overloads_name {
+            Some(name) => name.to_string(),
+            None => self.name().to_string(),
+        }
+    }
+
     /// 收集函数的所有参数（含 `&mut State`）。
     ///
     /// Collects all parameters of the function (including `&mut State`).
@@ -150,20 +165,26 @@ impl<A> ItemFnWrapper<A> {
         })
     }
 
-    /// 把 `duck_function_impl` 包进与函数同名的模块，并先插入参数结构体 `DuckArgsImpl`。
+    /// 把 `duck_function_impl` 包进与函数同名的模块，并先插入参数结构体 `DuckArgsImpl` 与
+    /// SQL 注册名常量 `SQL_NAME`。
     ///
     /// `fields` 是参与参数结构体的参数（标量函数的可变参数集合不入内），`named_param_from` 会
     /// 转写成 `#[duck(named_param_from = "...")]` —— 各宏只把 derive 宏真正需要的键透传过去。
+    /// `sql_name` 是该函数注册进 DuckDB 时真正用的名字，由各宏给出（设了 `overloads_name` 时是
+    /// 函数集名，否则是函数名）。
     ///
     /// Wraps `duck_function_impl` in a module named after the function, prepending the argument
-    /// struct `DuckArgsImpl`. `fields` are the parameters taking part in it (a scalar function's
-    /// variadic collection is left out) and `named_param_from` is written as
-    /// `#[duck(named_param_from = "...")]` — each macro forwards only the keys the derive macro
-    /// actually needs.
+    /// struct `DuckArgsImpl` and the `SQL_NAME` constant holding the SQL registration name.
+    /// `fields` are the parameters taking part in it (a scalar function's variadic collection is
+    /// left out) and `named_param_from` is written as `#[duck(named_param_from = "...")]` — each
+    /// macro forwards only the keys the derive macro actually needs. `sql_name` is the name the
+    /// function is really registered under, supplied by each macro (the function-set name when
+    /// `overloads_name` is set, the function name otherwise).
     pub(crate) fn common_build(
         &self,
         fields: &[FnArgWrapper],
         named_param_from: Option<&str>,
+        sql_name: &str,
         duck_function_impl: TokenStream2,
     ) -> TokenStream2Result {
         let name = self.name();
@@ -175,6 +196,19 @@ impl<A> ItemFnWrapper<A> {
 
             #vis mod #name{
                 use super::*;
+
+                /// 本函数注册到 DuckDB 时使用的 SQL 名字。
+                ///
+                /// 与 `NAME` 的区别：`NAME` 是 Rust 函数名（只用于标识回调），当签名通过
+                /// `overloads_name = "..."` 挂到函数集上时，`NAME` 与真正的 SQL 名字并不相同。
+                /// 错误信息前缀、日志、以及需要在别处引用这个函数名时，读这里。
+                ///
+                /// The SQL name this function is registered under. Unlike `NAME`, which is the Rust
+                /// function name (only used to identify the callback), this is the name SQL actually
+                /// uses — and it differs from `NAME` when the signature is attached to a function
+                /// set through `overloads_name = "..."`. Read this for error prefixes, logging, or
+                /// whenever the function name is needed elsewhere.
+                pub const SQL_NAME: &str = #sql_name;
 
                 #duck_args
 

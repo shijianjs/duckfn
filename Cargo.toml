@@ -53,6 +53,15 @@ quack-rs = "0.16.0"
 #libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 libduckdb-sys = { version = "1.10505.0", features = ["loadable-extension"] }
 tuple-transpose = "0.1.0"
-duckfn = { path = "duckfn", features = ["duckdb-1-5"] }
+# 示例 crate 打开 duckfn 的 chrono feature（时间包装类型 <-> chrono 互转）；duckfn 不 re-export
+# chrono，因此用到 chrono 类型的地方要自己依赖它。chrono 这里同样只要核心类型 + std：不需要
+# clock（取系统时间，会带上 iana-time-zone / wasm-bindgen 等一串依赖，wasm 构建也更容易出岔子）。
+#
+# The example crate enables duckfn's `chrono` feature (time wrapper types <-> chrono). duckfn does
+# not re-export chrono, so depending on it directly is up to the crate that names chrono types.
+# chrono is trimmed the same way here — core types plus `std`, no `clock` (system time, which drags
+# in iana-time-zone / wasm-bindgen and complicates the wasm build).
+duckfn = { path = "duckfn", features = ["duckdb-1-5", "chrono"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 indexmap = "2"
 

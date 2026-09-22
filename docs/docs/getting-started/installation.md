@@ -30,9 +30,10 @@ macros without the runtime.
 | Feature | Enables | Requires |
 | --- | --- | --- |
 | `duckdb-1-5` | Logical types added in DuckDB 1.5 — today `TIME_NS` (`DuckTimeNs`). | `libduckdb-sys` headers from DuckDB 1.5 or newer. |
+| `chrono` | Conversions between the time wrapper types and [`chrono`](https://crates.io/crates/chrono) (`DuckDate::to_naive_date` and friends), so the epoch arithmetic lives in duckfn. | An optional `chrono` dependency, pulled in by this feature. |
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono"] }
 ```
 
 `loadable-extension` is a feature of `libduckdb-sys`, not of `duckfn`, and it has to be enabled by

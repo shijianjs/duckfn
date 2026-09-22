@@ -187,12 +187,16 @@ mod dfn_scalar_reg_manual {
 
 | 属性宏 | 生成的 item |
 | --- | --- |
-| `#[duck_scalar_function]` | `ScalarFunctionImpl`、`scalar_function_builder()`、`scalar_overload_builder()` |
-| `#[duck_aggregate_function]` | `AggregateFunctionImpl`、`aggregate_function_builder()`、`aggregate_overload_builder(builder)`、`aggregate_function_guard()` |
-| `#[duck_table_function]` | `TableFunctionImpl`、`table_function_builder()`（返回 `DuckResult`） |
+| `#[duck_scalar_function]` | `ScalarFunctionImpl`、`SQL_NAME`、`scalar_function_builder()`、`scalar_overload_builder()` |
+| `#[duck_aggregate_function]` | `AggregateFunctionImpl`、`SQL_NAME`、`aggregate_function_builder()`、`aggregate_overload_builder(builder)`、`aggregate_function_guard()` |
+| `#[duck_table_function]` | `TableFunctionImpl`、`SQL_NAME`、`table_function_builder()`（返回 `DuckResult`） |
 | `#[duck_copy_function]` | `CopyFunctionImpl`、`copy_function_builder()`（返回 `DuckResult`）、`copy_function_register(connection)`，不生成 `DuckArgsImpl` |
 | `#[duck_cast_function]` | `CastFunctionImpl`、`cast_function_builder()`、`cast_function_register(connection)` |
 | `#[duck_replacement_scan]` | `ReplacementScanImpl`、`replacement_scan_register(connection)`，不生成 `DuckArgsImpl` |
+
+`SQL_NAME` 是 SQL 侧真正使用的名字：函数自己的名字，或者通过 `overloads_name` 注册时那个**函数集名**。
+它和适配层的 `NAME` 不是一回事 —— `NAME` 是 Rust 函数名，只用来标识回调。错误信息、日志里要带函数名时
+读 `SQL_NAME`，不必再抄一遍属性里的字符串字面量。
 
 `#[duck_custom_register]` 与 `#[duck_sql_macro]` 完全不生成模块：函数保持原样，只向注册表提交一项。
 

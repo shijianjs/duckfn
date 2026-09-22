@@ -65,10 +65,12 @@ impl ItemFnWrapper<DuckTableFunctionArgs> {
     /// `#[duck(named_param_from = "...")]` on the generated `DuckArgsImpl` — the only key this
     /// macro has to forward to `#[derive(DuckStruct)]`.
     pub(crate) fn build_table_function(&self) -> TokenStream2Result {
+        let sql_name = self.sql_name(None);
         let duck_function_impl = self.build_table_function_impl()?;
         self.common_build(
             &self.args(),
             self.args.named_param_from.as_deref(),
+            &sql_name,
             duck_function_impl,
         )
     }

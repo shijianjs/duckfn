@@ -24,6 +24,14 @@ pub(crate) mod duck_array;
 /// Wrapper types (timestamp, date, time, UUID, blob, ...) whose physical representation is
 /// shared but whose logical semantics differ.
 pub(crate) mod wrapper_types;
+// 时间包装类型与 chrono 的互操作（`to_naive_date` / `from_naive_date` 等固有方法），
+// 由 `chrono` feature 开关；模块文档见 `duckfn/src/value_types/chrono_bridge.rs`。
+//
+// Interop between the time wrapper types and chrono (`to_naive_date` / `from_naive_date` and
+// friends), behind the `chrono` feature; the module docs live in
+// `duckfn/src/value_types/chrono_bridge.rs`.
+#[cfg(feature = "chrono")]
+pub(crate) mod chrono_bridge;
 /// `Option<T>` 与可空值的映射：可空性由值承载，逻辑类型与 `T` 相同。
 ///
 /// Mappings between `Option<T>` and nullable values: nullability is carried by the value and the

@@ -31,8 +31,25 @@ default = []
 # duckfn/src/duck_vfs/). Requires libduckdb-sys with >= 1.5 headers.
 duckdb-1-5 = ["quack-rs/duckdb-1-5"]
 
+# 与 chrono 的互操作：给 DuckDate / DuckTimestamp* / DuckTime 等时间包装类型加上
+# `to_naive_date` / `from_naive_date` 这类双向转换方法（见 duckfn/src/value_types/chrono_bridge.rs）。
+# 默认关闭，因为多数扩展用不到 chrono；开启后 duckfn 会多一个可选依赖。
+#
+# Interop with chrono: adds bidirectional conversions (`to_naive_date` / `from_naive_date`, ...) to
+# the time wrapper types such as DuckDate / DuckTimestamp* / DuckTime (see
+# duckfn/src/value_types/chrono_bridge.rs). Off by default because most extensions never need
+# chrono; enabling it adds one optional dependency to duckfn.
+chrono = ["dep:chrono"]
+
 [dependencies]
 quack-rs = "0.16.0"
+
+# chrono feature 用的可选依赖：只需要核心的日期/时间类型，不需要 clock（拿系统时间）与
+# oldtime，因此关掉默认 feature 只留 std。
+#
+# Optional dependency of the `chrono` feature: only the core date/time types are needed, not
+# `clock` (system time) or `oldtime`, so the default features are off and only `std` is kept.
+chrono = { version = "0.4.31", default-features = false, features = ["std"], optional = true }
 
 # loadable-extension 功能
 # libduckdb-sys 加上 features = ["loadable-extension"] 从根本上改变了 DuckDB API 函数的工作方式：

@@ -229,6 +229,26 @@ A nullable argument is written `Option<DuckLazy<Config>>` and read with `resolve
 returns `Ok(None)` when the cell is `NULL`; `get()` reads the slot back from `result()` (it yields
 `Option<Arc<Config>>`, and `None` covers both "never parsed" and "parsed as `NULL`").
 
+That last part is the trap in `result()`: an **empty group** and a `NULL` argument both leave `get()`
+at `None`, and they mean opposite things. Decide from the row count first, and only then read the
+slot — otherwise "no rows at all" quietly turns into "the configuration was `NULL`":
+
+```rust
+fn result(&self) -> DuckOptionResult<f64> {
+    if self.rows == 0 {
+        return Ok(None);                    // empty group: there is nothing to report
+    }
+    let config = self.config.get()          // only here does None really mean the argument was NULL
+        .ok_or_else(|| duck_error("dfn_agg_weighted: config must not be NULL"))?;
+    Ok(Some(self.sum * config.scale()))
+}
+```
+
+The slot cannot tell the two cases apart by itself: it only records what the row handler saw, and on
+an empty group the row handler never ran at all. `result()` is where the two are separated, and the
+row count (`self.rows`, the same counter that distinguishes "no rows" from a real value further up)
+is how.
+
 The example extension measures both spellings in `test/sql/demo/lazy_config_demo.test`: over 5000 rows
 the `DuckLazy` argument parses the configuration **once** while the eager `Config` argument parses it
 **5000 times**, with identical results. The same file also covers the nullable argument and a
@@ -242,6 +262,11 @@ overloads need *different* return types, note that the `quack-rs` `AggregateFunc
 only set one return type for the whole set — use `duckfn::DuckfnAggregateFunctionSetBuilder` with the
 generated `aggregate_function_guard()` instead, which registers each overload as a standalone DuckDB
 function and therefore keeps each `Output`.
+
+Each generated module also exports `SQL_NAME`: with `overloads_name` set it is the **function-set
+name**, otherwise the function name. Error messages that a user sees should be prefixed with it —
+`format!("{}: ...", duckfn_agg_html::SQL_NAME)` — rather than with a hand-written copy of the
+attribute's string literal, which is exactly the copy that drifts.
 
 ## Source and tests
 

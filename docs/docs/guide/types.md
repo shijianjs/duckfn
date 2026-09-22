@@ -46,7 +46,7 @@ Types that share a physical representation but mean different things get a wrapp
 | DuckDB | Rust | Field |
 | --- | --- | --- |
 | `TIMESTAMP` | `DuckTimestamp` | `micros_since_epoch: i64` |
-| `TIMESTAMPTZ` | `DuckTimestampTz` | `millis_since_epoch: i64` |
+| `TIMESTAMPTZ` | `DuckTimestampTz` | `micros_since_epoch: i64` |
 | `TIMESTAMP_S` / `TIMESTAMP_MS` / `TIMESTAMP_NS` | `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` | `seconds_since_epoch` / `millis_since_epoch` / `nanos_since_epoch` |
 | `TIME` | `DuckTime` | `micros_since_midnight: i64` |
 | `TIME_NS` | `DuckTimeNs` | `nanos_since_midnight: i64` |
@@ -76,6 +76,54 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 
 `TIME_NS` was added in DuckDB 1.5, so it needs the
 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled.
+
+### Conversions with `chrono`
+
+A wrapper type holds a raw scalar plus a unit and nothing else — plain `TIMESTAMP` is microseconds
+since the epoch, `TIMESTAMP_MS` is milliseconds — so the epoch arithmetic needed to turn one into a
+readable, computable date-time is on the caller. The `chrono` feature adds that as a pair of methods
+per time type:
+
+| Direction | Methods |
+| --- | --- |
+| `DuckDate` ↔ `chrono::NaiveDate` | `to_naive_date` / `from_naive_date` |
+| `DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` ↔ `chrono::NaiveDateTime` | `to_naive_datetime` / `from_naive_datetime` |
+| `DuckTimestampTz` ↔ `chrono::DateTime<Utc>` | `to_datetime_utc` / `from_datetime_utc` |
+| `DuckTime` / `DuckTimeNs` ↔ `chrono::NaiveTime` | `to_naive_time` / `from_naive_time` |
+
+```toml
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["chrono"] }
+# duckfn does not re-export chrono, so add it for the types you name. Core types plus `std` is
+# enough; `clock` (system time) is only needed if you call `Utc::now()` yourself.
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+```
+
+```rust
+use chrono::{Days, NaiveDate};
+
+#[duck_scalar_function]
+fn dfn_date_add(d: DuckDate, days: i64) -> DuckOptionResult<DuckDate> {
+    let date = d.to_naive_date()?;                                   // DATE -> NaiveDate
+    let shifted = date.checked_add_days(Days::new(days.unsigned_abs()))
+        .ok_or_else(|| duck_error("dfn_date_add: out of chrono's range"))?;
+    Ok(Some(DuckDate::from_naive_date(shifted)?))                    // NaiveDate -> DATE
+}
+```
+
+Two rules the conversions follow:
+
+- **They never panic.** `DATE` is an `i32` day count and `TIMESTAMP` an `i64` microsecond count, both
+  far wider than what chrono can represent, and DuckDB also carries the sentinels `infinity` /
+  `-infinity` (`DATE` stores them as `±i32::MAX`, the `TIMESTAMP` family as `±i64::MAX`). Anything
+  chrono cannot hold comes back as a `DuckResult` error rather than being saturated or wrapped.
+- **They own the unit conversion**, so which precision a field name stands for never has to be
+  guessed: `TIMESTAMP_S` / `TIMESTAMP_MS` / `TIMESTAMP_NS` are seconds / milliseconds / nanoseconds,
+  and `TIMESTAMP` / `TIMESTAMPTZ` are both microseconds (they share the same `i64` storage). Going
+  back into a coarser unit (`from_naive_datetime` into `TIMESTAMP_S`, or into `TIME`) truncates
+  toward zero, the way DuckDB's own casts do.
+
+`DuckDate` ↔ `NaiveDate` is the pair that comes up most often, because a date is what SQL hands you
+and a calendar is what the calculation needs.
 
 ## Lists
 
@@ -176,9 +224,18 @@ pub struct DuckStructNested {
 ```
 
 ```sql
-SELECT (dfn_echo_struct_simple({'id': 1, 'name': 'a'})).id;                          -- 1
-SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}})).inner.value;  -- 2
+SELECT (dfn_echo_struct_simple({'id': 1, 'name': 'a'})).id;                                 -- 1
+SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}, 'maybe': NULL})).inner.value;  -- 2
 ```
+
+A `STRUCT` **literal** is matched by its anonymous type, so its field list has to line up exactly —
+same names, same types, same count. DuckDB inserts no implicit cast to add, drop or rename a field,
+and the error it gives does not mention that: `{'id': 1}` against the struct above fails with
+`No function matches the given name and argument types 'dfn_echo_struct_nested(STRUCT(id INTEGER))'.
+You might need to add explicit type casts.` Write every field out (nullable ones included, as
+`NULL`), or cast explicitly — `…::STRUCT(id INTEGER, "inner" STRUCT(…), maybe STRUCT(…))` (quote a
+field name that clashes with a keyword, such as `inner`), or to a name created by `create_type`
+(`…::ticket`, see below). A *column* of the right type needs none of this: it already has the type.
 
 Structs nest, and they may be used inside the other containers — `Vec<DuckStructSimple>`,
 `IndexMap<String, DuckStructSimple>`, `DuckArray<DuckStructSimple, 2>` and the `Option`-wrapped
@@ -361,7 +418,7 @@ is one rule worth knowing:
 
 | Gap | Detail |
 | --- | --- |
-| Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled. |
+| Behind a Cargo feature | `TIME_NS` is mapped by `DuckTimeNs`, but only with the [`duckdb-1-5` feature](../getting-started/installation.md#cargo-features) enabled; the [`chrono` conversions](#conversions-with-chrono) need the `chrono` feature. |
 | Not mapped, but implementable | `UNION`, `BIT`, `VARINT`, `GEOMETRY`, `VARIANT`: quack-rs has no read/write for them, but a [`DuckValueType` implementation of your own](./custom-types.md) can call the DuckDB C API through the raw vector handle. `ENUM` is generated for you by [`#[derive(DuckEnum)]`](#enums). |
 | Not storable types | `ANY`, `SQLNULL` and the integer/string literal types exist only in DuckDB's own signatures and literals; they cannot be an extension's argument or return type. |
 | No dedicated `DuckList` / `DuckMap` wrappers | `DuckList<T>` / `DuckMap<K, V>` are only aliases for `Vec<T>` / `IndexMap<K, V>`; the real types are the standard library / `indexmap` ones. |
@@ -374,6 +431,8 @@ is one rule worth knowing:
 - [`src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/types) — the echo functions for every type
 - [`test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/test/sql/types) — the expected results
 - [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) — the type implementations themselves
+- [`src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/chrono_bridge.rs) — the `chrono` conversions in use
+- [`test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/chrono_bridge.test) — their expected results, including the `infinity` errors
 
 ## Next
 

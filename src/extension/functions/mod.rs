@@ -1,5 +1,6 @@
 mod aggregate_function;
 mod cast_function;
+mod chrono_bridge;
 mod copy_from_function;
 mod copy_function;
 mod dynamic_table_function;

@@ -54,8 +54,9 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
     /// Generates the aggregate function: a same-named module, `AggregateFunctionImpl` and
     /// automatic registration (which can be disabled by arguments).
     pub(crate) fn build_aggregate_function(&self) -> TokenStream2Result {
+        let sql_name = self.sql_name(self.overloads_name());
         let duck_function_impl = self.build_aggregate_function_impl()?;
-        self.common_build(&self.args(), None, duck_function_impl)
+        self.common_build(&self.args(), None, &sql_name, duck_function_impl)
     }
 
     /// 生成聚合函数实现体：状态结构体 + `AggregateFunctionImpl` + 各种 builder + 自动注册。

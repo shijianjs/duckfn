@@ -45,7 +45,7 @@ SELECT dfn_echo_varchar('你好 🦆');                       -- 你好 🦆
 | DuckDB | Rust | 字段 |
 | --- | --- | --- |
 | `TIMESTAMP` | `DuckTimestamp` | `micros_since_epoch: i64` |
-| `TIMESTAMPTZ` | `DuckTimestampTz` | `millis_since_epoch: i64` |
+| `TIMESTAMPTZ` | `DuckTimestampTz` | `micros_since_epoch: i64` |
 | `TIMESTAMP_S` / `TIMESTAMP_MS` / `TIMESTAMP_NS` | `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` | `seconds_since_epoch` / `millis_since_epoch` / `nanos_since_epoch` |
 | `TIME` | `DuckTime` | `micros_since_midnight: i64` |
 | `TIME_NS` | `DuckTimeNs` | `nanos_since_midnight: i64` |
@@ -75,6 +75,50 @@ SELECT CAST(dfn_echo_uuid('00000000-0000-0000-0000-000000000001'::UUID) AS VARCH
 
 `TIME_NS` 是 DuckDB 1.5 新增的类型，因此需要开启
 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。
+
+### 与 `chrono` 互转
+
+包装类型里只有「原始标量 + 单位」—— 裸 `TIMESTAMP` 是自纪元起的微秒数、`TIMESTAMP_MS` 是毫秒数 ——
+所以把它变成可读、可算的日期时间所需的纪元数学，默认都得调用方自己写。`chrono` feature 把这件事按类型
+各给了一对方法：
+
+| 方向 | 方法 |
+| --- | --- |
+| `DuckDate` ↔ `chrono::NaiveDate` | `to_naive_date` / `from_naive_date` |
+| `DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` ↔ `chrono::NaiveDateTime` | `to_naive_datetime` / `from_naive_datetime` |
+| `DuckTimestampTz` ↔ `chrono::DateTime<Utc>` | `to_datetime_utc` / `from_datetime_utc` |
+| `DuckTime` / `DuckTimeNs` ↔ `chrono::NaiveTime` | `to_naive_time` / `from_naive_time` |
+
+```toml
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["chrono"] }
+# duckfn 不 re-export chrono，用到哪些类型就自己加依赖。核心类型加 std 就够；
+# 只有自己调 Utc::now() 才需要 clock（取系统时间）。
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+```
+
+```rust
+use chrono::{Days, NaiveDate};
+
+#[duck_scalar_function]
+fn dfn_date_add(d: DuckDate, days: i64) -> DuckOptionResult<DuckDate> {
+    let date = d.to_naive_date()?;                                   // DATE -> NaiveDate
+    let shifted = date.checked_add_days(Days::new(days.unsigned_abs()))
+        .ok_or_else(|| duck_error("dfn_date_add: out of chrono's range"))?;
+    Ok(Some(DuckDate::from_naive_date(shifted)?))                    // NaiveDate -> DATE
+}
+```
+
+两条约定：
+
+- **不 panic**：`DATE` 是 `i32` 天数、`TIMESTAMP` 是 `i64` 微秒数，值域都远大于 chrono 能表示的范围，
+  而且 DuckDB 还有 `infinity` / `-infinity` 两个哨兵（`DATE` 存 `±i32::MAX`，`TIMESTAMP` 系列存
+  `±i64::MAX`）。chrono 装不下的值一律返回 `DuckResult` 错误，不饱和、也不绕回成另一个时间点。
+- **单位换算由方法承担**：不用再从字段名猜精度 —— `TIMESTAMP_S` / `TIMESTAMP_MS` / `TIMESTAMP_NS`
+  分别是秒 / 毫秒 / 纳秒，而 `TIMESTAMP` 与 `TIMESTAMPTZ` 都是微秒（两者共用同一份 `i64` 存储）。
+  反向写进更粗的单位时（`from_naive_datetime` 写进 `TIMESTAMP_S`，或写进 `TIME`）按 DuckDB 自己的做法
+  **向零截断**。
+
+四对里最常用的就是 `DuckDate` ↔ `NaiveDate`：SQL 给你的是一个日期，而计算要的是一份日历。
 
 ## 列表
 
@@ -171,8 +215,16 @@ pub struct DuckStructNested {
 
 ```sql
 SELECT (dfn_echo_struct_simple({'id': 1, 'name': 'a'})).id;                                 -- 1
-SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}})).inner.value;  -- 2
+SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}, 'maybe': NULL})).inner.value;  -- 2
 ```
+
+`STRUCT` **字面量**按它的匿名类型精确匹配，所以字段列表必须完全对上 —— 字段名、字段类型、字段个数都要
+一致。DuckDB 不会为了补齐、删掉或改名而插入隐式 cast，而它给的报错并不会提这一点：对着上面这个结构体写
+`{'id': 1}` 会报 `No function matches the given name and argument types
+'dfn_echo_struct_nested(STRUCT(id INTEGER))'. You might need to add explicit type casts.`。要么把字段写全
+（可空字段也写上 `NULL`），要么显式 cast —— `…::STRUCT(id INTEGER, "inner" STRUCT(…), maybe STRUCT(…))`
+（字段名和关键字冲突时要加引号，这里的 `inner` 就是），或者 cast 到 `create_type` 建好的命名类型
+（`…::ticket`，见下文）。而**列**只要有正确的类型就不需要这些 —— 它本来就是那个类型。
 
 结构体可以嵌套，也可以放进其它容器里 —— `Vec<DuckStructSimple>`、`IndexMap<String, DuckStructSimple>`、
 `DuckArray<DuckStructSimple, 2>` 以及它们的 `Option` 版本都支持。
@@ -336,7 +388,7 @@ bind 参数、以及 `LIST` / `MAP` / `STRUCT` 值的子元素，都是以 `Valu
 
 | 缺口 | 说明 |
 | --- | --- |
-| 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)。 |
+| 需要 feature 的类型 | `TIME_NS` 已由 `DuckTimeNs` 映射，但要开启 [`duckdb-1-5` feature](../getting-started/installation.md#cargo-feature)；[与 `chrono` 互转](#与-chrono-互转) 需要 `chrono` feature。 |
 | 未映射，但可以自己实现 | `UNION`、`BIT`、`VARINT`、`GEOMETRY`、`VARIANT`：quack-rs 没有它们的读写方法，但你可以[自己实现 `DuckValueType`](./custom-types.md)，通过裸向量句柄直接调用 DuckDB 的 C API。`ENUM` 则由 [`#[derive(DuckEnum)]`](#枚举) 生成。 |
 | 不可存储类型 | `ANY`、`SQLNULL` 以及整数/字符串字面量类型只存在于 DuckDB 自身的函数签名与字面量中，不能作为扩展的参数或返回类型。 |
 | 没有专用的 `DuckList` / `DuckMap` 包装类型 | `DuckList<T>` / `DuckMap<K, V>` 只是 `Vec<T>` / `IndexMap<K, V>` 的别名，真正的类型是标准库 / `indexmap` 的那个。 |
@@ -349,6 +401,8 @@ bind 参数、以及 `LIST` / `MAP` / `STRUCT` 值的子元素，都是以 `Valu
 - [`src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/types) —— 每种类型的 echo 函数
 - [`test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/test/sql/types) —— 期望结果
 - [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) —— 类型实现本身
+- [`src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/chrono_bridge.rs) —— `chrono` 转换的实际用法
+- [`test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/chrono_bridge.test) —— 期望结果，含 `infinity` 报错
 
 ## 接下来
 
