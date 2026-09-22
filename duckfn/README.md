@@ -38,7 +38,7 @@ C/C++ glue code, and no local DuckDB build required.
 
 ```toml
 [dependencies]
-duckfn = "0.0.7"
+duckfn = "0.0.8"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
@@ -62,7 +62,7 @@ three are interop and independent of each other: `chrono` converts the time wrap
 arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.0.7", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.0.8", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
 
 ## Quick start
