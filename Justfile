@@ -93,7 +93,7 @@ release_publish:
     just publish_dry
     just publish
 
-# 切到下一开发版本：just release_dev 0.0.8-dev.0
+# 切到下一开发版本：just release_dev 0.0.9-dev.0
 release_dev new_version:
     bash scripts/release.sh dev "{{new_version}}"
 
