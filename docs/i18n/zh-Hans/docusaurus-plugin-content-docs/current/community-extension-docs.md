@@ -55,8 +55,12 @@ pub fn double_it(v: Option<i64>) -> Option<i64> {
 `#[duck_copy_from_function]`、`#[duck_sql_macro]`。`#[duck_replacement_scan]` 与
 `#[duck_custom_register]` 不支持 —— catalog 里没有以 Rust 函数名命名的对应条目。
 
-文本本身有两点要知道：
+文本本身有三点要知道：
 
+- **多条示例用 `"; "` 连接，每条结尾的分号会被去掉。** CSV 的 `example` 只有一列、是一个字符串 ——
+  生成器只是把它包进 `[...]`，不会再拆分 —— 而真实 SQL 里逗号遍地都是
+  （`FROM (VALUES (1, 'a'), (2, NULL)) v(i, s)`），用逗号分隔根本读不出示例在哪结束。`"; "` 是 SQL
+  自己的语句分隔符；去掉结尾分号则是为了不让 `["SELECT 1", "SELECT 2;"]` 拼成 `SELECT 1; SELECT 2;;`。
 - **换行在写出 CSV 时会被压成一个空格。** 生成的页面是一张 Markdown 表格，单元格里的换行会把表格行
   拆断；而且 DuckDB 的 `read_csv()` 本来就会把引号内字段里的裸换行读成 `\r\n`。逗号、双引号、非 ASCII
   都原样保留，只有换行会被压平。

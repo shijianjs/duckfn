@@ -106,35 +106,59 @@ pub fn export(project_dir: &Path, all: bool) -> io::Result<Summary> {
 
 /// 用一个 `csv` crate 的 writer 写出表头 + 每一行。
 ///
-/// 转义（字段含逗号 / 引号 / 换行时的加引号与双写）由 `csv` crate 负责，这里不手拼字符串；
-/// 多个示例用 `, ` 拼进同一个 `example` 字段：`generate_md.sh` 只做
-/// `'[' || other.example || ']'`，不会按分隔符再拆一次，所以拼成一个字段渲染出来才是 `[a, b]`
-/// —— 与它原生分支 `list_reduce(lambda x, y : x || ', ' || y)` 的形态一致。
-///
+/// 转义（字段含逗号 / 引号 / 换行时的加引号与双写）由 `csv` crate 负责，这里不手拼字符串。
+/// 多条示例经 [`join_examples`] 拼成一个 `example` 字段：`generate_md.sh` 只做
+/// `'[' || other.example || ']'`，不会按分隔符再拆一次，所以要在写出前拼好。
 /// 字段里的换行会被压成一个空格，见 [`flatten_newlines`]。
 ///
 /// Writes the header plus one row per function through a `csv` crate writer. Quoting and escaping
 /// (for fields containing commas, quotes or newlines) are the crate's job rather than hand-rolled
-/// string building; several examples are joined with `", "` into the single `example` field —
-/// `generate_md.sh` only does `'[' || other.example || ']'` and never splits the field again, so
-/// joining is what renders as `[a, b]`, matching its native
-/// `list_reduce(lambda x, y : x || ', ' || y)` branch. Newlines inside a field collapse to a single
-/// space, see [`flatten_newlines`].
+/// string building. Several examples go through [`join_examples`] into the single `example` field,
+/// because `generate_md.sh` only does `'[' || other.example || ']'` and never splits the field
+/// again. Newlines inside a field collapse to a single space, see [`flatten_newlines`].
 pub fn write(path: &Path, rows: &[FunctionDescription]) -> io::Result<()> {
     let mut writer = csv::Writer::from_path(path)?;
     writer.write_record(CSV_HEADER)?;
     for row in rows {
-        let examples = row.examples.join(", ");
+        let examples = join_examples(&row.examples);
         let fields = [
             flatten_newlines(&row.function),
             flatten_newlines(row.description.as_deref().unwrap_or_default()),
             flatten_newlines(row.comment.as_deref().unwrap_or_default()),
-            flatten_newlines(&examples),
+            Cow::Borrowed(examples.as_str()),
         ];
         writer.write_record(fields.map(|field| field.into_owned()))?;
     }
     writer.flush()?;
     Ok(())
+}
+
+/// 把多条示例拼进 CSV 那一个 `example` 字段：每条去掉首尾空白与结尾的分号，再用 `"; "` 连接。
+///
+/// 用分号而不是逗号：真实 SQL 里逗号遍地都是（`FROM (VALUES (1, 'a'), (2, NULL)) v(i, s)`），
+/// 用 `", "` 拼成一串之后根本分不清一条示例在哪结束 —— 渲染出来是 `[a, b, c]`，和示例内部的逗号混在
+/// 一起。`"; "` 是 SQL 自己的语句分隔符，拼出来与「把几条语句连着写」完全一样，一眼能读。
+///
+/// 先把每条结尾的分号去掉，是为了避免出现 `a;; b`：有人习惯给示例收尾加分号（community-extensions
+/// 里 `fakeit`、`chsql` 的 CSV 就是），有人不加（`dq` 不加），归一化之后两种写法结果一致。
+///
+/// Joins several examples into the CSV's single `example` field: each is stripped of surrounding
+/// whitespace and of a trailing semicolon, then they are joined with `"; "`. A semicolon rather than
+/// a comma, because real SQL is full of commas (`FROM (VALUES (1, 'a'), (2, NULL)) v(i, s)`) and a
+/// `", "` join renders as `[a, b, c]`, indistinguishable from the commas inside the examples
+/// themselves — `"; "` is SQL's own statement separator, so the result reads exactly like the
+/// statements typed one after another. Dropping the trailing semicolon avoids `a;; b`: some people
+/// terminate their examples (`fakeit` and `chsql` do in their community-extension CSVs) and some do
+/// not (`dq` does not), and normalising makes both come out the same.
+fn join_examples(examples: &[String]) -> String {
+    let normalized: Vec<&str> = examples
+        .iter()
+        .map(|example| {
+            let trimmed = example.trim();
+            trimmed.strip_suffix(';').unwrap_or(trimmed).trim_end()
+        })
+        .collect();
+    flatten_newlines(&normalized.join("; ")).into_owned()
 }
 
 /// 把字段里的一段连续换行压成一个空格。

@@ -10,8 +10,10 @@
 //!   元数据按「description/comment 取第一个非空、examples 拼接去重」合并。
 //! - **E 多个 example**：CSV 的 `example` 是**一个字符串**，
 //!   `generate_md.sh` 只做 `'[' || example.jekyll_format_function() || ']'`，
-//!   **不会**按分隔符再拆一次（对照它原生分支的 `list_reduce(lambda x, y : x || ', ' || y)`）。
-//!   所以多条示例要用 `", "` 拼成一个字段，渲染出来才是 `[a, b]`，与原生形态一致。
+//!   **不会**按分隔符再拆一次（对照它原生分支的 `list_reduce(lambda x, y : x || ', ' || y)`），
+//!   所以多条必须先在写出时拼好。拼的规则见 `join_examples`：每条去掉结尾分号后按 `"; "` 连接 ——
+//!   真实 SQL 里逗号遍地都是（`FROM (VALUES (1, 'a'), (2, NULL)) v(i, s)`），用逗号当分隔符根本读不出
+//!   一条示例在哪结束。下面用的示例都是这种带逗号的真 SQL，不是 `SELECT a, SELECT b`。
 //!
 //! 另外用一个可选的 DuckDB 往返测试把「这份 CSV 真的能被 `read_csv()` 读回原值」钉死 ——
 //! 转义写错了只有真读一遍才知道。没装 `duckdb` 命令行时该测试打印提示后跳过。
@@ -50,13 +52,21 @@ fn docs_double_it(v: Option<i64>) -> Option<i64> {
 // E 多个 example
 // ============================================================================
 
-/// 多条示例：`examples = [...]` 的顺序会被保留，导出时用 `", "` 拼成一个字段。
+/// 多条示例：`examples = [...]` 的顺序会被保留，导出时按 `"; "` 拼成一个字段。
 ///
-/// Several examples: the order of `examples = [...]` is preserved and they are joined with `", "`
-/// into the single CSV field.
+/// 示例刻意写成常见的真 SQL（内部全是逗号），并且**第二条以分号结尾** —— 收尾分号在导出时会被去掉，
+/// 免得拼出 `...; ;` 这种一眼像 bug 的东西。
+///
+/// Several examples: the order of `examples = [...]` is preserved and they are joined with `"; "`
+/// into the single CSV field. The examples are ordinary SQL full of commas, and the second one *does*
+/// end with a semicolon: that trailing semicolon is dropped on export so the result cannot end up
+/// looking like `...; ;`.
 #[duckfn::duck_scalar_function(
     description = "Adds two INTEGERs",
-    examples = ["SELECT docs_add_two(1, 2)", "SELECT docs_add_two(3, 4)"]
+    examples = [
+        "SELECT docs_add_two(i, 1) FROM (VALUES (1), (2), (3)) v(i) ORDER BY i",
+        "SELECT docs_add_two(i, j) FROM (VALUES (1, 2), (3, 4)) v(i, j);"
+    ]
 )]
 fn docs_add_two(a: i64, b: i64) -> i64 {
     a + b
@@ -113,20 +123,25 @@ fn docs_unicode() -> i64 {
 #[duckfn::duck_scalar_function(
     overloads_name = "docs_overloaded",
     description = "Overloaded: INTEGER input",
-    example = "SELECT docs_overloaded(1)"
+    example = "SELECT docs_overloaded(i) FROM (VALUES (1), (2)) v(i)"
 )]
 fn docs_overload_int(v: i64) -> i64 {
     v
 }
 
-/// 同一个函数集的 VARCHAR 签名：提供 comment，并且和上面共享同一个 example（导出时必须去重）。
+/// 同一个函数集的 VARCHAR 签名：提供 comment，并且和上面共享第一条 example（导出时必须去重），
+/// 第二条示例以分号结尾（导出时被去掉）。
 ///
-/// The VARCHAR signature of the same set: supplies the comment and shares one example with the
-/// other signature (which the export must deduplicate).
+/// The VARCHAR signature of the same set: supplies the comment, shares the first example with the
+/// other signature (which the export must deduplicate), and ends its second example with a
+/// semicolon (dropped on export).
 #[duckfn::duck_scalar_function(
     overloads_name = "docs_overloaded",
     comment = "Also accepts VARCHAR",
-    examples = ["SELECT docs_overloaded(1)", "SELECT docs_overloaded('a')"]
+    examples = [
+        "SELECT docs_overloaded(i) FROM (VALUES (1), (2)) v(i)",
+        "SELECT docs_overloaded(s) FROM (VALUES ('a'), ('b')) v(s);"
+    ]
 )]
 fn docs_overload_str(v: String) -> String {
     v
@@ -152,9 +167,9 @@ fn docs_overload_str(v: String) -> String {
 #[cfg(feature = "cli")]
 const EXPECTED_DEFAULT_CSV: &str = concat!(
     "function,description,comment,example\n",
-    "docs_add_two,Adds two INTEGERs,,\"SELECT docs_add_two(1, 2), SELECT docs_add_two(3, 4)\"\n",
+    "docs_add_two,Adds two INTEGERs,,\"SELECT docs_add_two(i, 1) FROM (VALUES (1), (2), (3)) v(i) ORDER BY i; SELECT docs_add_two(i, j) FROM (VALUES (1, 2), (3, 4)) v(i, j)\"\n",
     "docs_double_it,Doubles an INTEGER,\"NULL in, NULL out\",SELECT docs_double_it(21)\n",
-    "docs_overloaded,Overloaded: INTEGER input,Also accepts VARCHAR,\"SELECT docs_overloaded(1), SELECT docs_overloaded('a')\"\n",
+    "docs_overloaded,Overloaded: INTEGER input,Also accepts VARCHAR,\"SELECT docs_overloaded(i) FROM (VALUES (1), (2)) v(i); SELECT docs_overloaded(s) FROM (VALUES ('a'), ('b')) v(s)\"\n",
     "docs_special,\"Comma, \"\"quote\"\", and a newline\",  padded  ,\"SELECT docs_special('a,b') -- say \"\"hi\"\" {{ }} {% raw %}\"\n",
     "docs_unicode,把 INTEGER 翻倍,,SELECT docs_unicode()\n",
 );
@@ -186,15 +201,19 @@ fn declared_documentation_is_collected() {
     );
     assert!(double_it.is_documented());
 
-    // E：多条示例按声明顺序保留；没写 comment 就是 None。
+    // E：多条示例按声明顺序保留（原样保留，连结尾的分号都还在 —— 归一化只发生在写 CSV 时）；
+    // 没写 comment 就是 None。
+    //
+    // E: several examples keep their declared order and their literal text — the trailing semicolon
+    // included. Normalisation happens only when the CSV is written.
     let add_two = find("docs_add_two");
     assert_eq!(add_two.description.as_deref(), Some("Adds two INTEGERs"));
     assert_eq!(add_two.comment, None);
     assert_eq!(
         add_two.examples,
         vec![
-            "SELECT docs_add_two(1, 2)".to_string(),
-            "SELECT docs_add_two(3, 4)".to_string()
+            "SELECT docs_add_two(i, 1) FROM (VALUES (1), (2), (3)) v(i) ORDER BY i".to_string(),
+            "SELECT docs_add_two(i, j) FROM (VALUES (1, 2), (3, 4)) v(i, j);".to_string()
         ]
     );
 
@@ -237,13 +256,17 @@ fn declared_documentation_is_collected() {
         Some("Overloaded: INTEGER input")
     );
     assert_eq!(overloaded.comment.as_deref(), Some("Also accepts VARCHAR"));
-    // 两个签名各给了一个 example，其中 `SELECT docs_overloaded(1)` 重复 → 只保留一次。
-    // 重复项被去掉后，两种遍历顺序都会得到同一个顺序，所以这里可以直接逐项断言。
+    // 两个签名各给了 example，其中第一条重复 → 只保留一次。重复项被去掉后，两种遍历顺序都会得到
+    // 同一个结果，所以这里可以直接逐项断言。
+    //
+    // Both signatures contribute examples and the first one is shared, so it must appear once. With
+    // the duplicate dropped, both iteration orders give the same list, so it can be asserted item by
+    // item.
     assert_eq!(
         overloaded.examples,
         vec![
-            "SELECT docs_overloaded(1)".to_string(),
-            "SELECT docs_overloaded('a')".to_string()
+            "SELECT docs_overloaded(i) FROM (VALUES (1), (2)) v(i)".to_string(),
+            "SELECT docs_overloaded(s) FROM (VALUES ('a'), ('b')) v(s);".to_string()
         ]
     );
 }
@@ -375,14 +398,20 @@ fn csv_round_trips_through_duckdb() {
     assert_eq!(select("contains(description, chr(10))", "docs_special"), "false");
     assert_eq!(select("contains(description, chr(13))", "docs_special"), "false");
 
-    // E：多条示例拼成一个字段，`generate_md.sh` 包上方括号后与原生列表形态一致。
+    // E：多条示例拼成一个字段：按 `"; "` 连接，结尾分号被去掉，所以不会出现 `;;`；
+    // `generate_md.sh` 包上方括号后就是最终渲染的形态。
+    //
+    // E: several examples end up in one field, joined with `"; "` and with the trailing semicolon
+    // dropped (so no `;;`); wrapping in brackets is what `generate_md.sh` finally renders.
     assert_eq!(
         select("example", "docs_add_two"),
-        "SELECT docs_add_two(1, 2), SELECT docs_add_two(3, 4)"
+        "SELECT docs_add_two(i, 1) FROM (VALUES (1), (2), (3)) v(i) ORDER BY i; \
+         SELECT docs_add_two(i, j) FROM (VALUES (1, 2), (3, 4)) v(i, j)"
     );
     assert_eq!(
         select("'[' || example || ']'", "docs_add_two"),
-        "[SELECT docs_add_two(1, 2), SELECT docs_add_two(3, 4)]"
+        "[SELECT docs_add_two(i, 1) FROM (VALUES (1), (2), (3)) v(i) ORDER BY i; \
+         SELECT docs_add_two(i, j) FROM (VALUES (1, 2), (3, 4)) v(i, j)]"
     );
 
     // D：重载只占一行，`function` 是函数集名。
@@ -396,6 +425,15 @@ fn csv_round_trips_through_duckdb() {
     assert_eq!(
         select("description", "docs_overloaded"),
         "Overloaded: INTEGER input"
+    );
+    // D + E：合并后的示例也读得回来 —— 共享的那条只出现一次，结尾分号被去掉。
+    //
+    // D + E: the merged examples read back too — the shared one appears once and the trailing
+    // semicolon is gone.
+    assert_eq!(
+        select("example", "docs_overloaded"),
+        "SELECT docs_overloaded(i) FROM (VALUES (1), (2)) v(i); \
+         SELECT docs_overloaded(s) FROM (VALUES ('a'), ('b')) v(s)"
     );
 
     // B：`--all` 里的空字段被读成 NULL；`docs_overloaded` 的 comment 有值、example 有值。

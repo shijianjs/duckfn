@@ -57,8 +57,13 @@ They work on every attribute that registers a function: `#[duck_scalar_function]
 `#[duck_replacement_scan]` and `#[duck_custom_register]` do not take them, because nothing named
 after the Rust function ends up in the catalog.
 
-Two things worth knowing about the text itself:
+Three things worth knowing about the text itself:
 
+- **Several examples are joined with `"; "`, and a trailing `;` on each is dropped.** The CSV's
+  `example` column is a single string — the generator only wraps it in `[...]`, it never splits it —
+  and real SQL is full of commas (`FROM (VALUES (1, 'a'), (2, NULL)) v(i, s)`), so a comma join would
+  be unreadable. `"; "` is SQL's own statement separator, and dropping the trailing semicolon keeps
+  `["SELECT 1", "SELECT 2;"]` from coming out as `SELECT 1; SELECT 2;;`.
 - **Line breaks collapse to a single space** when the CSV is written. The generated page is a
   Markdown table, where a newline inside a cell ends the row, and DuckDB's `read_csv()` reads a bare
   newline inside a quoted field back as `\r\n` anyway. Commas, double quotes and non-ASCII text pass
