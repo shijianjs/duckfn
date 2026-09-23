@@ -137,3 +137,5 @@ duckdb -unsigned -c "LOAD './target/debug/<扩展名>.duckdb_extension'; SELECT 
 - 临时脚本、数据、日志、一次性验证代码放 `target/`，不要放在被跟踪的目录里。
 - 错误处理用 `duck_error(...)` / `DuckOptionResult`，不要把 panic 当控制流。
 - 能用属性解决的，不要退回手写注册代码。
+- 注释照旧中英双语，但**用户会看到的文案一律英文**（CLI 的 `about` / `help` / 打印、错误信息都是）。
+  clap 没有 i18n，而且 derive 会把文档注释本身当成帮助文本，写双语会两段并排显示在 `--help` 里。

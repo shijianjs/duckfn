@@ -19,37 +19,44 @@ use clap::{Parser, Subcommand};
 use std::path::Path;
 use std::process::ExitCode;
 
-/// 顶层命令行定义。
-///
-/// The top-level command-line definition.
+/// Helpers for duckfn extensions (not part of the extension runtime).
+//
+// clap 没有 i18n：`about` / `help` 都是编译期静态字符串，没有按 locale 取词的地方。而且 derive
+// 会把**文档注释本身当成帮助文本**（第一段是 `about`，整段是 `long_about`），所以这些位置上的
+// `///` 只能用一种语言 —— 本仓库其它注释照旧中英双语，这里凡是用户会看到的文本一律用英文，
+// 免得 `--help` 里中英两段并排出现（改之前就是这样）。中文说明放在 `//` 里。
+//
+// clap has no i18n: `about` and `help` are compile-time constants with nowhere to look a locale up,
+// and the derive turns **doc comments into the help text itself** (first paragraph is `about`, the
+// whole comment is `long_about`). A `///` in these positions can therefore only ever be one
+// language — everything user-visible here is English so `--help` does not print two paragraphs side
+// by side (which is what it did before); Chinese notes live in `//` comments.
+//
+// 中文标题：duckfn 的辅助命令（不参与扩展运行时）。
 #[derive(Debug, Parser)]
-#[command(
-    name = "duckfn",
-    about = "duckfn 的辅助命令（不参与扩展运行时）",
-    version
-)]
+#[command(name = "duckfn", version)]
 struct Cli {
-    /// 要执行的子命令。
-    ///
     /// The subcommand to run.
+    //
+    // 中文：要执行的子命令。
     #[command(subcommand)]
     command: Command,
 }
 
-/// 目前只有一个子命令；以后加工具命令就在这里加一个变体。
-///
-/// Only one subcommand for now; future tools are added as further variants here.
+// 目前只有一个子命令；以后加工具命令就在这里加一个变体。
+//
+// Only one subcommand for now; future tools are added as further variants here.
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// 把 `#[duck_*]` 上声明的函数文档导出成 CSV
-    ///
-    /// Export the function documentation declared on `#[duck_*]` as a CSV
+    /// Export the function documentation declared on `#[duck_*]` attributes as a CSV.
+    //
+    // 中文：把 `#[duck_*]` 上声明的函数文档导出成 CSV。
     #[command(name = "function_descriptions")]
     FunctionDescriptions {
-        /// 连没写 description / comment / example 的函数一起导出（文件名带 `_all` 后缀）
-        ///
-        /// Also export functions without any description / comment / example (the file name gets
-        /// an `_all` suffix)
+        /// Also export functions without any description, comment or example (the file name gets
+        /// an `_all` suffix).
+        //
+        // 中文：连没写 description / comment / example 的函数一起导出（文件名带 `_all` 后缀）。
         #[arg(long)]
         all: bool,
     },
