@@ -109,6 +109,8 @@ matching version, or rebuild against the version you are running.
 
 ### Where do tooling problems go?
 
-The IDE flagging `src/wasm_lib.rs`, `error[E0583]` once you nest modules, the Rust 1.86 pin in the
-official CI's WebAssembly job, and the upstream bugs worth knowing about are all collected in
+Problems with the project layout — the crate roots, `error[E0583]` once you nest modules, the IDE
+flagging `src/wasm_lib.rs` — are in
+[Project structure](./getting-started/project-structure.md). The Rust 1.86 pin in the official CI's
+WebAssembly job and the upstream bugs worth knowing about are in
 [Troubleshooting](./troubleshooting.md).

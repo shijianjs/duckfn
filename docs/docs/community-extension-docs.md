@@ -6,9 +6,10 @@ description: Why a duckfn extension needs function_descriptions.csv, what the fo
 
 # Community extension docs
 
-Every community extension gets a page on <https://duckdb.org/community_extensions/extensions/…>
-that is generated from the extension binary: DuckDB loads it, diffs `duckdb_functions()` before and
-after, and renders what the extension added.
+Every community extension gets a page on
+[duckdb.org/community_extensions](https://duckdb.org/community_extensions/list_of_extensions) that
+is generated from the extension binary: DuckDB loads it, diffs `duckdb_functions()` before and after,
+and renders what the extension added.
 
 That last part is the catch — the page shows whatever the catalog reports, and **DuckDB's C
 extension API has no way to set a function's description or examples**. It exposes

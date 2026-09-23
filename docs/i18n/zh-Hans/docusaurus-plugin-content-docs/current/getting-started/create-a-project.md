@@ -30,8 +30,9 @@ cd my_ext
 然后改掉模板里写死的部分：`Makefile` 里的 `EXTENSION_NAME`、要构建 WebAssembly 时的 `[[example]]`
 目标，以及传给 `duckfn_entrypoint!` 的名字。
 
-改的时候让两个 crate root 保持一致：`src/lib.rs` 与 `src/wasm_lib.rs` 必须声明同样的模块，官方模板那种
-`mod lib;` 再导出一旦遇到嵌套模块就会报 `error[E0583]` —— 见[问题排查](../troubleshooting.md#嵌套模块时报-e0583)。
+改的时候别动这几个 crate root：`src/lib.rs`、`src/wasm_lib.rs` 与 `src/bin/duckfn.rs` 都指向同一个
+`src/extension/` 模块，这是整套目录结构唯一的规则 —— 为什么、以及破了这条规则会看到什么
+`error[E0583]`，见[项目结构约定](./project-structure.md)。
 
 ## 用 duckfn、quack-rs 写逻辑
 

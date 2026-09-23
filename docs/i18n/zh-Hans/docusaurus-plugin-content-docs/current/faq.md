@@ -98,5 +98,6 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 ### 工具链层面的问题去哪看？
 
-IDE 对 `src/wasm_lib.rs` 标红、嵌套模块后的 `error[E0583]`、官方 CI 的 WebAssembly 作业锁定 Rust 1.86，
-以及几个值得知道的上游 bug，都汇总在[问题排查](./troubleshooting.md)。
+与目录结构有关的 —— 几个 crate root、嵌套模块后的 `error[E0583]`、IDE 对 `src/wasm_lib.rs` 标红 ——
+在[项目结构约定](./getting-started/project-structure.md)；官方 CI 的 WebAssembly 作业锁定 Rust 1.86，
+以及几个值得知道的上游 bug，在[问题排查](./troubleshooting.md)。

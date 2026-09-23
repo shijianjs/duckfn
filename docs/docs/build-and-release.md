@@ -50,8 +50,10 @@ just build_wasm
 
 Because `emcc` performs the final link, the crate type has to be `staticlib` for that target rather
 than `cdylib`. The repository handles this with an extra `[[example]]` target in `Cargo.toml` that
-points at `src/wasm_lib.rs` and declares `crate-type = ["staticlib"]`; that file simply forwards to
-`src/lib.rs`.
+points at `src/wasm_lib.rs` and declares `crate-type = ["staticlib"]`. That file is a crate root of
+its own: like `src/lib.rs` and the CLI's `src/bin/duckfn.rs`, it declares `mod extension;`, so all of
+them compile the same `src/extension/` tree — see
+[Project structure](./getting-started/project-structure.md).
 
 ## Continuous integration
 

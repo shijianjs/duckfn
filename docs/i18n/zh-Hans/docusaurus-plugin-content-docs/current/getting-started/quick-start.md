@@ -1,6 +1,6 @@
 ---
 title: 快速开始
-sidebar_position: 3
+sidebar_position: 4
 description: 编写、构建并加载一个最小的 duckfn 扩展，然后在 SQL 中调用它。
 ---
 

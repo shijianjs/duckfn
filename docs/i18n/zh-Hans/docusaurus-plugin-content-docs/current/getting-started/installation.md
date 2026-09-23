@@ -1,6 +1,6 @@
 ---
 title: 安装
-sidebar_position: 2
+sidebar_position: 3
 description: 添加 duckfn 依赖、声明 cdylib crate 类型，以及为什么不需要本地编译 DuckDB。
 ---
 

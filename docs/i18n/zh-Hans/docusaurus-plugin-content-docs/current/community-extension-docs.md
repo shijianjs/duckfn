@@ -6,9 +6,10 @@ description: 为什么 duckfn 扩展需要 function_descriptions.csv、四列各
 
 # 社区扩展文档页
 
-每个社区扩展在 <https://duckdb.org/community_extensions/extensions/…> 上都有一页简介，它是从
-扩展二进制**生成**的：DuckDB 加载扩展，把 `duckdb_functions()` 在加载前后做一次差集，再把多出来
-的东西渲染成页面。
+每个社区扩展在
+[duckdb.org/community_extensions](https://duckdb.org/community_extensions/list_of_extensions) 上都有一页
+简介，它是从扩展二进制**生成**的：DuckDB 加载扩展，把 `duckdb_functions()` 在加载前后做一次差集，
+再把多出来的东西渲染成页面。
 
 问题就在最后一步 —— 页面上显示的是 catalog 里查到什么就显示什么，而 **DuckDB 的 C 扩展 API
 没有设置函数 description 与 example 的接口**。它只提供

@@ -3,6 +3,6 @@
   "position": 2,
   "link": {
     "type": "generated-index",
-    "description": "Start from a template, add duckfn, then call your first function from SQL."
+    "description": "Start from a template, learn the layout it uses, add duckfn, then call your first function from SQL."
   }
 }

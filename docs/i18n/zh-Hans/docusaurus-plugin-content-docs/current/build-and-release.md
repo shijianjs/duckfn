@@ -48,8 +48,9 @@ just build_wasm
 ```
 
 由于最终链接由 `emcc` 完成，该目标下 crate 类型必须是 `staticlib` 而不是 `cdylib`。本仓库在 `Cargo.toml`
-里用一个额外的 `[[example]]` 目标解决这个问题：它指向 `src/wasm_lib.rs` 并声明 `crate-type = ["staticlib"]`，
-而那个文件只是转发到 `src/lib.rs`。
+里用一个额外的 `[[example]]` 目标解决这个问题：它指向 `src/wasm_lib.rs` 并声明 `crate-type = ["staticlib"]`。
+那个文件自己就是一个 crate root：和 `src/lib.rs`、CLI 的 `src/bin/duckfn.rs` 一样，它声明 `mod extension;`，
+三者编译的是同一棵 `src/extension/` 树 —— 见[项目结构约定](./getting-started/project-structure.md)。
 
 ## 持续集成
 

@@ -1,99 +1,17 @@
 ---
 title: Troubleshooting
 sidebar_position: 9
-description: The IDE flagging the WebAssembly entry file, E0583 in a nested module tree, the Rust 1.86 pin in the official CI, and an upstream bug that corrupts all-NULL list literals.
+description: The Rust 1.86 pin in the official CI's WebAssembly job, and an upstream bug that corrupts all-NULL list literals.
 ---
 
 # Troubleshooting
 
-Four things that are none of duckfn's doing, but that you will run into. Each one says what you see,
+Two things that are none of duckfn's doing, but that you will run into. Each one says what you see,
 why it happens, and what to do about it.
 
-## IDE errors in the WebAssembly entry file
-
-**What you see.** RustRover or rust-analyzer marks up `src/wasm_lib.rs` with errors that `make debug`,
-`just build` or `cargo duckdb-ext build` never reproduce.
-
-**Why.** `Cargo.toml` registers that file as an example:
-
-```toml
-[[example]]
-# crate-type can't be (at the moment) be overriden for specific targets
-path = "src/wasm_lib.rs"
-crate-type = ["staticlib"]
-```
-
-`crate-type` cannot be chosen per target, and the two targets need different ones — `cdylib` when
-compiling natively, `staticlib` for WebAssembly — so the template carries a second crate root that is
-only built when cross-compiling:
-
-```shell
-just build_wasm     # cargo build --release --target wasm32-unknown-emscripten --example rusty_quack
-```
-
-An IDE checks *every* target by default (`cargo check --all-targets`), which compiles that example for
-your host platform as well — a configuration it was never written for.
-
-**Fix.** Gate the file on the target architecture. On any other target it compiles to nothing and the
-errors disappear:
-
-```rust
-#![cfg(target_arch = "wasm32")]
-#![allow(special_module_name)]
-
-mod extension;
-```
-
-The second attribute silences the lint about a crate root that is not named `lib.rs`.
-
-## Nested modules fail with E0583
-
-**What you see.** The build breaks as soon as a module gains a submodule — for example when a second
-level appears under `src/`:
-
-```
-error[E0583]: file not found for module `demo`
- --> src\lib.rs:3:1
-
-error[E0583]: file not found for module `types`
- --> src\lib.rs:4:1
-```
-
-**Why.** The official template makes the WebAssembly root re-export the native one:
-
-```rust
-// src/wasm_lib.rs, official template
-mod lib;
-```
-
-`mod lib;` resolves to `src/lib.rs`, and from that point on `lib.rs` is a **file** module: its children
-are looked up *beside* it, under `src/lib/`. So a `mod demo;` written inside `src/lib.rs` is searched
-for at `src/lib/demo.rs` instead of `src/extension/demo.rs`, and rustc reports E0583 on the `mod` line.
-A flat `lib.rs` hides the problem; nesting exposes it.
-
-**Fix: mirror the two roots.** Both crate roots declare the same path, and every module lives under
-`src/extension/`:
-
-```
-src/
-├─ lib.rs              mod extension;                 native, crate-type = ["cdylib"]
-├─ wasm_lib.rs         mod extension;                 wasm example, crate-type = ["staticlib"]
-└─ extension/
-   ├─ mod.rs           mod demo; mod functions; mod types;
-   │                   duckfn_entrypoint!("rusty_quack");
-   ├─ demo/
-   ├─ functions/
-   └─ types/
-```
-
-`mod extension;` resolves to `src/extension/mod.rs` — a *directory* module — so both roots see the same
-tree, and `mod demo;` inside `src/extension/mod.rs` is looked up at `src/extension/demo.rs` or
-`src/extension/demo/mod.rs`. Nesting works at any depth, because nothing resolves relative to a file
-module any more.
-
-**Rule.** Keep the two roots identical, never re-export one from the other, put `duckfn_entrypoint!` in
-`src/extension/mod.rs`, and hang everything else off it. That is what this repository does, and it is
-why `src/lib.rs` and `src/wasm_lib.rs` are three lines each.
+Problems with the *layout* — the two crate roots, `error[E0583]`, and the IDE flagging
+`src/wasm_lib.rs` — live in [Project structure](./getting-started/project-structure.md) instead,
+because they are about how the project is put together rather than about something going wrong.
 
 ## WASM builds on the official CI are pinned to Rust 1.86
 
@@ -166,6 +84,8 @@ DuckDB v1.5.4 and v1.5.5, still open upstream.
 
 ## See also
 
+- [Project structure](./getting-started/project-structure.md) — the crate roots, `error[E0583]`, and the
+  IDE flagging `src/wasm_lib.rs`.
 - [FAQ](./faq.md) — the errors people hit while writing functions.
 - [Build and release](./build-and-release.md) — what the pipeline does on a version tag.
 - [Architecture](./internals/architecture.md) — how registration and dispatch actually work.

@@ -1,6 +1,6 @@
 ---
 title: Quick start
-sidebar_position: 3
+sidebar_position: 4
 description: Write, build and load a minimal duckfn extension, then call it from SQL.
 ---
 

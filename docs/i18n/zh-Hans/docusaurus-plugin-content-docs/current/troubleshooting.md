@@ -1,91 +1,16 @@
 ---
 title: 问题排查
 sidebar_position: 9
-description: IDE 误报 WebAssembly 入口文件、嵌套模块时的 E0583、官方 CI 锁定的 Rust 1.86，以及会把全 NULL 列表字面量读坏的上游 bug。
+description: 官方 CI 的 WebAssembly 作业锁定的 Rust 1.86，以及会把全 NULL 列表字面量读坏的上游 bug。
 ---
 
 # 问题排查
 
-下面四件事都不是 duckfn 造成的，但你迟早会碰到。每一条都说清现象、原因和处理办法。
+下面两件事都不是 duckfn 造成的，但你迟早会碰到。每一条都说清现象、原因和处理办法。
 
-## IDE 在 wasm 入口文件上报错
-
-**现象。** RustRover 或 rust-analyzer 给 `src/wasm_lib.rs` 标红，但 `make debug`、`just build`、
-`cargo duckdb-ext build` 都复现不出来。
-
-**原因。** `Cargo.toml` 把这个文件注册成了 example：
-
-```toml
-[[example]]
-# crate-type can't be (at the moment) be overriden for specific targets
-path = "src/wasm_lib.rs"
-crate-type = ["staticlib"]
-```
-
-`crate-type` 无法按 target 区分，而两个 target 需要的值不同 —— 本地编译要 `cdylib`，WebAssembly 要
-`staticlib`，所以模板多带了一个只在交叉编译时才构建的 crate root：
-
-```shell
-just build_wasm     # cargo build --release --target wasm32-unknown-emscripten --example rusty_quack
-```
-
-而 IDE 默认检查**所有 target**（`cargo check --all-targets`），于是把这个 example 也按本地平台编译了一遍
-—— 那并不是它被设计来编译的平台。
-
-**解决。** 给整个文件加架构门控：在其它 target 上它会被编译成空，报错随即消失：
-
-```rust
-#![cfg(target_arch = "wasm32")]
-#![allow(special_module_name)]
-
-mod extension;
-```
-
-第二个属性用于消除「crate root 不叫 `lib.rs`」那条 lint 提示。
-
-## 嵌套模块时报 E0583
-
-**现象。** 模块一旦多出一层就编不过 —— 例如 `src/` 下新增第二级时：
-
-```
-error[E0583]: file not found for module `demo`
- --> src\lib.rs:3:1
-
-error[E0583]: file not found for module `types`
- --> src\lib.rs:4:1
-```
-
-**原因。** 官方模板让 WebAssembly 入口重新导出 native 入口：
-
-```rust
-// src/wasm_lib.rs，官方模板
-mod lib;
-```
-
-`mod lib;` 解析到 `src/lib.rs`，从这一刻起 `lib.rs` 就是一个**文件**模块：它的子模块要去**它旁边**、
-也就是 `src/lib/` 下面找。于是写在 `src/lib.rs` 里的 `mod demo;` 会去找 `src/lib/demo.rs`，而不是
-`src/extension/demo.rs`，rustc 就在那行 `mod` 上报 E0583。扁平的 `lib.rs` 掩盖了这个问题，嵌套才把它暴露出来。
-
-**解决：让两个入口保持一致。** 两个 crate root 声明同一个路径，所有模块都放在 `src/extension/` 下：
-
-```
-src/
-├─ lib.rs              mod extension;                 native，crate-type = ["cdylib"]
-├─ wasm_lib.rs         mod extension;                 wasm example，crate-type = ["staticlib"]
-└─ extension/
-   ├─ mod.rs           mod demo; mod functions; mod types;
-   │                   duckfn_entrypoint!("rusty_quack");
-   ├─ demo/
-   ├─ functions/
-   └─ types/
-```
-
-`mod extension;` 解析到 `src/extension/mod.rs` —— 这是一个**目录**模块，所以两个入口看到的是同一棵树，
-`src/extension/mod.rs` 里的 `mod demo;` 会去找 `src/extension/demo.rs` 或 `src/extension/demo/mod.rs`。
-任意层级嵌套都成立，因为不再有任何路径相对于文件模块解析。
-
-**规则。** 两个入口保持逐行一致，不要相互再导出；`duckfn_entrypoint!` 写在 `src/extension/mod.rs`，
-其余模块全部挂在它下面。本仓库就是这么做的，这也是 `src/lib.rs` 与 `src/wasm_lib.rs` 各自只有三行的原因。
+与**目录结构**有关的那些 —— 两个 crate root、`error[E0583]`、IDE 对 `src/wasm_lib.rs` 标红 ——
+搬到了[项目结构约定](./getting-started/project-structure.md)，因为那是「项目怎么搭起来」的问题，
+不是「哪里出了故障」。
 
 ## 官方 CI 的 WASM 构建锁定在 Rust 1.86
 
@@ -155,6 +80,8 @@ SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 
 ## 相关页面
 
+- [项目结构约定](./getting-started/project-structure.md) —— 两个 crate root、`error[E0583]`、IDE 对
+  `src/wasm_lib.rs` 标红。
 - [常见问题](./faq.md) —— 写函数时实际踩到的那些报错。
 - [构建与发布](./build-and-release.md) —— 打 tag 时流水线做了什么。
 - [架构](./internals/architecture.md) —— 注册与派发到底怎么运作。

@@ -31,10 +31,9 @@ cd my_ext
 Then rename what the template hard-codes: `EXTENSION_NAME` in the `Makefile`, the `[[example]]`
 target if you also build for WebAssembly, and the name passed to `duckfn_entrypoint!`.
 
-While you do it, keep the two crate roots mirrored: `src/lib.rs` and `src/wasm_lib.rs` have to declare
-the same modules, and the official template's `mod lib;` re-export starts failing with
-`error[E0583]` as soon as you nest modules — see
-[Troubleshooting](../troubleshooting.md#nested-modules-fail-with-e0583).
+While you do it, leave the crate roots alone: `src/lib.rs`, `src/wasm_lib.rs` and `src/bin/duckfn.rs`
+all point at the same `src/extension/` module, and that is the one rule the layout follows — see
+[Project structure](./project-structure.md) for why, and what `error[E0583]` means when it is broken.
 
 ## Write with duckfn and quack-rs
 
