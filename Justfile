@@ -56,14 +56,10 @@ config_env:
 doc:
     cargo doc -p duckfn
 
-# 生成社区扩展文档页用的 function_descriptions.csv：just docs_csv
-# （描述写在 #[duck_*] 属性上，加载扩展时由 duckfn 导出）
-docs_csv out="docs/function_descriptions.csv":
-    bash scripts/function_descriptions.sh gen "{{out}}"
-
-# 校验已提交的 CSV 与当前扩展是否一致；有差异非零退出，可接 CI
-docs_csv_check csv="docs/function_descriptions.csv":
-    bash scripts/function_descriptions.sh check "{{csv}}"
+# 生成社区扩展文档页用的 function_descriptions.csv（只做转发，逻辑在 cargo CLI 里）
+# 描述写在 #[duck_*] 属性上；要连没写描述的函数一起导出：cargo run --bin duckfn -- function_descriptions --all
+docs_csv:
+    cargo run --bin duckfn -- function_descriptions
 
 # ==== 官方 makefile 流程：sqllogictest 与 CI 走这条 ====
 

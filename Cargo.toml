@@ -63,7 +63,15 @@ tuple-transpose = "0.1.0"
 # them directly is up to the crate that names their types. chrono is trimmed the same way here —
 # core types plus `std`, no `clock` (system time, which drags in iana-time-zone / wasm-bindgen and
 # complicates the wasm build).
-duckfn = { path = "duckfn", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
+#
+# `cli` 打开 duckfn 的命令行工具（src/bin/duckfn.rs 用）：
+#   cargo run --bin duckfn -- function_descriptions
+# 它给 duckfn 带上 clap 与 csv 两个依赖；不需要这个工具的项目可以去掉。
+#
+# `cli` enables duckfn's command-line tool, used by src/bin/duckfn.rs:
+#   cargo run --bin duckfn -- function_descriptions
+# It adds clap and csv to duckfn's dependency tree; projects that never run the tool can drop it.
+duckfn = { path = "duckfn", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal", "cli"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 uuid = "1"
 rust_decimal = "1"

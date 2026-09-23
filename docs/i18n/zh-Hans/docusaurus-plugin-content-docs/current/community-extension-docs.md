@@ -59,26 +59,52 @@ pub fn double_it(v: Option<i64>) -> Option<i64> {
 ## 生成 CSV
 
 ```bash
-just docs_csv                      # -> docs/function_descriptions.csv
-just docs_csv_check                # 已提交的 CSV 过期时非零退出
+cargo run --bin duckfn -- function_descriptions          # -> target/function_descriptions.csv
+cargo run --bin duckfn -- function_descriptions --all    # -> target/function_descriptions_all.csv
 ```
 
-`just docs_csv` 会先构建扩展，再带上 `DUCKFN_DUMP_FUNCTION_DESCRIPTIONS=<路径>` 用 duckdb 加载它，
-duckfn 在注册的同时把文件写出来。`function` 列取自注册前后 `duckdb_functions()` 的真实差集，
-因此它一定与社区扩展生成器做 JOIN 时用的名字一致 —— 包括那些由 `#[duck_custom_register]` 或
-`duck_sql_macro_files!` 注册出来的函数（它们自己并不需要写描述）。没写描述的函数也会出现在
-文件里，只是文本为空，这样骨架是完整的，还剩哪些没写一目了然。
-
-不用 `just` 的话就是一条命令：
+习惯用 `just` 的话也可以：
 
 ```bash
-DUCKFN_DUMP_FUNCTION_DESCRIPTIONS=docs/function_descriptions.csv \
-  duckdb -unsigned -c "LOAD './target/debug/my_ext.duckdb_extension';"
+just docs_csv
 ```
+
+默认只给「写了 description / comment / example 之一」的函数出一行；加 `--all` 则把注册进去的
+所有函数都写出来，没写文档的那几列留空，适合当「还差哪些没写」的清单看 —— 文件名会带上 `_all`
+后缀，两个文件不会互相覆盖。输出路径固定是 `<项目根>/target/`，下游不用猜文件在哪。
+
+整个导出是纯内存操作，只读编译期由宏记录下来的元数据：不加载扩展、不查 `duckdb_functions()`，
+完全不牵扯 DuckDB。
+
+### 在新项目里配好
+
+两处，都可以从 [duckfn 仓库](https://github.com/shijianjs/duckfn) 抄：
+
+1. `Cargo.toml` —— 打开 duckfn 的 `cli` feature：
+
+   ```toml
+   duckfn = { version = "x.y.z", features = ["duckdb-1-5", "cli"] }
+   ```
+
+2. `src/bin/duckfn.rs` —— CLI 入口：
+
+   ```rust
+   //! duckfn 命令行工具入口：cargo run --bin duckfn -- function_descriptions
+   #[path = "../extension/mod.rs"]
+   mod extension;
+
+   fn main() -> std::process::ExitCode {
+       duckfn::cli::run(env!("CARGO_MANIFEST_DIR"))
+   }
+   ```
+
+   这里的 `#[path]` 是刻意为之：`#[duck_*]` 的元数据靠 `inventory` 的静态构造器收集，只有真正被
+   链接进最终二进制的目标文件才会生效。只是依赖库的话，链接器可能把这些模块整块丢掉，导出的 CSV
+   会是空的，而且不会报错。
 
 ## 提交
 
 这份文件是从 **community-extensions 仓**读的，不是你自己的仓：提 PR 加上
 `extensions/<扩展名>/description.yml` 时，把
 `extensions/<扩展名>/docs/function_descriptions.csv` 一起放进去。在自己仓里留一份副本便于重新
-生成 —— `just docs_csv_check` 会在「新增了函数但没写描述」时提醒你。
+生成 —— 新增函数后重跑一次命令即可。

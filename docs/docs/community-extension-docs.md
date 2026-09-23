@@ -57,34 +57,60 @@ They work on every attribute that registers a function: `#[duck_scalar_function]
 after the Rust function ends up in the catalog.
 
 The attributes do not touch registration — they are collected into an `inventory` entry and only
-used when you export the CSV.
+used when the CSV is exported.
 
 ## Generate the CSV
 
 ```bash
-just docs_csv                      # -> docs/function_descriptions.csv
-just docs_csv_check                # fail if the committed CSV is out of date
+cargo run --bin duckfn -- function_descriptions          # -> target/function_descriptions.csv
+cargo run --bin duckfn -- function_descriptions --all    # -> target/function_descriptions_all.csv
 ```
 
-`just docs_csv` builds the extension, loads it in `duckdb` with
-`DUCKFN_DUMP_FUNCTION_DESCRIPTIONS=<path>` set, and duckfn writes the file while it registers. The
-`function` column comes from a real before/after diff of `duckdb_functions()`, so it is always the
-name the community-extension generator will join on — including functions registered through
-`#[duck_custom_register]` or `duck_sql_macro_files!`, none of which need a description of their own.
-Functions without one still get a row, with empty text, so the skeleton is complete and you can see
-what is left to write.
-
-Without `just`, the same thing is one command:
+or, if you prefer `just`:
 
 ```bash
-DUCKFN_DUMP_FUNCTION_DESCRIPTIONS=docs/function_descriptions.csv \
-  duckdb -unsigned -c "LOAD './target/debug/my_ext.duckdb_extension';"
+just docs_csv
 ```
+
+The default export writes one row per function that has a description, comment or example. `--all`
+writes every registered function instead, leaving the columns empty for the ones you have not
+documented yet — handy as a checklist, and the file name gets an `_all` suffix so the two do not
+collide. The path is always `<project>/target/`, fixed, so nothing downstream has to guess where to
+find it.
+
+This is a plain in-memory operation over what the macros recorded at compile time: no extension is
+loaded, `duckdb_functions()` is never queried, and DuckDB is not involved at all.
+
+### Setting it up in a new project
+
+Two pieces, both copied from the [duckfn repository](https://github.com/shijianjs/duckfn):
+
+1. `Cargo.toml` — turn on duckfn's `cli` feature:
+
+   ```toml
+   duckfn = { version = "x.y.z", features = ["duckdb-1-5", "cli"] }
+   ```
+
+2. `src/bin/duckfn.rs` — the entry point:
+
+   ```rust
+   //! duckfn 命令行工具入口：cargo run --bin duckfn -- function_descriptions
+   #[path = "../extension/mod.rs"]
+   mod extension;
+
+   fn main() -> std::process::ExitCode {
+       duckfn::cli::run(env!("CARGO_MANIFEST_DIR"))
+   }
+   ```
+
+   The `#[path]` inclusion is deliberate: `#[duck_*]` metadata is collected by `inventory`'s static
+   constructors, which only fire for object files that are really linked into the final binary.
+   Merely depending on the library lets the linker drop those modules, and the CSV would come out
+   empty without any error.
 
 ## Submit it
 
 The file is read from the **community-extensions repository**, not from your own: when you open the
 pull request that adds `extensions/<name>/description.yml`, add
 `extensions/<name>/docs/function_descriptions.csv` next to it. Keeping a copy in your own repo is
-handy for regeneration — `just docs_csv_check` will then tell you when a new function showed up
-without a description.
+handy for regeneration — re-run the command whenever you add a function.

@@ -84,6 +84,7 @@ clone 所在的分支 / tag 应当与项目 `Cargo.toml` 里的 duckfn 版本对
 src/lib.rs           ->  mod extension;
 src/wasm_lib.rs      ->  mod extension;   （同一组 mod，镜像）
 src/extension/mod.rs ->  duckfn_entrypoint!("<扩展名>");
+src/bin/duckfn.rs    ->  #[path] mod extension;  +  duckfn::cli::run(...)   （命令行工具，不参与插件运行）
 ```
 
 - **扩展名**必须全小写、只含下划线，且与 `Makefile` 的 `EXTENSION_NAME`、
@@ -95,6 +96,10 @@ src/extension/mod.rs ->  duckfn_entrypoint!("<扩展名>");
 - `Cargo.toml` 里 `crate-type = ["cdylib"]`；`libduckdb-sys` 必须开 `loadable-extension`，
   不要引入会真正链接 libduckdb 的 feature。
 - 不要写 `unsafe` 去解引用 DuckDB 的 C 类型。属性覆盖不到的场景用 `quack-rs` 的公开 API。
+- **`src/bin/duckfn.rs` 用 `#[path = "../extension/mod.rs"] mod extension;` 自己编一遍插件本体**，
+  不要改成 `use <crate>::...`：`#[duck_*]` 的文档元数据靠 `inventory` 的静态构造器收集，只有真正被
+  链接进最终二进制的目标文件才会生效，只依赖库会被链接器整块丢掉、CSV 静默变空。
+  它需要 `Cargo.toml` 里 duckfn 的 `cli` feature（带来 clap 与 csv）。
 
 ## 4. 开发循环
 
@@ -120,9 +125,11 @@ duckdb -unsigned -c "LOAD './target/debug/<扩展名>.duckdb_extension'; SELECT 
 4. 加测试：`test/sql/<分类>/<名字>.test`，参照 `../test/sql/**/*.test` 的写法，
    至少覆盖：正常值、`NULL`、边界值、错误路径（`statement error`）。
 5. 顺手写上 `description` / `example`：DuckDB 的 C API 没有设置函数描述与示例的接口，
-   社区扩展文档页全靠导出的 `docs/function_descriptions.csv` 覆盖，不写就是一片空白。
+   社区扩展文档页全靠导出的 `function_descriptions.csv` 覆盖，不写就是一片空白。
 6. `cargo duckdb-ext build` → 手动 `LOAD` 跑一遍 → `make test`。
-7. 扩展要作为社区扩展发布时：`just docs_csv` 重新生成 CSV，`just docs_csv_check` 确认没漏。
+7. 扩展要作为社区扩展发布时：`cargo run --bin duckfn -- function_descriptions`
+   （或 `just docs_csv`）重新生成 `target/function_descriptions.csv`，
+   再用 `--all` 看一遍还有哪些函数没写描述（输出 `target/function_descriptions_all.csv`）。
 
 ## 6. 代码约定
 

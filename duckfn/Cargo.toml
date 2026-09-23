@@ -20,6 +20,16 @@ crate-type = ["rlib"]
 [features]
 default = []
 
+# 命令行工具的开关：`cargo run --bin duckfn -- function_descriptions` 用的 clap 与 csv。
+# 只有扩展项目里的那个 bin 需要它，插件本体（cdylib）不需要；关掉时 duckfn 完全不依赖
+# 这两个 crate，所以下游没用到 CLI 就不用打开。
+#
+# The command-line tool switch: clap and csv, used by
+# `cargo run --bin duckfn -- function_descriptions`. Only the extension project's bin needs them,
+# never the extension itself; with this off duckfn depends on neither crate, so downstream projects
+# that never run the CLI need not enable it.
+cli = ["dep:clap", "dep:csv"]
+
 # DuckDB 1.5 新增能力的支持：开启 quack-rs 的 duckdb-1-5，从而拿到 1.5 的新逻辑类型
 # （TypeId::TimeNs / Value::as_time_ns）、COPY 函数相关的 *Info 类型，以及客户端上下文 /
 # 宿主文件系统（duckfn::duck_vfs::with_file_system 等，见 duckfn/src/duck_vfs/）。
@@ -61,6 +71,19 @@ rust_decimal = ["dep:rust_decimal"]
 
 [dependencies]
 quack-rs = "0.16.0"
+
+# `cli` feature 用的命令行解析（derive 风格：一个结构体 + 一个枚举就是一个 CLI）。
+#
+# Command-line parsing behind the `cli` feature (the derive style: one struct plus one enum is a
+# whole CLI).
+clap = { version = "4", features = ["derive"], optional = true }
+
+# `cli` feature 用的 CSV 写出：crates.io 上的纯 Rust 实现，不牵扯系统库或 FFI。
+# 转义规则（逗号 / 引号 / 换行的处理）交给它，不要自己拼字符串。
+#
+# CSV writing behind the `cli` feature: a pure-Rust implementation from crates.io, with no system
+# library or FFI involved. Quoting and escaping are its job, not something to hand-roll here.
+csv = { version = "1", optional = true }
 
 # chrono feature 用的可选依赖：只需要核心的日期/时间类型，不需要 clock（拿系统时间）与
 # oldtime，因此关掉默认 feature 只留 std。

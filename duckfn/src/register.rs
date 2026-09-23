@@ -61,16 +61,8 @@ inventory::collect!(DuckFunctionItem);
 ///
 /// 任一注册步骤失败时立即返回该错误，后续函数不再注册（收集到的 DDL 仍会打印出来）。
 ///
-/// 设了环境变量 `DUCKFN_DUMP_FUNCTION_DESCRIPTIONS`（值是输出路径）时，注册完成后还会把
-/// 本扩展的函数文档导出成 `function_descriptions.csv`；这一步是 best-effort，失败只打
-/// stderr，不影响注册结果（与宿主文件系统捕获同样的处理哲学）。
-///
 /// Returns the first error encountered; remaining functions are then left unregistered (the
-/// collected DDL is printed either way). When `DUCKFN_DUMP_FUNCTION_DESCRIPTIONS` is set (its
-/// value being the output path) this also exports the extension's function documentation to
-/// `function_descriptions.csv` once registration has finished; that step is best-effort and only
-/// warns on stderr, never affecting the registration result (the same philosophy as the host
-/// file-system capture).
+/// collected DDL is printed either way).
 pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
     // 注册期是拿到 DuckDB 数据库句柄的唯一窗口：这里留一条自有长连接，供聚合等回调
     // 通过 `duckfn::duck_vfs::with_file_system` / `duckfn::duck_vfs::file_system` 使用宿主文件系统。
@@ -88,25 +80,7 @@ pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
     // functions this extension added", so the `function` column always lines up with the
     // `function_name` community-extensions joins on. Queried only when the switch is on, so a
     // normal load costs nothing.
-    let before = if crate::doc::dump_target().is_some() {
-        match crate::doc::catalog_function_names(connection) {
-            Ok(names) => Some(names),
-            Err(error) => {
-                eprintln!("duckfn: {error}");
-                None
-            }
-        }
-    } else {
-        None
-    };
     let result = register_collected_items(connection);
-    if let Some(path) = crate::doc::dump_target() {
-        if let Err(error) =
-            crate::doc::dump_function_descriptions_csv(connection, before.as_ref(), &path)
-        {
-            eprintln!("duckfn: {error}");
-        }
-    }
     // 注册失败也把 `create_type = "print"` 的 DDL 打出来：它只是「预览」，与注册成败无关，
     // 出问题时反而更需要看到。
     //

@@ -65,18 +65,12 @@ test: ci-build
 ci-release: ci-init
     make release
 
-# 生成社区扩展文档页用的 function_descriptions.csv：just docs_csv
-# 描述写在 #[duck_*] 属性的 description / comment / example 上，加载扩展时由 duckfn 导出。
-# 导出的 CSV 要随 PR 提交到 community-extensions 仓的 extensions/<扩展名>/docs/ 下。
-docs_csv out="docs/function_descriptions.csv": build
-    mkdir -p "$(dirname '{{out}}')"
-    DUCKFN_DUMP_FUNCTION_DESCRIPTIONS='{{out}}' {{duckdb}} -unsigned -c "LOAD '{{ext_path}}';"
-
-# 校验已提交的 CSV 与当前扩展是否一致（有差异时 diff 非零退出，可接 CI）。
-# 这里用 diff 而不是 SQL 比较：CSV 是生成的，顺序稳定，手写改动应该直接重生成。
-docs_csv_check csv="docs/function_descriptions.csv":
-    just docs_csv target/function_descriptions.generated.csv
-    diff -u "{{csv}}" target/function_descriptions.generated.csv
+# 生成社区扩展文档页用的 function_descriptions.csv（只做转发，逻辑在 duckfn 的 cargo CLI 里）
+# 描述写在 #[duck_*] 属性的 description / comment / example 上，输出固定为 target/function_descriptions.csv；
+# 要连没写描述的函数一起导出（文件名带 _all 后缀）：cargo run --bin duckfn -- function_descriptions --all
+# 需要 src/bin/duckfn.rs 与 Cargo.toml 里的 duckfn feature "cli"。
+docs_csv:
+    cargo run --bin duckfn -- function_descriptions
 
 # WebAssembly 构建；要求 Makefile 的 [[example]] 名字与 extension_name 一致
 build_wasm:

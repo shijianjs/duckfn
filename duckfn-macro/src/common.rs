@@ -79,8 +79,8 @@ pub(crate) struct ItemFnWrapper<A> {
 /// `#[duck_*]` 属性上共享的「文档」参数：`description` / `comment` / `example` / `examples`。
 ///
 /// 它们不参与注册，只被 [`ItemFnWrapper::doc_inventory_submit`] 收集成
-/// `duckfn::DuckFunctionDocItem`，供导出社区扩展文档页需要的
-/// `docs/function_descriptions.csv`（见 `duckfn::write_function_descriptions_csv`）。
+/// `duckfn::DuckFunctionDocItem`，供 `cargo run --bin duckfn -- function_descriptions`
+/// 导出社区扩展文档页需要的 `function_descriptions.csv`。
 ///
 /// DuckDB 的 C 扩展 API 没有设置函数 description / example 的接口（只有 name / varargs /
 /// return_type / volatile 这些），所以这类文本没法随扩展注册进 catalog，只能靠
@@ -88,10 +88,10 @@ pub(crate) struct ItemFnWrapper<A> {
 ///
 /// The documentation arguments shared by the `#[duck_*]` attributes: `description` / `comment` /
 /// `example` / `examples`. They take no part in registration; [`ItemFnWrapper::doc_inventory_submit`]
-/// collects them into a `duckfn::DuckFunctionDocItem`, which backs the
-/// `docs/function_descriptions.csv` needed by the community-extension doc pages (see
-/// `duckfn::write_function_descriptions_csv`). DuckDB's C extension API has no way to set a
-/// function's description or examples, so this is the only source for that text.
+/// collects them into a `duckfn::DuckFunctionDocItem`, which
+/// `cargo run --bin duckfn -- function_descriptions` turns into the
+/// `function_descriptions.csv` the community-extension doc pages need. DuckDB's C extension API has
+/// no way to set a function's description or examples, so this is the only source for that text.
 #[derive(Debug, Default, Clone, FromMeta)]
 pub(crate) struct DuckDocArgs {
     /// 函数的一句话说明，落在 CSV 的 `description` 列。
@@ -119,16 +119,6 @@ pub(crate) struct DuckDocArgs {
 }
 
 impl DuckDocArgs {
-    /// 四个键一个都没写时为 `true`：此时不产出文档项。
-    ///
-    /// `true` when none of the four keys was written; no documentation entry is emitted then.
-    fn is_empty(&self) -> bool {
-        self.description.is_none()
-            && self.comment.is_none()
-            && self.example.is_none()
-            && self.examples.is_none()
-    }
-
     /// 最终的示例列表：`examples` 优先，其次单条 `example`。
     ///
     /// The resulting example list: `examples` wins, otherwise the single `example`.
@@ -357,7 +347,7 @@ impl<A> ItemFnWrapper<A> {
 /// implement the trait as well.
 impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
     /// 把 `duck_function_impl` 包进与函数同名的模块，并先插入参数结构体 `DuckArgsImpl` 与
-    /// SQL 注册名常量 `SQL_NAME`；模块后面再挂上本函数的文档元数据提交（没写文档参数时为空）。
+    /// SQL 注册名常量 `SQL_NAME`；模块后面再挂上本函数的文档元数据提交。
     ///
     /// `fields` 是参与参数结构体的参数（标量函数的可变参数集合不入内），`named_param_from` 会
     /// 转写成 `#[duck(named_param_from = "...")]` —— 各宏只把 derive 宏真正需要的键透传过去。
@@ -366,8 +356,8 @@ impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
     ///
     /// Wraps `duck_function_impl` in a module named after the function, prepending the argument
     /// struct `DuckArgsImpl` and the `SQL_NAME` constant holding the SQL registration name, and
-    /// appending this function's documentation-metadata submission (empty when no documentation
-    /// argument was written). `fields` are the parameters taking part in it (a scalar function's
+    /// appending this function's documentation-metadata submission. `fields` are the parameters
+    /// taking part in it (a scalar function's
     /// variadic collection is left out) and `named_param_from` is written as
     /// `#[duck(named_param_from = "...")]` — each macro forwards only the keys the derive macro
     /// actually needs. `sql_name` is the name the function is really registered under, supplied by
@@ -414,21 +404,21 @@ impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
     }
 
     /// 生成 `duckfn::DuckFunctionDocItem` 的 inventory 提交：把 `description` / `comment` /
-    /// `example`（`examples`）连同该函数在 DuckDB 里的名字一起记下来，供导出
-    /// `docs/function_descriptions.csv` 使用。
+    /// `example`（`examples`）连同该函数在 DuckDB 里的名字一起记下来，供
+    /// `cargo run --bin duckfn -- function_descriptions` 导出 CSV 使用。
     ///
-    /// 四个键一个都没写时输出空内容（不占编译产物空间）；`example` 与 `examples` 同时出现是
-    /// 编译错误。
+    /// 没写文档参数的函数也会提交一条（三个字段全空）：导出默认只写有文档的行，但
+    /// `--all` 需要知道插件的全部函数名，所以这里不能省。`example` 与 `examples` 同时出现
+    /// 是编译错误。
     ///
     /// Emits the `duckfn::DuckFunctionDocItem` inventory submission, recording `description` /
     /// `comment` / `example` (`examples`) together with the name the function is registered under,
-    /// for the exported `docs/function_descriptions.csv`. Nothing is emitted when none of the four
-    /// keys was written; writing both `example` and `examples` is a compile error.
+    /// for `cargo run --bin duckfn -- function_descriptions` to export. A function without any
+    /// documentation argument still submits an entry (with all three fields empty): the default
+    /// export only writes documented rows, but `--all` needs the extension's complete function
+    /// list, so this cannot be skipped. Writing both `example` and `examples` is a compile error.
     pub(crate) fn doc_inventory_submit(&self, sql_name: &str) -> TokenStream2Result {
         let doc = self.args.duck_doc();
-        if doc.is_empty() {
-            return Ok(quote! {});
-        }
         if doc.example.is_some() && doc.examples.is_some() {
             return Err(syn::Error::new_spanned(
                 self.item_fn.sig.ident.to_owned(),
