@@ -30,6 +30,7 @@ C/C++ glue code, and no local DuckDB build required.
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
 - Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included — plus one-line helpers such as `duckfn::duck_vfs::read_string` / `write_string` / `append_string` (`duckdb-1-5` feature)
 - Interop with other crates: the time wrapper types (`DuckDate`, `DuckTimestamp` / `_S` / `_Ms` / `_Ns`, `DuckTimestampTz`, `DuckTime`) convert to and from [`chrono`](https://crates.io/crates/chrono), `DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid), and `DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal) (`chrono` / `uuid` / `rust_decimal` features) — out-of-range values, DuckDB's `infinity` and digit-losing conversions come back as errors, never as a panic or a silent truncation
+- Function documentation: `description` / `comment` / `example` on any `#[duck_*]` attribute, exported to the `function_descriptions.csv` that DuckDB's community-extension pages read (the `cli` feature)
 - Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.
@@ -53,9 +54,12 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
-`duckfn` has four optional features. `duckdb-1-5` enables what DuckDB's 1.5 C API added: the logical
-types from DuckDB 1.5 (currently `TIME_NS`), copy functions, and host file-system access. The other
-three are interop and independent of each other: `chrono` converts the time wrapper types to and from
+`duckfn` has five optional features. `cli` adds the command-line tool that exports a
+`function_descriptions.csv` for DuckDB's community-extension pages
+(`cargo run --bin duckfn -- function_descriptions`); only an extension project's `src/bin/duckfn.rs`
+needs it. `duckdb-1-5` enables what DuckDB's 1.5 C API added: the logical types from DuckDB 1.5
+(currently `TIME_NS`), copy functions, and host file-system access. The other three are interop and
+independent of each other: `chrono` converts the time wrapper types to and from
 [`chrono`](https://crates.io/crates/chrono), `uuid` converts `DuckUuid` to and from
 [`uuid`](https://crates.io/crates/uuid), and `rust_decimal` converts `DuckDecimal<W, S>` to and from
 [`rust_decimal`](https://crates.io/crates/rust_decimal) — so the epoch / 128-bit / scaled-integer
@@ -112,6 +116,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [Replacement scans](https://shijianjs.github.io/duckfn/docs/guide/replacement-scans) | Making `SELECT * FROM 'data.points'` work. |
 | [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) | Macros from Rust or from `.sql` files. |
 | [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability and known gaps. |
+| [Community extension docs](https://shijianjs.github.io/duckfn/docs/community-extension-docs) | The `description` / `comment` / `example` attributes, and the CSV DuckDB's community-extension pages read. |
 | [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) · [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) | Error handling, expansion, registration and adapters. |
 
 中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>

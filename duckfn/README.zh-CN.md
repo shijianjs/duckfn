@@ -28,6 +28,7 @@
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
 - 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::duck_vfs::read_string` / `write_string` / `append_string` 这类一行式接口，由 `duckdb-1-5` feature 提供
 - 与其它 crate 互转：时间包装类型（`DuckDate`、`DuckTimestamp` / `_S` / `_Ms` / `_Ns`、`DuckTimestampTz`、`DuckTime`）与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid)，`DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal)（`chrono` / `uuid` / `rust_decimal` feature）—— 越界、DuckDB 的 `infinity` 与会丢位的转换都以错误返回，不会 panic，也不会静默截断
+- 函数文档：在任何 `#[duck_*]` 属性上写 `description` / `comment` / `example`，由 `cli` feature 提供的命令行工具导出成 DuckDB 社区扩展文档页读取的 `function_descriptions.csv`
 - 可直接复用 DuckDB 官方多平台扩展 CI
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。
@@ -49,7 +50,9 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 如果只想用宏、不要运行时，可以直接依赖
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
-`duckfn` 有四个可选 feature。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5 新增的逻辑类型
+`duckfn` 有五个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
+扩展文档页使用，命令是 `cargo run --bin duckfn -- function_descriptions`），只有扩展项目的
+`src/bin/duckfn.rs` 需要它。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5 新增的逻辑类型
 （目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问。另外三个是互转，彼此独立：`chrono` 让时间包装类型
 与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`uuid` 让 `DuckUuid` 与
 [`uuid`](https://crates.io/crates/uuid) 双向转换，`rust_decimal` 让 `DuckDecimal<W, S>` 与
@@ -105,6 +108,7 @@ duckfn_entrypoint!("my_ext");
 | [替换扫描](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/replacement-scans) | 让 `SELECT * FROM 'data.points'` 生效。 |
 | [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros) | 用 Rust 或 `.sql` 文件注册宏。 |
 | [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
+| [社区扩展文档页](https://shijianjs.github.io/duckfn/zh-Hans/docs/community-extension-docs) | `description` / `comment` / `example` 三个属性，以及 DuckDB 社区扩展文档页读取的那份 CSV。 |
 | [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) · [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) | 错误处理、宏展开、注册与适配器。 |
 
 English docs: <https://shijianjs.github.io/duckfn/>

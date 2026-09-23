@@ -29,6 +29,7 @@ cast, or a nested type — no C/C++ glue code, and no local DuckDB build require
 - Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
 - Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included — plus one-line helpers such as `duckfn::duck_vfs::read_string` / `write_string` / `append_string` (`duckdb-1-5` feature)
 - Interop with other crates: the time wrapper types (`DuckDate`, `DuckTimestamp` / `_S` / `_Ms` / `_Ns`, `DuckTimestampTz`, `DuckTime`) convert to and from [`chrono`](https://crates.io/crates/chrono), `DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid), and `DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal) (`chrono` / `uuid` / `rust_decimal` features) — out-of-range values, DuckDB's `infinity` and digit-losing conversions come back as errors, never as a panic or a silent truncation
+- Function documentation: `description` / `comment` / `example` on any `#[duck_*]` attribute, exported to the `function_descriptions.csv` that DuckDB's community-extension pages read (`cargo run --bin duckfn -- function_descriptions`)
 - Works with DuckDB's official multi-platform extension CI
 
 > Status: early / experimental. APIs may change before `1.0`.
@@ -99,12 +100,14 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | --- | --- |
 | [Introduction](https://shijianjs.github.io/duckfn/docs/intro) | What duckfn is, and how the crates fit together. |
 | [Create a project](https://shijianjs.github.io/duckfn/docs/getting-started/create-a-project) | Start from DuckDB's official Rust extension template. |
+| [Project structure](https://shijianjs.github.io/duckfn/docs/getting-started/project-structure) | The crate roots, `error[E0583]`, and the command-line tool's own root. |
 | [Installation](https://shijianjs.github.io/duckfn/docs/getting-started/installation) | Dependencies, MSRV, and why no DuckDB build is needed. |
 | [Quick start](https://shijianjs.github.io/duckfn/docs/getting-started/quick-start) | Write, build and load your first extension. |
 | [Guide](https://shijianjs.github.io/duckfn/docs/guide/attributes) | Attributes, scalar/aggregate/table/copy functions, casts, replacement scans, SQL macros. |
 | [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability rules and known gaps. |
 | [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) | `duck_error`, `DuckOptionResult`, and panic handling. |
 | [Example extension](https://shijianjs.github.io/duckfn/docs/examples/rusty-quack) | `rusty_quack`, with runnable SQL for every feature. |
+| [Community extension docs](https://shijianjs.github.io/duckfn/docs/community-extension-docs) | Function descriptions, and the CSV DuckDB's community-extension pages read. |
 | [Build and release](https://shijianjs.github.io/duckfn/docs/build-and-release) · [Contributing](https://shijianjs.github.io/duckfn/docs/contributing) · [FAQ](https://shijianjs.github.io/duckfn/docs/faq) | Local builds, CI, and troubleshooting. |
 
 中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>

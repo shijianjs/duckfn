@@ -28,6 +28,7 @@
 - panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
 - 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::duck_vfs::read_string` / `write_string` / `append_string` 这类一行式接口，由 `duckdb-1-5` feature 提供
 - 与其它 crate 互转：时间包装类型（`DuckDate`、`DuckTimestamp` / `_S` / `_Ms` / `_Ns`、`DuckTimestampTz`、`DuckTime`）与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid)，`DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal)（`chrono` / `uuid` / `rust_decimal` feature）—— 越界、DuckDB 的 `infinity` 与会丢位的转换都以错误返回，不会 panic，也不会静默截断
+- 函数文档：在任何 `#[duck_*]` 属性上写 `description` / `comment` / `example`，由 `cargo run --bin duckfn -- function_descriptions` 导出成 DuckDB 社区扩展文档页读取的 `function_descriptions.csv`
 - 可直接复用 DuckDB 官方多平台扩展 CI
 
 > 状态：早期 / 实验性，`1.0` 之前 API 可能变化。
@@ -95,12 +96,14 @@ duckfn_entrypoint!("my_ext");
 | --- | --- |
 | [简介](https://shijianjs.github.io/duckfn/zh-Hans/docs/intro) | duckfn 是什么，各 crate 如何配合。 |
 | [创建项目](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/create-a-project) | 从 DuckDB 官方 Rust 扩展模板起步。 |
+| [项目结构约定](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/project-structure) | 几个 crate root、`error[E0583]`、以及命令行工具自己的那个 root。 |
 | [安装](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/installation) | 依赖、MSRV，以及为什么不需要编译 DuckDB。 |
 | [快速开始](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/quick-start) | 编写、构建并加载第一个扩展。 |
 | [指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 属性参考、标量/聚合/表/COPY 函数、类型转换、替换扫描、SQL 宏。 |
 | [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
 | [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) | `duck_error`、`DuckOptionResult` 与 panic 的处理。 |
 | [示例扩展](https://shijianjs.github.io/duckfn/zh-Hans/docs/examples/rusty-quack) | `rusty_quack`，每个功能都配可运行的 SQL。 |
+| [社区扩展文档页](https://shijianjs.github.io/duckfn/zh-Hans/docs/community-extension-docs) | 函数描述，以及 DuckDB 社区扩展文档页读取的那份 CSV。 |
 | [构建与发布](https://shijianjs.github.io/duckfn/zh-Hans/docs/build-and-release) · [贡献指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/contributing) · [常见问题](https://shijianjs.github.io/duckfn/zh-Hans/docs/faq) | 本地构建、CI 与排错。 |
 
 English docs: <https://shijianjs.github.io/duckfn/>
