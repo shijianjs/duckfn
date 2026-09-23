@@ -8,7 +8,7 @@ name: Main Extension Distribution Pipeline
 on:
 #  push:
 #    branches: [main]
-#  pull_request:
+  pull_request:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
