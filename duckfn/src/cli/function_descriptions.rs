@@ -10,6 +10,7 @@
 //! catalog is never queried, so it needs no DuckDB and is unaffected by the extension runtime.
 
 use crate::{FunctionDescription, declared_function_descriptions};
+use std::borrow::Cow;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -106,24 +107,67 @@ pub fn export(project_dir: &Path, all: bool) -> io::Result<Summary> {
 /// 用一个 `csv` crate 的 writer 写出表头 + 每一行。
 ///
 /// 转义（字段含逗号 / 引号 / 换行时的加引号与双写）由 `csv` crate 负责，这里不手拼字符串；
-/// 多个示例用 `, ` 拼进同一个 `example` 字段，渲染出来就是 community-extensions 期望的列表形式。
+/// 多个示例用 `, ` 拼进同一个 `example` 字段：`generate_md.sh` 只做
+/// `'[' || other.example || ']'`，不会按分隔符再拆一次，所以拼成一个字段渲染出来才是 `[a, b]`
+/// —— 与它原生分支 `list_reduce(lambda x, y : x || ', ' || y)` 的形态一致。
+///
+/// 字段里的换行会被压成一个空格，见 [`flatten_newlines`]。
 ///
 /// Writes the header plus one row per function through a `csv` crate writer. Quoting and escaping
 /// (for fields containing commas, quotes or newlines) are the crate's job rather than hand-rolled
-/// string building; several examples are joined with `", "` into the single `example` field, which
-/// is the list form community-extensions expects.
+/// string building; several examples are joined with `", "` into the single `example` field —
+/// `generate_md.sh` only does `'[' || other.example || ']'` and never splits the field again, so
+/// joining is what renders as `[a, b]`, matching its native
+/// `list_reduce(lambda x, y : x || ', ' || y)` branch. Newlines inside a field collapse to a single
+/// space, see [`flatten_newlines`].
 pub fn write(path: &Path, rows: &[FunctionDescription]) -> io::Result<()> {
     let mut writer = csv::Writer::from_path(path)?;
     writer.write_record(CSV_HEADER)?;
     for row in rows {
         let examples = row.examples.join(", ");
-        writer.write_record([
-            row.function.as_str(),
-            row.description.as_deref().unwrap_or_default(),
-            row.comment.as_deref().unwrap_or_default(),
-            examples.as_str(),
-        ])?;
+        let fields = [
+            flatten_newlines(&row.function),
+            flatten_newlines(row.description.as_deref().unwrap_or_default()),
+            flatten_newlines(row.comment.as_deref().unwrap_or_default()),
+            flatten_newlines(&examples),
+        ];
+        writer.write_record(fields.map(|field| field.into_owned()))?;
     }
     writer.flush()?;
     Ok(())
+}
+
+/// 把字段里的一段连续换行压成一个空格。
+///
+/// 两个原因，都是实测出来的：
+///
+/// 1. `generate_md.sh` 把这几列塞进一张 Markdown 表格，单元格里的换行会把表格行拆断；
+/// 2. DuckDB 的 `read_csv()` 会把引号内字段里的 `\n` **读成 `\r\n`**
+///    （实测：`length()` 多 1、`contains(x, chr(13))` 为真），所以原样写出去也会被改掉。
+///
+/// 与其让它变形成不可预期的样子，不如在写出时就压平。
+///
+/// Collapses a run of newlines inside a field into a single space, for two measured reasons:
+/// `generate_md.sh` puts these columns into a Markdown table where a newline breaks the row, and
+/// DuckDB's `read_csv()` reads a `\n` inside a quoted field back as `\r\n` (measured: `length()` is
+/// one larger and `contains(x, chr(13))` is true). Flattening on the way out beats letting it
+/// deform unpredictably on the way back in.
+fn flatten_newlines(value: &str) -> Cow<'_, str> {
+    if !value.contains(['\r', '\n']) {
+        return Cow::Borrowed(value);
+    }
+    let mut flattened = String::with_capacity(value.len());
+    let mut in_break = false;
+    for ch in value.chars() {
+        if ch == '\r' || ch == '\n' {
+            if !in_break {
+                flattened.push(' ');
+                in_break = true;
+            }
+        } else {
+            flattened.push(ch);
+            in_break = false;
+        }
+    }
+    Cow::Owned(flattened)
 }

@@ -57,6 +57,16 @@ They work on every attribute that registers a function: `#[duck_scalar_function]
 `#[duck_replacement_scan]` and `#[duck_custom_register]` do not take them, because nothing named
 after the Rust function ends up in the catalog.
 
+Two things worth knowing about the text itself:
+
+- **Line breaks collapse to a single space** when the CSV is written. The generated page is a
+  Markdown table, where a newline inside a cell ends the row, and DuckDB's `read_csv()` reads a bare
+  newline inside a quoted field back as `\r\n` anyway. Commas, double quotes and non-ASCII text pass
+  through unchanged; only newlines are flattened.
+- **Curly braces are your problem to write and the generator's to escape.** `generate_md.sh` runs
+  both columns through a `jekyll_format_function` macro that wraps every `{{` and `}}` in
+  `{% raw %}…{% endraw %}`, so `example = "SELECT f('{{x}}')"` is fine as written.
+
 The attributes do not touch registration — they are collected into an `inventory` entry and only
 used when the CSV is exported.
 

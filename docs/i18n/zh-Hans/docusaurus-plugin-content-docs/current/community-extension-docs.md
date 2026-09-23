@@ -55,6 +55,15 @@ pub fn double_it(v: Option<i64>) -> Option<i64> {
 `#[duck_copy_from_function]`、`#[duck_sql_macro]`。`#[duck_replacement_scan]` 与
 `#[duck_custom_register]` 不支持 —— catalog 里没有以 Rust 函数名命名的对应条目。
 
+文本本身有两点要知道：
+
+- **换行在写出 CSV 时会被压成一个空格。** 生成的页面是一张 Markdown 表格，单元格里的换行会把表格行
+  拆断；而且 DuckDB 的 `read_csv()` 本来就会把引号内字段里的裸换行读成 `\r\n`。逗号、双引号、非 ASCII
+  都原样保留，只有换行会被压平。
+- **大括号照写即可，转义是生成器的事。** `generate_md.sh` 会把这两列过一遍 `jekyll_format_function`
+  宏，给每个 `{{` 和 `}}` 包上 `{% raw %}…{% endraw %}`，所以
+  `example = "SELECT f('{{x}}')"` 这样写没问题。
+
 这三个键不参与注册：它们只是被收集进一条 `inventory` 记录，导出 CSV 时才用上。
 
 ## 生成 CSV
