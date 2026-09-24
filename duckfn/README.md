@@ -54,7 +54,7 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
-`duckfn` has five optional features. `cli` adds the command-line tool that exports a
+`duckfn` has six optional features. `cli` adds the command-line tool that exports a
 `function_descriptions.csv` for DuckDB's community-extension pages
 (`cargo run --bin duckfn -- function_descriptions`); only an extension project's `src/bin/duckfn.rs`
 needs it. `duckdb-1-5` enables what DuckDB's 1.5 C API added: the logical types from DuckDB 1.5
@@ -68,6 +68,10 @@ arithmetic lives in duckfn rather than in every extension:
 ```toml
 duckfn = { version = "0.0.10", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
+
+`all` is the aggregate switch: it turns all five of the real features on at once. duckfn normally
+sits at the end of the dependency tree, so `features = ["all"]` is the convenient spelling; pick the
+individual features above when you want a leaner tree.
 
 ## Quick start
 

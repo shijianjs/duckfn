@@ -69,6 +69,16 @@ uuid = ["dep:uuid"]
 # values come back as an error.
 rust_decimal = ["dep:rust_decimal"]
 
+# 聚合开关：一次打开上面所有可选 feature（含 `cli`）。duckfn 多数场景就是依赖树的末端
+# （扩展本体直接依赖它，很少作为别人的依赖再被传递进来），所以「全开」通常是最省事的写法；
+# 想精简依赖树时再按上面列出的单项挑着开。
+#
+# Aggregate switch: turns every optional feature above on at once (including `cli`). duckfn is
+# usually the end of the dependency tree — an extension depends on it directly and it rarely shows
+# up transitively — which makes "everything on" the convenient spelling; pick the individual
+# features listed above when you want a leaner dependency tree.
+all = ["cli", "duckdb-1-5", "chrono", "uuid", "rust_decimal"]
+
 [dependencies]
 quack-rs = "0.16.0"
 

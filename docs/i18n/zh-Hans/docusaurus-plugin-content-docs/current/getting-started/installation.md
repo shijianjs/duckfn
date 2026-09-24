@@ -31,12 +31,17 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | `chrono` | 时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 的互转（`DuckDate::to_naive_date` 等），把纪元换算交给 duckfn。 | 由本 feature 引入的可选 `chrono` 依赖。 |
 | `uuid` | `DuckUuid` 与 [`uuid`](https://crates.io/crates/uuid) 的互转（`to_uuid` / `from_uuid`）。 | 可选的 `uuid` 依赖。 |
 | `rust_decimal` | `DuckDecimal<W, S>` 与 [`rust_decimal`](https://crates.io/crates/rust_decimal) 的互转；越界与丢位都以错误返回。 | 可选的 `rust_decimal` 依赖。 |
+| `all` | 聚合开关，一次打开所有可选 feature。 | 随它打开的那些 feature（含 `duckdb-1-5` 时需要 DuckDB 1.5 头文件）。 |
 
 三个互转 feature 各自独立，用到哪个开哪个：
 
 ```toml
 duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
+
+全开就是 `duckfn = { version = "{{DUCKFN_VERSION}}", features = ["all"] }`。它连 `cli` 一起打开，
+而 `cli` 只多带 `clap` 与 `csv`：对要构建 `src/bin/duckfn.rs` 的那个 crate 无所谓，但想把依赖树
+压到最小的话，还是按上面的单项挑。
 
 `loadable-extension` 是 `libduckdb-sys` 的 feature，不是 `duckfn` 的，需要你自己开启。
 

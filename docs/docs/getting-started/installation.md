@@ -33,12 +33,18 @@ macros without the runtime.
 | `chrono` | Conversions between the time wrapper types and [`chrono`](https://crates.io/crates/chrono) (`DuckDate::to_naive_date` and friends), so the epoch arithmetic lives in duckfn. | An optional `chrono` dependency, pulled in by this feature. |
 | `uuid` | Conversions between `DuckUuid` and [`uuid`](https://crates.io/crates/uuid) (`to_uuid` / `from_uuid`). | An optional `uuid` dependency. |
 | `rust_decimal` | Conversions between `DuckDecimal<W, S>` and [`rust_decimal`](https://crates.io/crates/rust_decimal); out-of-range and digit-losing values are errors. | An optional `rust_decimal` dependency. |
+| `all` | Every optional feature at once — the aggregate switch. | Whatever the features it turns on require (with `duckdb-1-5`: DuckDB 1.5 headers). |
 
 The three interop features are independent — enable only the crates you actually use:
 
 ```toml
 duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
+
+`all` is the shorthand for the lot: `duckfn = { version = "{{DUCKFN_VERSION}}", features = ["all"] }`.
+It also turns on `cli`, which only adds the CLI's `clap` and `csv`; that is fine for the crate you
+build `src/bin/duckfn.rs` in, but a dependency tree you want to keep minimal should name the
+individual features instead.
 
 `loadable-extension` is a feature of `libduckdb-sys`, not of `duckfn`, and it has to be enabled by
 you.

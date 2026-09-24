@@ -50,7 +50,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 如果只想用宏、不要运行时，可以直接依赖
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
-`duckfn` 有五个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
+`duckfn` 有六个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
 扩展文档页使用，命令是 `cargo run --bin duckfn -- function_descriptions`），只有扩展项目的
 `src/bin/duckfn.rs` 需要它。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5 新增的逻辑类型
 （目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问。另外三个是互转，彼此独立：`chrono` 让时间包装类型
@@ -62,6 +62,9 @@ duckfn，而不是留给每个扩展各写一遍：
 ```toml
 duckfn = { version = "0.0.10", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
+
+`all` 是聚合开关，一次把上面这五个都打开。duckfn 通常就在依赖树的末端，所以直接写
+`features = ["all"]` 最省事；想精简依赖树时再按上面的单项挑着开。
 
 ## 快速开始
 
