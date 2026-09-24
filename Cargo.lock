@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "duckfn"
-version = "0.0.10"
+version = "0.0.11-dev.0"
 dependencies = [
  "chrono",
  "clap",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "duckfn-macro"
-version = "0.0.10"
+version = "0.0.11-dev.0"
 dependencies = [
  "darling",
  "proc-macro2",
