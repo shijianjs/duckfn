@@ -370,9 +370,29 @@ impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
         sql_name: &str,
         duck_function_impl: TokenStream2,
     ) -> TokenStream2Result {
+        let duck_args = build_duck_args(fields, named_param_from)?;
+        self.common_build_with_duck_args(duck_args, sql_name, duck_function_impl)
+    }
+
+    /// 同 [`Self::common_build`]，但由调用方直接给出 `DuckArgsImpl` 的生成结果。
+    ///
+    /// 参数结构体不总是由「逐参数」推导出来的：标量函数的批量模式里，参数类型是用户自己的行结构体
+    /// （`#[derive(DuckStruct)]`），生成的 `DuckArgsImpl` 因此退化成一个类型别名，而不是一个新结构体。
+    /// 其余部分（模块名、`SQL_NAME`、文档提交）两者完全一致。
+    ///
+    /// Same as [`Self::common_build`] except that the caller supplies the `DuckArgsImpl` definition.
+    /// The argument struct is not always derived from the parameter list: in a batch scalar function
+    /// the parameter is the user's own row struct (`#[derive(DuckStruct)]`), so `DuckArgsImpl`
+    /// degenerates into a type alias rather than a new struct. Everything else (module name,
+    /// `SQL_NAME`, documentation submission) is identical.
+    pub(crate) fn common_build_with_duck_args(
+        &self,
+        duck_args: TokenStream2,
+        sql_name: &str,
+        duck_function_impl: TokenStream2,
+    ) -> TokenStream2Result {
         let name = self.name();
         let vis = self.visibility();
-        let duck_args = build_duck_args(fields, named_param_from)?;
         let item_fn = &self.item_fn;
         let doc_submit = self.doc_inventory_submit(sql_name)?;
         Ok(quote! {

@@ -1,4 +1,7 @@
-use duckfn::{duck_custom_register, duck_error, duck_scalar_function, DuckOptionResult, DuckResult};
+use duckfn::{
+    DuckOptionResult, DuckResult, DuckStruct, duck_custom_register, duck_error,
+    duck_scalar_function,
+};
 use quack_rs::prelude::{Connection, Registrar, ScalarFunctionSetBuilder};
 
 // ============================================================================
@@ -441,4 +444,124 @@ fn dfn_scalar_varargs_join(sep: String, parts: Vec<Option<String>>) -> String {
 #[duck_scalar_function(varargs = true)]
 fn dfn_scalar_varargs_merge(lists: Vec<Vec<i64>>) -> Vec<i64> {
     lists.into_iter().flatten().collect()
+}
+
+// ============================================================================
+// duck_scalar_function：batch —— 整批进、整批出
+//
+// 读值与写值本来就都是按批的，只有用户代码默认逐行。`batch = true` 把「遍历整批」这一步也交给
+// 用户：函数签名不再是一行参数，而是「整批行 -> 整批结果」。
+//
+//   fn f(rows: Vec<MyRow>)          -> ...   只收到非空行，空行由适配层按原位回填 NULL
+//   fn f(rows: Vec<Option<MyRow>>)  -> ...   空行以 None 交给函数自己处理
+//
+//   -> Vec<T>                            每行非空
+//   -> Vec<Option<T>>                    逐行可空
+//   -> DuckOptionResult<Vec<T>>          整批可失败，Ok(None) = 整批 NULL
+//   -> DuckOptionResult<Vec<Option<T>>>  即上一条的可空版本
+//
+// `MyRow` 由用户 `#[derive(DuckStruct)]` 定义，直接充当参数类型（宏不再生成 DuckArgsImpl）。
+// 适配层仍然是「每个 chunk 调一次」，所以整表不会被拉进内存；DuckDB 的向量化读写路径不变。
+// 典型场景：行级逻辑，但可以合并成一次 HTTP 请求 / 一次批量查询。
+//
+// 返回的行数必须与收到的行数一致，否则整条查询失败；`batch = true` 与 `varargs = true` 互斥。
+// ============================================================================
+
+/// 批量函数的行结构：字段顺序即 SQL 位置参数顺序（id BIGINT, tag VARCHAR）
+#[derive(Clone, Debug, Default, DuckStruct)]
+pub struct DfnBatchRow {
+    pub id: i64,
+    pub tag: String,
+}
+
+/// `Vec<MyRow>` + `Vec<T>`：一次拿到整批，每行返回「本批有多少行」——证明批量不是逐行拼接的
+/// ```sql
+/// SELECT DISTINCT dfn_batch_batch_size(id, tag) FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, tag);
+/// -- 3
+/// ```
+#[duck_scalar_function(
+    batch = true,
+    description = "Reports how many rows arrived in the same batch, proving batch mode sees the whole chunk at once",
+    example = "SELECT DISTINCT dfn_batch_batch_size(id, tag) FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, tag)"
+)]
+fn dfn_batch_batch_size(rows: Vec<DfnBatchRow>) -> Vec<i64> {
+    // 真实的批量函数在这里把整批行合并成一次 HTTP 请求 / 一次批量查询
+    let size = rows.len() as i64;
+    vec![size; rows.len()]
+}
+
+/// `Vec<MyRow>` + `DuckOptionResult<Vec<T>>`：空行先被剔掉，结果再按原位回填 NULL
+/// ```sql
+/// SELECT dfn_batch_join(id, tag) FROM (VALUES (1, 'a'), (NULL, 'b'), (2, 'c')) t(id, tag);
+/// -- '1:a|2:c', NULL, '1:a|2:c'
+/// ```
+#[duck_scalar_function(
+    batch = true,
+    description = "Joins the whole batch into one string, skipping NULL rows and putting NULL back in place"
+)]
+fn dfn_batch_join(rows: Vec<DfnBatchRow>) -> DuckOptionResult<Vec<String>> {
+    let joined = rows
+        .iter()
+        .map(|row| format!("{}:{}", row.id, row.tag))
+        .collect::<Vec<_>>()
+        .join("|");
+    // 每行都返回「整批拼起来的结果」，好让 SQL 侧一眼看出批量确实生效了
+    Ok(Some(vec![joined; rows.len()]))
+}
+
+/// `Vec<Option<MyRow>>` + `DuckOptionResult<Vec<Option<T>>>`：空行以 None 进函数体
+/// ```sql
+/// SELECT dfn_batch_tag_len(id, tag) FROM (VALUES (1, 'aa'), (NULL, 'bbb'), (2, '')) t(id, tag);
+/// -- 2, NULL, 0
+/// ```
+#[duck_scalar_function(
+    batch = true,
+    description = "Receives NULL rows as None and decides their result itself"
+)]
+fn dfn_batch_tag_len(rows: Vec<Option<DfnBatchRow>>) -> DuckOptionResult<Vec<Option<i64>>> {
+    let mut output: Vec<Option<i64>> = Vec::with_capacity(rows.len());
+    for row in &rows {
+        // 空行（None）由函数自己决定语义：这里原样返回 NULL
+        output.push(row.as_ref().map(|row| row.tag.len() as i64));
+    }
+    Ok(Some(output))
+}
+
+/// `Ok(None)` 表示整批输出 NULL；`Err` 让整条查询失败
+/// ```sql
+/// SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (1, 'a'), (2, 'b')) t(id, tag);
+/// -- 10, 20
+/// SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (1, '')) t(id, tag);
+/// -- NULL（整批）
+/// SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (-1, 'a')) t(id, tag);
+/// -- 报错
+/// ```
+#[duck_scalar_function(
+    batch = true,
+    description = "Returns Ok(None) to NULL the whole batch, or an error to fail the query"
+)]
+fn dfn_batch_all_or_nothing(rows: Vec<DfnBatchRow>) -> DuckOptionResult<Vec<i64>> {
+    if rows.iter().any(|row| row.id < 0) {
+        return Err(duck_error(
+            "dfn_batch_all_or_nothing: negative id is rejected",
+        ));
+    }
+    if rows.iter().any(|row| row.tag.is_empty()) {
+        // 整批作废：与逐行返回 None 不同，这里所有行都会变成 NULL
+        return Ok(None);
+    }
+    Ok(Some(rows.iter().map(|row| row.id * 10).collect()))
+}
+
+/// 故意少还一行：宏生成的行数校验会报错（演示用，正常函数不要这样写）
+/// ```sql
+/// SELECT dfn_batch_misaligned(id, tag) FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, tag);
+/// -- 报错
+/// ```
+#[duck_scalar_function(
+    batch = true,
+    description = "Deliberately returns one row too few, to exercise the row-count check"
+)]
+fn dfn_batch_misaligned(rows: Vec<DfnBatchRow>) -> Vec<i64> {
+    vec![0; rows.len().saturating_sub(1)]
 }

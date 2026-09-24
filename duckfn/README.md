@@ -108,7 +108,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | Page | Contents |
 | --- | --- |
 | [Attributes](https://shijianjs.github.io/duckfn/docs/guide/attributes) | All attributes, shared arguments, and manual registration. |
-| [Scalar functions](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) | Return shapes, `NULL` handling, overloads. |
+| [Scalar functions](https://shijianjs.github.io/duckfn/docs/guide/scalar-functions) | Return shapes, `NULL` handling, batch mode, overloads. |
 | [Aggregate functions](https://shijianjs.github.io/duckfn/docs/guide/aggregate-functions) | Row handlers, state types, parallel aggregation. |
 | [Table functions](https://shijianjs.github.io/duckfn/docs/guide/table-functions) | Row structs, named parameters, streaming. |
 | [Copy functions](https://shijianjs.github.io/duckfn/docs/guide/copy-functions) | Custom file formats for `COPY ... TO` / `COPY ... FROM`, built on runtime dynamic columns. |

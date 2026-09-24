@@ -42,6 +42,7 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 | `special_null_handling` | `#[duck_scalar_function]`、`#[duck_aggregate_function]` | `false` | 让 DuckDB 把 `NULL` 入参交给回调，而不是在 bind 阶段折叠掉。见[标量函数](./scalar-functions.md#null-的处理)。 |
 | `volatile` | `#[duck_scalar_function]` | `false` | 标量函数用：标记为 volatile，注册时调用 `duckdb_scalar_function_set_volatile`，DuckDB 不缓存、不复用相同参数的调用结果。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#volatile)。 |
 | `varargs` | `#[duck_scalar_function]` | `false` | 标量函数用：开启可变参数。函数签名最后一个参数必须是 `Vec<T>`，其元素类型 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。需要 `duckdb-1-5` feature，且不能与 `overloads_name` 同用。见[标量函数](./scalar-functions.md#可变参数)。 |
+| `batch` | `#[duck_scalar_function]` | `false` | 标量函数用：把整批行一次性交给函数，而不是逐行遍历。唯一参数是 `Vec<MyRow>`（只含非空行）或 `Vec<Option<MyRow>>`，`MyRow` 是 `#[derive(DuckStruct)]` 结构体并直接充当参数类型；返回 `Vec<T>` / `Vec<Option<T>>` / `DuckOptionResult<Vec<…>>`。不能与 `varargs` 同用。见[标量函数](./scalar-functions.md#批量模式)。 |
 | `implicit_cost` | `#[duck_cast_function]` | — | 类型转换用：隐式转换代价。 |
 | `overloads_name` | `#[duck_scalar_function]`、`#[duck_aggregate_function]` | — | 以该函数集的重载形式注册，而不是注册自身的函数名。 |
 
@@ -191,7 +192,7 @@ mod dfn_scalar_reg_manual {
 
 | 属性宏 | 生成的 item |
 | --- | --- |
-| `#[duck_scalar_function]` | `ScalarFunctionImpl`、`SQL_NAME`、`scalar_function_builder()`、`scalar_overload_builder()` |
+| `#[duck_scalar_function]` | `ScalarFunctionImpl`、`SQL_NAME`、`scalar_function_builder()`、`scalar_overload_builder()`；`batch = true` 时 `DuckArgsImpl` 是行结构体的别名，而不是新生成的结构体 |
 | `#[duck_aggregate_function]` | `AggregateFunctionImpl`、`SQL_NAME`、`aggregate_function_builder()`、`aggregate_overload_builder(builder)`、`aggregate_function_guard()` |
 | `#[duck_table_function]` | `TableFunctionImpl`、`SQL_NAME`、`table_function_builder()`（返回 `DuckResult`） |
 | `#[duck_copy_function]` | `CopyFunctionImpl`、`copy_function_builder()`（返回 `DuckResult`）、`copy_function_register(connection)`，不生成 `DuckArgsImpl` |

@@ -43,6 +43,7 @@ compile error. `#[duck_custom_register]` takes no arguments at all.
 | `special_null_handling` | `#[duck_scalar_function]`, `#[duck_aggregate_function]` | `false` | Ask DuckDB to hand `NULL` arguments to the callback instead of folding them away. See [Scalar functions](./scalar-functions.md#null-handling). |
 | `volatile` | `#[duck_scalar_function]` | `false` | Mark the function volatile, so registration calls `duckdb_scalar_function_set_volatile` and DuckDB neither caches nor reuses calls with the same arguments. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#volatile). |
 | `varargs` | `#[duck_scalar_function]` | `false` | Enable variadic arguments. The last parameter must be `Vec<T>` and `T`'s logical type is passed to `duckdb_scalar_function_set_varargs`. Requires the `duckdb-1-5` feature and cannot be combined with `overloads_name`. See [Scalar functions](./scalar-functions.md#variadic-arguments). |
+| `batch` | `#[duck_scalar_function]` | `false` | Hand the whole batch of rows to the function instead of walking it row by row. The single parameter is `Vec<MyRow>` (only the non-`NULL` rows) or `Vec<Option<MyRow>>`, `MyRow` being a `#[derive(DuckStruct)]` struct that becomes the argument type; the return value is `Vec<T>` / `Vec<Option<T>>` / `DuckOptionResult<Vec<…>>`. Cannot be combined with `varargs`. See [Scalar functions](./scalar-functions.md#batch-mode). |
 | `implicit_cost` | `#[duck_cast_function]` | — | For casts: the implicit conversion cost. |
 | `overloads_name` | `#[duck_scalar_function]`, `#[duck_aggregate_function]` | — | Register as an overload of this function set instead of under the function's own name. |
 
@@ -198,7 +199,7 @@ provides:
 
 | Macro | Generated items |
 | --- | --- |
-| `#[duck_scalar_function]` | `ScalarFunctionImpl`, `SQL_NAME`, `scalar_function_builder()`, `scalar_overload_builder()` |
+| `#[duck_scalar_function]` | `ScalarFunctionImpl`, `SQL_NAME`, `scalar_function_builder()`, `scalar_overload_builder()` — with `batch = true`, `DuckArgsImpl` is an alias for the row struct rather than a generated struct |
 | `#[duck_aggregate_function]` | `AggregateFunctionImpl`, `SQL_NAME`, `aggregate_function_builder()`, `aggregate_overload_builder(builder)`, `aggregate_function_guard()` |
 | `#[duck_table_function]` | `TableFunctionImpl`, `SQL_NAME`, `table_function_builder()` (returns a `DuckResult`) |
 | `#[duck_copy_function]` | `CopyFunctionImpl`, `copy_function_builder()` (returns a `DuckResult`), `copy_function_register(connection)` — no `DuckArgsImpl` |

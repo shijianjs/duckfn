@@ -37,7 +37,7 @@
 - 所有属性宏：`auto_register = false`（只生成 builder 不注册）；
 - `#[duck_table_function]`：`named_param_from = "field"`（命名参数起点）、`dynamic_columns`；
 - `#[duck_scalar_function]`：`special_null_handling`、`volatile`、`varargs`（DuckDB 1.5+）、
-  `overloads_name`；
+  `batch`（整批进、整批出）、`overloads_name`；
 - `#[duck_aggregate_function]`：`special_null_handling`、`overloads_name`；
 - `#[duck_cast_function]`：`implicit_cost`；
 - 两个 derive：`named_param_from`、`rename_all`、`sql_name`、`create_type`。

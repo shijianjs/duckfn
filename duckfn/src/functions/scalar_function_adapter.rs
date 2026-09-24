@@ -1,12 +1,13 @@
-//! 标量函数适配层：把 quack-rs 的向量级 C 回调拆成「逐行」的 Rust 代码。
+//! 标量函数适配层：把 quack-rs 的向量级 C 回调拆成「按批读、逐行算、按批写」的 Rust 代码。
 //!
-//! Scalar-function adapter: splits quack-rs' vector-level C callback into per-row Rust code.
+//! Scalar-function adapter: splits quack-rs' vector-level C callback into batch-read, row-wise
+//! evaluation and batch-write Rust code.
 
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;
 use crate::value_types::duck_value_type::{DuckValueReader, DuckValueType};
 use crate::{
-    DuckExtraInfo, DuckOptionResult, DuckResult, duck_scalar_unwind, erased_extra_info,
+    DuckExtraInfo, DuckOptionResult, DuckResult, duck_error, duck_scalar_unwind, erased_extra_info,
     raw_extra_info, vec_option_to_ref,
 };
 use libduckdb_sys::{duckdb_connection, duckdb_data_chunk, duckdb_function_info, duckdb_vector};
@@ -17,26 +18,30 @@ use quack_rs::prelude::{
 
 /// 把「参数结构体 -> 输出值」的纯 Rust 函数注册成 DuckDB 标量函数。
 ///
-/// 适配层把 quack-rs 的向量级回调拆成逐行的 Rust 代码：
+/// 适配层读写两侧都按「批」处理，只有用户代码默认是逐行的：
 ///
-/// - 用 [`Self::Args`]（实现 [`DuckColumns`]）从输入 `DataChunk` 逐行取参；
-/// - 每行调用 [`Self::apply`]（或 NULL 时代替的 [`Self::apply_with_null`]，以及带附加数据的
-///   [`Self::apply_with_extra`]）；
+/// - 用 [`Self::Args`]（实现 [`DuckColumns`]）把输入 `DataChunk` 整体读成
+///   `Vec<Option<Self::Args>>`（`None` 表示该行整体为 NULL）；
+/// - 默认逐行调用 [`Self::apply`]（或 NULL 时代替的 [`Self::apply_with_null`]，以及带附加数据的
+///   [`Self::apply_with_extra`]）；想一次处理整批的实现改覆盖 [`Self::apply_batch`]；
 /// - 启用可变参数（[`Self::varargs_element_type`] 返回 `Some`）时改走
-///   [`Self::apply_varargs`]，固定参数之后的列全部按该类型读成一个集合；
+///   [`Self::apply_varargs`]，固定参数之后的列全部按该类型读成一个集合（流式，不物化整批）；
 /// - 收集成 `Vec<Option<Self::Output>>` 后一次性写入输出向量。
 ///
-/// 一般不用手写这个 impl，直接用 `#[duck_scalar_function]` 作用在普通函数上即可。
+/// 一般不用手写这个 impl，直接用 `#[duck_scalar_function]` 作用在普通函数上即可；需要批量处理时
+/// 加 `batch = true`。
 ///
-/// Registers a plain Rust function `Args -> Output` as a DuckDB scalar function. The adapter
-/// splits quack-rs' vector-level callback into per-row Rust code: it reads arguments row by
-/// row through [`Self::Args`] (a [`DuckColumns`] implementation), calls [`Self::apply`] (or
-/// [`Self::apply_with_null`] for NULL rows, or [`Self::apply_with_extra`] when extra data is
-/// attached), or [`Self::apply_varargs`] once variadic arguments are enabled
-/// ([`Self::varargs_element_type`] returns `Some`), where every column past the fixed ones is
-/// read as one element of the variadic element type. It finally writes the collected results into
-/// the output vector in one batch. Usually you do not implement this manually: just annotate a
-/// plain function with `#[duck_scalar_function]`.
+/// Registers a plain Rust function `Args -> Output` as a DuckDB scalar function. Both reading and
+/// writing are batched; only the user code is per-row by default: the adapter materialises the
+/// input `DataChunk` into `Vec<Option<Self::Args>>` through [`Self::Args`] (a [`DuckColumns`]
+/// implementation), with `None` meaning the row is NULL as a whole. It then calls [`Self::apply`]
+/// (or [`Self::apply_with_null`] for NULL rows, or [`Self::apply_with_extra`] when extra data is
+/// attached) once per row — an implementation that wants the whole batch at once overrides
+/// [`Self::apply_batch`] instead. Variadic functions ([`Self::varargs_element_type`] returns
+/// `Some`) go through [`Self::apply_varargs`], still streaming; every column past the fixed ones is
+/// read as one element of the variadic element type. Both paths finally write the collected results
+/// into the output vector in one batch. Usually you do not implement this manually: annotate a plain
+/// function with `#[duck_scalar_function]`, adding `batch = true` for batch processing.
 pub trait ScalarFunctionAdapter: Sized + 'static {
     /// # Safety
     ///
@@ -70,22 +75,69 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             }
             let row_count = chunk.size();
 
-            let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
-            for row in 0..row_count {
-                let result = if has_varargs {
-                    Self::apply_varargs(&readers, row, fixed_count)
-                } else {
-                    Self::apply_with_extra(Self::Args::read_columns(&readers, row), extra)
-                };
-                match result {
-                    Ok(r) => output_vec.push(r),
-                    Err(e) => {
-                        info.set_error(e.as_str());
-                        return;
+            // 读值与写值一样按批处理：先把整个 chunk 读成「一批行」，再交给用户代码。
+            //
+            // - 可变参数没有稳定的行结构（每个参数列的个数由调用处决定），仍按 `(readers, row)`
+            //   流式读取；
+            // - 其余情况统一物化成 `Vec<Option<Self::Args>>`，默认由 [`Self::apply_batch`] 逐行遍历
+            //   （语义与改造前逐行读取完全一致），批量实现只需覆盖它，就得到「整批进、整批出」。
+            //
+            // Reading mirrors writing: the whole chunk is turned into a batch of rows first and only
+            // then handed to the user code. Variadic functions keep streaming (`their arguments have
+            // no stable row structure`), everything else materialises into `Vec<Option<Self::Args>>`
+            // and goes through [`Self::apply_batch`], whose default walks the rows one by one —
+            // exactly what the previous per-row loop did. A batch implementation only overrides that
+            // method to get "whole batch in, whole batch out".
+            let result = if has_varargs {
+                let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(row_count);
+                for row in 0..row_count {
+                    match Self::apply_varargs(&readers, row, fixed_count) {
+                        Ok(r) => output_vec.push(r),
+                        Err(e) => {
+                            info.set_error(e.as_str());
+                            return;
+                        }
                     }
                 }
+                Ok(Some(output_vec))
+            } else {
+                let rows: Vec<Option<Self::Args>> = (0..row_count)
+                    .map(|row| Self::Args::read_columns(&readers, row))
+                    .collect();
+                Self::apply_batch(rows, extra)
+            };
+            match result {
+                Ok(Some(results)) => {
+                    // 兜底校验：批量实现必须逐行返回，长度对不上就是实现有 bug（宏生成的实现
+                    // 已经先查过一遍并给出更具体的错误）。
+                    //
+                    // A safety net: a batch implementation must return one result per row; a length
+                    // mismatch is a bug in the implementation (the macro-generated one already
+                    // checks it with a more specific message).
+                    if results.len() != row_count {
+                        info.set_error(
+                            duck_error(format!(
+                                "{}: batch implementation returned {} rows for {} input rows",
+                                Self::NAME,
+                                results.len(),
+                                row_count
+                            ))
+                            .as_str(),
+                        );
+                        return;
+                    }
+                    Self::Output::write_batch(output, &vec_option_to_ref(&results));
+                }
+                // `Ok(None)` 在批量语义下表示「整批输出 NULL」（逐行实现不会走到这里）。
+                //
+                // Under the batch semantics `Ok(None)` means "the whole batch is NULL" (a per-row
+                // implementation never returns it).
+                Ok(None) => {
+                    let nulls: Vec<Option<&Self::Output>> = vec![None; row_count];
+                    Self::Output::write_batch(output, &nulls);
+                }
+                Err(e) => info.set_error(e.as_str()),
             }
-            Self::Output::write_batch(output, &vec_option_to_ref(&output_vec));
         });
     }
 
@@ -181,6 +233,64 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
         _fixed_count: usize,
     ) -> DuckOptionResult<Self::Output> {
         unreachable!("apply_varargs is only used when varargs_element_type() returns Some")
+    }
+
+    /// 对「一整批行」求值；默认逐行转调 [`Self::apply_with_extra`]。
+    ///
+    /// `rows` 是本 chunk 读出来的一批参数行，长度就是本次要算的行数；`None` 表示该行整体为
+    /// NULL（任一非可空参数为 NULL，与逐行路径的判据完全一致 —— 批量并不会另搞一套判空逻辑）。
+    ///
+    /// `extra` 是注册期通过 [`Self::extra_info`] 挂上的函数级数据，原样转给
+    /// [`Self::apply_with_extra`]；宏以 `batch = true` 生成的批量实现目前不把 `extra` 交给用户函数
+    /// （用户函数签名里没有它的位置），手写 impl 可以直接使用。
+    ///
+    /// 返回约定（元素是 `Option<Self::Output>`，因此「某一行是 NULL」与「值本身可空」都能表达）：
+    ///
+    /// - `Ok(Some(results))`：`results.len()` **必须**等于 `rows.len()`，且顺序一一对应。长度对不上
+    ///   会报错（宏生成的实现会先给出一条带函数名的具体错误，适配层另有一次兜底校验）；
+    /// - `Ok(None)`：**整批**输出 NULL —— 注意这与逐行的「本行 NULL」不同；
+    /// - `Err(e)`：整条查询失败。
+    ///
+    /// 逐行实现完全不需要理会这个方法：默认实现就是「遍历 `rows`，逐个调用
+    /// [`Self::apply_with_extra`]」，行为与改造前一致。想要「整批进、整批出」（例如把整批行合并成
+    /// 一次 HTTP 请求 / 一次数据库往返）的实现才覆盖它，此时 `apply` 不会被调用。
+    ///
+    /// 可变参数（[`Self::varargs_element_type`] 返回 `Some`）的函数不走这里，适配层仍按
+    /// `(readers, row)` 流式读取。
+    ///
+    /// Evaluates one whole batch of rows; by default it just walks `rows` and delegates to
+    /// [`Self::apply_with_extra`] for every one of them. `rows` is the chunk materialised as
+    /// argument rows and `None` means that row is NULL as a whole (a NULL in any non-nullable
+    /// argument — the very same criterion as the per-row path, since batching does not introduce a
+    /// second notion of nullability).
+    ///
+    /// `extra` is the function-level data attached at registration time through
+    /// [`Self::extra_info`] and is forwarded to [`Self::apply_with_extra`]; the batch implementation
+    /// the macro generates with `batch = true` does not hand it to the user function (whose
+    /// signature has no place for it), while a hand-written impl can use it directly.
+    ///
+    /// Contract (the element is `Option<Self::Output>`, so "this row is NULL" and "the value itself
+    /// is nullable" are both expressible): `Ok(Some(results))` requires
+    /// `results.len() == rows.len()`, in the same order (a mismatch is an error; the
+    /// macro-generated implementation reports a function-specific message first and the adapter has
+    /// a second safety net), `Ok(None)` means the **entire batch** is NULL — unlike a per-row
+    /// `None`, which only nulls that row — and `Err(e)` fails the whole query.
+    ///
+    /// A per-row implementation never needs to touch this method: the default is exactly the loop
+    /// that used to sit in the adapter. Only implementations that want "whole batch in, whole batch
+    /// out" (for instance one HTTP request or one database round trip for the whole batch) override
+    /// it, in which case `apply` is never called. Variadic functions
+    /// ([`Self::varargs_element_type`] returns `Some`) do not go through here: the adapter keeps
+    /// streaming them row by row.
+    fn apply_batch(
+        rows: Vec<Option<Self::Args>>,
+        extra: Option<&DuckExtraInfo>,
+    ) -> DuckOptionResult<Vec<Option<Self::Output>>> {
+        let mut output_vec: Vec<Option<Self::Output>> = Vec::with_capacity(rows.len());
+        for args in rows {
+            output_vec.push(Self::apply_with_extra(args, extra)?);
+        }
+        Ok(Some(output_vec))
     }
 
     /// 构造「独立函数」用的 builder（自带函数名）。

@@ -39,8 +39,8 @@ Each macro accepts only the arguments it needs — an unknown key is a compile e
 - every attribute: `auto_register = false` (generate the builders without registering);
 - `#[duck_table_function]`: `named_param_from = "field"` (where named parameters start),
   `dynamic_columns`;
-- `#[duck_scalar_function]`: `special_null_handling`, `volatile`, `varargs` (DuckDB 1.5+) and
-  `overloads_name`;
+- `#[duck_scalar_function]`: `special_null_handling`, `volatile`, `varargs` (DuckDB 1.5+),
+  `batch` (whole batch in, whole batch out) and `overloads_name`;
 - `#[duck_aggregate_function]`: `special_null_handling`, `overloads_name`;
 - `#[duck_cast_function]`: `implicit_cost`;
 - the derives: `named_param_from`, `rename_all`, `sql_name`, `create_type`.

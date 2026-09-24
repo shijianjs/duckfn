@@ -112,15 +112,22 @@ Each registration kind has an adapter trait that turns Rust values into DuckDB's
 
 ### Scalar
 
-Reads one row at a time out of the input chunk, calls `apply_with_null`, writes the results as a
-batch. `apply_with_null` returns `Ok(None)` when any non-`Option` argument is `NULL`, which is what
-short-circuits the row. `null_handling()` defaults to `DefaultNullHandling` and is overridden to
-`SpecialNullHandling` by `special_null_handling = true`. Likewise `volatile()` defaults to `false`
-and is overridden to `true` by `volatile = true`, which makes registration call
-`duckdb_scalar_function_set_volatile` (DuckDB 1.5+). `varargs_element_type()` defaults to `None`;
-with `varargs = true` it returns the element type of the signature's last `Vec<T>` and registration
-calls `duckdb_scalar_function_set_varargs` (DuckDB 1.5+), while the callback reads the extra columns
-through `apply_varargs` instead of `apply`.
+Reads the whole input chunk into a batch of rows (`Vec<Option<Args>>`, `None` meaning a `NULL` row),
+hands that batch to `apply_batch` and writes the results as a batch. `apply_batch`'s default walks
+the rows and calls `apply_with_null` once per row, which keeps the per-row semantics: it returns
+`Ok(None)` when any non-`Option` argument is `NULL`, and that is what short-circuits the row.
+A batch implementation overrides `apply_batch` instead (that is what `batch = true` generates),
+receives the whole batch at once and returns `Vec<Option<Output>>`; `Ok(None)` from it means the whole
+batch is `NULL`, and the returned length must match the batch size.
+
+`null_handling()` defaults to `DefaultNullHandling` and is overridden to `SpecialNullHandling` by
+`special_null_handling = true`. Likewise `volatile()` defaults to `false` and is overridden to `true`
+by `volatile = true`, which makes registration call `duckdb_scalar_function_set_volatile`
+(DuckDB 1.5+). `varargs_element_type()` defaults to `None`; with `varargs = true` it returns the
+element type of the signature's last `Vec<T>` and registration calls
+`duckdb_scalar_function_set_varargs` (DuckDB 1.5+), while the callback streams the extra columns
+through `apply_varargs` instead of `apply` (variadic arguments have no stable row structure, so they
+are never materialised into a batch).
 
 ### Aggregate
 

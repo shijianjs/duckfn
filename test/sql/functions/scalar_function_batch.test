@@ -1,0 +1,130 @@
+# name: test/sql/functions/scalar_function_batch.test
+# description: duck_scalar_function 的 batch 模式：整批入参、行数对齐、空行过滤与回填、整批 NULL、报错
+# group: [functions]
+
+require rusty_quack
+
+# 批量函数仍然按 chunk 调用，所以整表不会被拉进内存：下面这些小查询每个都是一次 chunk，
+# `dfn_batch_batch_size` 的取值直接反映「这一批有多少行」。
+
+# ============================================================================
+# Vec<MyRow> + Vec<T>：一次拿到整批行
+# ============================================================================
+
+query I
+SELECT DISTINCT dfn_batch_batch_size(id, tag) FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, tag);
+----
+3
+
+query I
+SELECT dfn_batch_batch_size(id, tag) FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, tag);
+----
+3
+3
+3
+
+# 返回值类型来自 「Vec<T> 里的 T」
+query T
+SELECT typeof(dfn_batch_batch_size(1, 'a'));
+----
+BIGINT
+
+# 大表仍然按 chunk 调用：每个 chunk 都不超过 DuckDB 的标准向量大小（2048），
+# 也就是整表没有被一次性拉进内存
+query I
+SELECT count(*) FROM range(5000) t(i) WHERE dfn_batch_batch_size(i, 'x') BETWEEN 1 AND 2048;
+----
+5000
+
+# 行参数类型由行结构体决定：id BIGINT + tag VARCHAR 才匹配
+statement error
+SELECT dfn_batch_batch_size('x', 1);
+----
+No function matches
+
+# ============================================================================
+# Vec<MyRow> + DuckOptionResult<Vec<T>>：空行先被剔掉，结果再按原位回填 NULL
+# ============================================================================
+
+# 整批只有非空行参与：这里两行拼成 '1:a|2:c'，中间那行按原位回填 NULL
+query T
+SELECT dfn_batch_join(id, tag) FROM (VALUES (1, 'a'), (NULL, 'b'), (2, 'c')) t(id, tag);
+----
+1:a|2:c
+NULL
+1:a|2:c
+
+# tag 为 NULL 同样让整行短路
+query T
+SELECT dfn_batch_join(id, tag) FROM (VALUES (1, NULL), (2, 'c')) t(id, tag);
+----
+NULL
+2:c
+
+# 整个 chunk 都是空行：用户收到空批，返回值全部回填成 NULL
+query T
+SELECT dfn_batch_join(NULL::BIGINT, 'a');
+----
+NULL
+
+# ============================================================================
+# Vec<Option<MyRow>> + DuckOptionResult<Vec<Option<T>>>：空行以 None 进函数体
+# ============================================================================
+
+# 空行没有被剔掉，而是以 None 到达用户代码，由用户自己决定结果
+query I
+SELECT dfn_batch_tag_len(id, tag) FROM (VALUES (1, 'aa'), (NULL, 'bbb'), (2, '')) t(id, tag);
+----
+2
+NULL
+0
+
+query T
+SELECT typeof(dfn_batch_tag_len(1, 'aa'));
+----
+BIGINT
+
+# ============================================================================
+# Ok(None) = 整批输出 NULL（与逐行的「本行 NULL」不同）
+# ============================================================================
+
+query I
+SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (1, 'a'), (2, 'b')) t(id, tag);
+----
+10
+20
+
+# 批内出现空 tag -> 返回 Ok(None) -> 整批都是 NULL
+query I
+SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (1, ''), (2, 'b')) t(id, tag);
+----
+NULL
+NULL
+
+# ============================================================================
+# Err = 整条查询失败
+# ============================================================================
+
+statement error
+SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (-1, 'a')) t(id, tag);
+----
+dfn_batch_all_or_nothing: negative id is rejected
+
+statement error
+SELECT dfn_batch_all_or_nothing(id, tag) FROM (VALUES (1, 'a'), (-2, 'b')) t(id, tag);
+----
+dfn_batch_all_or_nothing: negative id is rejected
+
+# ============================================================================
+# 行数对齐：返回行数必须与收到的行数一致
+# ============================================================================
+
+statement error
+SELECT dfn_batch_misaligned(id, tag) FROM (VALUES (1, 'a')) t(id, tag);
+----
+dfn_batch_misaligned: batch function returned 0 rows, but received 1 non-NULL input rows
+
+statement error
+SELECT dfn_batch_misaligned(id, tag) FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, tag);
+----
+batch function returned

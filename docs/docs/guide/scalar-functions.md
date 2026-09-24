@@ -213,6 +213,84 @@ fixed non-`Option` argument. Zero variadic arguments are allowed. The switch req
 (quack-rs' `ScalarOverloadBuilder` exposes no varargs switch); the macro rejects that combination
 at compile time.
 
+## Batch mode
+
+Reading and writing a chunk are already batched; only your function is called per row. `batch = true`
+hands the walking over to you: the function receives the whole batch of rows and returns the whole
+batch of results. Use it when the per-row work can be merged — one HTTP request, one database round
+trip — instead of one call per row.
+
+The signature is not "a row of arguments" but "a batch of rows -> a batch of results". The row type
+is your own `#[derive(DuckStruct)]` struct and *is* the argument type (no `DuckArgsImpl` struct is
+generated), so the columns are exactly the fields of that struct:
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+pub struct DfnBatchRow {
+    pub id: i64,
+    pub tag: String,
+}
+
+#[duck_scalar_function(batch = true)]
+fn dfn_batch_join(rows: Vec<DfnBatchRow>) -> DuckOptionResult<Vec<String>> {
+    let joined = rows.iter()
+        .map(|row| format!("{}:{}", row.id, row.tag))
+        .collect::<Vec<_>>()
+        .join("|");
+    Ok(Some(vec![joined; rows.len()]))
+}
+```
+
+Two input shapes decide what happens to `NULL` rows:
+
+| Parameter | `NULL` rows |
+| --- | --- |
+| `Vec<DfnBatchRow>` | Filtered out: the body only sees the non-NULL rows, and the results are spliced back at their original positions with `NULL`. |
+| `Vec<Option<DfnBatchRow>>` | Delivered to the body as `None`; the function decides their results itself. |
+
+```rust
+#[duck_scalar_function(batch = true)]
+fn dfn_batch_tag_len(rows: Vec<Option<DfnBatchRow>>) -> DuckOptionResult<Vec<Option<i64>>> {
+    Ok(Some(rows.iter().map(|row| row.as_ref().map(|row| row.tag.len() as i64)).collect()))
+}
+```
+
+Four return shapes mirror the per-row ones:
+
+| Shape | Meaning |
+| --- | --- |
+| `Vec<T>` | One non-`NULL` value per row. |
+| `Vec<Option<T>>` | One possibly-`NULL` value per row. |
+| `DuckOptionResult<Vec<T>>` | `Ok(None)` makes the **whole batch** `NULL`; `Err(e)` fails the query. |
+| `DuckOptionResult<Vec<Option<T>>>` | The nullable flavour of the previous shape. |
+
+```sql
+SELECT dfn_batch_join(id, tag) FROM (VALUES (1, 'a'), (NULL, 'b'), (2, 'c')) t(id, tag);
+-- 1:a|2:c, NULL, 1:a|2:c   (the NULL row was filtered out, then filled back in)
+
+SELECT dfn_batch_tag_len(id, tag) FROM (VALUES (1, 'aa'), (NULL, 'bbb'), (2, '')) t(id, tag);
+-- 2, NULL, 0               (the NULL row arrived as None)
+```
+
+Notes:
+
+- The batch is **one chunk**, not one table: DuckDB still calls the callback once per data chunk, so
+  a large table is never materialised in memory and the vectorised read/write paths stay in place.
+  `fn dfn_batch_batch_size(rows: Vec<DfnBatchRow>) -> Vec<i64>` returns `rows.len()` for every row,
+  so `SELECT DISTINCT dfn_batch_batch_size(i, 'x') FROM range(5000)` shows the chunk sizes.
+- The returned row count must equal the number of rows the function received (for `Vec<DfnBatchRow>`
+  that is the number of **non-NULL** rows, since the NULL rows never reached the body). A mismatch
+  fails the query with `batch function returned N rows, but received M input rows` instead of writing
+  garbage.
+- A per-row `None` (`Vec<Option<T>>`) only nulls that row, while `Ok(None)` from
+  `DuckOptionResult<Vec<_>>` nulls the whole batch — do not confuse the two.
+- `batch = true` cannot be combined with `varargs = true` (variadic arguments have no stable row
+  structure); the macro rejects the combination at compile time. `overloads_name`,
+  `auto_register`, `special_null_handling` and `volatile` work as usual.
+- `NULL` handling is otherwise unchanged: a `NULL` in a non-nullable field still invalidates the
+  whole row (that is exactly what the filtered shape reacts to), and an `Option` field still arrives
+  as `None`.
+
 ## Overloads and function sets
 
 Several signatures can share one SQL name. The simplest way is `overloads_name`, which merges every
@@ -266,6 +344,7 @@ scalar functions are always registered positionally, so the `name := value` name
 
 - [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) — the example functions
 - [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the expected results
+- [`test/sql/functions/scalar_function_batch.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function_batch.test) — the batch-mode expected results
 - [`duckfn/src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/scalar_function_adapter.rs) — the runtime side
 
 ## Next

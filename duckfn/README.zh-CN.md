@@ -100,7 +100,7 @@ duckfn_entrypoint!("my_ext");
 | 页面 | 内容 |
 | --- | --- |
 | [属性参考](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/attributes) | 全部属性、公共参数与手动注册。 |
-| [标量函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) | 返回形态、`NULL` 处理、重载。 |
+| [标量函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/scalar-functions) | 返回形态、`NULL` 处理、批量模式、重载。 |
 | [聚合函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/aggregate-functions) | 行处理函数、状态类型、并行聚合。 |
 | [表函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/table-functions) | 行结构体、命名参数、流式输出。 |
 | [COPY 函数](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/copy-functions) | 为 `COPY ... TO` / `COPY ... FROM` 提供自定义文件格式，基于运行时动态列。 |

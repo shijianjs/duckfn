@@ -204,6 +204,78 @@ SELECT typeof(dfn_scalar_varargs_merge([1]));     -- BIGINT[]
 `overloads_name` 同用（quack-rs 的 `ScalarOverloadBuilder` 没有暴露 varargs 开关），宏会在编译期
 拒绝这种组合。
 
+## 批量模式
+
+读值和写值本来就都是按批的，逐行的只有用户函数。`batch = true` 把「遍历整批」这一步也交给你：
+函数一次收到整批行、一次还回整批结果。适用场景是「行级逻辑，但可以合并成一次请求」—— 一次 HTTP
+调用、一次数据库往返，而不是每行各来一次。
+
+这时签名不再是「一行参数」，而是「整批行 -> 整批结果」。行类型就是你自己用 `#[derive(DuckStruct)]`
+定义的结构体，它直接充当参数类型（宏不再生成 `DuckArgsImpl`），字段即列：
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+pub struct DfnBatchRow {
+    pub id: i64,
+    pub tag: String,
+}
+
+#[duck_scalar_function(batch = true)]
+fn dfn_batch_join(rows: Vec<DfnBatchRow>) -> DuckOptionResult<Vec<String>> {
+    let joined = rows.iter()
+        .map(|row| format!("{}:{}", row.id, row.tag))
+        .collect::<Vec<_>>()
+        .join("|");
+    Ok(Some(vec![joined; rows.len()]))
+}
+```
+
+入参有两种形态，决定空行怎么处理：
+
+| 参数 | 空行 |
+| --- | --- |
+| `Vec<DfnBatchRow>` | 先被剔掉：函数体只看到非空行，结果再按原位回填 `NULL`。 |
+| `Vec<Option<DfnBatchRow>>` | 以 `None` 交给函数体，由函数自己决定这些行的结果。 |
+
+```rust
+#[duck_scalar_function(batch = true)]
+fn dfn_batch_tag_len(rows: Vec<Option<DfnBatchRow>>) -> DuckOptionResult<Vec<Option<i64>>> {
+    Ok(Some(rows.iter().map(|row| row.as_ref().map(|row| row.tag.len() as i64)).collect()))
+}
+```
+
+返回形态有四种，与逐行版本一一对应：
+
+| 形态 | 含义 |
+| --- | --- |
+| `Vec<T>` | 每行一个非 `NULL` 的值。 |
+| `Vec<Option<T>>` | 每行一个可空值。 |
+| `DuckOptionResult<Vec<T>>` | `Ok(None)` 让**整批**变成 `NULL`，`Err(e)` 让整条查询失败。 |
+| `DuckOptionResult<Vec<Option<T>>>` | 上一种的可空版本。 |
+
+```sql
+SELECT dfn_batch_join(id, tag) FROM (VALUES (1, 'a'), (NULL, 'b'), (2, 'c')) t(id, tag);
+-- 1:a|2:c, NULL, 1:a|2:c   （空行被剔掉，再按原位回填）
+
+SELECT dfn_batch_tag_len(id, tag) FROM (VALUES (1, 'aa'), (NULL, 'bbb'), (2, '')) t(id, tag);
+-- 2, NULL, 0               （空行以 None 到达函数体）
+```
+
+几点说明：
+
+- 一批就是一个 chunk，不是一张表：DuckDB 仍然按数据块调用回调，整表不会被拉进内存，读写两侧的
+  向量化路径原样保留。`fn dfn_batch_batch_size(rows: Vec<DfnBatchRow>) -> Vec<i64>` 让每行返回
+  `rows.len()`，于是 `SELECT DISTINCT dfn_batch_batch_size(i, 'x') FROM range(5000)` 能看出块大小。
+- 返回的行数必须与函数收到的行数一致（`Vec<DfnBatchRow>` 形态下是**非空行**的行数，因为空行根本没
+  进函数体）。不一致会让整条查询失败并报出 `batch function returned N rows, but received M input rows`，
+  而不是写出错位的数据。
+- 逐行的 `None`（`Vec<Option<T>>`）只让那一行变成 `NULL`，而 `DuckOptionResult<Vec<_>>` 的
+  `Ok(None)` 会让整批变成 `NULL` —— 两者不要混淆。
+- `batch = true` 不能与 `varargs = true` 同用（可变参数没有稳定的行结构），宏会在编译期拒绝；
+  `overloads_name`、`auto_register`、`special_null_handling`、`volatile` 都照常生效。
+- 其余 NULL 语义完全不变：非可空字段为 `NULL` 仍然让整个参数值作废（过滤形态正是据此剔除空行），
+  可空字段仍然以 `None` 进入函数体。
+
 ## 重载与函数集
 
 多个签名可以共用一个 SQL 名字。最简单的方式是 `overloads_name`：取值相同的签名会被合并成一个函数集，
@@ -255,6 +327,7 @@ SELECT dfn_scalar_reg_named_param(x := 1, y := 2); -- 12（不存在的名字也
 
 - [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) —— 示例函数
 - [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 期望结果
+- [`test/sql/functions/scalar_function_batch.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function_batch.test) —— 批量模式的期望结果
 - [`duckfn/src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/scalar_function_adapter.rs) —— 运行时侧
 
 ## 接下来

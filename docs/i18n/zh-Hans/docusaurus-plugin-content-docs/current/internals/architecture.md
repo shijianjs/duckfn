@@ -105,12 +105,18 @@ LOAD 'my_ext.duckdb_extension'
 
 ### 标量函数
 
-每次从输入 chunk 读一行，调用 `apply_with_null`，再批量写出结果。任一非 `Option` 参数为 `NULL` 时，
-`apply_with_null` 返回 `Ok(None)`，这就是整行短路的来源。`null_handling()` 默认返回 `DefaultNullHandling`，
-`special_null_handling = true` 时被覆盖为 `SpecialNullHandling`。类似地，`volatile()` 默认返回 `false`，
-`volatile = true` 时被覆盖为 `true`，注册期随之调用 `duckdb_scalar_function_set_volatile`（DuckDB 1.5+）。
-`varargs_element_type()` 默认返回 `None`；`varargs = true` 时返回签名最后一个 `Vec<T>` 的元素类型，
-注册期调用 `duckdb_scalar_function_set_varargs`（DuckDB 1.5+），回调则改走 `apply_varargs` 而不是 `apply`。
+先把整个输入 chunk 读成一批行（`Vec<Option<Args>>`，`None` 表示该行整体为 `NULL`），把这批行交给
+`apply_batch`，再批量写出结果。`apply_batch` 的默认实现遍历这批行、逐行调用 `apply_with_null`，
+因此逐行语义不变：任一非 `Option` 参数为 `NULL` 时 `apply_with_null` 返回 `Ok(None)`，这就是整行短路的
+来源。批量实现改为覆盖 `apply_batch`（`batch = true` 生成的就是它）：一次拿到整批行、返回
+`Vec<Option<Output>>`，其中的 `Ok(None)` 表示整批 `NULL`，返回长度必须与批大小一致。
+
+`null_handling()` 默认返回 `DefaultNullHandling`，`special_null_handling = true` 时被覆盖为
+`SpecialNullHandling`。类似地，`volatile()` 默认返回 `false`，`volatile = true` 时被覆盖为 `true`，
+注册期随之调用 `duckdb_scalar_function_set_volatile`（DuckDB 1.5+）。`varargs_element_type()` 默认返回
+`None`；`varargs = true` 时返回签名最后一个 `Vec<T>` 的元素类型，注册期调用
+`duckdb_scalar_function_set_varargs`（DuckDB 1.5+），回调则改走 `apply_varargs` 而不是 `apply`
+（可变参数没有稳定的行结构，因此从不成批物化）。
 
 ### 聚合函数
 

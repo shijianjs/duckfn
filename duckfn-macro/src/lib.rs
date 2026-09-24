@@ -197,6 +197,14 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 ///   `T` 的逻辑类型会交给 DuckDB 的 `duckdb_scalar_function_set_varargs`，调用时固定参数之后的
 ///   每一列都按 `T` 读出来、组成 `Vec<T>` 传给函数体。比如
 ///   `fn my_sum(values: Vec<i64>) -> i64`。同样需要 `duckdb-1-5`，也不能与 `overloads_name` 同用。
+/// - `batch = true` 开启批量模式：适配层本来就把整块数据读成一批行、再由默认实现逐行调用函数体，
+///   这个开关把那层遍历也交给用户 —— 唯一的参数是整批行、返回值是整批结果。行类型由用户用
+///   `#[derive(DuckStruct)]` 定义并直接充当参数类型（宏不再生成 `DuckArgsImpl` 结构体）：
+///   `fn f(rows: Vec<MyRow>) -> Vec<T>` 只收到非空行（结果按原位回填 NULL），
+///   `fn f(rows: Vec<Option<MyRow>>) -> DuckOptionResult<Vec<Option<T>>>` 则把空行以 `None`
+///   交给函数体。返回形态还有 `Vec<T>` / `Vec<Option<T>>` / `DuckOptionResult<Vec<T>>`
+///   （`Ok(None)` 表示整批 NULL）；返回行数必须与收到的行数一致，否则整条查询失败。
+///   函数仍然按 chunk 调用，整表不会被拉进内存。不能与 `varargs = true` 同用。
 ///
 /// 宏会生成一个同名模块，导出 `scalar_function_builder()` / `scalar_overload_builder()`（便于手动注册
 /// 重载或函数集），以及常量 `SQL_NAME` —— 该签名注册到 DuckDB 时真正使用的 SQL 名字（设了
@@ -218,7 +226,19 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// type goes to DuckDB's `duckdb_scalar_function_set_varargs`, so at call time every column after
 /// the fixed ones is read as a `T` and collected into the `Vec<T>` passed to the body — e.g.
 /// `fn my_sum(values: Vec<i64>) -> i64`. Both switches require duckfn's `duckdb-1-5` feature (the
-/// DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. A module named after the
+/// DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. `batch = true` enables batch
+/// mode: the adapter already reads a whole chunk as a batch of rows and its default implementation
+/// walks them one by one, and this switch hands that walk over to you — the single parameter is the
+/// whole batch of rows and the return value is the whole batch of results. The row type is a
+/// user-defined `#[derive(DuckStruct)]` struct used directly as the argument type (no `DuckArgsImpl`
+/// struct is generated): `fn f(rows: Vec<MyRow>) -> Vec<T>` receives only the non-NULL rows (their
+/// results are spliced back at the original positions), while
+/// `fn f(rows: Vec<Option<MyRow>>) -> DuckOptionResult<Vec<Option<T>>>` receives the NULL rows as
+/// `None`. The other return shapes are `Vec<T>`, `Vec<Option<T>>` and
+/// `DuckOptionResult<Vec<T>>` (`Ok(None)` nulls the whole batch); the returned row count must match
+/// the number of rows received or the query fails. The function is still called once per chunk, so
+/// a large table is never materialised. It cannot be combined with `varargs = true`. A module named
+/// after the
 /// function is generated, exporting `scalar_function_builder()` and `scalar_overload_builder()`
 /// for manual overload / function-set registration, plus the `SQL_NAME` constant holding the SQL
 /// name this signature is really registered under (the function-set name when `overloads_name` is
