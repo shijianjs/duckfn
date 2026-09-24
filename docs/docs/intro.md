@@ -74,7 +74,8 @@ template and the `quack-rs` example next to their raw implementations.
 
 ## Where to go next
 
-- [Create a project](./getting-started/create-a-project.md) — start from DuckDB's official Rust extension template.
+- [Create a project](./getting-started/create-a-project.md) — start from the duckfn extension
+  template, or from DuckDB's official Rust one.
 - [Installation](./getting-started/installation.md) — dependencies, MSRV, and why no DuckDB build is needed.
 - [Quick start](./getting-started/quick-start.md) — build and load your first extension.
 - [Attributes](./guide/attributes.md) — the full attribute and argument reference.

@@ -99,7 +99,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | Page | Contents |
 | --- | --- |
 | [Introduction](https://shijianjs.github.io/duckfn/docs/intro) | What duckfn is, and how the crates fit together. |
-| [Create a project](https://shijianjs.github.io/duckfn/docs/getting-started/create-a-project) | Start from DuckDB's official Rust extension template. |
+| [Create a project](https://shijianjs.github.io/duckfn/docs/getting-started/create-a-project) | Start from the [duckfn extension template](https://github.com/shijianjs/duckfn-extension-template) or DuckDB's official Rust one. |
 | [Project structure](https://shijianjs.github.io/duckfn/docs/getting-started/project-structure) | The crate roots, `error[E0583]`, and the command-line tool's own root. |
 | [Installation](https://shijianjs.github.io/duckfn/docs/getting-started/installation) | Dependencies, MSRV, and why no DuckDB build is needed. |
 | [Quick start](https://shijianjs.github.io/duckfn/docs/getting-started/quick-start) | Write, build and load your first extension. |

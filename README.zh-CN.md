@@ -95,7 +95,7 @@ duckfn_entrypoint!("my_ext");
 | 页面 | 内容 |
 | --- | --- |
 | [简介](https://shijianjs.github.io/duckfn/zh-Hans/docs/intro) | duckfn 是什么，各 crate 如何配合。 |
-| [创建项目](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/create-a-project) | 从 DuckDB 官方 Rust 扩展模板起步。 |
+| [创建项目](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/create-a-project) | 从 [duckfn 扩展模板](https://github.com/shijianjs/duckfn-extension-template)或 DuckDB 官方 Rust 扩展模板起步。 |
 | [项目结构约定](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/project-structure) | 几个 crate root、`error[E0583]`、以及命令行工具自己的那个 root。 |
 | [安装](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/installation) | 依赖、MSRV，以及为什么不需要编译 DuckDB。 |
 | [快速开始](https://shijianjs.github.io/duckfn/zh-Hans/docs/getting-started/quick-start) | 编写、构建并加载第一个扩展。 |

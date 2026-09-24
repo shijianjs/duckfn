@@ -1,17 +1,52 @@
 ---
 title: 创建项目
 sidebar_position: 1
-description: 从 DuckDB 官方 Rust 扩展模板起步，用 duckfn、quack-rs 写逻辑，用 cargo-duckdb-ext-tools 构建。
+description: 从 duckfn 扩展模板或 DuckDB 官方 Rust 扩展模板起步，用 duckfn、quack-rs 写逻辑，用 cargo-duckdb-ext-tools 构建。
 ---
 
 # 创建项目
 
 动手写代码之前有三个决定：以什么为起点、用什么写、怎么构建。
 
-## 从官方模板起步
+## 从模板起步
+
+下面两份模板是同一套骨架 —— DuckDB 的 CI、`extension-ci-tools`、`cdylib` crate root、sqllogictest
+目录。差别只在于「为 duckfn 接好了多少」。
+
+### duckfn 模板
+
+[`shijianjs/duckfn-extension-template`](https://github.com/shijianjs/duckfn-extension-template)
+是本项目自己的模板：官方骨架，但 duckfn 相关的固定动作已经做完了。
+
+```shell
+git clone https://github.com/shijianjs/duckfn-extension-template my_ext
+cd my_ext
+rm -rf .git && git init    # 可选：丢掉模板的历史，从头开始自己的仓库
+just rename my_ext
+```
+
+`just rename`（即 `scripts/rename.sh`）就是这份模板存在的理由。扩展名必须在好几处同时一致，漏掉一处
+不是编译错误，而是一个加载不起来的扩展 —— DuckDB 按文件名推出要查找的入口点符号，对不上只会让 `LOAD`
+失败，不会给出有用的提示。脚本一次改齐这些地方：
+
+- `Cargo.toml` 里的 `[package] name` 与 `[[example]] name`；
+- `Makefile` 里的 `EXTENSION_NAME`；
+- 传给 `duckfn_entrypoint!(…)` 的名字，它会成为入口点符号 `my_ext_init_c_api`；
+- `Justfile` 与 CI 工作流里的 `extension_name`；
+- README 与文档站里的路径示例，以及 `Cargo.lock` 里那一条。
+
+脚本末尾会打印剩下需要人工过一遍的事情，主要就是把两个示例函数换成自己的 API。其余部分都已经在了：
+依赖列表里带着 `duckfn` 且开了 `loadable-extension`、`src/lib.rs` 与 `src/wasm_lib.rs` 声明同一组
+`mod`、一个标量示例函数与一个聚合示例函数（各配 sqllogictest 文件）、`Justfile`、`docs/` 下的中英双语
+Docusaurus 站点（可以删，仓库里没有别的东西依赖它）、发版脚本，以及 `community-extension/` 下注册社区
+扩展要提交的文件。开发循环写在它的 `README.md` 与 `DEVELOPMENT.md` 里，它的 `AGENTS.md` 也就是
+[让 AI 助手写代码](#让-ai-助手写代码)那一节说的那一份。
+
+### 官方模板
 
 [`duckdb/extension-template-rs`](https://github.com/duckdb/extension-template-rs) 是 DuckDB 官方的
-Rust 扩展模板，也是新扩展最合适的起点：
+Rust 扩展模板，也是上面两份模板的共同底座。想自己接线就从这里起步；但无论从哪份模板起步，都值得知道它
+的存在 —— makefile 与 CI 最终都来自这里：
 
 - 自带完整的 GitHub Actions 流水线：为 DuckDB 支持的每个平台构建并测试扩展，打版本 tag 时发布二进制。
   这部分不需要自己写。
@@ -27,11 +62,12 @@ cd my_ext
 `extension-ci-tools` 是 git submodule，所以克隆时要带 `--recurse-submodules`，或首次构建前先执行
 `git submodule update --init --recursive`。
 
-然后改掉模板里写死的部分：`Makefile` 里的 `EXTENSION_NAME`、要构建 WebAssembly 时的 `[[example]]`
-目标，以及传给 `duckfn_entrypoint!` 的名字。
+然后改掉模板里写死的部分 —— `Makefile` 里的 `EXTENSION_NAME`、要构建 WebAssembly 时的 `[[example]]`
+目标、传给 `duckfn_entrypoint!` 的名字 —— 这正是 `just rename` 自动化的那张清单，另外还有它当时还不
+知道的 `Justfile` 与 CI 条目。
 
-改的时候别动这几个 crate root：`src/lib.rs`、`src/wasm_lib.rs` 与 `src/bin/duckfn.rs` 都指向同一个
-`src/extension/` 模块，这是整套目录结构唯一的规则 —— 为什么、以及破了这条规则会看到什么
+无论从哪份模板起步，都别动这几个 crate root：`src/lib.rs`、`src/wasm_lib.rs` 与 `src/bin/duckfn.rs`
+都指向同一个 `src/extension/` 模块，这是整套目录结构唯一的规则 —— 为什么、以及破了这条规则会看到什么
 `error[E0583]`，见[项目结构约定](./project-structure.md)。
 
 ## 用 duckfn、quack-rs 写逻辑
@@ -84,8 +120,9 @@ SELECT double_it(21);
 本仓库用 `Justfile` 封装了两种流程，见[快速开始](./quick-start.md#3-构建)。
 
 [`templates/Justfile`](https://github.com/shijianjs/duckfn/blob/main/templates/Justfile) 是给下游项目的
-精简版：复制进新项目、把 `extension_name` 改成与 `duckfn_entrypoint!` 一致，之后日常就用
-`just build`、`just sql "SELECT …"`、`just repl`、`just test`。
+精简版 —— [duckfn 模板](#duckfn-模板)里的 `Justfile` 就是它，`just rename` 已经把 `extension_name`
+改成与 `duckfn_entrypoint!` 一致。没有这份 Justfile 的项目把它复制进去、改这一个值即可；两种情况下
+日常都是 `just build`、`just sql "SELECT …"`、`just repl`、`just test`。
 
 ## 什么时候仍然需要官方流程
 
@@ -99,7 +136,8 @@ SELECT double_it(21);
 
 ## 让 AI 助手写代码
 
-如果扩展交给 AI 助手来写，就在项目里放一份 `AGENTS.md`。本仓库提供了模板：
+如果扩展交给 AI 助手来写，就在项目里放一份 `AGENTS.md`。从 [duckfn 模板](#duckfn-模板)起步的话它已经
+在里面了：把两个占位符填上 —— 这个扩展做什么、duckfn 的 clone 在哪 —— 这一步就结束了。否则就复制
 [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md)。
 
 它要解决的问题是「依赖能带过去什么、带不过去什么」。`cargo` 会把 `duckfn` 与 `duckfn-macro`
