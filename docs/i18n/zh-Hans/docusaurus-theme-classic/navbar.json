@@ -30,5 +30,17 @@
   "item.label.Zread": {
     "message": "Zread",
     "description": "Navbar item with label Zread"
+  },
+  "item.label.DuckDB": {
+    "message": "DuckDB",
+    "description": "Navbar item with label DuckDB"
+  },
+  "item.label.Community extensions": {
+    "message": "社区扩展",
+    "description": "Navbar item with label Community extensions"
+  },
+  "item.label.quack-rs": {
+    "message": "quack-rs",
+    "description": "Navbar item with label quack-rs"
   }
 }

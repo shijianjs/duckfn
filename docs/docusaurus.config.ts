@@ -135,6 +135,14 @@ const config: Config = {
             {label: 'crates.io', href: 'https://crates.io/crates/duckfn'},
             {label: 'docs.rs', href: 'https://docs.rs/duckfn'},
             {label: 'Zread', href: 'https://zread.ai/shijianjs/duckfn'},
+            // Upstream ecosystem: DuckDB itself, the extension directory, and the
+            // C-API binding crate duckfn is built on.
+            {label: 'DuckDB', href: 'https://duckdb.org'},
+            {
+              label: 'Community extensions',
+              href: 'https://duckdb.org/community_extensions/',
+            },
+            {label: 'quack-rs', href: 'https://github.com/tomtom215/quack-rs'},
           ],
         },
       ],
@@ -181,6 +189,25 @@ const config: Config = {
             {
               label: 'Zread',
               href: 'https://zread.ai/shijianjs/duckfn',
+            },
+          ],
+        },
+        {
+          // Upstream of this project: the DuckDB engine, the directory of community
+          // extensions, and the C-API binding crate that duckfn sits on.
+          title: 'Ecosystem',
+          items: [
+            {
+              label: 'DuckDB',
+              href: 'https://duckdb.org',
+            },
+            {
+              label: 'Community extensions',
+              href: 'https://duckdb.org/community_extensions/',
+            },
+            {
+              label: 'quack-rs',
+              href: 'https://github.com/tomtom215/quack-rs',
             },
           ],
         },
