@@ -25,7 +25,7 @@ categories = ["database", "api-bindings", "development-tools::ffi"]
 # 3. cargo 无条件跳过任何**含 Cargo.toml 的子目录**（Cargo Book："Any subdirectory that
 #    contains a `Cargo.toml` file"），且不受 include 模式影响。这就是 `duckfn-macro/` 不在这里
 #    列出的原因 —— 它是独立 crate、单独发布。示例扩展已经并进本包（src/extension/、
-#    src/wasm_lib.rs、src/bin/duckfn.rs、test/sql/），所以能随包一起发布。
+#    src/bin/duckfn.rs、test/sql/），所以能随包一起发布。
 #
 # 除了运行时代码与测试，包内含全量文档站正文（英文 + 简体中文）与示例扩展及其用例，这样解包即得
 # 完整文档和可运行的示例，阅读或喂给 AI 都不必再克隆仓库。
@@ -41,8 +41,8 @@ categories = ["database", "api-bindings", "development-tools::ffi"]
 # 3. cargo unconditionally skips any subdirectory containing a `Cargo.toml` (Cargo Book: "Any
 #    subdirectory that contains a `Cargo.toml` file"), and no `include` pattern overrides that. That
 #    is why `duckfn-macro/` is not listed here — it is a crate of its own, published separately. The
-#    example extension now lives inside this package (src/extension/, src/wasm_lib.rs,
-#    src/bin/duckfn.rs, test/sql/) and therefore ships with it.
+#    example extension now lives inside this package (src/extension/, src/bin/duckfn.rs, test/sql/)
+#    and therefore ships with it.
 #
 # Besides the runtime and its tests the package carries the whole documentation site (English and
 # Simplified Chinese) and the example extension with its sqllogictest suite, so unpacking the crate
@@ -81,9 +81,24 @@ homepage = "https://github.com/shijianjs/duckfn"
 authors = ["shijianjs"]
 
 [lib]
-# rlib 供下游当依赖用，cdylib 就是原生扩展本体 —— 打开 `quack` 时它导出 DuckDB 需要的
-# `duckfn_init_c_api`，配合 src/extension/entry.rs 里的 `duckfn_entrypoint!("duckfn")`。
-crate-type = ["rlib", "cdylib"]
+# 三种 crate-type，各给一个平台用：
+#   rlib     下游当依赖用；
+#   cdylib   原生扩展本体 —— 打开 `quack` 时导出 DuckDB 要的 `duckfn_init_c_api`
+#            （见 src/extension/entry.rs 的 `duckfn_entrypoint!("duckfn")`）；
+#   staticlib WebAssembly 用 —— emcc 负责最终链接，所以 wasm 那边要的是 .a（libduckfn.a）。
+# 三个一起列出，是因为 crate-type 不能按 target 覆写；cargo 每次都会把三种产物都做出来，
+# 各平台取自己需要的那份。这样也就不需要一个单独的 `[[example]]` wasm 根了：示例树只由 lib
+# 编一遍，入口符号与 inventory 注册项都只有一份（多编一遍会重复注册，wasm 上直接链接失败）。
+#
+# Three crate types, one per consumer: rlib for dependents, cdylib as the native extension (it
+# exports `duckfn_init_c_api` when `quack` is on — see `duckfn_entrypoint!("duckfn")` in
+# src/extension/entry.rs), and staticlib for WebAssembly, where emcc does the final link and wants a
+# `.a` (libduckfn.a). They are listed together because crate-type cannot be overridden per target, so
+# cargo builds all three and each platform picks the one it needs. That also removes the need for a
+# separate `[[example]]` wasm root: the example tree is compiled once, by the lib, so the entry symbol
+# and the inventory registrations exist exactly once (a second copy registers everything twice and
+# fails to link on wasm).
+crate-type = ["rlib", "cdylib", "staticlib"]
 
 [[bin]]
 # 命令行工具（导出 function_descriptions.csv）。它自己用 `#[path]` 再编一遍示例源码：直接依赖 rlib
@@ -105,15 +120,6 @@ crate-type = ["rlib", "cdylib"]
 # template's bin keeps the plain `duckfn`.
 name = "duckfn-cli"
 path = "src/bin/duckfn.rs"
-required-features = ["quack"]
-
-[[example]]
-# WebAssembly 用：crate-type 不能按 target 覆写，所以单独一个 staticlib 目标。
-# 名字必须等于扩展名 —— 上游 rust.Makefile 的 wasm 分支写死了 `--example $(EXTENSION_NAME)`，
-# 产物名也是 lib$(EXTENSION_NAME).a。
-name = "duckfn"
-path = "src/wasm_lib.rs"
-crate-type = ["staticlib"]
 required-features = ["quack"]
 
 [features]

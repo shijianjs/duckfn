@@ -8,7 +8,7 @@ description: 官方 CI 的 WebAssembly 作业锁定的 Rust 1.86，以及会把�
 
 下面两件事都不是 duckfn 造成的，但你迟早会碰到。每一条都说清现象、原因和处理办法。
 
-与**目录结构**有关的那些 —— 两个 crate root、`error[E0583]`、IDE 对 `src/wasm_lib.rs` 标红 ——
+与**目录结构**有关的那些 —— 几个 crate root、`error[E0583]`、IDE 对独立 wasm root 标红 ——
 搬到了[项目结构约定](./getting-started/project-structure.md)，因为那是「项目怎么搭起来」的问题，
 不是「哪里出了故障」。
 
@@ -80,8 +80,8 @@ SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 
 ## 相关页面
 
-- [项目结构约定](./getting-started/project-structure.md) —— 两个 crate root、`error[E0583]`、IDE 对
-  `src/wasm_lib.rs` 标红。
+- [项目结构约定](./getting-started/project-structure.md) —— 几个 crate root、`error[E0583]`、IDE 对
+  独立 wasm root 标红。
 - [常见问题](./faq.md) —— 写函数时实际踩到的那些报错。
 - [构建与发布](./build-and-release.md) —— 打 tag 时流水线做了什么。
 - [架构](./internals/architecture.md) —— 注册与派发到底怎么运作。

@@ -41,7 +41,7 @@ The repository is a Cargo workspace whose root is also the `duckfn` crate root:
 | Path | Description | Published to crates.io |
 | --- | --- | --- |
 | `/` (`duckfn`) | Runtime framework: traits, type adapters, function registration. Also the workspace root. | Yes |
-| `src/extension/`, `test/sql/` | The example extension (`duckfn`): runnable SQL for every feature, its three entry points (`src/lib.rs`, `src/wasm_lib.rs`, `src/bin/duckfn.rs`) and its sqllogictest suite. Part of this package, compiled only with the `quack` feature. | Yes — sources only, never compiled for a dependent |
+| `src/extension/`, `test/sql/` | The example extension (`duckfn`): runnable SQL for every feature, its three entry points (`src/lib.rs`, `src/bin/duckfn.rs`) and its sqllogictest suite. Part of this package, compiled only with the `quack` feature. | Yes — sources only, never compiled for a dependent |
 | [`duckfn-macro/`](duckfn-macro/) | Procedural macros: `#[duck_scalar_function]`, `#[derive(DuckStruct)]`, `#[derive(DuckEnum)]`, ... | Yes |
 | [`docs/`](docs/) | Docusaurus documentation site: `docs/docs/**` (English) and `docs/i18n/zh-Hans/**` (Simplified Chinese). | No, docs site — but its sources ship inside the `duckfn` package |
 

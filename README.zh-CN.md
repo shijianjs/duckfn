@@ -41,7 +41,7 @@
 | --- | --- | --- |
 | `/`（`duckfn`） | 运行时框架：trait、类型适配、函数注册。同时是 workspace 根。 | 是 |
 | [`duckfn-macro/`](duckfn-macro/) | 过程宏：`#[duck_scalar_function]`、`#[derive(DuckStruct)]`、`#[derive(DuckEnum)]` 等。 | 是 |
-| `src/extension/`、`test/sql/` | 示例扩展（`duckfn`）：每个功能都配可运行的 SQL，三个入口（`src/lib.rs`、`src/wasm_lib.rs`、`src/bin/duckfn.rs`）与 sqllogictest 用例。属于本包，只在打开 `quack` feature 时才编译。 | 是 —— 仅源码，下游依赖不会编译它 |
+| `src/extension/`、`test/sql/` | 示例扩展（`duckfn`）：每个功能都配可运行的 SQL，三个入口（`src/lib.rs`、`src/bin/duckfn.rs`）与 sqllogictest 用例。属于本包，只在打开 `quack` feature 时才编译。 | 是 —— 仅源码，下游依赖不会编译它 |
 | [`docs/`](docs/) | Docusaurus 文档站：`docs/docs/**`（英文）与 `docs/i18n/zh-Hans/**`（简体中文）。 | 否，文档站 —— 但正文会随 `duckfn` 包一起发布 |
 
 发布到 crates.io 的 `duckfn` 包里带着运行时、测试、本 README、许可证、整份文档源文件与示例扩展及它的

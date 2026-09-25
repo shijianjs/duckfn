@@ -47,9 +47,9 @@ lint:
 test: ci-build
     make test
 
-# WebAssembly 构建
+# WebAssembly 构建（产物是 lib 的 staticlib：target/wasm32-unknown-emscripten/release/libduckfn.a）
 build_wasm:
-    cargo build --release --target wasm32-unknown-emscripten --example {{extension_name}} --features quack
+    cargo build --release --target wasm32-unknown-emscripten --features quack
 
 # 工具链（首次）：固定 Rust 版本 + 装 wasm target
 config_env:

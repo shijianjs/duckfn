@@ -54,13 +54,14 @@ rustup target add wasm32-unknown-emscripten
 just build_wasm
 ```
 
-Because `emcc` performs the final link, the crate type has to be `staticlib` for that target rather
-than `cdylib`. This package handles that with an extra `[[example]]` target in
-`Cargo.toml` that points at `src/wasm_lib.rs` and declares
-`crate-type = ["staticlib"]`. That file is a crate root of its own: like `src/lib.rs`
-and the CLI's `src/bin/duckfn.rs`, it includes the same `src/extension/` tree (with the entry point
-itself shared through `src/extension/entry.rs`) — see
-[Project structure](./getting-started/project-structure.md).
+Because `emcc` performs the final link, that target needs a `staticlib` rather than a `cdylib`. Since
+`crate-type` cannot be overridden per target, the lib simply lists both — `["rlib", "cdylib",
+"staticlib"]` — and the wasm build picks the `.a` up. Both extension artefacts then come out of one
+compilation of `src/extension/`, which matters: a second copy of the tree would register every function
+twice, and the duplicate entry symbol fails to link on wasm. `make` does the rest — it links the archive
+into a side module with `emcc` and appends the extension metadata. See
+[Project structure](./getting-started/project-structure.md) for the alternative (a separate wasm root
+target, as the upstream template uses) and what it costs.
 
 ## Continuous integration
 
@@ -122,7 +123,7 @@ The example extension ships as part of this package instead of as a crate of its
 uploaded separately.
 
 The published `duckfn` package is more than the runtime: the `include` list in the root `Cargo.toml`
-packs the example extension (`src/extension/**`, `src/wasm_lib.rs`, `src/bin/duckfn.rs`), its
+packs the example extension (`src/extension/**`, `src/bin/duckfn.rs`), its
 sqllogictest suite (`test/sql/**/*.test`), the documentation sources (`docs/README.md`,
 `docs/docs/**` and the Simplified Chinese translations under `docs/i18n/`), `demo.sh`, the READMEs
 and the license. Unpacking the crate therefore hands you both the full documentation and a runnable

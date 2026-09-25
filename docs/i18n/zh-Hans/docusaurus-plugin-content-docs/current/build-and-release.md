@@ -52,11 +52,12 @@ rustup target add wasm32-unknown-emscripten
 just build_wasm
 ```
 
-由于最终链接由 `emcc` 完成，该目标下 crate 类型必须是 `staticlib` 而不是 `cdylib`。本包在
-`Cargo.toml` 里用一个额外的 `[[example]]` 目标解决这个问题：它指向
-`src/wasm_lib.rs` 并声明 `crate-type = ["staticlib"]`。那个文件自己就是一个 crate root：
-和 `src/lib.rs`、CLI 的 `src/bin/duckfn.rs` 一样，它包含同一棵 `src/extension/` 树
-（入口符号本身由 `src/extension/entry.rs` 共享）—— 见[项目结构约定](./getting-started/project-structure.md)。
+由于最终链接由 `emcc` 完成，该目标需要的是 `staticlib` 而不是 `cdylib`。`crate-type` 不能按 target
+覆写，于是 lib 干脆把两个都列上（`["rlib", "cdylib", "staticlib"]`），wasm 那边取其中的 `.a` 用。
+两个扩展产物因此都出自 `src/extension/` 的同一次编译 —— 这点很关键：多编一份就会把每个函数注册两次，
+而且在 wasm 上重复的入口符号会直接链接失败。剩下的交给 `make`：它用 `emcc` 把归档链成 side module，
+再补上扩展元数据。另一种做法（像上游模板那样另开一个 wasm root 目标）与它的代价见
+[项目结构约定](./getting-started/project-structure.md)。
 
 ## 持续集成
 
@@ -113,7 +114,7 @@ rust-version = "1.86"
 示例扩展随本包一起发布，而不是独立 crate，所以也不会单独上传。
 
 而且发布出去的 `duckfn` 包并不只有运行时：根 `Cargo.toml` 的 `include` 会把示例扩展
-（`src/extension/**`、`src/wasm_lib.rs`、`src/bin/duckfn.rs`）、它的 sqllogictest 用例
+（`src/extension/**`、`src/bin/duckfn.rs`）、它的 sqllogictest 用例
 （`test/sql/**/*.test`）、文档站正文（`docs/README.md`、`docs/docs/**` 与 `docs/i18n/` 下的简体
 中文译文）、`demo.sh`、README 与许可证一起打进去。所以解包即得完整文档**和**一份可以直接跑的示例 ——
 这正是把它们放进同一个包的意义。确切清单用 `cargo package -p duckfn --list` 查看。

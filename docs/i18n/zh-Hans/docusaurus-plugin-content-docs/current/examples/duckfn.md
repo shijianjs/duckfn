@@ -6,8 +6,9 @@ description: duckfn —— 随 duckfn 一起发布的示例扩展，用可运行
 
 # 示例扩展
 
-示例扩展是 `duckfn` 包自己的一部分：模块树在 `src/extension/`，`src/wasm_lib.rs` 与
-`src/bin/duckfn.rs` 分别是它的 WebAssembly 与命令行入口。它不单独发布，存在的意义是把每一项功能都跑
+示例扩展是 `duckfn` 包自己的一部分：模块树在 `src/extension/`，`src/bin/duckfn.rs` 是它的命令行
+入口；WebAssembly 那边也不需要单独的 root，同一个 lib 编成 `staticlib` 即可。它不单独发布，
+存在的意义是把每一项功能都跑
 一遍；`test/sql/` 下的 sqllogictest 用例则是各函数行为的权威依据。由于它**随已发布的 `duckfn` 包一起
 分发**，不用克隆仓库就能读到它的源码与测试。
 

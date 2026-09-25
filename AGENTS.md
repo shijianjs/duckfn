@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `/`（根） | `duckfn` 运行时：`src/`（不含 `src/extension/`）、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
 | `src/extension/` | 示例扩展的模块树（`demo/`、`functions/`、`types/`），默认不编译（见下） | 是（随 `duckfn` 包） |
-| `src/wasm_lib.rs`、`src/bin/duckfn.rs` | 示例的另外两个入口：WebAssembly（`[[example]] duckfn`）与命令行工具（`[[bin]] duckfn-cli`，文件名仍是 duckfn.rs，原因见下） | 是（随 `duckfn` 包） |
+| `src/bin/duckfn.rs` | 命令行工具入口（`[[bin]] duckfn-cli`，文件名仍是 duckfn.rs，原因见下）。WebAssembly 入口不需要单独文件 —— lib 自己产出 `staticlib`，见下 | 是（随 `duckfn` 包） |
 | `test/sql/` | 示例的 sqllogictest 用例（41 个 `.test`） | 是（随 `duckfn` 包，只收 `.test`） |
 | `duckfn-macro/` | 过程宏 crate | 是（crates.io） |
 | `docs/` | Docusaurus 文档站：`docs/docs/**`（英）与 `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`（中） | 是（随 `duckfn` 包，仅正文源文件） |
@@ -35,7 +35,7 @@ extension;`），`[[bin]] duckfn-cli` 与 `[[example]] duckfn` 都写了 `requir
 ### 发布包内容
 
 `duckfn` 发布包的内容由根 `Cargo.toml` 的 `include` 白名单决定：运行时代码与测试、示例扩展
-（`src/extension/**`、`src/wasm_lib.rs`、`src/bin/duckfn.rs`）、`test/sql/**/*.test`、`demo.sh`、
+（`src/extension/**`、`src/bin/duckfn.rs`）、`test/sql/**/*.test`、`demo.sh`、
 README、LICENSE、文档站正文（英 + 中）。改这个白名单后，用 `cargo package -p duckfn --list`
 核对一遍。三条容易踩的坑：
 

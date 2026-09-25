@@ -7,8 +7,9 @@ description: duckfn, the example extension shipped with duckfn, with runnable SQ
 # The example extension
 
 The example extension is part of the `duckfn` package itself: its module tree lives in
-`src/extension/`, and `src/wasm_lib.rs` / `src/bin/duckfn.rs` are its WebAssembly and command-line
-entry points. It is never published on its own — it exists to exercise every feature, and its
+`src/extension/`, and `src/bin/duckfn.rs` is its command-line entry point. The WebAssembly build needs
+no root of its own either — the same lib is compiled as a `staticlib` for it. It is never published on
+its own — it exists to exercise every feature, and its
 sqllogictest suite under `test/sql/` is the reference for what each function returns. Because it
 ships *inside* the published `duckfn` package, its sources and tests are readable without cloning the
 repository.

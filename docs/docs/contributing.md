@@ -49,7 +49,7 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 The root manifest pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
 
 One Cargo detail worth knowing: the example extension is **part of the `duckfn` package** — the module
-tree in `src/extension/` plus the `src/wasm_lib.rs` and `src/bin/duckfn.rs` entry points — rather than
+tree in `src/extension/` plus the `src/bin/duckfn.rs` entry point — rather than
 a crate of its own, because cargo never packages a subdirectory that contains its own `Cargo.toml`.
 What compiles it is the `quack` feature, off by default: `make debug` passes it on through
 `TARGET_INFO += --features quack` in the root `Makefile`. A dependency on `duckfn` therefore sees the

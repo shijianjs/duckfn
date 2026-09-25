@@ -9,8 +9,8 @@ description: The Rust 1.86 pin in the official CI's WebAssembly job, and an upst
 Two things that are none of duckfn's doing, but that you will run into. Each one says what you see,
 why it happens, and what to do about it.
 
-Problems with the *layout* — the two crate roots, `error[E0583]`, and the IDE flagging
-`src/wasm_lib.rs` — live in [Project structure](./getting-started/project-structure.md) instead,
+Problems with the *layout* — the crate roots, `error[E0583]`, and the IDE flagging a separate wasm
+root — live in [Project structure](./getting-started/project-structure.md) instead,
 because they are about how the project is put together rather than about something going wrong.
 
 ## WASM builds on the official CI are pinned to Rust 1.86
@@ -85,7 +85,7 @@ DuckDB v1.5.4 and v1.5.5, still open upstream.
 ## See also
 
 - [Project structure](./getting-started/project-structure.md) — the crate roots, `error[E0583]`, and the
-  IDE flagging `src/wasm_lib.rs`.
+  IDE flagging a separate wasm root.
 - [FAQ](./faq.md) — the errors people hit while writing functions.
 - [Build and release](./build-and-release.md) — what the pipeline does on a version tag.
 - [Architecture](./internals/architecture.md) — how registration and dispatch actually work.

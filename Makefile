@@ -59,9 +59,25 @@ all: configure debug
 include extension-ci-tools/makefiles/c_api_extensions/base.Makefile
 include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 
-# 见上面的说明；`+=` 让 native、wasm 与 macOS 交叉编译各分支都带上这个 feature。
-# See the note above: `+=` carries the feature into the native, wasm and macOS cross-compile branches.
+# 构建参数：
+#   - native / macOS 交叉编译：上游给的是空值（或 `--target <triple>`），追加 feature 即可。
+#   - wasm：扩展产物来自 lib 的 staticlib（名字自动就是 lib$(EXTENSION_NAME).a），所以上游给的
+#     `--example $(EXTENSION_NAME)` 不再需要，改成只带 --target；IS_EXAMPLE 也清掉 —— 产物在
+#     target/<target>/<profile>/ 根下，而不是 examples/ 子目录里。
+#
+# Build arguments:
+#   - native / macOS cross-compile: the upstream value is empty (or `--target <triple>`), so the
+#     feature is simply appended.
+#   - wasm: the artefact is the lib's staticlib (already named lib$(EXTENSION_NAME).a), so the
+#     upstream `--example $(EXTENSION_NAME)` is dropped and only `--target` is kept; IS_EXAMPLE is
+#     cleared as well, because the artefact sits at the root of target/<target>/<profile>/ instead of
+#     in an examples/ subdirectory.
+ifneq ($(DUCKDB_WASM_PLATFORM),)
+TARGET_INFO := --target $(TARGET) --features quack
+IS_EXAMPLE :=
+else
 TARGET_INFO += --features quack
+endif
 
 configure: venv platform extension_version
 

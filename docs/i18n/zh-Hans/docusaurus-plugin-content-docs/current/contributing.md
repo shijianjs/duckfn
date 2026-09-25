@@ -47,7 +47,8 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 根清单锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
 
 有一条 Cargo 细节值得知道：示例扩展是 **`duckfn` 包自己的一部分** —— `src/extension/` 下的模块树，
-加上 `src/wasm_lib.rs` 与 `src/bin/duckfn.rs` 两个入口 —— 而不是独立 crate。原因是 cargo 永远不会
+加上 `src/bin/duckfn.rs` 这个命令行入口（wasm 入口不用单独文件，lib 的 `staticlib` 就是它）—— 而不是
+独立 crate。原因是 cargo 永远不会
 打包含自己 `Cargo.toml` 的子目录。真正编译它的是默认关闭的 `quack` feature：`make debug` 通过根
 `Makefile` 里的 `TARGET_INFO += --features quack` 把它带上。所以依赖 `duckfn` 的下游看到的依赖树与
 以前完全一致 —— 源码在包里，但什么都不编译。跑运行时自身的测试用 `cargo test -p duckfn`，

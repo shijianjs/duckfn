@@ -154,14 +154,17 @@ pub use quack_rs::prelude::{
     CopyBindInfo, CopyFinalizeInfo, CopyFunctionBuilder, CopyGlobalInitInfo, CopySinkInfo,
 };
 
-// 示例扩展：并进本包后由 `quack` feature 打开，模块树在 src/extension/，与另外两个入口
-// src/wasm_lib.rs（WebAssembly）和 src/bin/duckfn.rs（CLI）共用同一份源码。feature 关闭时示例源码
-// 随包发布但不参与编译，下游依赖树因此完全不受影响。
+// 示例扩展：并进本包后由 `quack` feature 打开，模块树在 src/extension/。这份源码只由本 crate 编一遍：
+// 本 lib 同时产出原生扩展的 cdylib 与 WebAssembly 用的 staticlib（见 Cargo.toml 的 crate-type），
+// CLI（src/bin/duckfn.rs）再自带一份以便收集注册项。feature 关闭时示例源码随包发布但不参与编译，
+// 下游依赖树因此完全不受影响。
 //
-// The example extension: folded into this package and switched on by the `quack` feature. Its module
-// tree lives in src/extension/ and is shared with the other two entry points, src/wasm_lib.rs
-// (WebAssembly) and src/bin/duckfn.rs (the CLI). With the feature off the example sources ship in the
-// package without being compiled, so a downstream dependency tree is unaffected.
+// The example extension: folded into this package and switched on by the `quack` feature, with its
+// module tree in src/extension/. That source is compiled exactly once, by this crate: the lib produces
+// both the native cdylib and the WebAssembly staticlib (see the crate-type in Cargo.toml), and the CLI
+// (src/bin/duckfn.rs) carries its own copy so it can collect the registrations. With the feature off
+// the example sources ship in the package without being compiled, so a downstream dependency tree is
+// unaffected.
 #[cfg(feature = "quack")]
 mod extension;
 // 入口符号（`duckfn_entrypoint!`）单独放，CLI 编同一棵树时要能跳过它 —— 原因见该文件与
