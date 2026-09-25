@@ -176,9 +176,8 @@ just release_dev 0.0.6-dev.0
 
 - [`scripts/release.sh`](scripts/release.sh)：`release_bump` / `release_dev` / `release_tag` 的实际实现。
 - [`docs/duckfn-version.ts`](docs/duckfn-version.ts) 与 [`docs/plugins/remark-version-placeholder.ts`](docs/plugins/remark-version-placeholder.ts)：文档站的版本占位符机制。
-- `templates/`：给下游扩展项目的两层模板。`AGENTS.md` 是项目层（复制过去只填两个值：项目目标与 duckfn clone 路径），
-  `duckfn-conventions.md` 是共享层（知识源、硬约束、开发循环），由本仓库维护。
-  项目层只引用共享层、不复制内容，因此 duckfn 升级时下游 `git pull` 即可，不用重做模板。
-  另有 `Justfile` 可直接复制到新项目根目录，只改 `extension_name` 一处。
+- [duckfn-extension-template](https://github.com/shijianjs/duckfn-extension-template)：给下游扩展项目的
+  脚手架，骨架、CI、sqllogictest、文档站与发版脚本都已就位；克隆后 `just rename <新扩展名>` 一次改齐
+  所有需要一致的名字。原先放在本仓库 `templates/` 下的那套模板已由该仓库取代。
 - [`docs/docs/build-and-release.md`](docs/docs/build-and-release.md)：面向读者的构建与发布说明。
 - [`docs/docs/contributing.md`](docs/docs/contributing.md)：本地开发流程与约定。

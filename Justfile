@@ -1,7 +1,7 @@
 # duckfn workspace 的 Justfile。
 #
 # 日常开发走 Cargo（just build / just sql / just repl），发版流程见根目录 AGENTS.md。
-# 下游扩展项目要的是精简版：templates/Justfile。
+# 下游扩展项目要的是精简版：duckfn-extension-template 仓库里的 Justfile。
 #
 # Windows 下 recipe 交给 Git Bash 执行；按自己的 Git 安装路径调整。
 set windows-shell := ["C:\\Program Files\\Git\\bin\\bash.exe", "-c"]

@@ -119,10 +119,10 @@ SELECT double_it(21);
 
 本仓库用 `Justfile` 封装了两种流程，见[快速开始](./quick-start.md#3-构建)。
 
-[`templates/Justfile`](https://github.com/shijianjs/duckfn/blob/main/templates/Justfile) 是给下游项目的
-精简版 —— [duckfn 模板](#duckfn-模板)里的 `Justfile` 就是它，`just rename` 已经把 `extension_name`
-改成与 `duckfn_entrypoint!` 一致。没有这份 Justfile 的项目把它复制进去、改这一个值即可；两种情况下
-日常都是 `just build`、`just sql "SELECT …"`、`just repl`、`just test`。
+[duckfn 模板](#duckfn-模板)用一份
+[`Justfile`](https://github.com/shijianjs/duckfn-extension-template/blob/main/Justfile) 把两种流程都
+包了一层：`just build`、`just sql "SELECT …"`、`just repl`、`just test`、`just ci-release`，以及文档站
+与发版相关的 recipe。`just rename` 已经把 `extension_name` 改成与 `duckfn_entrypoint!` 一致。
 
 ## 什么时候仍然需要官方流程
 
@@ -136,9 +136,9 @@ SELECT double_it(21);
 
 ## 让 AI 助手写代码
 
-如果扩展交给 AI 助手来写，就在项目里放一份 `AGENTS.md`。从 [duckfn 模板](#duckfn-模板)起步的话它已经
-在里面了：把两个占位符填上 —— 这个扩展做什么、duckfn 的 clone 在哪 —— 这一步就结束了。否则就复制
-[`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md)。
+如果扩展交给 AI 助手来写，就在项目里放一份 `AGENTS.md`。[duckfn 模板](#duckfn-模板)里已经有一份：
+把两个占位符填上 —— 这个扩展做什么、duckfn 的 clone 在哪 —— 这一步就结束了。从别处起步的话，把那份
+文件复制过去：[`AGENTS.md`](https://github.com/shijianjs/duckfn-extension-template/blob/main/AGENTS.md)。
 
 它要解决的问题是「依赖能带过去什么、带不过去什么」。`cargo` 会把 `duckfn` 与 `duckfn-macro`
 解包到本地 registry，因此运行时与宏的实现 —— 也就是「某个属性收哪些参数、允许哪些返回形状」的
@@ -146,18 +146,11 @@ SELECT double_it(21);
 用户文档、`src/extension/` 下的示例扩展、`test/sql/` 下的 sqllogictest 套件，都不会跟着依赖进入
 下游项目，也不会自动进入助手的上下文。
 
-所以模板把知识源排了序：先本仓库的本地 clone（看文档、示例与测试），再本地 registry，
-文档站只作兜底；并明确要求助手查不到时就停下来问，而不是凭印象编一个属性出来。
+所以它把知识源指向本仓库的本地 clone，并明确要求助手查不到时就停下来问，而不是凭印象编一个属性出来：
+文档、示例扩展与 sqllogictest 都只在那份 clone 里，两个占位符里有一个是它的路径，原因就在这里。
 
-模板刻意拆成了两层：
-
-- [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md)
-  是**项目层**：复制到新项目根目录命名为 `AGENTS.md`，只填两个值 —— 这个扩展做什么、
-  duckfn 的 clone 在哪。凡是能从代码里读出来的（扩展名、crate 名、duckfn 版本）一律不抄进来，
-  这样它就不会变成第二份会过期的真相。
-- [`templates/duckfn-conventions.md`](https://github.com/shijianjs/duckfn/blob/main/templates/duckfn-conventions.md)
-  是**共享层**：知识源、硬约束、开发循环、新增函数的流程。项目层的 `AGENTS.md` 只指向它、不复制它
-  —— 这正是模板不会被用成一次性的原因：duckfn 升级时，clone 里 `git pull` 一下就同步了。
+凡是能从代码里读出来的（扩展名、crate 名、duckfn 版本）一律不抄进去，这样它就不会变成第二份会过期的
+真相。
 
 ## 接下来
 

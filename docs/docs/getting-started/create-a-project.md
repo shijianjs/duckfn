@@ -132,11 +132,10 @@ SELECT double_it(21);
 
 The repository wraps both flows in its `Justfile`; see [Quick start](./quick-start.md#3-build-it).
 
-[`templates/Justfile`](https://github.com/shijianjs/duckfn/blob/main/templates/Justfile) is a trimmed
-version aimed at downstream projects — the [duckfn template](#the-duckfn-template) ships it as its
-own `Justfile`, `just rename` already having set `extension_name` to whatever `duckfn_entrypoint!`
-declares. In a project without it, copy it in and set that one value; either way the day-to-day loop
-is `just build`, `just sql "SELECT …"`, `just repl` and `just test`.
+The [duckfn template](#the-duckfn-template) wraps both flows in a
+[`Justfile`](https://github.com/shijianjs/duckfn-extension-template/blob/main/Justfile): `just build`,
+`just sql "SELECT …"`, `just repl`, `just test`, `just ci-release`, plus the `docs_*` and release
+recipes. `just rename` has already set `extension_name` to whatever `duckfn_entrypoint!` declares.
 
 ## When the official flow is still needed
 
@@ -152,10 +151,11 @@ rather than PowerShell — see [Contributing](../contributing.md#windows).
 
 ## Brief your coding agent
 
-If an AI agent writes the extension, give it a project-level `AGENTS.md`. Start from the
-[duckfn template](#the-duckfn-template) and you already have one: fill in its two placeholders —
-what the extension does and where the duckfn clone lives — and that is the whole setup. Otherwise
-copy [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md).
+If an AI agent writes the extension, give it a project-level `AGENTS.md`. The
+[duckfn template](#the-duckfn-template) ships one: fill in its two placeholders — what the extension
+does and where the duckfn clone lives — and that is the whole setup. Starting from anywhere else,
+copy that file:
+[`AGENTS.md`](https://github.com/shijianjs/duckfn-extension-template/blob/main/AGENTS.md).
 
 It exists because of what a dependency does and does not carry. `cargo` unpacks `duckfn` and
 `duckfn-macro` into the local registry, so the runtime and the macro implementations — the ground
@@ -164,21 +164,13 @@ and readable. What is *not* in the published crate is everything else: the user 
 the example extension under `src/extension/` and the sqllogictest suite under `test/sql` never reach
 a downstream project, and neither does any of it enter the agent's context by itself.
 
-The template therefore ranks its sources — a local clone of this repository first, the local cargo
-registry second, the documentation site only as a last resort — and tells the agent to stop and ask
-rather than invent an attribute it cannot find.
+The `AGENTS.md` therefore points the agent at a local clone of this repository and tells it to stop
+and ask rather than invent an attribute it cannot find: the guide, the example extension and the
+sqllogictest files only exist there, which is why the clone's path is one of the two placeholders to
+fill in.
 
-It is split in two on purpose:
-
-- [`templates/AGENTS.md`](https://github.com/shijianjs/duckfn/blob/main/templates/AGENTS.md) is the
-  project layer. Copy it into the new project as `AGENTS.md` and fill in two values: what the
-  extension does, and where the duckfn clone lives. Everything that can be read out of the code —
-  extension name, crate name, duckfn version — is deliberately *not* duplicated there, so it cannot
-  go stale.
-- [`templates/duckfn-conventions.md`](https://github.com/shijianjs/duckfn/blob/main/templates/duckfn-conventions.md)
-  is the shared layer: knowledge sources, hard constraints, the build loop and the checklist for
-  adding a function. The project `AGENTS.md` points at it instead of copying it, which is what keeps
-  the template from being a one-off — `git pull` in the clone is all a duckfn upgrade needs.
+Nothing that can be read out of the code is written down in it — extension name, crate name, duckfn
+version — so it cannot go stale.
 
 ## Next
 
