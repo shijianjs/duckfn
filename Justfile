@@ -6,8 +6,9 @@
 # Windows 下 recipe 交给 Git Bash 执行；按自己的 Git 安装路径调整。
 set windows-shell := ["C:\\Program Files\\Git\\bin\\bash.exe", "-c"]
 
-# 示例扩展名（根 crate rusty_quack），与 src/extension/mod.rs 里 duckfn_entrypoint!("...") 一致
-extension_name := "rusty_quack"
+# 示例扩展名（duckfn-quack crate），与 duckfn-quack/src/extension/mod.rs 里
+# duckfn_entrypoint!("...")、根 Makefile 的 EXTENSION_NAME 一致
+extension_name := "duckfn_quack"
 
 # duckdb 命令行；不在 PATH 里时用 `just DUCKDB=/path/to/duckdb repl`
 duckdb := env_var_or_default("DUCKDB", "duckdb")
@@ -18,9 +19,10 @@ ext_path := "./target/debug/" + extension_name + ".duckdb_extension"
 default:
     @just --list
 
-# 构建示例扩展 -> target/debug/rusty_quack.duckdb_extension
+# 构建示例扩展 -> target/debug/duckfn_quack.duckdb_extension
+# 示例 crate 在 duckfn-quack/ 下，构建产物仍落在 workspace 根的 target/ 里
 build:
-    cargo duckdb-ext build
+    cargo duckdb-ext build --manifest-path duckfn-quack/Cargo.toml
 
 # 构建后跑一条 SQL 就退出：just sql "SELECT double_it(21);"
 sql sql: build
@@ -38,13 +40,13 @@ release:
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
 
-# 跑 test/sql/**/*.test（等价 make configure debug test）
+# 跑 duckfn-quack/test/sql/**/*.test（等价 make configure debug test）
 test: ci-build
     make test
 
 # WebAssembly 构建
 build_wasm:
-    cargo build --release --target wasm32-unknown-emscripten --example {{extension_name}}
+    cargo build -p duckfn_quack --release --target wasm32-unknown-emscripten --example {{extension_name}}
 
 # 工具链（首次）：固定 Rust 版本 + 装 wasm target
 config_env:
@@ -57,9 +59,11 @@ doc:
     cargo doc -p duckfn
 
 # 生成社区扩展文档页用的 function_descriptions.csv（只做转发，逻辑在 cargo CLI 里）
-# 描述写在 #[duck_*] 属性上；要连没写描述的函数一起导出：cargo run --bin duckfn -- function_descriptions --all
+# 描述写在 #[duck_*] 属性上；要连没写描述的函数一起导出：
+#   cargo run -p duckfn_quack --bin duckfn -- function_descriptions --all
+# 根包 duckfn 没有同名的 bin，所以必须带 -p，否则在根目录会解析失败。
 docs_csv:
-    cargo run --bin duckfn -- function_descriptions
+    cargo run -p duckfn_quack --bin duckfn -- function_descriptions
 
 # ==== 官方 makefile 流程：sqllogictest 与 CI 走这条 ====
 
@@ -99,6 +103,7 @@ release_publish:
     just publish
 
 # 切到下一开发版本（参数形如 X.Y.Z-dev.0）：just release_dev <新版本>
+# 只动根 Cargo.toml 与 Cargo.lock
 release_dev new_version:
     bash scripts/release.sh dev "{{new_version}}"
 

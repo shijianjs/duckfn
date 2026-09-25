@@ -79,4 +79,4 @@ template and the `quack-rs` example next to their raw implementations.
 - [Installation](./getting-started/installation.md) — dependencies, MSRV, and why no DuckDB build is needed.
 - [Quick start](./getting-started/quick-start.md) — build and load your first extension.
 - [Attributes](./guide/attributes.md) — the full attribute and argument reference.
-- [The example extension](./examples/rusty-quack.md) — a working extension covering every feature.
+- [The example extension](./examples/duckfn-quack.md) — a working extension covering every feature.

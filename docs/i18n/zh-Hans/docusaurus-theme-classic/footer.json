@@ -41,7 +41,7 @@
   },
   "link.item.label.Examples": {
     "message": "示例",
-    "description": "The label of footer link with label=Examples linking to /docs/examples/rusty-quack"
+    "description": "The label of footer link with label=Examples linking to /docs/examples/duckfn-quack"
   },
   "link.item.label.Zread": {
     "message": "Zread",

@@ -1,0 +1,83 @@
+# name: duckfn-quack/test/sql/functions/rust_decimal_bridge.test
+# description: duckfn 的 rust_decimal feature：DuckDecimal<W, S> <-> rust_decimal::Decimal 双向转换，含宽度 / 标度越界与丢位时返回错误
+# group: [functions]
+
+require duckfn_quack
+
+# 两边能力不对等：DuckDB 的 DECIMAL(W, S) 是「i128 未缩放整数 + 标度」（W 最大 38），
+# rust_decimal 的尾数只有 96 位（2^96 - 1，约 28~29 位有效数字）、标度上限 28。
+# 因此越界与丢位都必须报错，不能静默截断。
+
+# ============================================================================
+# DECIMAL(18, 3) -> rust_decimal -> 文本
+# ============================================================================
+
+query T
+SELECT dfn_decimal_to_text(1.234::DECIMAL(18,3));
+----
+1.234
+
+query T
+SELECT dfn_decimal_to_text((-1.234)::DECIMAL(18,3));
+----
+-1.234
+
+# rust_decimal 的文本会保留标度，所以 0 渲染成 0.000（不是 0）
+query T
+SELECT dfn_decimal_to_text(0::DECIMAL(18,3));
+----
+0.000
+
+# 大值同样在 18 位以内
+query T
+SELECT dfn_decimal_to_text(999999999999999.999::DECIMAL(18,3));
+----
+999999999999999.999
+
+# ============================================================================
+# 用 rust_decimal 算一次再写回 DECIMAL(18, 3)
+# ============================================================================
+
+query T
+SELECT CAST(dfn_decimal_double(1.234::DECIMAL(18,3)) AS VARCHAR);
+----
+2.468
+
+query T
+SELECT CAST(dfn_decimal_double((-0.001)::DECIMAL(18,3)) AS VARCHAR);
+----
+-0.002
+
+# 写回同样保留标度：0 还是 0.000
+query T
+SELECT CAST(dfn_decimal_double(0::DECIMAL(18,3)) AS VARCHAR);
+----
+0.000
+
+# ============================================================================
+# DECIMAL(38, 0)：宽度超过 rust_decimal 的 96 位尾数
+# ============================================================================
+
+# 装得下的照常转换
+query T
+SELECT dfn_decimal38_to_text(123::DECIMAL(38,0));
+----
+123
+
+# 2^96 - 1 正好是 rust_decimal 的尾数上限
+query T
+SELECT dfn_decimal38_to_text(79228162514264337593543950335::DECIMAL(38,0));
+----
+79228162514264337593543950335
+
+# 再加 1 就装不下了：报错而不是截断
+statement error
+SELECT dfn_decimal38_to_text(79228162514264337593543950336::DECIMAL(38,0));
+----
+rust_decimal
+
+# 极端值同理
+statement error
+SELECT dfn_decimal38_to_text(99999999999999999999999999999999999999::DECIMAL(38,0));
+----
+rust_decimal

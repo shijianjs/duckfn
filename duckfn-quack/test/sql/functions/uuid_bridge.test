@@ -1,0 +1,77 @@
+# name: duckfn-quack/test/sql/functions/uuid_bridge.test
+# description: duckfn 的 uuid feature：DuckUuid <-> uuid::Uuid 双向转换，与 DuckDB 自己的渲染 / 解析逐字对照
+# group: [functions]
+
+require duckfn_quack
+
+# DuckUuid::value 是「DuckDB 渲染出来的那 128 位」（quack-rs 已撤销内部最高位翻转），
+# 所以 uuid crate 的文本、解析、版本号都应当与 DuckDB 自己的行为完全一致。
+# 关键断言一律与 DuckDB 内置行为对照，而不是写死我们这边的十六进制。
+
+# ============================================================================
+# 渲染：与 CAST(... AS VARCHAR) 逐字相同
+# ============================================================================
+
+query T
+SELECT dfn_uuid_to_text('11111111-2222-3333-4444-555555555555'::UUID);
+----
+11111111-2222-3333-4444-555555555555
+
+# 一批边界样例逐行对照 DuckDB 自己的渲染：全零（最高位翻转的另一端）、全 F、常规 v4
+query I
+SELECT count(*) FILTER (WHERE dfn_uuid_to_text(u) <> CAST(u AS VARCHAR))
+FROM (VALUES
+    ('00000000-0000-0000-0000-000000000000'::UUID),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff'::UUID),
+    ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::UUID)
+) t(u);
+----
+0
+
+# ============================================================================
+# 反向：文本解析回 DuckUuid
+# ============================================================================
+
+query I
+SELECT (dfn_uuid_parse('11111111-2222-3333-4444-555555555555')
+        = '11111111-2222-3333-4444-555555555555'::UUID)::INT;
+----
+1
+
+query I
+SELECT (dfn_uuid_parse('ffffffff-ffff-ffff-ffff-ffffffffffff')
+        = 'ffffffff-ffff-ffff-ffff-ffffffffffff'::UUID)::INT;
+----
+1
+
+# 版本号取自规范字节（第 13 个十六进制位）：样例是 v3，v4 那条是 4
+query I
+SELECT dfn_uuid_version('11111111-2222-3333-4444-555555555555'::UUID);
+----
+3
+
+query I
+SELECT dfn_uuid_version('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::UUID);
+----
+4
+
+# 往返：文本 -> DuckUuid -> 文本
+query T
+SELECT dfn_uuid_to_text(dfn_uuid_parse('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'));
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# ============================================================================
+# 解析失败：报错，而不是变成全零 UUID
+# ============================================================================
+
+statement error
+SELECT dfn_uuid_parse('not-a-uuid');
+----
+dfn_uuid_parse: 'not-a-uuid' is not a UUID
+
+# DuckDB 的 UUID 文本固定 8-4-4-4-12，长度不对同样报错
+statement error
+SELECT dfn_uuid_parse('11111111-2222-3333-4444-55555555');
+----
+is not a UUID

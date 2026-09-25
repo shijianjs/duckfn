@@ -1,0 +1,121 @@
+# name: duckfn-quack/test/sql/types/duck_opt_option_table_echo.test
+# description: duck_opt_option_table_echo.rs 中 Option<Option<T>> 与 Option<T> 等价的表函数回显测试
+# group: [types]
+
+require duckfn_quack
+
+# 表函数与标量函数的差别在读参数：bind 阶段按 duckdb_value 读，只有 DuckResult、没有 Option。
+# 双层 Option 在这条路径上同样与单层等价：
+#   - read_slot_by_duck_value 把 NULL 变成 Some(None)，不会像 Vec<T> 那样报
+#     "Vec<T> value is None"；
+#   - 写侧三条路径（leaf / 容器子向量 / struct 子字段）都由 Option<T> 的转发覆盖：
+#     奇数行的 NULL 与字段自身的 NULL 走的是同一套 write_null。
+#
+# 行数规则同其它 dfn_table_echo_*：count 缺省 1，偶数行写值、奇数行写 NULL。
+# 所有取值都用 CAST(... AS VARCHAR) 包一层，避免驱动层对 LIST 的二次转换影响比对。
+
+# ============================================================================
+# INTEGER // Option<Option<i32>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_integer(42, count => 3);
+----
+42
+NULL
+42
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_opt_option_integer(42);
+----
+INTEGER
+
+# 入参是 NULL：整列都是 NULL（外层 None 的语义）
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_integer(NULL, count => 2);
+----
+NULL
+NULL
+
+# ============================================================================
+# VARCHAR // Option<Option<String>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_varchar('abc', count => 2);
+----
+abc
+NULL
+
+# 空串是「有值」，不是 NULL
+query T
+SELECT v FROM dfn_table_echo_opt_option_varchar('', count => 1);
+----
+(empty)
+
+# ============================================================================
+# DATE // Option<Option<DuckDate>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_date(DATE '2024-01-02', count => 3);
+----
+2024-01-02
+NULL
+2024-01-02
+
+# ============================================================================
+# LIST(INTEGER)，元素是双层 Option // Option<Vec<Option<Option<i32>>>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_list([1, NULL, 3], count => 3);
+----
+[1, NULL, 3]
+NULL
+[1, NULL, 3]
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_opt_option_list([1, NULL, 3]);
+----
+INTEGER[]
+
+# 元素出现 NULL：元素类型是 Option<Option<i32>>，NULL 原样保留
+# （对比 duck_list_table_echo.test 里的 Vec<i32>：元素 NULL 会 bind 报错）
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_list([NULL, 2], count => 1);
+----
+[NULL, 2]
+
+# ============================================================================
+# STRUCT(id INTEGER, name VARCHAR) // Option<Option<DuckStructSimple>>
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_struct({'id': 1, 'name': 'a'}, count => 3);
+----
+{'id': 1, 'name': a}
+NULL
+{'id': 1, 'name': a}
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_opt_option_struct({'id': 1, 'name': 'a'});
+----
+STRUCT(id INTEGER, "name" VARCHAR)
+
+# 整体 NULL：写侧走 Option<DuckStructSimple>::write_null -> DuckStructSimple::write_null，
+# 子字段一并置 NULL，不会留下未初始化内存
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_opt_option_struct(
+    NULL::STRUCT(id INTEGER, name VARCHAR), count => 2);
+----
+NULL
+NULL
+
+# 取子字段：NULL 行上取子字段也是 NULL
+query TT
+SELECT CAST(v.id AS VARCHAR), CAST(v.name AS VARCHAR)
+FROM dfn_table_echo_opt_option_struct({'id': 1, 'name': 'a'}, count => 2) t(v);
+----
+1	a
+NULL	NULL

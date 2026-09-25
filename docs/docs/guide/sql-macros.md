@@ -164,10 +164,10 @@ Macro names are looked up case-insensitively, and mistakes surface as ordinary D
 
 ## Source and tests
 
-- [`src/extension/functions/sql_macro.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/sql_macro.rs) — the macros built in Rust
-- [`src/extension/functions/sql/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/functions/sql) — the `.sql` files
-- [`test/sql/functions/sql_macro.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/sql_macro.test) — the expected results
-- [`duckfn/src/functions/sql_macro_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/sql_macro_adapter.rs) — the runtime side
+- [`duckfn-quack/src/extension/functions/sql_macro.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/sql_macro.rs) — the macros built in Rust
+- [`duckfn-quack/src/extension/functions/sql/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-quack/src/extension/functions/sql) — the `.sql` files
+- [`duckfn-quack/test/sql/functions/sql_macro.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/sql_macro.test) — the expected results
+- [`src/functions/sql_macro_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/sql_macro_adapter.rs) — the runtime side
 
 ## Next
 

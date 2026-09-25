@@ -1,0 +1,629 @@
+# name: duckfn-quack/test/sql/types/duck_struct_scalar_echo.test
+# description: duck_struct.rs 中 STRUCT 类型（#[derive(DuckStruct)] 命名字段结构体）的 echo 往返测试
+# group: [types]
+
+require duckfn_quack
+
+# 每个用例都刻意使用 >= 2 行输入。
+# 单行字面量参数会被 DuckDB 以常量向量传入，而 duckfn 直接按下标读取嵌套子向量，
+# 在常量向量上会读到未初始化内存（详见文件末尾"已知缺陷"）。
+
+# ============================================================================
+# STRUCT(id INTEGER, name VARCHAR) // 基础结构
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_simple(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'name': 'a'}),
+    ({'id': 2, 'name': 'world'})
+) t(x);
+----
+{'id': 1, 'name': a}
+{'id': 2, 'name': world}
+
+# NULL 行保持 NULL，且不影响其它行
+query T
+SELECT CAST(dfn_echo_struct_simple(x) AS VARCHAR) FROM (VALUES
+    (NULL::STRUCT(id INTEGER, name VARCHAR)),
+    ({'id': 1, 'name': 'a'})
+) t(x);
+----
+NULL
+{'id': 1, 'name': a}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_simple(x)) FROM (VALUES
+    ({'id': 1, 'name': 'a'}),
+    ({'id': 2, 'name': 'b'})
+) t(x);
+----
+STRUCT(id INTEGER, "name" VARCHAR)
+
+# 字段提取走 DuckDB 的 struct_extract（直接重解释子向量），验证子字段写回正确
+query T
+SELECT CAST((dfn_echo_struct_simple(x)).id AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'name': 'a'}),
+    ({'id': 2, 'name': 'b'})
+) t(x);
+----
+1
+2
+
+# NULL struct 行的字段提取：struct_extract 直接重解释子向量、不看父向量的 validity，
+# 所以写 NULL 行时必须把子字段也一起置 NULL，否则会读到未初始化内存
+query T
+SELECT CAST((dfn_echo_struct_simple(x)).id AS VARCHAR) FROM (VALUES
+    (NULL::STRUCT(id INTEGER, name VARCHAR)),
+    ({'id': 1, 'name': 'a'})
+) t(x);
+----
+NULL
+1
+
+# ============================================================================
+# STRUCT(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, l BIGINT, f FLOAT, d DOUBLE, v VARCHAR)
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_simple_types(x) AS VARCHAR) FROM (VALUES
+    ({'b': true, 't': 1::TINYINT, 's': 2::SMALLINT, 'i': 3::INTEGER, 'l': 4::BIGINT, 'f': 1.5::FLOAT, 'd': 2.5::DOUBLE, 'v': 'x'}),
+    ({'b': false, 't': -1::TINYINT, 's': -2::SMALLINT, 'i': -3::INTEGER, 'l': -4::BIGINT, 'f': -1.5::FLOAT, 'd': -2.5::DOUBLE, 'v': 'y'})
+) t(x);
+----
+{'b': true, 't': 1, 's': 2, 'i': 3, 'l': 4, 'f': 1.5, 'd': 2.5, 'v': x}
+{'b': false, 't': -1, 's': -2, 'i': -3, 'l': -4, 'f': -1.5, 'd': -2.5, 'v': y}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_simple_types(x)) FROM (VALUES
+    ({'b': true, 't': 1::TINYINT, 's': 2::SMALLINT, 'i': 3::INTEGER, 'l': 4::BIGINT, 'f': 1.5::FLOAT, 'd': 2.5::DOUBLE, 'v': 'x'}),
+    ({'b': false, 't': -1::TINYINT, 's': -2::SMALLINT, 'i': -3::INTEGER, 'l': -4::BIGINT, 'f': -1.5::FLOAT, 'd': -2.5::DOUBLE, 'v': 'y'})
+) t(x);
+----
+STRUCT(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, l BIGINT, f FLOAT, d DOUBLE, v VARCHAR)
+
+# ============================================================================
+# STRUCT(d DATE, ts TIMESTAMP, dec DECIMAL(18,3), bl BLOB) // 包装类型字段
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_wrapper(x) AS VARCHAR) FROM (VALUES
+    ({'d': DATE '2024-01-02', 'ts': TIMESTAMP '2024-01-02 03:04:05', 'dec': 1.234::DECIMAL(18,3), 'bl': '\xAA\xBB'::BLOB}),
+    ({'d': DATE '1999-12-31', 'ts': TIMESTAMP '1999-12-31 23:59:59', 'dec': -9.999::DECIMAL(18,3), 'bl': '\x00'::BLOB})
+) t(x);
+----
+{'d': 2024-01-02, 'ts': '2024-01-02 03:04:05', 'dec': 1.234, 'bl': \xAA\xBB}
+{'d': 1999-12-31, 'ts': '1999-12-31 23:59:59', 'dec': -9.999, 'bl': \x00}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_wrapper(x)) FROM (VALUES
+    ({'d': DATE '2024-01-02', 'ts': TIMESTAMP '2024-01-02 03:04:05', 'dec': 1.234::DECIMAL(18,3), 'bl': '\xAA\xBB'::BLOB}),
+    ({'d': DATE '1999-12-31', 'ts': TIMESTAMP '1999-12-31 23:59:59', 'dec': -9.999::DECIMAL(18,3), 'bl': '\x00'::BLOB})
+) t(x);
+----
+STRUCT(d DATE, ts TIMESTAMP, "dec" DECIMAL(18,3), bl BLOB)
+
+# ============================================================================
+# 可空字段（Option<T>）
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_nullable(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'age': NULL::INTEGER, 'name': NULL::VARCHAR}),
+    ({'id': 2, 'age': 30, 'name': 'b'})
+) t(x);
+----
+{'id': 1, 'age': NULL, 'name': NULL}
+{'id': 2, 'age': 30, 'name': b}
+
+query T
+SELECT CAST(dfn_echo_struct_all_nullable(x) AS VARCHAR) FROM (VALUES
+    ({'id': NULL::INTEGER, 'name': NULL::VARCHAR, 'data': NULL::INTEGER[]}),
+    ({'id': 5, 'name': 'x', 'data': [1, NULL, 3]})
+) t(x);
+----
+{'id': NULL, 'name': NULL, 'data': NULL}
+{'id': 5, 'name': x, 'data': [1, NULL, 3]}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_all_nullable(x)) FROM (VALUES
+    ({'id': NULL::INTEGER, 'name': NULL::VARCHAR, 'data': NULL::INTEGER[]}),
+    ({'id': 5, 'name': 'x', 'data': [1, NULL, 3]})
+) t(x);
+----
+STRUCT(id INTEGER, "name" VARCHAR, "data" INTEGER[])
+
+# ============================================================================
+# 字段里嵌套变长结构：LIST / MAP / ARRAY
+# 两行的列表长度不同，覆盖子字段的 reserve / set_size 与 write_finish 递归
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_with_list(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'data': [1], 'tags': ['a', 'b', 'c']}),
+    ({'id': 2, 'data': [1, 2, 3, 4, 5], 'tags': []::VARCHAR[]})
+) t(x);
+----
+{'id': 1, 'data': [1], 'tags': [a, b, c]}
+{'id': 2, 'data': [1, 2, 3, 4, 5], 'tags': []}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_with_list(x)) FROM (VALUES
+    ({'id': 1, 'data': [1], 'tags': ['a']}),
+    ({'id': 2, 'data': [1, 2], 'tags': []::VARCHAR[]})
+) t(x);
+----
+STRUCT(id INTEGER, "data" INTEGER[], tags VARCHAR[])
+
+query T
+SELECT CAST(dfn_echo_struct_with_list_n(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'data': [1, NULL, 3]}),
+    ({'id': 2, 'data': NULL::INTEGER[]})
+) t(x);
+----
+{'id': 1, 'data': [1, NULL, 3]}
+{'id': 2, 'data': NULL}
+
+query T
+SELECT CAST(dfn_echo_struct_with_map(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'm': map(['a', 'b'], [1, 2])}),
+    ({'id': 2, 'm': map([]::VARCHAR[], []::INTEGER[])})
+) t(x);
+----
+{'id': 1, 'm': {a=1, b=2}}
+{'id': 2, 'm': {}}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_with_map(x)) FROM (VALUES
+    ({'id': 1, 'm': map(['a'], [1])}),
+    ({'id': 2, 'm': map(['b'], [2])})
+) t(x);
+----
+STRUCT(id INTEGER, m MAP(VARCHAR, INTEGER))
+
+query T
+SELECT CAST(dfn_echo_struct_with_array(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'arr': [1, 2, 3]::INTEGER[3]}),
+    ({'id': 2, 'arr': [4, 5, 6]::INTEGER[3]})
+) t(x);
+----
+{'id': 1, 'arr': [1, 2, 3]}
+{'id': 2, 'arr': [4, 5, 6]}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_with_array(x)) FROM (VALUES
+    ({'id': 1, 'arr': [1, 2, 3]::INTEGER[3]}),
+    ({'id': 2, 'arr': [4, 5, 6]::INTEGER[3]})
+) t(x);
+----
+STRUCT(id INTEGER, arr INTEGER[3])
+
+# ============================================================================
+# 嵌套 struct：不可空的内层字段 + 可空的内层字段
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_nested(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'inner': {'key': 'a', 'value': 2}, 'maybe': NULL::STRUCT(key VARCHAR, value INTEGER)}),
+    ({'id': 2, 'inner': {'key': 'b', 'value': 3}, 'maybe': {'key': 'c', 'value': 4}})
+) t(x);
+----
+{'id': 1, 'inner': {'key': a, 'value': 2}, 'maybe': NULL}
+{'id': 2, 'inner': {'key': b, 'value': 3}, 'maybe': {'key': c, 'value': 4}}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_nested(x)) FROM (VALUES
+    ({'id': 1, 'inner': {'key': 'a', 'value': 2}, 'maybe': NULL::STRUCT(key VARCHAR, value INTEGER)}),
+    ({'id': 2, 'inner': {'key': 'b', 'value': 3}, 'maybe': {'key': 'c', 'value': 4}})
+) t(x);
+----
+STRUCT(id INTEGER, "inner" STRUCT("key" VARCHAR, "value" INTEGER), maybe STRUCT("key" VARCHAR, "value" INTEGER))
+
+# 可空的内层字段为 NULL 时，内层子字段也要一并置 NULL（嵌套递归）
+query T
+SELECT CAST((dfn_echo_struct_nested(x)).maybe.key AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'inner': {'key': 'a', 'value': 2}, 'maybe': NULL::STRUCT(key VARCHAR, value INTEGER)}),
+    ({'id': 2, 'inner': {'key': 'b', 'value': 3}, 'maybe': {'key': 'c', 'value': 4}})
+) t(x);
+----
+NULL
+c
+
+# 不可空的内层字段为 NULL 时，整行降级为 NULL（宏生成代码用 `?` 提前返回）
+query T
+SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'inner': {'key': 'a', 'value': 2}}),
+    ({'id': 2, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)})
+) t(x);
+----
+{'id': 1, 'inner': {'key': a, 'value': 2}}
+NULL
+
+# 单行 / 常量向量输入：不可空字段读到 NULL 时整行变 NULL
+# （这三条曾经直接崩溃 0xC0000005，见文件末尾"已修复"一节）
+query T
+SELECT CAST(dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)}) AS VARCHAR);
+----
+NULL
+
+query T
+SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM (VALUES
+    ({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)})
+) t(x);
+----
+NULL
+
+statement ok
+CREATE OR REPLACE TABLE struct_const_single AS
+SELECT {'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)} AS x;
+
+query T
+SELECT CAST(dfn_echo_struct_nested_only(x) AS VARCHAR) FROM struct_const_single;
+----
+NULL
+
+# 对照：单行常量、inner 非 NULL 时正常回显
+query T
+SELECT CAST(dfn_echo_struct_nested_only({'id': 1, 'inner': {'key': 'a', 'value': 2}}) AS VARCHAR);
+----
+{'id': 1, 'inner': {'key': a, 'value': 2}}
+
+# 单行常量、结构体字段全 NULL：同样只是整行变 NULL
+query T
+SELECT CAST(dfn_echo_struct_inner({'key': NULL, 'value': NULL}) AS VARCHAR);
+----
+NULL
+
+query T
+SELECT CAST(dfn_echo_struct_inner(x) AS VARCHAR) FROM (VALUES
+    ({'key': 'a', 'value': 2}),
+    ({'key': 'b', 'value': 3})
+) t(x);
+----
+{'key': a, 'value': 2}
+{'key': b, 'value': 3}
+
+query T
+SELECT CAST(dfn_echo_struct_inner(x) AS VARCHAR) FROM (VALUES
+    (NULL::STRUCT(key VARCHAR, value INTEGER)),
+    ({'key': 'a', 'value': 2})
+) t(x);
+----
+NULL
+{'key': a, 'value': 2}
+
+# ============================================================================
+# struct 作为其它容器的元素
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_struct_list(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]),
+    ([]::STRUCT(id INTEGER, name VARCHAR)[])
+) t(x);
+----
+[{'id': 1, 'name': a}, {'id': 2, 'name': b}]
+[]
+
+query T
+SELECT CAST(dfn_echo_struct_list(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    (NULL::STRUCT(id INTEGER, name VARCHAR)[])
+) t(x);
+----
+[{'id': 1, 'name': a}]
+NULL
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_list(x)) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([]::STRUCT(id INTEGER, name VARCHAR)[])
+) t(x);
+----
+STRUCT(id INTEGER, "name" VARCHAR)[]
+
+# 元素类型不可空（Vec<T>）时，列表内的 NULL 元素无法用 T 表示，
+# 空值向外传播 -> 整个列表变成 NULL
+query T
+SELECT CAST(dfn_echo_struct_list(x) IS NULL AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+false
+true
+
+# 元素类型为 Vec<Option<T>> 时，NULL 元素被完整保留
+query T
+SELECT CAST(dfn_echo_struct_list_nullable(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+[{'id': 1, 'name': a}]
+[{'id': 2, 'name': b}, NULL]
+
+query T
+SELECT CAST(len(dfn_echo_struct_list_nullable(x)) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([NULL::STRUCT(id INTEGER, name VARCHAR), NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+1
+2
+
+query T
+SELECT CAST((dfn_echo_struct_list_nullable(x))[1].id AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+1
+NULL
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_list_nullable(x)) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}]),
+    ([NULL::STRUCT(id INTEGER, name VARCHAR)])
+) t(x);
+----
+STRUCT(id INTEGER, "name" VARCHAR)[]
+
+query T
+SELECT CAST(dfn_echo_struct_map_value(x) AS VARCHAR) FROM (VALUES
+    (map(['k1'], [{'id': 1, 'name': 'a'}])),
+    (map(['k2', 'k3'], [{'id': 2, 'name': 'b'}, {'id': 3, 'name': 'c'}]))
+) t(x);
+----
+{k1={'id': 1, 'name': a}}
+{k2={'id': 2, 'name': b}, k3={'id': 3, 'name': c}}
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_map_value(x)) FROM (VALUES
+    (map(['k1'], [{'id': 1, 'name': 'a'}])),
+    (map(['k2'], [{'id': 2, 'name': 'b'}]))
+) t(x);
+----
+MAP(VARCHAR, STRUCT(id INTEGER, "name" VARCHAR))
+
+# ---------------------------------------------------------------------------
+# MAP(VARCHAR, STRUCT)：value 可空（Option<V>）与不可空（V）
+# ---------------------------------------------------------------------------
+
+# value 可空：NULL value 被完整保留
+query T
+SELECT CAST(dfn_echo_struct_map_value_nullable(x) AS VARCHAR) FROM (VALUES
+    (map(['k1'], [{'id': 1, 'name': 'a'}])),
+    (map(['k2', 'k3'], [{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)]))
+) t(x);
+----
+{k1={'id': 1, 'name': a}}
+{k2={'id': 2, 'name': b}, k3=NULL}
+
+# NULL value 上取子字段也是 NULL（依赖 struct 的 write_null 递归置空）
+query T
+SELECT CAST((dfn_echo_struct_map_value_nullable(x))['k3'].id AS VARCHAR) FROM (VALUES
+    (map(['k3'], [{'id': 2, 'name': 'b'}])),
+    (map(['k3'], [NULL::STRUCT(id INTEGER, name VARCHAR)]))
+) t(x);
+----
+2
+NULL
+
+query T
+SELECT CAST(dfn_echo_struct_map_value_nullable(x) AS VARCHAR) FROM (VALUES
+    (map(['k'], [{'id': 1, 'name': 'a'}])),
+    (map(['k'], [NULL::STRUCT(id INTEGER, name VARCHAR)]))
+) t(x);
+----
+{k={'id': 1, 'name': a}}
+{k=NULL}
+
+# value 不可空：NULL value 让整个 map 变成 NULL
+query T
+SELECT CAST(dfn_echo_struct_map_value(x) IS NULL AS VARCHAR) FROM (VALUES
+    (map(['k1'], [{'id': 1, 'name': 'a'}])),
+    (map(['k2'], [NULL::STRUCT(id INTEGER, name VARCHAR)]))
+) t(x);
+----
+false
+true
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_map_value_nullable(x)) FROM (VALUES
+    (map(['k1'], [{'id': 1, 'name': 'a'}])),
+    (map(['k2'], [NULL::STRUCT(id INTEGER, name VARCHAR)]))
+) t(x);
+----
+MAP(VARCHAR, STRUCT(id INTEGER, "name" VARCHAR))
+
+# ---------------------------------------------------------------------------
+# ARRAY(STRUCT, 2)：元素可空（[Option<T>; N]）与不可空（[T; N]）
+# ---------------------------------------------------------------------------
+
+# 元素可空：NULL 元素被完整保留
+query T
+SELECT CAST(dfn_echo_struct_array_nullable(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+[{'id': 1, 'name': a}, {'id': 2, 'name': b}]
+[{'id': 3, 'name': c}, NULL]
+
+# NULL 元素上取子字段也是 NULL
+query T
+SELECT CAST((dfn_echo_struct_array_nullable(x))[2].id AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+2
+NULL
+
+query T
+SELECT CAST(dfn_echo_struct_array_nullable(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    ([NULL, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+[{'id': 1, 'name': a}, {'id': 2, 'name': b}]
+[NULL, NULL]
+
+# 元素不可空：NULL 元素让整个 ARRAY 变成 NULL
+query T
+SELECT CAST(dfn_echo_struct_array(x) IS NULL AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+false
+true
+
+query T
+SELECT CAST(dfn_echo_struct_array(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+[{'id': 1, 'name': a}, {'id': 2, 'name': b}]
+NULL
+
+query T
+SELECT DISTINCT typeof(dfn_echo_struct_array_nullable(x)) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+STRUCT(id INTEGER, "name" VARCHAR)[2]
+
+# ---------------------------------------------------------------------------
+# 整个 MAP / ARRAY 为 NULL 时透传 NULL
+# ---------------------------------------------------------------------------
+
+query T
+SELECT CAST(dfn_echo_struct_map_value_nullable(x) AS VARCHAR) FROM (VALUES
+    (map(['k'], [{'id': 1, 'name': 'a'}])),
+    (NULL::MAP(VARCHAR, STRUCT(id INTEGER, name VARCHAR)))
+) t(x);
+----
+{k={'id': 1, 'name': a}}
+NULL
+
+query T
+SELECT CAST(dfn_echo_struct_array_nullable(x) AS VARCHAR) FROM (VALUES
+    ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+    (NULL::STRUCT(id INTEGER, name VARCHAR)[2])
+) t(x);
+----
+[{'id': 1, 'name': a}, {'id': 2, 'name': b}]
+NULL
+
+# ============================================================================
+# 批量：1000 行，含变长 LIST 字段 / 嵌套 struct 字段 / 含 NULL 元素的 MAP、ARRAY
+# ============================================================================
+
+query I
+SELECT sum(len(s.data)) FROM (
+    SELECT dfn_echo_struct_with_list({'id': i::INTEGER, 'data': range(1, 4)::INTEGER[], 'tags': []::VARCHAR[]}) s
+    FROM range(1000) t(i)
+) u;
+----
+3000
+
+query I
+SELECT sum(s.inner.value) FROM (
+    SELECT dfn_echo_struct_nested_only({'id': i::INTEGER, 'inner': {'key': 'k', 'value': i::INTEGER}}) s
+    FROM range(1000) t(i)
+) u;
+----
+499500
+
+# MAP / ARRAY 的子向量按行连续排布，验证含 NULL 元素时下标不串行
+query I
+SELECT sum((dfn_echo_struct_map_value_nullable(x))['k'].id) FROM (
+    SELECT map(['k', 'n'], [{'id': i::INTEGER, 'name': 'k'}, NULL::STRUCT(id INTEGER, name VARCHAR)]) x
+    FROM range(1000) t(i)
+) u;
+----
+499500
+
+query I
+SELECT sum((dfn_echo_struct_array_nullable(x))[1].id) FROM (
+    SELECT [{'id': i::INTEGER, 'name': 'k'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2] x
+    FROM range(1000) t(i)
+) u;
+----
+499500
+
+# ============================================================================
+# 已修复：单行 / 常量向量输入 + 嵌套 NULL struct 字段不再崩溃
+#
+# 现象（a6a3214 之前）：struct 为 NULL 时只置父向量 validity、子字段向量留着
+# 未初始化内存；DuckDB 的 struct_extract / 结果集输出会直接重解释子向量，
+# 于是读到未初始化内存 —— 单行数据即可触发 ACCESS_VIOLATION (0xC0000005)：
+#   SELECT dfn_echo_struct_nested_only({'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)});
+#   CREATE TABLE t AS SELECT {'id': 1, 'inner': NULL::STRUCT(key VARCHAR, value INTEGER)} AS x;
+#   SELECT dfn_echo_struct_nested_only(x) FROM t;    -- 单行表也崩
+#
+# 根因在写侧，与 duck_list_scalar_echo.test 记录的"常量 NULL 子向量按逻辑下标读"
+# 无关（那个问题现在依然存在，见下）。修法：DuckValueType::write_null 由 struct
+# 重写为递归把子字段一并置 NULL（duck_struct.rs / duck_struct_derive.rs 的 s_write_null）。
+# 回退验证：把 write_null 改回只 set_null，上面的单行用例立刻恢复崩溃。
+# 上面的单行常量 / VALUES 单行 / 单行表用例即回归覆盖。
+# ============================================================================
+
+# ============================================================================
+# 已知缺陷（DuckDB 侧）：变长容器的 child 为常量向量时按逻辑下标读越界
+#
+# 即 duckdb#25616（C API returns incorrect values when reading Constant NULL list
+# children），与 duck_list_scalar_echo.test 中记录的是同一个问题。
+#
+# 触发条件：整个参数被折叠成常量向量（直接写字面量，或与行无关的常量投影）。
+# 此时 LIST / MAP 的 child（数据区）只有 1 个物理元素，而 duckfn 是按逻辑下标
+# 裸读子向量的，于是从第 2 个元素起越界读到未初始化内存 —— 全是 NULL 的元素
+# 不占数据区，DuckDB 就让 child 保持常量表示：
+#   SELECT dfn_echo_list_integer_n([NULL, NULL, NULL, NULL]);            -- [NULL, 477, -1712852624, 477]
+#   SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL])); -- {a=NULL, b=477}
+#   SELECT dfn_echo_struct_list_nullable([NULL, NULL, NULL, NULL]::STRUCT(id INTEGER, name VARCHAR)[]);
+#   -- [NULL, {'id': 577, 'name': ''}, {'id': 201092432, 'name': ''}, {'id': 577, 'name': ''}]
+#   SELECT dfn_echo_list_nested_n([[NULL, NULL], NULL]);                 -- [[NULL, 477], NULL]
+# 元素里只要有一个真实值（[1, NULL, 3]）child 就必须展开；把参数写成单行 VALUES
+# 时参数不再是常量向量 —— 两种写法都不复现。
+#
+# 只有变长容器会踩到：ARRAY 的 child 尺寸被强制为 N × 行数、STRUCT 的 children
+# 必须与父向量同尺寸，都不会留下"常量 child"，所以 ARRAY / STRUCT（含
+# ARRAY(STRUCT)、ARRAY(ARRAY)）即使输入同样全 NULL 也读不到垃圾值；struct 的
+# 字段级子向量同理（上面单行 / 跨行全 NULL 的用例都只返回 NULL）。
+#
+# 这是 duckfn 读取路径的既有缺陷，与 echo 函数无关，且垃圾值每次进程都不同，
+# 因此这里只记录、不写成断言。
+# ============================================================================
+
+# ============================================================================
+# 类型语义：容器内 NULL 元素由元素类型决定（非缺陷）
+#
+# 三种容器遵循同一条规则：元素的 Rust 类型不带 Option 时，NULL 元素无法表示，
+# 读侧用 `?` / collect::<Option<_>> 让空值向外传播，整个容器变成 NULL；
+# 带 Option 时 NULL 元素被原样保留。写侧对称：None -> T::write_null。
+#
+#   - LIST  Vec<T>  /  Vec<Option<T>>
+#       SELECT dfn_echo_struct_list(x) IS NULL FROM (VALUES
+#           ([{'id': 1, 'name': 'a'}]),
+#           ([{'id': 2, 'name': 'b'}, NULL::STRUCT(id INTEGER, name VARCHAR)])) t(x);
+#       -- false / true；对照 dfn_echo_struct_list_nullable -> [..., NULL]
+#
+#   - MAP   IndexMap<K, V>  /  IndexMap<K, Option<V>>
+#       key 不允许为 NULL（两版都是 IndexMap<K, _>），只有 value 有 Option 变体
+#       SELECT dfn_echo_struct_map_value(x) IS NULL FROM (VALUES
+#           (map(['k1'], [{'id': 1, 'name': 'a'}])),
+#           (map(['k2'], [NULL::STRUCT(id INTEGER, name VARCHAR)]))) t(x);
+#       -- false / true；对照 dfn_echo_struct_map_value_nullable -> {k2=NULL}
+#
+#   - ARRAY [T; N]（别名 DuckArray） /  [Option<T>; N]
+#       SELECT dfn_echo_struct_array(x) IS NULL FROM (VALUES
+#           ([{'id': 1, 'name': 'a'}, {'id': 2, 'name': 'b'}]::STRUCT(id INTEGER, name VARCHAR)[2]),
+#           ([{'id': 3, 'name': 'c'}, NULL]::STRUCT(id INTEGER, name VARCHAR)[2])) t(x);
+#       -- false / true；对照 dfn_echo_struct_array_nullable -> [..., NULL]
+#
+# 只要读侧与写侧使用同一套 Option 约定，NULL 元素既不会丢失也不会串行。
+# ============================================================================

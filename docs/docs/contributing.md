@@ -42,11 +42,16 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 
 | Member | Published | Notes |
 | --- | --- | --- |
-| `duckfn/` | yes | The runtime framework. |
+| `/` (`duckfn`) | yes | The runtime framework, and the workspace root. |
 | `duckfn-macro/` | yes | The procedural macros; depends on the runtime for nothing, only on `darling`, `syn`, `quote`. |
-| `/` (`rusty_quack`) | no (`publish = false`) | The example extension, kept at the root so it can reuse DuckDB's official CI. |
+| `duckfn-quack/` | no (`publish = false`) | The example extension (`duckfn_quack`) and its sqllogictest suite, kept in-tree so it can reuse DuckDB's official CI. It also ships inside the published `duckfn` package. |
 
-`duckfn/` pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
+The root manifest pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
+
+One Cargo detail worth knowing: the root manifest sets `default-members = ["duckfn-quack"]`, so a bare
+`cargo build` or `cargo test` from the repository root targets the example package — that is what
+lets DuckDB's official makefiles find the extension. Use `cargo test -p duckfn` for the runtime's
+own tests, or `cargo test --workspace` for everything.
 
 ## Day-to-day commands
 
@@ -84,18 +89,18 @@ DuckDB's own sqllogictest runner is the practical choice: it exercises the exten
 exactly the way DuckDB calls it, and it is what CI runs. It needs the `make` flow to be set up
 (`make configure` once, then `make test`).
 
-Tests are sqllogictest files under `test/sql/`, mirroring the source layout:
+Tests are sqllogictest files under `duckfn-quack/test/sql/`, mirroring the source layout:
 
 ```
-test/sql/demo/       <source file>.test
-test/sql/functions/  <source file>.test
-test/sql/types/      <type>_scalar_echo.test, <type>_table_echo.test
+duckfn-quack/test/sql/demo/       <source file>.test
+duckfn-quack/test/sql/functions/  <source file>.test
+duckfn-quack/test/sql/types/      <type>_scalar_echo.test, <type>_table_echo.test
 ```
 
 A file starts by requiring the extension, then pairs SQL with its expected output:
 
 ```sql
-require rusty_quack
+require duckfn_quack
 
 query I
 SELECT double_it5(21);
@@ -144,7 +149,7 @@ npm run build            # must pass for both locales; broken links fail the bui
   (`duckfn-macro/src/<macro>.rs`); each macro declares only its own keys and no longer forwards its
   arguments to the derive macros.
 - When behaviour changes, update the sqllogictest expectation first, then the docs page that quotes
-  it, then the READMEs.
+  it, then the READMEs (`README.md` and `README.zh-CN.md`).
 
 ## Next
 

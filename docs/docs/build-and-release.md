@@ -31,13 +31,15 @@ just doc                    # cargo doc -p duckfn
 Two settings in the `Makefile` are worth knowing:
 
 ```make
-EXTENSION_NAME=rusty_quack
+EXTENSION_NAME=duckfn_quack
 USE_UNSTABLE_C_API=1
 TARGET_DUCKDB_VERSION=v1.5.5
 ```
 
 `USE_UNSTABLE_C_API=1` is what makes the built extension loadable only with `-unsigned`, and only in
 a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metadata is written for.
+`EXTENSION_NAME` has to match `duckfn_entrypoint!` in `duckfn-quack/src/extension/mod.rs` and the
+`require` lines of the sqllogictest files.
 
 ## WebAssembly
 
@@ -49,10 +51,11 @@ just build_wasm
 ```
 
 Because `emcc` performs the final link, the crate type has to be `staticlib` for that target rather
-than `cdylib`. The repository handles this with an extra `[[example]]` target in `Cargo.toml` that
-points at `src/wasm_lib.rs` and declares `crate-type = ["staticlib"]`. That file is a crate root of
-its own: like `src/lib.rs` and the CLI's `src/bin/duckfn.rs`, it declares `mod extension;`, so all of
-them compile the same `src/extension/` tree — see
+than `cdylib`. The example crate handles this with an extra `[[example]]` target in
+`duckfn-quack/Cargo.toml` that points at `duckfn-quack/src/wasm_lib.rs` and declares
+`crate-type = ["staticlib"]`. That file is a crate root of its own: like `duckfn-quack/src/lib.rs`
+and the CLI's `duckfn-quack/src/bin/duckfn.rs`, it declares `mod extension;`, so all of them compile
+the same `duckfn-quack/src/extension/` tree — see
 [Project structure](./getting-started/project-structure.md).
 
 ## Continuous integration
@@ -72,7 +75,7 @@ jobs:
     with:
       duckdb_version: v1.5.5
       ci_tools_version: v1.5-variegata
-      extension_name: rusty_quack
+      extension_name: duckfn_quack
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
 ```
@@ -85,9 +88,9 @@ use.
 
 A second job turns the pushed tag into a GitHub Release:
 
-1. Download every `rusty_quack-*-extension-*` artefact.
+1. Download every `duckfn_quack-*-extension-*` artefact.
 2. Collect the `*.duckdb_extension` and `*.duckdb_extension.wasm` files into
-   `rusty_quack-<arch>.duckdb_extension`.
+   `duckfn_quack-<arch>.duckdb_extension`.
 3. Build release notes from the commit list since the previous `v*` tag.
 4. Create the release, or upload to it if it already exists.
 
@@ -111,7 +114,18 @@ version = "{{DUCKFN_VERSION}}"
 rust-version = "1.86"
 ```
 
-The example extension at the repository root is `publish = false`; it is never uploaded.
+The example extension in `duckfn-quack/` is `publish = false`; it is never uploaded as a crate of its
+own.
+
+The published `duckfn` package is more than the runtime, though: the `include` list in the root
+`Cargo.toml` also packs the documentation sources (`docs/README.md`, `docs/docs/**` and the
+Simplified Chinese translations under `docs/i18n/`), so the crate on crates.io carries the full
+documentation — the example page with its runnable SQL included. `cargo package -p duckfn --list`
+prints the exact file list.
+
+One thing the package can never carry is the example extension itself: cargo skips any subdirectory
+that contains a `Cargo.toml`, and no `include` pattern overrides that, so `duckfn-quack/` — sources,
+tests and all — stays in the repository.
 
 ## Documentation site
 

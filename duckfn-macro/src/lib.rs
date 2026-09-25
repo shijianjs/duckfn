@@ -558,17 +558,17 @@ pub fn duck_replacement_scan(attr: TokenStream, item: TokenStream) -> TokenStrea
 
 /// Generate DuckDB extension entry point.
 ///
-/// 生成 DuckDB 扩展入口：`duckfn_entrypoint!("rusty_quack");`
+/// 生成 DuckDB 扩展入口：`duckfn_entrypoint!("duckfn_quack");`
 /// 扩展名必须全小写、只含字母/数字/下划线。
 ///
-/// Generates the DuckDB extension entry point: `duckfn_entrypoint!("rusty_quack");`. The
+/// Generates the DuckDB extension entry point: `duckfn_entrypoint!("duckfn_quack");`. The
 /// extension name must be lowercase and contain only letters, digits and underscores.
 ///
 /// Expands to:
 ///
 /// ```ignore
 /// quack_rs::entry_point_v2!(
-///     rusty_quack_init_c_api,
+///     duckfn_quack_init_c_api,
 ///     duckfn::register_all_duckfn
 /// );
 /// ```

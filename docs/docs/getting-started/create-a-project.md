@@ -160,14 +160,16 @@ copy that file:
 It exists because of what a dependency does and does not carry. `cargo` unpacks `duckfn` and
 `duckfn-macro` into the local registry, so the runtime and the macro implementations — the ground
 truth for which attribute accepts which arguments and which return shapes it allows — are on disk
-and readable. What is *not* in the published crate is everything else: the user guide under `docs/`,
-the example extension under `src/extension/` and the sqllogictest suite under `test/sql` never reach
-a downstream project, and neither does any of it enter the agent's context by itself.
+and readable. The published `duckfn` package is more than that: it also carries the documentation
+sources under `docs/docs/**` and their Simplified Chinese translations, so the user guide and the
+example page with its runnable SQL can be read straight out of the unpacked crate — see
+[Build and release](../build-and-release.md).
 
-The `AGENTS.md` therefore points the agent at a local clone of this repository and tells it to stop
-and ask rather than invent an attribute it cannot find: the guide, the example extension and the
-sqllogictest files only exist there, which is why the clone's path is one of the two placeholders to
-fill in.
+What the crate does not carry is the repository around them: the example extension's sources, the
+issue history, the CI workflows, the documentation site's own tooling, and the `AGENTS.md` file
+itself. That is why the `AGENTS.md`
+points the agent at a local clone of this repository and tells it to stop and ask rather than invent
+an attribute it cannot find — the clone's path is one of the two placeholders to fill in.
 
 Nothing that can be read out of the code is written down in it — extension name, crate name, duckfn
 version — so it cannot go stale.

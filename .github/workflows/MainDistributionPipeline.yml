@@ -24,7 +24,9 @@ jobs:
     with:
       duckdb_version: v1.5.5
       ci_tools_version: v1.5-variegata
-      extension_name: rusty_quack
+      # 扩展 crate 在 duckfn-quack/，但 CI 的 extension-ci-tools 一律在仓库根执行 make，
+      # 名称必须与根 Makefile 的 EXTENSION_NAME 一致。
+      extension_name: duckfn_quack
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
 
@@ -38,7 +40,7 @@ jobs:
     permissions:
       contents: write
     env:
-      EXTENSION_NAME: rusty_quack
+      EXTENSION_NAME: duckfn_quack
       DUCKDB_VERSION: v1.5.5
     steps:
       # Needed to list the commits since the previous version tag when building the release notes.
@@ -50,7 +52,7 @@ jobs:
       - name: Download extension artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: 'rusty_quack-*-extension-*'
+          pattern: 'duckfn_quack-*-extension-*'
           path: artifacts
 
       - name: Collect extension binaries

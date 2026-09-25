@@ -88,7 +88,8 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 ### 怎么测试扩展？
 
-用 `test/sql/` 下的 sqllogictest 文件，通过 `make test`（`just test`）运行。文件中用 `require rusty_quack`
+用 `duckfn-quack/test/sql/` 下的 sqllogictest 文件，通过 `make test`（`just test`）运行。文件中用
+`require duckfn_quack`
 声明依赖的扩展，然后成对给出语句与期望输出。见[贡献指南](./contributing.md#测试)。
 
 ### 扩展能加载，但调用时报版本错误

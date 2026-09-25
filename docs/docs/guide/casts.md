@@ -88,9 +88,9 @@ SELECT CAST('41' AS VARCHAR) + 1::HUGEINT; -- 42
 
 ## Source and tests
 
-- [`src/extension/functions/cast_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/cast_function.rs) — the example casts
-- [`test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/cast_function.test) — the expected results
-- [`duckfn/src/functions/cast_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/cast_function_adapter.rs) — the runtime side
+- [`duckfn-quack/src/extension/functions/cast_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/cast_function.rs) — the example casts
+- [`duckfn-quack/test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/cast_function.test) — the expected results
+- [`src/functions/cast_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/cast_function_adapter.rs) — the runtime side
 
 ## Next
 

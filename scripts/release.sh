@@ -9,25 +9,26 @@
 #
 # 用法：
 #   bash scripts/release.sh bump <new-version>   # 项目 + 文档的版本号全量替换
-#   bash scripts/release.sh dev  <new-version>   # 只把 Cargo 文件切到开发版本
+#   bash scripts/release.sh dev  <new-version>   # 只把 Cargo 清单切到开发版本
 #   bash scripts/release.sh tag  <version>       # 打 tag 并推送，触发 CI 发版
 set -euo pipefail
 
 # 核对「旧版本号残留」时跳过的文件：
 # Cargo.lock 由 cargo update 负责；package-lock.json 与本项目版本号无关；
-# AGENTS.md 是流程说明，里面的版本号只是示例。
+# AGENTS.md 是流程说明，里面的版本号只是示例；duckfn-quack/ 是示例扩展与
+# sqllogictest 夹具，它自己的版本号（0.1.0）与 duckfn 无关，也不该被发版脚本改写。
 CHECK_EXCLUDES=(
     ':(exclude)Cargo.lock'
     ':(exclude)docs/package-lock.json'
     ':(exclude)AGENTS.md'
+    ':(exclude)duckfn-quack'
 )
 
-# 批量替换时额外跳过：两个 Cargo 清单单独处理；文档站的正文只写
-# {{DUCKFN_VERSION}} 占位符，版本号集中在 docs/duckfn-version.ts。
+# 批量替换时额外跳过：Cargo 清单单独处理（根 Cargo.toml 是唯一出现字面版本号的地方）；
+# 文档站的正文只写 {{DUCKFN_VERSION}} 占位符，版本号集中在 docs/duckfn-version.ts。
 REPLACE_EXCLUDES=(
     "${CHECK_EXCLUDES[@]}"
     ':(exclude)Cargo.toml'
-    ':(exclude)duckfn/Cargo.toml'
     ':(exclude)docs/duckfn-version.ts'
     ':(exclude)docs/docs'
     ':(exclude)docs/i18n'
@@ -80,11 +81,13 @@ cmd_bump() {
         die "版本号已经是 ${new}"
     fi
 
-    # Cargo 清单里的版本号 = 工作区当前版本
+    # Cargo 清单里的版本号 = 工作区当前版本。
+    # 根 Cargo.toml 既是 workspace 根、又是 duckfn 包的清单，也是全仓唯一出现字面版本号
+    # 的地方（[workspace.package] 的 version，以及 duckfn-macro 的精确 pin）。
     if [ "$dev" != "$new" ]; then
         echo "Cargo 版本 ${dev} -> ${new}"
         escaped=$(sed_escape "$dev")
-        sed -i "s/${escaped}/${new}/g" Cargo.toml duckfn/Cargo.toml
+        sed -i "s/${escaped}/${new}/g" Cargo.toml
     fi
 
     # 文档 / README / CI 注释里的版本号 = 最近一次 tag 的版本。
@@ -127,7 +130,7 @@ cmd_dev() {
     fi
 
     escaped=$(sed_escape "$old")
-    sed -i "s/${escaped}/${new}/g" Cargo.toml duckfn/Cargo.toml
+    sed -i "s/${escaped}/${new}/g" Cargo.toml
     sync_lock
 
     git --no-pager diff --stat

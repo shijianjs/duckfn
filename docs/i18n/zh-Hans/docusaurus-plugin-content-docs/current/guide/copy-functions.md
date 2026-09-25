@@ -217,11 +217,11 @@ fn dfn_copy_manual_register(c: &Connection) -> DuckResult<()> {
 
 ## 源码与测试
 
-- [`src/extension/functions/copy_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/copy_function.rs) —— `dfn_copy_tsv` 写出示例
-- [`src/extension/functions/copy_from_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/copy_from_function.rs) —— `dfn_copy_tsv_from` 读入示例
-- [`src/extension/functions/tsv_format.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/tsv_format.rs) —— 共用的单元格编解码（转义与解析）
-- [`test/sql/functions/copy_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/copy_function.test) 与 [`copy_from_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/copy_from_function.test) —— 期望结果
-- [`duckfn/src/functions/copy_to_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/copy_to_adapter.rs) / [`copy_from_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/copy_from_adapter.rs) —— 运行时侧
+- [`duckfn-quack/src/extension/functions/copy_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/copy_function.rs) —— `dfn_copy_tsv` 写出示例
+- [`duckfn-quack/src/extension/functions/copy_from_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/copy_from_function.rs) —— `dfn_copy_tsv_from` 读入示例
+- [`duckfn-quack/src/extension/functions/tsv_format.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/tsv_format.rs) —— 共用的单元格编解码（转义与解析）
+- [`duckfn-quack/test/sql/functions/copy_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/copy_function.test) 与 [`copy_from_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/copy_from_function.test) —— 期望结果
+- [`src/functions/copy_to_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/copy_to_adapter.rs) / [`copy_from_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/copy_from_adapter.rs) —— 运行时侧
 
 ## 接下来
 

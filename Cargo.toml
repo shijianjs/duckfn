@@ -1,14 +1,85 @@
 [package]
-name = "rusty_quack"
-version = "0.1.0"
-edition = "2021"
-# 示例插件项目：仅用于演示 duckfn，不发布到 crates.io。
-# 保留在本仓库根目录是为了复用 DuckDB 官方 CI 自动构建各平台的扩展包。
-publish = false
+name = "duckfn"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Write DuckDB extensions in plain Rust: attribute macros that turn ordinary functions into scalar/aggregate/table functions, SQL macros and nested LIST/MAP/ARRAY/STRUCT types."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+readme = "README.md"
+# crates.io's "Documentation" link should land on the user guide rather than on docs.rs.
+documentation = "https://shijianjs.github.io/duckfn/"
+keywords = ["duckdb", "extension", "ffi", "database", "macro"]
+categories = ["database", "api-bindings", "development-tools::ffi"]
+
+# 打包白名单（crate 根就是仓库根，不显式列出就会连 docs/node_modules 一起打进去）。
+# 两条必须遵守的规则：
+#
+# 1. 模式必须以 `/` 开头。gitignore 风格里裸的 `LICENSE` / `README.md` 会匹配**任意层级**
+#    的同名文件，于是 docs/node_modules/**/LICENSE、configure/venv/**/LICENSE 全被收进包
+#    （实测 1600 多个文件）；`/LICENSE` 才是只匹配包根目录。
+# 2. cargo 无条件跳过任何**含 Cargo.toml 的子目录**（Cargo Book："Any subdirectory that
+#    contains a `Cargo.toml` file"），且不受 include 模式影响 —— 所以示例扩展
+#    duckfn-quack/ 无法进包（实测：显式写 "duckfn-quack/src/**" 也命中 0 个文件）。
+#    它只能留在仓库里，包内由 README 与 docs/examples/duckfn-quack.md 指过去。
+#
+# 除了运行时代码与测试，包内含全量文档站正文（英文 + 简体中文），这样解包即得完整文档，
+# 阅读或喂给 AI 都不必再克隆仓库。
+#
+# The packaging whitelist. Two rules to respect:
+#
+# 1. Patterns must start with `/`. In gitignore syntax a bare `LICENSE` / `README.md` matches files
+#    with that name at *any* depth, which swept in docs/node_modules/**/LICENSE and
+#    configure/venv/**/LICENSE (1600+ files in a test run); `/LICENSE` matches the package root
+#    only.
+# 2. cargo unconditionally skips any subdirectory containing a `Cargo.toml` (Cargo Book: "Any
+#    subdirectory that contains a `Cargo.toml` file"), and no `include` pattern overrides that — so
+#    the example extension duckfn-quack/ cannot be packaged (verified: an explicit
+#    "duckfn-quack/src/**" pattern matched zero files). It stays in the repository, and the package
+#    points at it from the README and docs/examples/duckfn-quack.md.
+#
+# Besides the runtime and its tests the package carries the whole documentation site (English and
+# Simplified Chinese), so unpacking the crate is enough to read the docs without cloning.
+include = [
+    "/Cargo.toml",
+    "/src/**",
+    "/tests/**",
+    "/README.md",
+    "/README.zh-CN.md",
+    "/LICENSE",
+    "/docs/README.md",
+    "/docs/docs/**",
+    "/docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**",
+]
 
 [workspace]
 resolver = "3"
-members = ["duckfn", "duckfn-macro","."]
+members = ["duckfn-macro", "duckfn-quack"]
+
+# 在仓库根目录不带包选择参数时，cargo 默认选中的成员。必须列上示例包：DuckDB 官方的
+# extension-ci-tools makefile 在根目录执行裸 `cargo build`（wasm 时再加 `--example
+# $(EXTENSION_NAME)`），靠这条才能在子目录 duckfn-quack/ 里找到 cdylib 与 example。
+#
+# 代价是根目录的裸 `cargo build` / `cargo test` 只针对示例包（duckfn 会作为依赖被一起编译，
+# 但它的 tests/ 不会跑）；要跑运行时自身的测试用 `cargo test -p duckfn`，跑全部用
+# `cargo test --workspace`。根包 duckfn 不能写进这个列表（cargo 会报 not a member）。
+#
+# 改动这个列表前先读回根 Makefile 里那段注释。
+#
+# Which members a package-less cargo invocation selects when run from the repository root. The
+# example package has to be listed: DuckDB's extension-ci-tools makefiles run a bare `cargo build`
+# from the root (plus `--example $(EXTENSION_NAME)` for wasm), and this is what lets them find the
+# cdylib and the example inside duckfn-quack/.
+#
+# The price is that a bare `cargo build` / `cargo test` at the root targets the example package only
+# (duckfn is still compiled as a dependency, but its tests/ do not run); use `cargo test -p duckfn`
+# for the runtime's own tests, or `cargo test --workspace` for everything. The root package duckfn
+# cannot be listed here — cargo rejects it as "not a member".
+#
+# Read the comment in the root Makefile again before changing this list.
+default-members = ["duckfn-quack"]
 
 [workspace.package]
 version = "0.0.11-dev.0"
@@ -20,7 +91,127 @@ homepage = "https://github.com/shijianjs/duckfn"
 authors = ["shijianjs"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib"]
+
+[features]
+default = []
+
+# 命令行工具的开关：`cargo run --bin duckfn -- function_descriptions` 用的 clap 与 csv。
+# 只有扩展项目里的那个 bin 需要它，插件本体（cdylib）不需要；关掉时 duckfn 完全不依赖
+# 这两个 crate，所以下游没用到 CLI 就不用打开。
+#
+# The command-line tool switch: clap and csv, used by
+# `cargo run --bin duckfn -- function_descriptions`. Only the extension project's bin needs them,
+# never the extension itself; with this off duckfn depends on neither crate, so downstream projects
+# that never run the CLI need not enable it.
+cli = ["dep:clap", "dep:csv"]
+
+# DuckDB 1.5 新增能力的支持：开启 quack-rs 的 duckdb-1-5，从而拿到 1.5 的新逻辑类型
+# （TypeId::TimeNs / Value::as_time_ns）、COPY 函数相关的 *Info 类型，以及客户端上下文 /
+# 宿主文件系统（duckfn::duck_vfs::with_file_system 等，见 src/duck_vfs/）。
+# 要求 libduckdb-sys 使用 >= 1.5 的头文件。
+#
+# Support for what DuckDB 1.5 added: forwards to quack-rs' `duckdb-1-5` feature, which exposes the
+# new logical types (`TypeId::TimeNs` / `Value::as_time_ns`), the copy-function `*Info` types, and
+# the client context / host file system (`duckfn::duck_vfs::with_file_system` and friends, see
+# src/duck_vfs/). Requires libduckdb-sys with >= 1.5 headers.
+duckdb-1-5 = ["quack-rs/duckdb-1-5"]
+
+# 与 chrono 的互操作：给 DuckDate / DuckTimestamp* / DuckTime 等时间包装类型加上
+# `to_naive_date` / `from_naive_date` 这类双向转换方法（见 src/value_types/chrono_bridge.rs）。
+# 默认关闭，因为多数扩展用不到 chrono；开启后 duckfn 会多一个可选依赖。
+#
+# Interop with chrono: adds bidirectional conversions (`to_naive_date` / `from_naive_date`, ...) to
+# the time wrapper types such as DuckDate / DuckTimestamp* / DuckTime (see
+# src/value_types/chrono_bridge.rs). Off by default because most extensions never need
+# chrono; enabling it adds one optional dependency to duckfn.
+chrono = ["dep:chrono"]
+
+# 与 uuid crate 的互操作：DuckUuid <-> uuid::Uuid（见 src/value_types/uuid_bridge.rs）。
+# 这一对是无损的（两边都是 128 位），因此不像时间桥那样返回 DuckResult。
+#
+# Interop with the `uuid` crate: DuckUuid <-> uuid::Uuid (see
+# src/value_types/uuid_bridge.rs). The pair is lossless — both sides are 128 bits — so unlike
+# the time bridge these conversions do not return a DuckResult.
+uuid = ["dep:uuid"]
+
+# 与 rust_decimal 的互操作：DuckDecimal<W, S> <-> rust_decimal::Decimal（见
+# src/value_types/decimal_bridge.rs）。注意 rust_decimal 的尾数是 96 位（约 28~29 位有效数字），
+# 装不下 DuckDB 允许的 DECIMAL(38, ...)，越界会返回错误。
+#
+# Interop with `rust_decimal`: DuckDecimal<W, S> <-> rust_decimal::Decimal (see
+# src/value_types/decimal_bridge.rs). Note that rust_decimal's mantissa is 96 bits (about
+# 28-29 significant digits), so it cannot hold every DECIMAL(38, ...) DuckDB allows; out-of-range
+# values come back as an error.
+rust_decimal = ["dep:rust_decimal"]
+
+# 聚合开关：一次打开上面所有可选 feature（含 `cli`）。duckfn 多数场景就是依赖树的末端
+# （扩展本体直接依赖它，很少作为别人的依赖再被传递进来），所以「全开」通常是最省事的写法；
+# 想精简依赖树时再按上面列出的单项挑着开。
+#
+# Aggregate switch: turns every optional feature above on at once (including `cli`). duckfn is
+# usually the end of the dependency tree — an extension depends on it directly and it rarely shows
+# up transitively — which makes "everything on" the convenient spelling; pick the individual
+# features listed above when you want a leaner dependency tree.
+all = ["cli", "duckdb-1-5", "chrono", "uuid", "rust_decimal"]
+
+[dependencies]
+quack-rs = "0.16.0"
+
+# `cli` feature 用的命令行解析（derive 风格：一个结构体 + 一个枚举就是一个 CLI）。
+#
+# Command-line parsing behind the `cli` feature (the derive style: one struct plus one enum is a
+# whole CLI).
+clap = { version = "4", features = ["derive"], optional = true }
+
+# `cli` feature 用的 CSV 写出：crates.io 上的纯 Rust 实现，不牵扯系统库或 FFI。
+# 转义规则（逗号 / 引号 / 换行的处理）交给它，不要自己拼字符串。
+#
+# CSV writing behind the `cli` feature: a pure-Rust implementation from crates.io, with no system
+# library or FFI involved. Quoting and escaping are its job, not something to hand-roll here.
+csv = { version = "1", optional = true }
+
+# chrono feature 用的可选依赖：只需要核心的日期/时间类型，不需要 clock（拿系统时间）与
+# oldtime，因此关掉默认 feature 只留 std。
+#
+# Optional dependency of the `chrono` feature: only the core date/time types are needed, not
+# `clock` (system time) or `oldtime`, so the default features are off and only `std` is kept.
+chrono = { version = "0.4.31", default-features = false, features = ["std"], optional = true }
+
+# uuid feature 用的可选依赖：默认 feature 为空，不需要 uuid 的 v4 / fast-rng / serde 等。
+#
+# Optional dependency of the `uuid` feature: its default feature set is empty, and the `v4` /
+# `fast-rng` / `serde` features are not needed here.
+uuid = { version = "1", optional = true }
+
+# rust_decimal feature 用的可选依赖。
+#
+# Optional dependency of the `rust_decimal` feature.
+rust_decimal = { version = "1", optional = true }
+
+# loadable-extension 功能
+# libduckdb-sys 加上 features = ["loadable-extension"] 从根本上改变了 DuckDB API 函数的工作方式：
+# Without feature:  duckdb_query(...)  →  calls linked libduckdb directly
+# With feature:     duckdb_query(...)  →  dispatches through an AtomicPtr table
+# AtomicPtr 表初始值为空。DuckDB 通过调用来填充它。 duckdb_rs_extension_api_init 。
+# headers only — no linked library
+libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
+#libduckdb-sys = { version = "1.10505.0", features = ["loadable-extension"] }
+
+#tuple-transpose = "0.1.0"
+
+# 对应duckdb的map语义
+indexmap = "2"
+
+# 过程宏 crate 与本 crate 同属一个 workspace，且是旁挂目录；发版脚本靠这里的精确 pin
+# （=X.Y.Z）与 crate 版本一起改，所以路径是相对本清单的 duckfn-macro/。
+#
+# The proc-macro crate is a sibling directory inside this workspace; the release script rewrites
+# this exact pin (=X.Y.Z) together with the crate version, hence the manifest-relative path.
+duckfn-macro = { version = "=0.0.11-dev.0", path = "duckfn-macro" }
+
+inventory = "0.3"
+itertools = "0.15"
 
 [profile.release]
 ## 下面两个官方模板的
@@ -31,49 +222,3 @@ strip = true
 #panic = "abort"             # required — panics across FFI are undefined behavior
 #opt-level = 3
 #codegen-units = 1
-
-[[example]]
-# crate-type can't be (at the moment) be overriden for specific targets
-# src/wasm_lib.rs forwards to src/lib.rs so that we can change from cdylib
-# (that is needed while compiling natively) to staticlib (needed since the
-# actual linking will be done via emcc
-name = "rusty_quack"
-path = "src/wasm_lib.rs"
-crate-type = ["staticlib"]
-
-[dependencies]
-#duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vscalar"] }
-quack-rs = "0.16.0"
-# loadable-extension 功能
-# libduckdb-sys 加上 features = ["loadable-extension"] 从根本上改变了 DuckDB API 函数的工作方式：
-# Without feature:  duckdb_query(...)  →  calls linked libduckdb directly
-# With feature:     duckdb_query(...)  →  dispatches through an AtomicPtr table
-# AtomicPtr 表初始值为空。DuckDB 通过调用来填充它。 duckdb_rs_extension_api_init 。
-# headers only — no linked library
-#libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
-libduckdb-sys = { version = "1.10505.0", features = ["loadable-extension"] }
-tuple-transpose = "0.1.0"
-# 示例 crate 打开 duckfn 的互转 feature（时间包装类型 <-> chrono、DuckUuid <-> uuid、
-# DuckDecimal <-> rust_decimal）；duckfn 不 re-export 这三个 crate，因此用到它们类型的地方要自己
-# 依赖。chrono 这里同样只要核心类型 + std：不需要 clock（取系统时间，会带上 iana-time-zone /
-# wasm-bindgen 等一串依赖，wasm 构建也更容易出岔子）。
-#
-# The example crate enables duckfn's interop features (time wrapper types <-> chrono, DuckUuid <->
-# uuid, DuckDecimal <-> rust_decimal). duckfn re-exports none of those three crates, so depending on
-# them directly is up to the crate that names their types. chrono is trimmed the same way here —
-# core types plus `std`, no `clock` (system time, which drags in iana-time-zone / wasm-bindgen and
-# complicates the wasm build).
-#
-# `cli` 打开 duckfn 的命令行工具（src/bin/duckfn.rs 用）：
-#   cargo run --bin duckfn -- function_descriptions
-# 它给 duckfn 带上 clap 与 csv 两个依赖；不需要这个工具的项目可以去掉。
-#
-# `cli` enables duckfn's command-line tool, used by src/bin/duckfn.rs:
-#   cargo run --bin duckfn -- function_descriptions
-# It adds clap and csv to duckfn's dependency tree; projects that never run the tool can drop it.
-duckfn = { path = "duckfn", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal", "cli"] }
-chrono = { version = "0.4", default-features = false, features = ["std"] }
-uuid = "1"
-rust_decimal = "1"
-indexmap = "2"
-

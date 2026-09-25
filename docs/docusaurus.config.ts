@@ -167,7 +167,7 @@ const config: Config = {
             },
             {
               label: 'Examples',
-              to: '/docs/examples/rusty-quack',
+              to: '/docs/examples/duckfn-quack',
             },
           ],
         },

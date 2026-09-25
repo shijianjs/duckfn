@@ -3,14 +3,14 @@ build
 configure
 .idea
 duckdb_unittest_tempdir
-/test/bin
+/duckfn-quack/test/bin
 venv
 /.codebuddy
 
-# COPY 测试写出的临时数据文件（测试运行器的 __TEST_DIR__ 就是 test/sql）
-test/sql/dfn_copy_*.tsv
+# COPY 测试写出的临时数据文件（测试运行器的 __TEST_DIR__ 就是 duckfn-quack/test/sql）
+duckfn-quack/test/sql/dfn_copy_*.tsv
 # file_system.test 写在 __TEST_DIR__ 下的两个待读文件
-test/sql/dfn_fs_*.csv
+duckfn-quack/test/sql/dfn_fs_*.csv
 # file_util.test 写出的读写用例数据
-test/sql/dfn_file_*
-test/sql/*.*
+duckfn-quack/test/sql/dfn_file_*
+duckfn-quack/test/sql/*.*

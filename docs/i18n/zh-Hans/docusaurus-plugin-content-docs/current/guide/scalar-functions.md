@@ -325,10 +325,10 @@ SELECT dfn_scalar_reg_named_param(x := 1, y := 2); -- 12（不存在的名字也
 
 ## 源码与测试
 
-- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) —— 示例函数
-- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 期望结果
-- [`test/sql/functions/scalar_function_batch.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function_batch.test) —— 批量模式的期望结果
-- [`duckfn/src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/scalar_function_adapter.rs) —— 运行时侧
+- [`duckfn-quack/src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/scalar_function.rs) —— 示例函数
+- [`duckfn-quack/test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/scalar_function.test) —— 期望结果
+- [`duckfn-quack/test/sql/functions/scalar_function_batch.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/scalar_function_batch.test) —— 批量模式的期望结果
+- [`src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/scalar_function_adapter.rs) —— 运行时侧
 
 ## 接下来
 

@@ -22,7 +22,7 @@ description: duckfn 如何把一个加了属性的函数变成已注册的 DuckD
 | `quack-rs` | DuckDB C API 绑定：各类 builder、`LogicalType`、`DataChunk`、`VectorReader`/`VectorWriter`、`SqlMacro`、`ExtensionError`。 |
 | `libduckdb-sys` | DuckDB 的 C 头文件，以 `loadable-extension` feature 编译。 |
 
-`duckfn` 的模块都是 `pub(crate)`，公共接口就是 `duckfn/src/lib.rs` 里那些 `pub use` 重导出 ——
+`duckfn` 的模块都是 `pub(crate)`，公共接口就是 `src/lib.rs` 里那些 `pub use` 重导出 ——
 这也是为什么 `duckfn::DuckOptionResult` 存在，而 `duckfn::ExtensionError` 不存在。
 
 ## 1. 宏展开
@@ -142,7 +142,7 @@ DuckDB 的六个回调都实现在状态类型上：
 
 ### COPY 函数
 
-`COPY ... TO` 与 `COPY ... FROM` 都建立在运行时动态列（`duckfn/src/dynamic`）之上，而不是
+`COPY ... TO` 与 `COPY ... FROM` 都建立在运行时动态列（`src/dynamic`）之上，而不是
 `DuckValueType` —— 因为 COPY 函数的列要到 bind 阶段才知道。
 
 `COPY ... TO` 由四个回调驱动：`bind` 把输出列逐列反推成 `DuckResultSchema`（每列一次
@@ -221,9 +221,9 @@ quack-rs 的再导出都在 `duckdb-1-5` feature 后面。
 | 属性接受哪些参数？ | 该宏自己的文件，如 `duckfn-macro/src/scalar_function.rs` |
 | 宏生成了什么？ | 同一个文件加上公共的 `common.rs`；derive 在 `duck_struct_derive.rs` / `duck_enum_derive.rs` |
 | 入口点怎么生成？ | `duckfn-macro/src/entrypoint.rs` |
-| 注册是怎么工作的？ | `duckfn/src/register.rs` |
-| 回调是怎么实现的？ | `duckfn/src/functions/*_adapter.rs` |
-| 类型是怎么转换的？ | `duckfn/src/value_types/*.rs` |
+| 注册是怎么工作的？ | `src/register.rs` |
+| 回调是怎么实现的？ | `src/functions/*_adapter.rs` |
+| 类型是怎么转换的？ | `src/value_types/*.rs` |
 
 ## 接下来
 

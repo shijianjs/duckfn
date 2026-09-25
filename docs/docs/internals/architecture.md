@@ -23,7 +23,7 @@ layering, the registration flow and much more. When this page is not enough, sta
 | `libduckdb-sys` | DuckDB's C headers, compiled with the `loadable-extension` feature. |
 
 `duckfn`'s modules are all `pub(crate)`; the public surface is the set of `pub use` re-exports in
-`duckfn/src/lib.rs`, which is why `duckfn::DuckOptionResult` exists but `duckfn::ExtensionError` does
+`src/lib.rs`, which is why `duckfn::DuckOptionResult` exists but `duckfn::ExtensionError` does
 not.
 
 ## 1. Expansion
@@ -156,7 +156,7 @@ Both are wrapped in `catch_unwind`, so a panic in either becomes a query error. 
 ### Copy
 
 `COPY ... TO` and `COPY ... FROM` are both built on the runtime dynamic columns
-(`duckfn/src/dynamic`) rather than on `DuckValueType`, because a copy function's columns are
+(`src/dynamic`) rather than on `DuckValueType`, because a copy function's columns are
 only known during bind.
 
 `COPY ... TO` is driven through four callbacks: `bind` turns the output columns into a
@@ -247,9 +247,9 @@ row), and `DuckBindArgs` (usable as a table function's arguments).
 | Which arguments does an attribute accept? | the macro's own file under `duckfn-macro/src/` (e.g. `scalar_function.rs`) |
 | What does a macro emit? | that same file plus the shared `common.rs`; the derives are in `duck_struct_derive.rs` / `duck_enum_derive.rs` |
 | How is the entry point generated? | `duckfn-macro/src/entrypoint.rs` |
-| How does registration work? | `duckfn/src/register.rs` |
-| How is a callback implemented? | `duckfn/src/functions/*_adapter.rs` |
-| How is a type converted? | `duckfn/src/value_types/*.rs` |
+| How does registration work? | `src/register.rs` |
+| How is a callback implemented? | `src/functions/*_adapter.rs` |
+| How is a type converted? | `src/value_types/*.rs` |
 
 ## Next
 

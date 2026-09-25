@@ -106,12 +106,12 @@ channel any more, because a row only updates the state.
 
 ## Source and tests
 
-- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — `duck_error`, `Ok(None)` and panic cases
-- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the same for aggregates
-- [`test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/cast_function.test) — `CAST` versus `TRY_CAST`
-- [`duckfn/src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/table_function_adapter.rs) — where bind and scan catch panics
+- [`duckfn-quack/test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/scalar_function.test) — `duck_error`, `Ok(None)` and panic cases
+- [`duckfn-quack/test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/aggregate_function.test) — the same for aggregates
+- [`duckfn-quack/test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/cast_function.test) — `CAST` versus `TRY_CAST`
+- [`src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/table_function_adapter.rs) — where bind and scan catch panics
 
 ## Next
 
 - [Attributes](./attributes.md) — which return shapes each macro accepts.
-- [The example extension](../examples/rusty-quack.md) — all of these error paths in runnable SQL.
+- [The example extension](../examples/duckfn-quack.md) — all of these error paths in runnable SQL.

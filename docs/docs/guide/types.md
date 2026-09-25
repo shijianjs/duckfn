@@ -477,13 +477,13 @@ is one rule worth knowing:
 
 ## Source and tests
 
-- [`src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/types) — the echo functions for every type
-- [`test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/test/sql/types) — the expected results
-- [`duckfn/src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn/src/value_types) — the type implementations themselves
-- [`src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/chrono_bridge.rs) — the `chrono` conversions in use
-- [`test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/chrono_bridge.test) — their expected results, including the `infinity` errors
-- [`src/extension/functions/uuid_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/uuid_bridge.rs) · [`test/sql/functions/uuid_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/uuid_bridge.test) — the `uuid` pair, checked against DuckDB's own rendering
-- [`src/extension/functions/rust_decimal_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/rust_decimal_bridge.rs) · [`test/sql/functions/rust_decimal_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/rust_decimal_bridge.test) — the `rust_decimal` pair, including where it runs out of range
+- [`duckfn-quack/src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-quack/src/extension/types) — the echo functions for every type
+- [`duckfn-quack/test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-quack/test/sql/types) — the expected results
+- [`src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/src/value_types) — the type implementations themselves
+- [`duckfn-quack/src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/chrono_bridge.rs) — the `chrono` conversions in use
+- [`duckfn-quack/test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/chrono_bridge.test) — their expected results, including the `infinity` errors
+- [`duckfn-quack/src/extension/functions/uuid_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/uuid_bridge.rs) · [`duckfn-quack/test/sql/functions/uuid_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/uuid_bridge.test) — the `uuid` pair, checked against DuckDB's own rendering
+- [`duckfn-quack/src/extension/functions/rust_decimal_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/rust_decimal_bridge.rs) · [`duckfn-quack/test/sql/functions/rust_decimal_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/rust_decimal_bridge.test) — the `rust_decimal` pair, including where it runs out of range
 
 ## Next
 

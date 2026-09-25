@@ -75,4 +75,4 @@ FFI 包装、列读写与注册代码都由属性宏生成，所以上面这段�
 - [安装](./getting-started/installation.md) —— 依赖、MSRV，以及为什么不需要编译 DuckDB。
 - [快速开始](./getting-started/quick-start.md) —— 构建并加载第一个扩展。
 - [属性参考](./guide/attributes.md) —— 完整的属性与参数说明。
-- [示例扩展](./examples/rusty-quack.md) —— 覆盖全部功能的可运行示例。
+- [示例扩展](./examples/duckfn-quack.md) —— 覆盖全部功能的可运行示例。

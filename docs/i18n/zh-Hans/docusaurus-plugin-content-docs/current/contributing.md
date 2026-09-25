@@ -40,11 +40,15 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 
 | 成员 | 是否发布 | 说明 |
 | --- | --- | --- |
-| `duckfn/` | 是 | 运行时框架。 |
+| `/`（`duckfn`） | 是 | 运行时框架，同时是 workspace 根。 |
 | `duckfn-macro/` | 是 | 过程宏；不依赖运行时，只依赖 `darling`、`syn`、`quote`。 |
-| `/`（`rusty_quack`） | 否（`publish = false`） | 示例扩展，放在根目录以便复用 DuckDB 官方 CI。 |
+| `duckfn-quack/` | 否（`publish = false`） | 示例扩展（`duckfn_quack`）与它的 sqllogictest 用例，放在仓库里以便复用 DuckDB 官方 CI；它也会随已发布的 `duckfn` 包一起分发。 |
 
-`duckfn/` 锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
+根清单锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
+
+有一条 Cargo 细节值得知道：根清单设置了 `default-members = ["duckfn-quack"]`，所以在仓库根裸跑
+`cargo build` 或 `cargo test` 只作用于示例包 —— DuckDB 官方 makefile 正是靠这一点找到扩展的。
+跑运行时自身的测试用 `cargo test -p duckfn`，跑全部用 `cargo test --workspace`。
 
 ## 日常命令
 
@@ -78,18 +82,18 @@ just doc                                 # 生成 duckfn 的 rustdoc
 用 DuckDB 官方的 sqllogictest 最实用：它通过 SQL 来验证扩展，也就是 DuckDB 真正调用扩展的方式，
 而且 CI 跑的就是这一套。它需要先跑通 `make` 流程（`make configure` 做一次，之后用 `make test`）。
 
-测试是 `test/sql/` 下的 sqllogictest 文件，与源码目录一一对应：
+测试是 `duckfn-quack/test/sql/` 下的 sqllogictest 文件，与源码目录一一对应：
 
 ```
-test/sql/demo/       <源文件名>.test
-test/sql/functions/  <源文件名>.test
-test/sql/types/      <type>_scalar_echo.test、<type>_table_echo.test
+duckfn-quack/test/sql/demo/       <源文件名>.test
+duckfn-quack/test/sql/functions/  <源文件名>.test
+duckfn-quack/test/sql/types/      <type>_scalar_echo.test、<type>_table_echo.test
 ```
 
 文件开头先声明依赖的扩展，然后成对给出 SQL 与期望输出：
 
 ```sql
-require rusty_quack
+require duckfn_quack
 
 query I
 SELECT double_it5(21);

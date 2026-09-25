@@ -224,7 +224,7 @@ const NEXT_STEPS: {to: string; title: ReactNode; details: ReactNode}[] = [
     ),
   },
   {
-    to: '/docs/examples/rusty-quack',
+    to: '/docs/examples/duckfn-quack',
     title: (
       <Translate
         id="homepage.next.example.title"

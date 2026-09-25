@@ -2,6 +2,40 @@
 
 本文件记录本仓库的约定与维护流程，供 AI 助手与维护者参考。
 
+## 仓库结构
+
+本仓库是一个 Cargo workspace，而根目录同时就是 `duckfn` 运行时 crate 的包根：
+
+| 路径 | 内容 | 是否发布 |
+| --- | --- | --- |
+| `/`（根） | `duckfn` 运行时：`src/`、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
+| `duckfn-macro/` | 过程宏 crate | 是（crates.io） |
+| `duckfn-quack/` | 示例扩展 `duckfn_quack`：`src/`、`test/sql/`、`demo.sh`。不单独发布，只用于复用 DuckDB 官方多平台 CI | 否 |
+| `docs/` | Docusaurus 文档站：`docs/docs/**`（英）与 `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`（中） | 是（随 `duckfn` 包一起发布，仅正文源文件） |
+| `Makefile` / `Justfile` | 本地与 CI 的构建入口。Makefile 必须留在仓库根（CI 在根目录执行 `make`） | — |
+| `extension-ci-tools/` | DuckDB 官方 CI 子模块，不要修改它的内容 | — |
+
+`duckfn` 发布包的内容由根 `Cargo.toml` 的 `include` 白名单决定：运行时代码与测试、README、
+LICENSE、文档站正文（英 + 中）。改这个白名单后，用 `cargo package -p duckfn --list` 核对一遍，
+确认没有把 `docs/node_modules`、`docs/package-lock.json`、`target/`、`build/`、`configure/`
+之类打进去。两条容易踩的坑：
+
+- **模式必须以 `/` 开头**。gitignore 风格里裸的 `LICENSE` / `README.md` 会匹配任意层级的同名
+  文件 —— 实测会把 `docs/node_modules/**/LICENSE`、`configure/venv/**/LICENSE` 一起收进包
+  （1600 多个文件）。
+- **`duckfn-quack/` 进不了包**，这是 cargo 的硬规则：任何含 `Cargo.toml` 的子目录一律跳过，
+  `include` 里写 `duckfn-quack/src/**` 也匹配不到任何文件。所以示例扩展只能在仓库里，
+  包内靠 README 与 `docs/docs/examples/duckfn-quack.md` 指路。
+
+两条与构建强相关的约定：
+
+- DuckDB 扩展名 `duckfn_quack` 必须四处一致：`duckfn-quack/src/extension/mod.rs` 的
+  `duckfn_entrypoint!`、根 `Makefile` 的 `EXTENSION_NAME`、CI 的 `extension_name`，以及
+  `duckfn-quack/test/sql/**/*.test` 里的 `require`。
+- 根目录裸跑 `cargo build` / `cargo test` 只作用于示例包（根 `Cargo.toml` 的
+  `default-members`，DuckDB 官方 makefile 依赖这一点才能找到扩展）；跑运行时自身的测试用
+  `cargo test -p duckfn`，跑全部用 `cargo test --workspace`。
+
 ## 仓库约定
 
 ### 临时文件放到 target/
@@ -47,8 +81,6 @@ sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
 放进脚本而不是直接写进 Justfile，是因为 just 的 shebang recipe 在 Windows 上需要
 `cygpath` 翻译解释器路径，而 Git Bash 并不提供它。
 
-## 发版流程
-
 版本号形如 `X.Y.Z`（例如 `0.0.5`）。一次完整的发版 =
 提升版本号 → 提交并打 tag → 等 CI 产出 Release → 发布到 crates.io → 切回下一开发版本。
 
@@ -82,12 +114,13 @@ just release_bump 0.0.5
 
 脚本做两件事，并打印每个被改动的文件：
 
-- **Cargo 文件**：取工作区当前版本（开发版本，如 `0.0.5-dev.0`）→ `0.0.5`，
-  涉及 `Cargo.toml` 与 `duckfn/Cargo.toml`。
+- **Cargo 文件**：取工作区当前版本（开发版本，如 `0.0.5-dev.0`）→ `0.0.5`。
+  只涉及根 `Cargo.toml` —— 它既是 workspace 根、又是 `duckfn` 包的清单，也是全仓唯一出现
+  字面版本号的地方（`[workspace.package]` 的 `version`，以及 `duckfn-macro` 的精确 pin）。
 - **文档 / README / CI 注释**：取**最近一次 tag** 的版本（如 `0.0.4`）→ `0.0.5`。
   涉及的文件由 `git grep` 自动找出，不需要维护清单：
   - `README.md`、`README.zh-CN.md`
-  - `duckfn/README.md`、`duckfn/README.zh-CN.md`
+  - `Justfile`：注释里的示例命令
   - `.github/workflows/MainDistributionPipeline.yml`：注释里的示例 tag
   - `docs/duckfn-version.ts`：文档站版本号的唯一来源
 
@@ -98,8 +131,9 @@ just release_bump 0.0.5
 最后用 `cargo update -p duckfn -p duckfn-macro` 同步 `Cargo.lock`，并打印残留的旧版本号
 （应当为空）以及 `git diff --stat`。
 
-> 根目录示例扩展 `rusty_quack` 的版本（`0.1.0`）与 `duckfn` 的版本无关，脚本不会碰它。
-> `Cargo.lock`、`docs/package-lock.json` 与本文件被排除在替换之外。
+> `duckfn-quack/` 里示例扩展的版本（`0.1.0`）与 `duckfn` 的版本无关，脚本不会碰它——
+> 它是随包发行的示例与 sqllogictest 夹具，夹具里的字面量不该被发版脚本改写。
+> `Cargo.lock`、`docs/package-lock.json`、本文件与 `duckfn-quack/` 被排除在替换之外。
 
 ### 2. 提交并打 tag
 
@@ -169,11 +203,13 @@ error: ... (schannel: failed to receive handshake, SSL/TLS connection failed)
 just release_dev 0.0.6-dev.0
 ```
 
-这一步只动 `Cargo.toml`、`duckfn/Cargo.toml` 和 `Cargo.lock`：文档与 README 中的示例
+这一步只动根 `Cargo.toml` 和 `Cargo.lock`：文档与 README 中的示例
 始终指向最新**已发布**版本，不打 tag、不发布。
 
 ## 相关文档
 
+- [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md)：`duckfn` 的 crate README（根 README，同时在 GitHub 首页与 crates.io 上展示）。
+- [`duckfn-quack/`](duckfn-quack/)：随包发行的示例扩展与 sqllogictest 用例；`duckfn-quack/demo.sh` 是一组可直接跑的 `just sql` 示例。
 - [`scripts/release.sh`](scripts/release.sh)：`release_bump` / `release_dev` / `release_tag` 的实际实现。
 - [`docs/duckfn-version.ts`](docs/duckfn-version.ts) 与 [`docs/plugins/remark-version-placeholder.ts`](docs/plugins/remark-version-placeholder.ts)：文档站的版本占位符机制。
 - [duckfn-extension-template](https://github.com/shijianjs/duckfn-extension-template)：给下游扩展项目的

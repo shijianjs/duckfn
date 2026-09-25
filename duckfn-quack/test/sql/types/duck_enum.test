@@ -1,0 +1,175 @@
+# name: duckfn-quack/test/sql/types/duck_enum.test
+# description: #[derive(DuckEnum)] 生成的 ENUM：字典与命名规则、读写往返、NULL、STRUCT 字段、表函数 bind 路径，以及 create_type 建类型 / "print" 只打印
+# group: [types]
+
+require duckfn_quack
+
+# 由 derive 生成的 ENUM 与手写的 ENUM（custom_type_echo.test 里的 Color）行为一致：
+#   - 逻辑类型是带字典的 ENUM，字典就是变体的声明顺序；
+#   - 向量里只存下标，读写都是搬运下标；
+#   - bind 阶段（表函数参数、STRUCT 字段）按标签匹配。
+#
+# DuckDB 只对**常量** VARCHAR 做隐式 ENUM 转换，所以列/表达式要显式写
+# `::ENUM(...)` 或建好的命名类型 `::priority`。
+#
+# 所有取值都用 CAST(... AS VARCHAR) 包一层，比对更稳定。
+
+# ============================================================================
+# create_type：加载期建好命名类型（幂等），没开 create_type 的不会建
+# ============================================================================
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'priority';
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'channel';
+----
+0
+
+# 建好的类型在普通 SQL 里可以直接使用
+query T
+SELECT CAST('high'::priority AS VARCHAR);
+----
+high
+
+# ============================================================================
+# create_type = "print"：加载期只把 DDL 打印到 stderr，不建类型
+#
+# 渲染的是与 create_type = true 完全相同的那条语句：
+#   CREATE TYPE IF NOT EXISTS "severity" AS ENUM ('info', 'warn', 'error');
+# 只是不执行 —— 所以 catalog 里查不到 severity，但枚举本身照常可用。
+# ============================================================================
+
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'severity';
+----
+0
+
+# 仅用于对照：true 模式建的 priority 确实存在
+query I
+SELECT count(*) FROM duckdb_types() WHERE type_name = 'priority';
+----
+1
+
+query T
+SELECT typeof(dfn_echo_severity('info'));
+----
+ENUM('info', 'warn', 'error')
+
+# 常量字符串会被隐式转换成参数所需的 ENUM
+query T
+SELECT CAST(dfn_echo_severity('warn') AS VARCHAR);
+----
+warn
+
+# ============================================================================
+# 字典与命名规则：rename_all = "lowercase"
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_priority('low'));
+----
+ENUM('low', 'medium', 'high')
+
+query T
+SELECT CAST(dfn_echo_priority(p) AS VARCHAR) FROM (VALUES
+    ('low'::priority),
+    ('medium'::priority),
+    ('high'::priority)
+) t(p);
+----
+low
+medium
+high
+
+# 常量 VARCHAR 会做隐式转换
+query T
+SELECT CAST(dfn_echo_priority('medium') AS VARCHAR);
+----
+medium
+
+# 不在字典里的标签在转换阶段就被拒绝
+statement error
+SELECT dfn_echo_priority('LOW'::priority);
+----
+Could not convert string 'LOW' to UINT8
+
+# ============================================================================
+# NULL：非可空参数整行短路，Option<Priority> 取到 None
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_priority(NULL::priority) AS VARCHAR);
+----
+NULL
+
+query T
+SELECT CAST(dfn_echo_priority_n(p) AS VARCHAR) FROM (VALUES
+    ('high'::priority),
+    (NULL::priority)
+) t(p);
+----
+high
+NULL
+
+# ============================================================================
+# STRUCT 字段（含可空字段）
+# ============================================================================
+
+query TT
+SELECT CAST(x.priority AS VARCHAR), CAST(x.tag AS VARCHAR) FROM (
+    SELECT dfn_echo_ticket({'id': 1, 'priority': 'high'::priority, 'tag': NULL::priority}) AS x
+);
+----
+high	NULL
+
+query T
+SELECT CAST(x.tag AS VARCHAR) FROM (
+    SELECT dfn_echo_ticket({'id': 2, 'priority': 'low'::priority, 'tag': 'medium'::priority}) AS x
+);
+----
+medium
+
+# ============================================================================
+# 表函数：入参走 bind 阶段的 duckdb_value，出参是 ENUM 列
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_priority('medium'::priority, count => 3);
+----
+medium
+NULL
+medium
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_priority('low'::priority, count => 1);
+----
+ENUM('low', 'medium', 'high')
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_priority(NULL::priority, count => 2);
+----
+NULL
+NULL
+
+# ============================================================================
+# 命名规则：SCREAMING_SNAKE_CASE + 单变体 #[duck(rename = "socket")]
+# ============================================================================
+
+query T
+SELECT typeof(dfn_echo_channel('HTTP'));
+----
+ENUM('HTTP', 'GRPC', 'socket')
+
+query T
+SELECT CAST(dfn_echo_channel(i) AS VARCHAR) FROM (VALUES
+    ('HTTP'::ENUM('HTTP', 'GRPC', 'socket')),
+    ('GRPC'::ENUM('HTTP', 'GRPC', 'socket')),
+    ('socket'::ENUM('HTTP', 'GRPC', 'socket'))
+) t(i);
+----
+HTTP
+GRPC
+socket

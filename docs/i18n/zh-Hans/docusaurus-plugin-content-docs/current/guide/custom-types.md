@@ -7,7 +7,7 @@ description: 为自己的类型实现 DuckValueType，以及如何触达 duckfn 
 # 自定义类型
 
 `DuckValueType` 是公开且未封闭的 trait，因此在 `duckfn` 之外定义的类型也能映射到 DuckDB 类型。
-示例扩展就是这么做的，实现在 `src/extension/types/custom_type_echo.rs`，本页逐段说明。
+示例扩展就是这么做的，实现在 `duckfn-quack/src/extension/types/custom_type_echo.rs`，本页逐段说明。
 
 ## 什么时候需要自己实现
 
@@ -123,14 +123,14 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 **quack-rs 没有映射的逻辑类型。** `DuckValueReader` 与 `DuckValueWriter` 在高层的 `vector_reader` /
 `vector_writer` 之外，都暴露了裸的 `c_duckdb_vector`，因此必要时可以下到 DuckDB 的 C API。`ENUM`
 （读下标、再从枚举字典取出标签）、`BIT`、`VARINT` 这些没有 quack-rs 访问器的类型，走的就是这条路。
-`src/extension/types/custom_type_echo.rs` 里的 `Color` 就是这个例子的完整实现：字典用
+`duckfn-quack/src/extension/types/custom_type_echo.rs` 里的 `Color` 就是这个例子的完整实现：字典用
 `LogicalType::enum_type(&[...])` 声明，读写覆盖带裸向量的 `read_valid` / `write_valid` 来搬运下标，
 bind 阶段的标签用 `Value::as_str()` 从 `duckdb_value` 取。
 具体到 `ENUM`，通常不必手写：`#[derive(DuckEnum)]` 生成的就是这份实现，配上 `create_type = true`
 还会在加载期执行 `CREATE TYPE ... AS ENUM (...)` —— 手写版本的意义是把机制讲清楚，而不是日常用法。
 
 **容器类型。** 容器需要子读写器，并且要把 NULL 传播进子向量。
-`duckfn/src/value_types/duck_list.rs`、`duck_map.rs`、`duck_array.rs`、`duck_struct.rs` 就是参考实现。
+`src/value_types/duck_list.rs`、`duck_map.rs`、`duck_array.rs`、`duck_struct.rs` 就是参考实现。
 
 **延迟读取。** `duck_lazy.rs` 是另一个极端：`read_valid` 只记录位置和一个存活凭证，真正的解析推迟到
 `get()`。自己的类型想推迟工作时就照这个模式来 —— 包括那个凭证，正是它把「源 chunk 已经死了还在消费」
@@ -141,9 +141,9 @@ bind 阶段的标签用 `Value::as_str()` 从 `duckdb_value` 取。
 
 ## 源码与测试
 
-- [`src/extension/types/custom_type_echo.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/types/custom_type_echo.rs) —— `Celsius`，在 duckfn 之外实现
-- [`test/sql/types/custom_type_echo.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/types/custom_type_echo.test) —— 期望结果
-- [`duckfn/src/value_types/duck_value_type.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/value_types/duck_value_type.rs) —— trait 本身
+- [`duckfn-quack/src/extension/types/custom_type_echo.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/types/custom_type_echo.rs) —— `Celsius`，在 duckfn 之外实现
+- [`duckfn-quack/test/sql/types/custom_type_echo.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/types/custom_type_echo.test) —— 期望结果
+- [`src/value_types/duck_value_type.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_value_type.rs) —— trait 本身
 
 ## 接下来
 

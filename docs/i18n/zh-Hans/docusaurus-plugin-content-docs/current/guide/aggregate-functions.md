@@ -235,7 +235,7 @@ fn result(&self) -> DuckOptionResult<f64> {
 槽本身区分不了这两种情形 —— 它只记录行处理回调看到过什么，而空组里行处理回调一次都没跑。区分发生在
 `result()`：靠行数（`self.rows`，也就是上面用来区分「没有行」与「真有值」的那个计数器）。
 
-示例扩展在 `test/sql/demo/lazy_config_demo.test` 里把两种写法都量了一遍：5000 行下 `DuckLazy` 入参解析
+示例扩展在 `duckfn-quack/test/sql/demo/lazy_config_demo.test` 里把两种写法都量了一遍：5000 行下 `DuckLazy` 入参解析
 配置 **1 次**，eager 的 `Config` 入参解析 **5000 次**，两者结果完全相同。同一个文件还覆盖了可空参数，以及
 `PRAGMA threads=4` 下合并局部状态的场景 —— 合并要把配置搬过去，既不能重新解析、也不能丢掉它。
 
@@ -252,10 +252,10 @@ fn result(&self) -> DuckOptionResult<f64> {
 
 ## 源码与测试
 
-- [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
-- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 期望结果
-- [`duckfn/src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/functions/aggregate_function_adapter.rs) —— 运行时侧
-- [`duckfn/src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn/src/value_types/duck_lazy_slot.rs) —— 上面用到的 `DuckLazySlot<T>`（只解析一次的槽）
+- [`duckfn-quack/src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
+- [`duckfn-quack/test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/aggregate_function.test) —— 期望结果
+- [`src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/aggregate_function_adapter.rs) —— 运行时侧
+- [`src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_lazy_slot.rs) —— 上面用到的 `DuckLazySlot<T>`（只解析一次的槽）
 
 ## 接下来
 
