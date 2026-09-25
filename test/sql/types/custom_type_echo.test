@@ -1,0 +1,170 @@
+# name: test/sql/types/custom_type_echo.test
+# description: 用户自定义 DuckValueType：newtype（Celsius）、ENUM（Color，走 C API）、它们作为 STRUCT 字段，以及容器/表函数用法
+# group: [types]
+
+require duckfn
+
+# ============================================================================
+# Celsius：自定义 newtype，物理表示是 DOUBLE
+# ============================================================================
+
+query R
+SELECT dfn_echo_celsius(i) FROM (VALUES
+    (1.5::DOUBLE), (-2.25::DOUBLE), (0.0::DOUBLE)
+) t(i);
+----
+1.5
+-2.25
+0.0
+
+query T
+SELECT typeof(dfn_echo_celsius(21.5::DOUBLE));
+----
+DOUBLE
+
+# 非 Option 入参：NULL 整行短路
+query T
+SELECT CAST(dfn_echo_celsius(NULL::DOUBLE) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
+# 自定义类型作为 STRUCT 字段
+# ============================================================================
+
+query T
+SELECT (dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).place;
+----
+oslo
+
+query T
+SELECT typeof((dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).celsius);
+----
+DOUBLE
+
+query T
+SELECT (dfn_echo_temperature_reading(x)).place
+FROM (VALUES ({'place': 'cairo', 'celsius': 31.0::DOUBLE})) t(x);
+----
+cairo
+
+# ============================================================================
+# 表函数参数 / 输出（走 bind 阶段的 Value 读取）
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
+----
+1.5
+NULL
+1.5
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_celsius(1.5::DOUBLE);
+----
+DOUBLE
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(NULL::DOUBLE, count => 2);
+----
+NULL
+NULL
+
+# ============================================================================
+# Color：自定义 ENUM（quack-rs 没有读写方法，实现里直接下到 C API）
+#
+# 字典存在逻辑类型里、向量里只存下标，所以读写都覆盖了带裸向量的
+# read_valid / write_valid；bind 阶段的 duckdb_value 用 Value::as_str() 取标签。
+# 所有取值都用 CAST(... AS VARCHAR) 包一层，比对更稳定。
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_color(i) AS VARCHAR) FROM (VALUES
+    ('red'::ENUM('red', 'green', 'blue')),
+    ('green'::ENUM('red', 'green', 'blue')),
+    ('blue'::ENUM('red', 'green', 'blue'))
+) t(i);
+----
+red
+green
+blue
+
+# SQL 侧就是带字典的 ENUM 类型
+query T
+SELECT typeof(dfn_echo_color('red'::ENUM('red', 'green', 'blue')));
+----
+ENUM('red', 'green', 'blue')
+
+# 标量入参会做隐式转换，所以直接写字符串也行
+query T
+SELECT CAST(dfn_echo_color('blue') AS VARCHAR);
+----
+blue
+
+# 非可空入参：NULL 整行短路
+query T
+SELECT CAST(dfn_echo_color(NULL::ENUM('red', 'green', 'blue')) AS VARCHAR);
+----
+NULL
+
+# 可空版本：Option<Color>
+query T
+SELECT CAST(dfn_echo_color_n(i) AS VARCHAR) FROM (VALUES
+    ('green'::ENUM('red', 'green', 'blue')),
+    (NULL::ENUM('red', 'green', 'blue'))
+) t(i);
+----
+green
+NULL
+
+# 字典由 DuckDB 强制：不在字典里的标签在转换阶段就被拒绝（UINT8 正是它的内部表示）
+statement error
+SELECT dfn_echo_color('purple'::ENUM('red', 'green', 'blue'));
+----
+Could not convert string 'purple' to UINT8
+
+# ============================================================================
+# 自定义 ENUM 作为 STRUCT 字段（含可空字段）
+# ============================================================================
+
+query T
+SELECT CAST((dfn_echo_color_reading({
+    'name': 'sky',
+    'color': 'blue'::ENUM('red', 'green', 'blue'),
+    'fallback': NULL::ENUM('red', 'green', 'blue')
+})).color AS VARCHAR);
+----
+blue
+
+query T
+SELECT CAST((dfn_echo_color_reading({
+    'name': 'leaf',
+    'color': 'green'::ENUM('red', 'green', 'blue'),
+    'fallback': 'red'::ENUM('red', 'green', 'blue')
+})).fallback AS VARCHAR);
+----
+red
+
+# ============================================================================
+# ENUM 作为表函数参数（bind 阶段走 duckdb_value，即 Value::as_str）与输出列
+# ============================================================================
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_color(
+    'green'::ENUM('red', 'green', 'blue'), count => 3);
+----
+green
+NULL
+green
+
+query T
+SELECT typeof(v) FROM dfn_table_echo_color('red'::ENUM('red', 'green', 'blue'), count => 1);
+----
+ENUM('red', 'green', 'blue')
+
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_color(
+    NULL::ENUM('red', 'green', 'blue'), count => 2);
+----
+NULL
+NULL

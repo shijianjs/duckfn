@@ -24,7 +24,7 @@ use quack_rs::prelude::{LogicalType, TypeId, Value};
 /// 于是「多套一层」也是合法的：`Option<Option<T>>` 与 `Option<T>` 完全等价 —— 逻辑类型相同、
 /// NULL 只会读成外层 `None`、`None` 与 `Some(None)` 都写 NULL。封装层不方便把中间类型剥出来时
 /// 可以直接套一层，不必为「本来就是 `Option`」单独加判断（能力用例见
-/// `duckfn-quack/test/sql/types/duck_opt_option_scalar_echo.test` 与 `duck_opt_option_table_echo.test`）。
+/// `test/sql/types/duck_opt_option_scalar_echo.test` 与 `duck_opt_option_table_echo.test`）。
 ///
 /// `Option<T>` ↔ the same DuckDB type as `T`, just allowing SQL NULL. DuckDB's logical types have
 /// no "nullable" dimension — NULL lives in the vector's validity mask — so `Option<T>` shares

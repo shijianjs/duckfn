@@ -42,16 +42,19 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 
 | Member | Published | Notes |
 | --- | --- | --- |
-| `/` (`duckfn`) | yes | The runtime framework, and the workspace root. |
+| `/` (`duckfn`) | yes | The runtime framework, the example extension and the workspace root. |
 | `duckfn-macro/` | yes | The procedural macros; depends on the runtime for nothing, only on `darling`, `syn`, `quote`. |
-| `duckfn-quack/` | no (`publish = false`) | The example extension (`duckfn_quack`) and its sqllogictest suite, kept in-tree so it can reuse DuckDB's official CI. It also ships inside the published `duckfn` package. |
+| `src/extension/`, `test/sql/` | shipped, never compiled | The example extension (`duckfn`) with its sqllogictest suite: part of the `duckfn` package, switched on by the `quack` feature. |
 
 The root manifest pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
 
-One Cargo detail worth knowing: the root manifest sets `default-members = ["duckfn-quack"]`, so a bare
-`cargo build` or `cargo test` from the repository root targets the example package — that is what
-lets DuckDB's official makefiles find the extension. Use `cargo test -p duckfn` for the runtime's
-own tests, or `cargo test --workspace` for everything.
+One Cargo detail worth knowing: the example extension is **part of the `duckfn` package** — the module
+tree in `src/extension/` plus the `src/wasm_lib.rs` and `src/bin/duckfn.rs` entry points — rather than
+a crate of its own, because cargo never packages a subdirectory that contains its own `Cargo.toml`.
+What compiles it is the `quack` feature, off by default: `make debug` passes it on through
+`TARGET_INFO += --features quack` in the root `Makefile`. A dependency on `duckfn` therefore sees the
+same dependency tree as before — sources present in the package, nothing compiled. Use
+`cargo test -p duckfn` for the runtime's own tests, or `cargo test --workspace` for everything.
 
 ## Day-to-day commands
 
@@ -72,7 +75,8 @@ to be configured per platform.
 The extension code runs **inside the `duckdb` process**, so attach the debugger to that process
 instead of launching something yourself:
 
-1. Build with debug symbols — `make debug`, or `cargo duckdb-ext build`.
+1. Build with debug symbols — `make debug`, or `just build` (which runs
+   `cargo duckdb-ext build -- --features quack`).
 2. Start DuckDB and keep the session alive, for example `duckdb -unsigned`.
 3. `LOAD '/path/to/my_ext.duckdb_extension';` in that session.
 4. In the IDE, attach to the running `duckdb` process — in RustRover that is
@@ -89,18 +93,18 @@ DuckDB's own sqllogictest runner is the practical choice: it exercises the exten
 exactly the way DuckDB calls it, and it is what CI runs. It needs the `make` flow to be set up
 (`make configure` once, then `make test`).
 
-Tests are sqllogictest files under `duckfn-quack/test/sql/`, mirroring the source layout:
+Tests are sqllogictest files under `test/sql/`, mirroring the source layout:
 
 ```
-duckfn-quack/test/sql/demo/       <source file>.test
-duckfn-quack/test/sql/functions/  <source file>.test
-duckfn-quack/test/sql/types/      <type>_scalar_echo.test, <type>_table_echo.test
+test/sql/demo/       <source file>.test
+test/sql/functions/  <source file>.test
+test/sql/types/      <type>_scalar_echo.test, <type>_table_echo.test
 ```
 
 A file starts by requiring the extension, then pairs SQL with its expected output:
 
 ```sql
-require duckfn_quack
+require duckfn
 
 query I
 SELECT double_it5(21);

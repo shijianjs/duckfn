@@ -1,0 +1,112 @@
+# name: test/sql/types/duck_lazy.test
+# description: DuckLazy<T> 的行为：本行内延迟读取、NULL 由 Option 承载、struct 字段与容器元素、只读与 bind 路径报错
+# group: [types]
+
+require duckfn
+
+# DuckLazy<T> 的逻辑类型与 T 完全相同，读取时只记录位置（O(1)），真正解析推迟到 get()。
+# 函数体与入参读取在同一个回调里，所以函数体里 get() 是安全的。
+# 聚合场景（复杂配置项只解析一次）见 test/sql/demo/lazy_config_demo.test。
+
+# ============================================================================
+# 标量入参：DuckLazy<i32> / DuckLazy<String>
+# ============================================================================
+
+query I
+SELECT dfn_echo_lazy_integer(42);
+----
+42
+
+# 类型与 T 完全一致，SQL 侧看不出区别
+query T
+SELECT typeof(dfn_echo_lazy_integer(42));
+----
+INTEGER
+
+# 多行：每行各自构造凭证
+query I
+SELECT dfn_echo_lazy_integer(i) FROM (VALUES (1), (2), (3)) t(i);
+----
+1
+2
+3
+
+query T
+SELECT dfn_echo_lazy_varchar('abc');
+----
+abc
+
+# ============================================================================
+# NULL 语义与其它类型一致
+# ============================================================================
+
+# 非可空入参 DuckLazy<i32>：NULL 行整行短路（函数体不执行）→ NULL
+query I
+SELECT dfn_echo_lazy_integer(i) FROM (VALUES (1), (NULL), (3)) t(i);
+----
+1
+NULL
+3
+
+# 需要可空就写 Option<DuckLazy<T>>：NULL 读到 None，不构造凭证
+query I
+SELECT dfn_echo_lazy_integer_n(i) FROM (VALUES (7), (NULL), (8)) t(i);
+----
+7
+NULL
+8
+
+# ============================================================================
+# 容器元素：Vec<DuckLazy<T>>
+# ============================================================================
+
+query I
+SELECT dfn_echo_lazy_list_sum([1, 2, 3]);
+----
+6
+
+query I
+SELECT dfn_echo_lazy_list_sum(i) FROM (VALUES ([1]), ([]::INTEGER[]), ([10, 20])) t(i);
+----
+1
+0
+30
+
+# ============================================================================
+# STRUCT 字段：#[derive(DuckStruct)] 路径
+# ============================================================================
+
+query I
+SELECT dfn_echo_lazy_struct({'v': 1, 's': 'ab'});
+----
+3
+
+# 可空字段为 NULL：不构造凭证，跳过它
+query I
+SELECT dfn_echo_lazy_struct({'v': 5, 's': NULL::VARCHAR});
+----
+5
+
+# 非可空字段为 NULL：整行变 NULL（与普通字段的语义一致）
+query I
+SELECT dfn_echo_lazy_struct({'v': NULL::INTEGER, 's': 'ab'});
+----
+NULL
+
+# ============================================================================
+# 只读：写路径 panic → 适配层转成查询报错（不是崩溃，也不是静默写 NULL）
+# ============================================================================
+
+statement error
+SELECT dfn_echo_lazy_passthrough(1);
+----
+DuckLazy<T> is read-only: it can only be read, never written back
+
+# ============================================================================
+# bind 参数：表函数参数走 Value 路径，明确不支持
+# ============================================================================
+
+statement error
+SELECT * FROM dfn_table_echo_lazy(1);
+----
+DuckLazy<T> is not supported on the bind/Value path

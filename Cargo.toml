@@ -15,37 +15,44 @@ keywords = ["duckdb", "extension", "ffi", "database", "macro"]
 categories = ["database", "api-bindings", "development-tools::ffi"]
 
 # 打包白名单（crate 根就是仓库根，不显式列出就会连 docs/node_modules 一起打进去）。
-# 两条必须遵守的规则：
+# 三条必须遵守的规则：
 #
-# 1. 模式必须以 `/` 开头。gitignore 风格里裸的 `LICENSE` / `README.md` 会匹配**任意层级**
-#    的同名文件，于是 docs/node_modules/**/LICENSE、configure/venv/**/LICENSE 全被收进包
+# 1. 模式必须以 `/` 开头。gitignore 风格里裸的 `LICENSE` / `README.md` 会匹配**任意层级**的
+#    同名文件，于是 docs/node_modules/**/LICENSE、configure/venv/**/LICENSE 全被收进包
 #    （实测 1600 多个文件）；`/LICENSE` 才是只匹配包根目录。
-# 2. cargo 无条件跳过任何**含 Cargo.toml 的子目录**（Cargo Book："Any subdirectory that
-#    contains a `Cargo.toml` file"），且不受 include 模式影响 —— 所以示例扩展
-#    duckfn-quack/ 无法进包（实测：显式写 "duckfn-quack/src/**" 也命中 0 个文件）。
-#    它只能留在仓库里，包内由 README 与 docs/examples/duckfn-quack.md 指过去。
+# 2. 写了 include 就**绕过 gitignore**，所以测试残留得自己挡：sqllogictest 会在 test/sql 下写出
+#    dfn_file_*、dfn_copy_*.tsv 之类的临时文件，因此这里只收 `.test` 用例本身。
+# 3. cargo 无条件跳过任何**含 Cargo.toml 的子目录**（Cargo Book："Any subdirectory that
+#    contains a `Cargo.toml` file"），且不受 include 模式影响。这就是 `duckfn-macro/` 不在这里
+#    列出的原因 —— 它是独立 crate、单独发布。示例扩展已经并进本包（src/extension/、
+#    src/wasm_lib.rs、src/bin/duckfn.rs、test/sql/），所以能随包一起发布。
 #
-# 除了运行时代码与测试，包内含全量文档站正文（英文 + 简体中文），这样解包即得完整文档，
-# 阅读或喂给 AI 都不必再克隆仓库。
+# 除了运行时代码与测试，包内含全量文档站正文（英文 + 简体中文）与示例扩展及其用例，这样解包即得
+# 完整文档和可运行的示例，阅读或喂给 AI 都不必再克隆仓库。
 #
-# The packaging whitelist. Two rules to respect:
+# The packaging whitelist. Three rules to respect:
 #
 # 1. Patterns must start with `/`. In gitignore syntax a bare `LICENSE` / `README.md` matches files
 #    with that name at *any* depth, which swept in docs/node_modules/**/LICENSE and
-#    configure/venv/**/LICENSE (1600+ files in a test run); `/LICENSE` matches the package root
-#    only.
-# 2. cargo unconditionally skips any subdirectory containing a `Cargo.toml` (Cargo Book: "Any
-#    subdirectory that contains a `Cargo.toml` file"), and no `include` pattern overrides that — so
-#    the example extension duckfn-quack/ cannot be packaged (verified: an explicit
-#    "duckfn-quack/src/**" pattern matched zero files). It stays in the repository, and the package
-#    points at it from the README and docs/examples/duckfn-quack.md.
+#    configure/venv/**/LICENSE (1600+ files in a test run); `/LICENSE` matches the package root only.
+# 2. Specifying `include` **bypasses gitignore**, so the test residue has to be kept out by hand: the
+#    sqllogictest suite writes temporary files (dfn_file_*, dfn_copy_*.tsv, ...) into test/sql, hence
+#    only the `.test` files themselves are taken.
+# 3. cargo unconditionally skips any subdirectory containing a `Cargo.toml` (Cargo Book: "Any
+#    subdirectory that contains a `Cargo.toml` file"), and no `include` pattern overrides that. That
+#    is why `duckfn-macro/` is not listed here — it is a crate of its own, published separately. The
+#    example extension now lives inside this package (src/extension/, src/wasm_lib.rs,
+#    src/bin/duckfn.rs, test/sql/) and therefore ships with it.
 #
 # Besides the runtime and its tests the package carries the whole documentation site (English and
-# Simplified Chinese), so unpacking the crate is enough to read the docs without cloning.
+# Simplified Chinese) and the example extension with its sqllogictest suite, so unpacking the crate
+# is enough to read the docs and run the example without cloning.
 include = [
     "/Cargo.toml",
     "/src/**",
     "/tests/**",
+    "/test/sql/**/*.test",
+    "/demo.sh",
     "/README.md",
     "/README.zh-CN.md",
     "/LICENSE",
@@ -56,30 +63,13 @@ include = [
 
 [workspace]
 resolver = "3"
-members = ["duckfn-macro", "duckfn-quack"]
-
-# 在仓库根目录不带包选择参数时，cargo 默认选中的成员。必须列上示例包：DuckDB 官方的
-# extension-ci-tools makefile 在根目录执行裸 `cargo build`（wasm 时再加 `--example
-# $(EXTENSION_NAME)`），靠这条才能在子目录 duckfn-quack/ 里找到 cdylib 与 example。
+# 示例扩展并进根包后，workspace 里只剩过程宏这一个成员；它不写进这里也行（路径依赖会自动成为
+# 成员），列出来只是更直白。根包 duckfn 不是成员，而是 workspace 根包。
 #
-# 代价是根目录的裸 `cargo build` / `cargo test` 只针对示例包（duckfn 会作为依赖被一起编译，
-# 但它的 tests/ 不会跑）；要跑运行时自身的测试用 `cargo test -p duckfn`，跑全部用
-# `cargo test --workspace`。根包 duckfn 不能写进这个列表（cargo 会报 not a member）。
-#
-# 改动这个列表前先读回根 Makefile 里那段注释。
-#
-# Which members a package-less cargo invocation selects when run from the repository root. The
-# example package has to be listed: DuckDB's extension-ci-tools makefiles run a bare `cargo build`
-# from the root (plus `--example $(EXTENSION_NAME)` for wasm), and this is what lets them find the
-# cdylib and the example inside duckfn-quack/.
-#
-# The price is that a bare `cargo build` / `cargo test` at the root targets the example package only
-# (duckfn is still compiled as a dependency, but its tests/ do not run); use `cargo test -p duckfn`
-# for the runtime's own tests, or `cargo test --workspace` for everything. The root package duckfn
-# cannot be listed here — cargo rejects it as "not a member".
-#
-# Read the comment in the root Makefile again before changing this list.
-default-members = ["duckfn-quack"]
+# With the example extension folded into the root package, the procedural-macro crate is the only
+# member left. Listing it is optional (a path dependency inside the workspace directory becomes a
+# member automatically) but explicit; the root package duckfn is the workspace root, not a member.
+members = ["duckfn-macro"]
 
 [workspace.package]
 version = "0.0.11-dev.0"
@@ -91,17 +81,53 @@ homepage = "https://github.com/shijianjs/duckfn"
 authors = ["shijianjs"]
 
 [lib]
-crate-type = ["rlib"]
+# rlib 供下游当依赖用，cdylib 就是原生扩展本体 —— 打开 `quack` 时它导出 DuckDB 需要的
+# `duckfn_init_c_api`，配合 src/extension/entry.rs 里的 `duckfn_entrypoint!("duckfn")`。
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+# 命令行工具（导出 function_descriptions.csv）。它自己用 `#[path]` 再编一遍示例源码：直接依赖 rlib
+# 时链接器可能把 inventory 的注册项整块丢掉，导出的 CSV 会静默变空。也因此它只包含
+# `extension/mod.rs`，不含入口符号（见 src/extension/entry.rs）。
+#
+# 目标名是 `duckfn-cli` 而不是文件名的 `duckfn`：本包的 lib 是 cdylib，产物也叫 duckfn，
+# Windows 上两者的 .pdb 会撞名（cargo 报 output filename collision）。下游项目的包名不同，
+# 不会撞，所以模板里那个 bin 依旧叫 `duckfn`。
+#
+# The command-line tool (it exports function_descriptions.csv). It compiles the example sources again
+# through `#[path]`, because depending on the rlib alone lets the linker drop the inventory
+# registrations and the CSV would come out silently empty. That is also why it includes
+# `extension/mod.rs` without the entry symbol (see src/extension/entry.rs).
+#
+# The target is named `duckfn-cli`, not `duckfn` like its file: this package's lib is a cdylib whose
+# artifact is also called duckfn, and on Windows the two .pdb files would collide (cargo reports an
+# output filename collision). A downstream package has a different name and no collision, so the
+# template's bin keeps the plain `duckfn`.
+name = "duckfn-cli"
+path = "src/bin/duckfn.rs"
+required-features = ["quack"]
+
+[[example]]
+# WebAssembly 用：crate-type 不能按 target 覆写，所以单独一个 staticlib 目标。
+# 名字必须等于扩展名 —— 上游 rust.Makefile 的 wasm 分支写死了 `--example $(EXTENSION_NAME)`，
+# 产物名也是 lib$(EXTENSION_NAME).a。
+name = "duckfn"
+path = "src/wasm_lib.rs"
+crate-type = ["staticlib"]
+required-features = ["quack"]
 
 [features]
 default = []
 
-# 命令行工具的开关：`cargo run --bin duckfn -- function_descriptions` 用的 clap 与 csv。
+# 命令行工具的开关：`cargo run --features quack --bin duckfn-cli -- function_descriptions` 用的 clap
+# 与 csv（那个 bin 的文件在 src/bin/duckfn.rs，目标名见上面的 `[[bin]]`，本身也挂在 `quack` 上）。
 # 只有扩展项目里的那个 bin 需要它，插件本体（cdylib）不需要；关掉时 duckfn 完全不依赖
 # 这两个 crate，所以下游没用到 CLI 就不用打开。
 #
 # The command-line tool switch: clap and csv, used by
-# `cargo run --bin duckfn -- function_descriptions`. Only the extension project's bin needs them,
+# `cargo run --features quack --bin duckfn-cli -- function_descriptions` (that bin's file is
+# src/bin/duckfn.rs, its target name is set by the `[[bin]]` above, and it is itself gated on
+# `quack`). Only the extension project's bin needs them,
 # never the extension itself; with this off duckfn depends on neither crate, so downstream projects
 # that never run the CLI need not enable it.
 cli = ["dep:clap", "dep:csv"]
@@ -144,6 +170,23 @@ uuid = ["dep:uuid"]
 # 28-29 significant digits), so it cannot hold every DECIMAL(38, ...) DuckDB allows; out-of-range
 # values come back as an error.
 rust_decimal = ["dep:rust_decimal"]
+
+# 示例扩展与 CLI 的开关（示例源码在 src/extension/，CLI 在 src/bin/duckfn.rs）：它依赖 `all`，
+# 因为示例把每一档可选能力都演示了一遍。
+# 反过来 `all` **不**依赖它 —— `all` 是给下游用户用的，用户不需要示例与那些测试函数进自己的依赖树。
+# 默认关闭还有一个原因：`required-features` 的失败是静默的（裸 `cargo build` 只会产出一个没有入口
+# 符号的 cdylib，LOAD 时才报错），所以构建扩展的命令一律显式带上它 —— 不带上时示例源码在包里却
+# 不参与编译，正好就是「只有源码、不生效」。
+#
+# The example extension and CLI switch (the example lives in src/extension/, the CLI in
+# src/bin/duckfn.rs): it depends on `all`, since the example exercises every optional capability.
+# The reverse does not hold — `all` is meant for downstream users, who have no use for the example
+# and its test functions in their dependency tree. Being off by default also means `required-features`
+# can silently skip the targets: a bare `cargo build` produces a cdylib without the entry-point
+# symbol and only `LOAD` complains, so every command that builds the extension passes this feature
+# explicitly. With it off, the example sources sit in the package without being compiled — exactly
+# the intended "sources present, no effect" behaviour.
+quack = ["all"]
 
 # 聚合开关：一次打开上面所有可选 feature（含 `cli`）。duckfn 多数场景就是依赖树的末端
 # （扩展本体直接依赖它，很少作为别人的依赖再被传递进来），所以「全开」通常是最省事的写法；

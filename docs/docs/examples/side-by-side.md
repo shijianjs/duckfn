@@ -398,5 +398,5 @@ cannot be generated — the function body and the aggregate state — stay.
 
 ## Next
 
-- [The example extension](./duckfn-quack.md) — the same ideas covering every feature duckfn has.
+- [The example extension](./duckfn.md) — the same ideas covering every feature duckfn has.
 - [Aggregate functions](../guide/aggregate-functions.md) — the state type and `combine` in detail.

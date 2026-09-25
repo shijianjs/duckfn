@@ -271,6 +271,28 @@ fn declared_documentation_is_collected() {
     );
 }
 
+/// 本测试文件声明的函数名前缀。示例扩展现在与本 crate 同处一个包（`quack` feature），打开它时
+/// `declared_function_descriptions()` 里会多出几十个示例函数，所以逐字节比对只针对本文件自己声明的
+/// 那几行 —— 这也正是这几个测试真正关心的事。
+///
+/// The prefix of the functions this test file declares. The example extension now lives in the same
+/// package behind the `quack` feature, so with it on `declared_function_descriptions()` returns
+/// dozens of example functions as well; the byte-for-byte comparisons therefore look at this file's
+/// own rows only, which is what these tests are about.
+#[cfg(feature = "cli")]
+const OWN_PREFIX: &str = "docs_";
+
+/// 从整份 CSV 里挑出本测试自己声明的那几行（连同表头）。
+///
+/// Keeps the rows this test declares, plus the header, out of the whole CSV.
+#[cfg(feature = "cli")]
+fn own_csv(text: &str) -> String {
+    text.lines()
+        .filter(|line| line.starts_with("function,") || line.starts_with(OWN_PREFIX))
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
 /// 默认导出：只写有文档的函数，表头是 community-extensions 认的四列。
 ///
 /// The default export: only documented rows, with the header community-extensions expects.
@@ -287,20 +309,38 @@ fn export_writes_documented_rows_only() {
         path.file_name().and_then(|name| name.to_str()),
         Some("function_descriptions.csv")
     );
-    assert_eq!(summary.written, 5);
-    assert_eq!(summary.without_description, 0);
-    assert_eq!(summary.skipped, 1, "the undocumented function must be skipped");
 
-    // 整份文件逐字节比对：转义、排序、合并、跳过、换行压平一次性都验了。
+    // 统计跟着「本 crate 实际声明的全部函数」走，不写死数字：示例扩展与运行时同处一个包。
     //
-    // Byte-for-byte comparison of the whole file: escaping, ordering, merging, skipping and
-    // newline flattening in one assertion.
-    assert_eq!(text, EXPECTED_DEFAULT_CSV);
+    // The counts follow every function this crate declares instead of hard-coded numbers, because
+    // the example extension shares the package with the runtime.
+    let declared = declared_function_descriptions();
+    assert_eq!(
+        summary.written,
+        declared.iter().filter(|row| row.is_documented()).count()
+    );
+    assert_eq!(summary.without_description, 0);
+    assert_eq!(
+        summary.skipped,
+        declared.len() - summary.written,
+        "every undocumented function must be skipped"
+    );
+
+    // 本测试声明的行逐字节比对：转义、排序、合并、跳过、换行压平一次性都验了。
+    //
+    // Byte-for-byte comparison of the rows this test declares: escaping, ordering, merging,
+    // skipping and newline flattening in one assertion.
+    let own = own_csv(&text);
+    assert_eq!(own, EXPECTED_DEFAULT_CSV);
+    assert!(
+        !text.lines().any(|line| line.starts_with("docs_undocumented")),
+        "the undocumented function must not be exported by default"
+    );
     // 没有字段跨物理行 —— 这正是换行被压平的结果，Markdown 表格与 `read_csv()` 都要求这样。
     //
     // No field spans a physical line, which is what the flattening buys: both the Markdown table
     // and `read_csv()` require it.
-    assert_eq!(text.lines().count(), 6, "header + 5 rows, no multi-line field");
+    assert_eq!(own.lines().count(), 6, "header + 5 rows, no multi-line field");
     // LF 换行（仓库约定），且文件以换行结束。
     //
     // LF line endings (the repository convention), with a trailing newline.
@@ -325,8 +365,19 @@ fn export_all_includes_undocumented_rows() {
         path.file_name().and_then(|name| name.to_str()),
         Some("function_descriptions_all.csv")
     );
-    assert_eq!(summary.written, 6);
-    assert_eq!(summary.without_description, 1);
+
+    // 同上：统计跟着本 crate 实际声明的全部函数走。
+    //
+    // As above: the counts follow every function this crate declares.
+    let declared = declared_function_descriptions();
+    assert_eq!(summary.written, declared.len());
+    assert_eq!(
+        summary.without_description,
+        declared
+            .iter()
+            .filter(|row| row.description.is_none())
+            .count()
+    );
     assert_eq!(summary.skipped, 0);
 
     // `docs_undocumented` 排序上正好在 `docs_unicode` 前面，插进去即可。
@@ -336,8 +387,9 @@ fn export_all_includes_undocumented_rows() {
         "docs_unicode,",
         "docs_undocumented,,,\ndocs_unicode,",
     );
-    assert_eq!(text, expected);
-    assert_eq!(text.lines().count(), 7, "header + 6 rows, no multi-line field");
+    let own = own_csv(&text);
+    assert_eq!(own, expected);
+    assert_eq!(own.lines().count(), 7, "header + 6 rows, no multi-line field");
 }
 
 // ============================================================================
@@ -440,12 +492,18 @@ fn csv_round_trips_through_duckdb() {
     assert_eq!(select("comment IS NULL", "docs_undocumented"), "true");
     assert_eq!(select("comment IS NULL", "docs_double_it"), "false");
 
-    // `function` 列就是 JOIN 键：函数名与排序都对。
+    // `function` 列就是 JOIN 键：函数名与排序都对（只看本测试声明的那几个，示例扩展与运行时同处
+    // 一个包，打开 `quack` 时 CSV 里还有几十个示例函数）。
+    //
+    // The `function` column is the JOIN key: names and ordering both hold (scoped to this test's own
+    // functions, since the example extension shares the package and adds dozens of rows when `quack`
+    // is on).
     assert_eq!(
         duckdb_scalar(
             &duckdb,
             &format!(
-                "SELECT string_agg(function, ',') FROM (SELECT function FROM {source} ORDER BY 1)"
+                "SELECT string_agg(function, ',') FROM \
+                 (SELECT function FROM {source} WHERE starts_with(function, 'docs_') ORDER BY 1)"
             ),
         ),
         "docs_add_two,docs_double_it,docs_overloaded,docs_special,docs_undocumented,docs_unicode"

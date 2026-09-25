@@ -21,24 +21,27 @@ description: 本地构建与测试命令、WebAssembly 目标，以及 DuckDB �
 常用组合在 `Justfile` 里已经封装好：
 
 ```bash
-just build                  # cargo duckdb-ext build
+just build                  # cargo duckdb-ext build -- --features quack
 just sql "SELECT double_it5(21);"          # 构建后 LOAD 并执行一条语句
 just test                   # make configure debug test
 just doc                    # cargo doc -p duckfn
 ```
 
-`Makefile` 里有两个设置值得了解：
+`Makefile` 里有四个设置值得了解：
 
 ```make
-EXTENSION_NAME=duckfn_quack
+EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
 TARGET_DUCKDB_VERSION=v1.5.5
+TARGET_INFO += --features quack
 ```
 
 `USE_UNSTABLE_C_API=1` 决定了产出的扩展只能在兼容版本的 DuckDB 里、并加 `-unsigned` 才能加载。
 `TARGET_DUCKDB_VERSION` 指明写入元数据时针对的版本。`EXTENSION_NAME` 必须与
-`duckfn-quack/src/extension/mod.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的
-`require` 保持一致。
+`src/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
+`TARGET_INFO += --features quack` 决定示例会不会被编译：它挂在默认关闭的 `quack` feature 上，而
+`TARGET_INFO` 是 DuckDB 官方 makefile 唯一会原样拼进 `cargo build` 的变量。少了这一行，产出的是一个
+没有入口符号的 cdylib。
 
 ## WebAssembly
 
@@ -49,11 +52,11 @@ rustup target add wasm32-unknown-emscripten
 just build_wasm
 ```
 
-由于最终链接由 `emcc` 完成，该目标下 crate 类型必须是 `staticlib` 而不是 `cdylib`。示例 crate 在
-`duckfn-quack/Cargo.toml` 里用一个额外的 `[[example]]` 目标解决这个问题：它指向
-`duckfn-quack/src/wasm_lib.rs` 并声明 `crate-type = ["staticlib"]`。那个文件自己就是一个 crate root：
-和 `duckfn-quack/src/lib.rs`、CLI 的 `duckfn-quack/src/bin/duckfn.rs` 一样，它声明 `mod extension;`，
-三者编译的是同一棵 `duckfn-quack/src/extension/` 树 —— 见[项目结构约定](./getting-started/project-structure.md)。
+由于最终链接由 `emcc` 完成，该目标下 crate 类型必须是 `staticlib` 而不是 `cdylib`。本包在
+`Cargo.toml` 里用一个额外的 `[[example]]` 目标解决这个问题：它指向
+`src/wasm_lib.rs` 并声明 `crate-type = ["staticlib"]`。那个文件自己就是一个 crate root：
+和 `src/lib.rs`、CLI 的 `src/bin/duckfn.rs` 一样，它包含同一棵 `src/extension/` 树
+（入口符号本身由 `src/extension/entry.rs` 共享）—— 见[项目结构约定](./getting-started/project-structure.md)。
 
 ## 持续集成
 
@@ -71,7 +74,7 @@ jobs:
     with:
       duckdb_version: v1.5.5
       ci_tools_version: v1.5-variegata
-      extension_name: duckfn_quack
+      extension_name: duckfn
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
 ```
@@ -83,8 +86,8 @@ jobs:
 
 第二个作业把推送的 tag 变成 GitHub Release：
 
-1. 下载全部 `duckfn_quack-*-extension-*` 产物。
-2. 把 `*.duckdb_extension` 与 `*.duckdb_extension.wasm` 收敛为 `duckfn_quack-<arch>.duckdb_extension`。
+1. 下载全部 `duckfn-*-extension-*` 产物。
+2. 把 `*.duckdb_extension` 与 `*.duckdb_extension.wasm` 收敛为 `duckfn-<arch>.duckdb_extension`。
 3. 用上一个 `v*` tag 以来的提交记录生成发布说明。
 4. 创建 Release；若已存在则上传覆盖。
 
@@ -107,15 +110,16 @@ version = "{{DUCKFN_VERSION}}"
 rust-version = "1.86"
 ```
 
-仓库里的示例扩展（`duckfn-quack/`）是 `publish = false`，永远不会作为独立 crate 上传。
+示例扩展随本包一起发布，而不是独立 crate，所以也不会单独上传。
 
-不过发布出去的 `duckfn` 包并不只有运行时：根 `Cargo.toml` 的 `include` 会把文档站正文
-（`docs/README.md`、`docs/docs/**` 与 `docs/i18n/` 下的简体中文译文）一起打进去，所以在 crates.io
-上拿到的包带着完整文档 —— 包括那页可以照着跑的示例页。确切清单用 `cargo package -p duckfn --list`
-查看。
+而且发布出去的 `duckfn` 包并不只有运行时：根 `Cargo.toml` 的 `include` 会把示例扩展
+（`src/extension/**`、`src/wasm_lib.rs`、`src/bin/duckfn.rs`）、它的 sqllogictest 用例
+（`test/sql/**/*.test`）、文档站正文（`docs/README.md`、`docs/docs/**` 与 `docs/i18n/` 下的简体
+中文译文）、`demo.sh`、README 与许可证一起打进去。所以解包即得完整文档**和**一份可以直接跑的示例 ——
+这正是把它们放进同一个包的意义。确切清单用 `cargo package -p duckfn --list` 查看。
 
-包永远带不过去的是示例扩展本身：cargo 会跳过任何含 `Cargo.toml` 的子目录，`include` 模式也覆盖不了
-这条规则，所以 `duckfn-quack/`（连同它的源码与用例）只能留在仓库里。
+示例只在打开 `quack` feature 时才参与编译（`cargo build --features quack`），所以它进包对任何依赖
+`duckfn` 的下游项目都没有影响。
 
 ## 文档站
 

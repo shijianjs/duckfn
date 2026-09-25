@@ -102,12 +102,12 @@ SELECT dfn_scalar_ret_panic(13);   -- 报错：unlucky input: 13
 
 ## 源码与测试
 
-- [`duckfn-quack/test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/scalar_function.test) —— `duck_error`、`Ok(None)` 与 panic 用例
-- [`duckfn-quack/test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/aggregate_function.test) —— 聚合函数的同类用例
-- [`duckfn-quack/test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/cast_function.test) —— `CAST` 与 `TRY_CAST` 的差别
+- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— `duck_error`、`Ok(None)` 与 panic 用例
+- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 聚合函数的同类用例
+- [`test/sql/functions/cast_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/cast_function.test) —— `CAST` 与 `TRY_CAST` 的差别
 - [`src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/table_function_adapter.rs) —— bind 与 scan 里捕获 panic 的位置
 
 ## 接下来
 
 - [属性参考](./attributes.md) —— 各宏接受的返回形态。
-- [示例扩展](../examples/duckfn-quack.md) —— 这些错误路径的可运行 SQL。
+- [示例扩展](../examples/duckfn.md) —— 这些错误路径的可运行 SQL。

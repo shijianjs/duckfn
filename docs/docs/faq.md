@@ -97,8 +97,8 @@ key; the other attribute macros reject it.
 
 ### How do I test an extension?
 
-With sqllogictest files under `duckfn-quack/test/sql/`, run by `make test` (`just test`). The file
-sets up the extension with `require duckfn_quack`, then pairs statements with their expected output. See
+With sqllogictest files under `test/sql/`, run by `make test` (`just test`). The file
+sets up the extension with `require duckfn`, then pairs statements with their expected output. See
 [Contributing](./contributing.md#tests).
 
 ### The extension loads but calls fail with a version error

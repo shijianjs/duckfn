@@ -1,0 +1,427 @@
+# name: test/sql/types/duck_list_scalar_echo.test
+# description: duck_list.rs 中 LIST 类型（Vec<T> / Vec<Option<T>>）的 echo 往返测试
+# group: [types]
+
+require duckfn
+
+# 所有取值都用 CAST(... AS VARCHAR) 包一层，避免驱动层对 LIST 的二次转换影响比对
+
+# ============================================================================
+# LIST(INTEGER) // Vec<i32>
+# 多行且长度不同，覆盖 ListVector 的 offset / reserve / set_size
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_integer(i) AS VARCHAR) FROM (VALUES
+    ([1, 2, 3]),
+    ([4]),
+    ([]::INTEGER[]),
+    ([5, 6, 7, 8, 9])
+) t(i);
+----
+[1, 2, 3]
+[4]
+[]
+[5, 6, 7, 8, 9]
+
+query T
+SELECT typeof(dfn_echo_list_integer([1]));
+----
+INTEGER[]
+
+# 中间夹 NULL 行：NULL 行应保持 NULL，且不影响其它行的元素偏移
+query T
+SELECT CAST(dfn_echo_list_integer(i) AS VARCHAR) FROM (VALUES
+    ([1, 2]),
+    (NULL::INTEGER[]),
+    ([])
+) t(i);
+----
+[1, 2]
+NULL
+[]
+
+# Vec<T> 的元素不可为 NULL：列表里出现 NULL 元素时整体返回 NULL
+query T
+SELECT CAST(dfn_echo_list_integer([1, NULL, 3]) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
+# LIST(BIGINT) // Vec<i64>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_bigint(i) AS VARCHAR) FROM (VALUES
+    ([9223372036854775807::BIGINT, (-9223372036854775808)::BIGINT]),
+    ([]::BIGINT[])
+) t(i);
+----
+[9223372036854775807, -9223372036854775808]
+[]
+
+query T
+SELECT typeof(dfn_echo_list_bigint([1]));
+----
+BIGINT[]
+
+# ============================================================================
+# LIST(DOUBLE) // Vec<f64>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_double(i) AS VARCHAR) FROM (VALUES
+    ([1.5, -2.25, 0.0]),
+    ([1e308, -1e-308])
+) t(i);
+----
+[1.5, -2.25, 0.0]
+[1e+308, -1e-308]
+
+query T
+SELECT typeof(dfn_echo_list_double([1.5]));
+----
+DOUBLE[]
+
+# ============================================================================
+# LIST(BOOLEAN) // Vec<bool>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_bool(i) AS VARCHAR) FROM (VALUES
+    ([true, false, true]),
+    ([]::BOOLEAN[])
+) t(i);
+----
+[true, false, true]
+[]
+
+query T
+SELECT typeof(dfn_echo_list_bool([true]));
+----
+BOOLEAN[]
+
+# ============================================================================
+# LIST(VARCHAR) // Vec<String>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_varchar(i) AS VARCHAR) FROM (VALUES
+    (['a', 'bb', '']),
+    ([]::VARCHAR[]),
+    (['', 'hello world', '你好'])
+) t(i);
+----
+[a, bb, '']
+[]
+['', hello world, 你好]
+
+query T
+SELECT typeof(dfn_echo_list_varchar(['a']));
+----
+VARCHAR[]
+
+# ============================================================================
+# LIST(DATE) // Vec<DuckDate>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_date(i) AS VARCHAR) FROM (VALUES
+    ([DATE '2024-01-02', DATE '1969-12-31']),
+    ([]::DATE[])
+) t(i);
+----
+[2024-01-02, 1969-12-31]
+[]
+
+query T
+SELECT typeof(dfn_echo_list_date([DATE '2024-01-02']));
+----
+DATE[]
+
+# ============================================================================
+# LIST(DECIMAL(18,3)) // Vec<DuckDecimal<18, 3>>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_decimal(i) AS VARCHAR) FROM (VALUES
+    ([1.234::DECIMAL(18,3), (-1.234)::DECIMAL(18,3), 0::DECIMAL(18,3)]),
+    ([]::DECIMAL(18,3)[])
+) t(i);
+----
+[1.234, -1.234, 0.000]
+[]
+
+query T
+SELECT typeof(dfn_echo_list_decimal([1.234]));
+----
+DECIMAL(18,3)[]
+
+# ============================================================================
+# LIST(BLOB) // Vec<DuckBlob>
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_blob(i) AS VARCHAR) FROM (VALUES
+    (['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB, ''::BLOB]),
+    ([]::BLOB[])
+) t(i);
+----
+[\xAA\xBB, \x00\x01\xFF, '']
+[]
+
+query T
+SELECT typeof(dfn_echo_list_blob(['\xAA'::BLOB]));
+----
+BLOB[]
+
+# ============================================================================
+# LIST(LIST(INTEGER)) // Vec<Vec<i32>>，嵌套 LIST
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_nested(i) AS VARCHAR) FROM (VALUES
+    ([[1, 2], [3]]),
+    ([[], [1]]),
+    ([]::INTEGER[][])
+) t(i);
+----
+[[1, 2], [3]]
+[[], [1]]
+[]
+
+query T
+SELECT typeof(dfn_echo_list_nested([[1]]));
+----
+INTEGER[][]
+
+# 内层列表为 NULL 时整体返回 NULL
+query T
+SELECT CAST(dfn_echo_list_nested([NULL, [1]]) AS VARCHAR);
+----
+NULL
+
+# ============================================================================
+# LIST(INTEGER) // Vec<Option<i32>>，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_integer_n(i) AS VARCHAR) FROM (VALUES
+    ([1, NULL, 3]),
+    ([NULL]),
+    ([NULL, NULL]::INTEGER[]),
+    ([]::INTEGER[])
+) t(i);
+----
+[1, NULL, 3]
+[NULL]
+[NULL, NULL]
+[]
+
+query T
+SELECT typeof(dfn_echo_list_integer_n([1]));
+----
+INTEGER[]
+
+# NULL 行 + 可空元素混合
+query T
+SELECT CAST(dfn_echo_list_integer_n(i) AS VARCHAR) FROM (VALUES
+    ([1, 2]),
+    (NULL::INTEGER[]),
+    ([NULL, 4])
+) t(i);
+----
+[1, 2]
+NULL
+[NULL, 4]
+
+# ============================================================================
+# LIST(VARCHAR) // Vec<Option<String>>，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_varchar_n(i) AS VARCHAR) FROM (VALUES
+    (['a', NULL, '']),
+    ([NULL, NULL]::VARCHAR[])
+) t(i);
+----
+[a, NULL, '']
+[NULL, NULL]
+
+query T
+SELECT typeof(dfn_echo_list_varchar_n(['a']));
+----
+VARCHAR[]
+
+# ============================================================================
+# LIST(DATE) // Vec<Option<DuckDate>>，元素可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_date_n(i) AS VARCHAR) FROM (VALUES
+    ([DATE '2024-01-02', NULL]),
+    ([NULL]::DATE[])
+) t(i);
+----
+[2024-01-02, NULL]
+[NULL]
+
+query T
+SELECT typeof(dfn_echo_list_date_n([DATE '2024-01-02']));
+----
+DATE[]
+
+# ============================================================================
+# LIST(LIST(INTEGER)) // Vec<Option<Vec<Option<i32>>>>，内外层均可为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_nested_n(i) AS VARCHAR) FROM (VALUES
+    ([[1, NULL], NULL, []]),
+    ([[]]),
+    ([NULL])
+) t(i);
+----
+[[1, NULL], NULL, []]
+[[]]
+[NULL]
+
+query T
+SELECT typeof(dfn_echo_list_nested_n([[1]]));
+----
+INTEGER[][]
+
+# ============================================================================
+# 大列表：验证 reserve 与 set_size 在超过单次容量时的正确性
+# ============================================================================
+
+query I
+SELECT length(dfn_echo_list_integer(i)) FROM (SELECT range(1, 3001)::INTEGER[] AS i) t;
+----
+3000
+
+query T
+SELECT CAST(sum(x) AS VARCHAR)
+FROM (
+    SELECT unnest(dfn_echo_list_integer(i)) AS x
+    FROM (SELECT range(1, 3001)::INTEGER[] AS i) t
+) s;
+----
+4501500
+
+# 嵌套列表：展开后求和，验证多层子向量偏移
+query T
+SELECT CAST(sum(x) AS VARCHAR)
+FROM (
+    SELECT unnest(flatten(dfn_echo_list_nested(i))) AS x
+    FROM (VALUES ([[1, 2], [3]]), ([[4]])) t(i)
+) s;
+----
+10
+
+# ============================================================================
+# 常量向量边界
+#
+# 参数被折叠成常量向量时（直接写字面量，或与行无关的常量投影），嵌套类型还多一层
+# "常量子向量"：列表元素全是 NULL 时不占数据区，DuckDB 就让 LIST 的 child 保持常量
+# 表示（逻辑长度 N、物理 1 个元素），而 duckfn 是按逻辑下标裸读子向量的，于是从第 2
+# 个元素起越界读到未初始化内存（垃圾值每个进程都不一样，同一次运行内稳定）：
+#   SELECT dfn_echo_list_integer_n([NULL, NULL]);             -- 实得 [NULL, 631]
+#   SELECT dfn_echo_list_integer_n([NULL, NULL]::INTEGER[]);  -- 同样出错，与元素类型是否显式无关
+# 元素里只要有一个真实值（[1, NULL, 3]）child 就必须展开；把参数写成单行 VALUES 时
+# 参数不再是常量向量 —— 两种写法都不复现。
+#
+# 只有变长容器会踩到：ARRAY 的 child 尺寸被强制为 N × 行数、STRUCT 的 children 必须
+# 与父向量同尺寸，都不会留下"常量 child"，所以 ARRAY / STRUCT 不受影响。
+#
+# 这是 duckfn 读取路径的既有缺陷，与 echo 函数无关，因此下面只固化不触发
+# 该缺陷、但语义等价的写法。
+# ============================================================================
+
+# 常量字面量：元素都有具体类型，子向量会被真正写满
+query T
+SELECT CAST(dfn_echo_list_integer_n([1, 1, 1, 1]) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_integer_n([1, 2, 3, 4]) AS VARCHAR);
+----
+[1, 1, 1, 1]
+[1, 2, 3, 4]
+
+# 元素显式指定类型后，全 NULL 也安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([NULL::INTEGER, NULL::INTEGER]) AS VARCHAR);
+----
+[NULL, NULL]
+
+# 单个未定型 NULL：列表长度为 1，只读下标 0，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([NULL]) AS VARCHAR);
+----
+[NULL]
+
+# 未定型 NULL 与具体类型混写时整表类型由具体元素决定，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([NULL, 1]) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_integer_n([1, NULL]) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_varchar_n([NULL, NULL, 'x']) AS VARCHAR);
+----
+[NULL, 1]
+[1, NULL]
+[NULL, NULL, x]
+
+# 经过一次真实计算后元素类型确定，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n(list_transform([NULL, NULL]::INTEGER[], lambda x: x)) AS VARCHAR);
+----
+[NULL, NULL]
+
+# 参数是常量表达式、且行数多于列表长度：DuckDB 会 flatten 顶层向量
+query T
+SELECT string_agg(CAST(dfn_echo_list_integer_n([1, 2]) AS VARCHAR), '|') FROM range(5);
+----
+[1, 2]|[1, 2]|[1, 2]|[1, 2]|[1, 2]
+
+# 标量函数里的常量参数（add(x, 3) 中的 3）不影响结果
+query T
+SELECT string_agg(CAST(dfn_echo_integer(i::INTEGER + 3) AS VARCHAR), '|')
+FROM (SELECT range AS i FROM range(3)) t;
+----
+3|4|5
+
+# 元素来自列引用：走真实写入，安全
+query T
+SELECT CAST(dfn_echo_list_integer_n([i::INTEGER, i::INTEGER + 3]) AS VARCHAR) FROM (SELECT 0 AS i) t;
+----
+[0, 3]
+
+# ============================================================================
+# NULL 处理：任何参数为 NULL 时结果应为 NULL
+# ============================================================================
+
+query T
+SELECT CAST(dfn_echo_list_integer(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_bigint(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_double(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_bool(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_varchar(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_date(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_decimal(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_blob(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_nested(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_integer_n(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_varchar_n(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_date_n(NULL) AS VARCHAR)
+UNION ALL SELECT CAST(dfn_echo_list_nested_n(NULL) AS VARCHAR);
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL

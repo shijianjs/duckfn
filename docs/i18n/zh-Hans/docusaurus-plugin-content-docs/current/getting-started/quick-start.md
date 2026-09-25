@@ -6,8 +6,8 @@ description: 编写、构建并加载一个最小的 duckfn 扩展，然后在 S
 
 # 快速开始
 
-本页从零构建一个名为 `my_ext` 的最小扩展。本仓库自带的示例扩展是 `duckfn_quack`，覆盖了全部功能，
-见[示例扩展](../examples/duckfn-quack.md)。
+本页从零构建一个名为 `my_ext` 的最小扩展。本仓库自带的示例扩展是 `duckfn`，覆盖了全部功能，
+见[示例扩展](../examples/duckfn.md)。
 
 如果想直接从带 CI 的可用骨架起步，见[创建项目](./create-a-project.md)。
 
@@ -102,4 +102,4 @@ SELECT double_it(21);
 - [属性参考](../guide/attributes.md) —— 所有属性与宏参数集中在一处。
 - [标量函数](../guide/scalar-functions.md) —— 返回形态、重载与函数集。
 - [类型映射](../guide/types.md) —— 可以作为参数和返回值的 Rust 类型。
-- [示例扩展](../examples/duckfn-quack.md) —— 每个功能都有可运行的 SQL。
+- [示例扩展](../examples/duckfn.md) —— 每个功能都有可运行的 SQL。

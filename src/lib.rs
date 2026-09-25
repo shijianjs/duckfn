@@ -26,6 +26,16 @@
 //! DuckDB scalar/aggregate/table/copy formats, casts, SQL macros and LIST / MAP / ARRAY / STRUCT /
 //! ENUM value types.
 
+// 示例源码（src/extension/**）里写的是 `use duckfn::…` 与 `#[duckfn::duck_scalar_function(…)]`，
+// 也就是把它当外部依赖来用 —— 这正是下游项目要抄的写法。在 crate 内部这些路径只有在把自己别名成
+// `duckfn` 之后才解析得开，所以加这一行；示例源码与文档里的片段都不用改。
+//
+// The example sources (src/extension/**) spell the crate as an external dependency — `use duckfn::…`,
+// `#[duckfn::duck_scalar_function(…)]` — which is exactly what a downstream project copies. Inside
+// this crate those paths only resolve once the crate is aliased to `duckfn`, hence this line; the
+// example sources and the snippets in the docs need no change.
+extern crate self as duckfn;
+
 /// 列集合读写抽象：`DuckColumns`。
 ///
 /// Column read/write abstraction: [`DuckColumns`].
@@ -143,3 +153,22 @@ pub use quack_rs::prelude::{BindInfo, DataChunk, LogicalType, TypeId, Value};
 pub use quack_rs::prelude::{
     CopyBindInfo, CopyFinalizeInfo, CopyFunctionBuilder, CopyGlobalInitInfo, CopySinkInfo,
 };
+
+// 示例扩展：并进本包后由 `quack` feature 打开，模块树在 src/extension/，与另外两个入口
+// src/wasm_lib.rs（WebAssembly）和 src/bin/duckfn.rs（CLI）共用同一份源码。feature 关闭时示例源码
+// 随包发布但不参与编译，下游依赖树因此完全不受影响。
+//
+// The example extension: folded into this package and switched on by the `quack` feature. Its module
+// tree lives in src/extension/ and is shared with the other two entry points, src/wasm_lib.rs
+// (WebAssembly) and src/bin/duckfn.rs (the CLI). With the feature off the example sources ship in the
+// package without being compiled, so a downstream dependency tree is unaffected.
+#[cfg(feature = "quack")]
+mod extension;
+// 入口符号（`duckfn_entrypoint!`）单独放，CLI 编同一棵树时要能跳过它 —— 原因见该文件与
+// src/bin/duckfn.rs 的注释。
+//
+// The entry point (`duckfn_entrypoint!`) is kept apart so the CLI can skip it while compiling the same
+// tree — see the note in that file and in src/bin/duckfn.rs.
+#[cfg(feature = "quack")]
+#[path = "extension/entry.rs"]
+mod extension_entry;

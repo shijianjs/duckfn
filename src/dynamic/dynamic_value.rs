@@ -479,13 +479,13 @@ impl DuckDynamicValue {
     ///
     /// **它不是一种无歧义的往返编码**：字符串原样输出、容器里的 NULL 写作 `NULL`，因此
     /// `['NULL', NULL]` 与 `['NULL', 'NULL']` 会渲染成同一个字符串。自定义文件格式应当按自己的
-    /// 转义约定递归渲染（`duckfn-quack/src/extension/functions/tsv_format.rs` 就是一个例子），而不是直接拿这份
+    /// 转义约定递归渲染（`src/extension/functions/tsv_format.rs` 就是一个例子），而不是直接拿这份
     /// 文本去解析。
     ///
     /// **This is not an unambiguous round-trip encoding**: strings are written verbatim and a NULL
     /// inside a container becomes `NULL`, so `['NULL', NULL]` and `['NULL', 'NULL']` render
     /// identically. A custom file format should render recursively with its own escaping rules (see
-    /// `duckfn-quack/src/extension/functions/tsv_format.rs` for an example) rather than parse this text back.
+    /// `src/extension/functions/tsv_format.rs` for an example) rather than parse this text back.
     ///
     /// 约定：
     /// - `VARCHAR` 原样输出（不做引号 / 转义，格式实现若需要转义请自行处理）；

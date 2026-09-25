@@ -40,15 +40,18 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 
 | 成员 | 是否发布 | 说明 |
 | --- | --- | --- |
-| `/`（`duckfn`） | 是 | 运行时框架，同时是 workspace 根。 |
+| `/`（`duckfn`） | 是 | 运行时框架、示例扩展，同时是 workspace 根。 |
 | `duckfn-macro/` | 是 | 过程宏；不依赖运行时，只依赖 `darling`、`syn`、`quote`。 |
-| `duckfn-quack/` | 否（`publish = false`） | 示例扩展（`duckfn_quack`）与它的 sqllogictest 用例，放在仓库里以便复用 DuckDB 官方 CI；它也会随已发布的 `duckfn` 包一起分发。 |
+| `src/extension/`、`test/sql/` | 随包发布，但不编译 | 示例扩展（`duckfn`）与它的 sqllogictest 用例：属于 `duckfn` 包，由 `quack` feature 打开。 |
 
 根清单锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
 
-有一条 Cargo 细节值得知道：根清单设置了 `default-members = ["duckfn-quack"]`，所以在仓库根裸跑
-`cargo build` 或 `cargo test` 只作用于示例包 —— DuckDB 官方 makefile 正是靠这一点找到扩展的。
-跑运行时自身的测试用 `cargo test -p duckfn`，跑全部用 `cargo test --workspace`。
+有一条 Cargo 细节值得知道：示例扩展是 **`duckfn` 包自己的一部分** —— `src/extension/` 下的模块树，
+加上 `src/wasm_lib.rs` 与 `src/bin/duckfn.rs` 两个入口 —— 而不是独立 crate。原因是 cargo 永远不会
+打包含自己 `Cargo.toml` 的子目录。真正编译它的是默认关闭的 `quack` feature：`make debug` 通过根
+`Makefile` 里的 `TARGET_INFO += --features quack` 把它带上。所以依赖 `duckfn` 的下游看到的依赖树与
+以前完全一致 —— 源码在包里，但什么都不编译。跑运行时自身的测试用 `cargo test -p duckfn`，
+跑全部用 `cargo test --workspace`。
 
 ## 日常命令
 
@@ -67,7 +70,8 @@ just doc                                 # 生成 duckfn 的 rustdoc
 
 扩展代码运行在 **`duckdb` 进程内**，所以调试器要附加到那个进程，而不是由 IDE 自己启动一个程序：
 
-1. 用带调试符号的方式构建 —— `make debug`，或 `cargo duckdb-ext build`。
+1. 用带调试符号的方式构建 —— `make debug`，或 `just build`（即
+   `cargo duckdb-ext build -- --features quack`）。
 2. 启动 DuckDB 并保持会话存活，例如 `duckdb -unsigned`。
 3. 在该会话里执行 `LOAD '/path/to/my_ext.duckdb_extension';`。
 4. 在 IDE 里附加到正在运行的 `duckdb` 进程 —— RustRover 见
@@ -82,18 +86,18 @@ just doc                                 # 生成 duckfn 的 rustdoc
 用 DuckDB 官方的 sqllogictest 最实用：它通过 SQL 来验证扩展，也就是 DuckDB 真正调用扩展的方式，
 而且 CI 跑的就是这一套。它需要先跑通 `make` 流程（`make configure` 做一次，之后用 `make test`）。
 
-测试是 `duckfn-quack/test/sql/` 下的 sqllogictest 文件，与源码目录一一对应：
+测试是 `test/sql/` 下的 sqllogictest 文件，与源码目录一一对应：
 
 ```
-duckfn-quack/test/sql/demo/       <源文件名>.test
-duckfn-quack/test/sql/functions/  <源文件名>.test
-duckfn-quack/test/sql/types/      <type>_scalar_echo.test、<type>_table_echo.test
+test/sql/demo/       <源文件名>.test
+test/sql/functions/  <源文件名>.test
+test/sql/types/      <type>_scalar_echo.test、<type>_table_echo.test
 ```
 
 文件开头先声明依赖的扩展，然后成对给出 SQL 与期望输出：
 
 ```sql
-require duckfn_quack
+require duckfn
 
 query I
 SELECT double_it5(21);

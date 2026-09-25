@@ -173,7 +173,7 @@ guard 持有那条自有连接上的互斥锁：
   不保证等价。
 - **需要 DuckDB 1.5.0+ 与 `duckdb-1-5` feature**，否则这些函数不存在。
 
-示例扩展在聚合函数里用了它（`duckfn-quack/src/extension/functions/file_system.rs` 的 `dfn_agg_file_size`），
-`duckfn-quack/test/sql/functions/file_system.test` 用 DuckDB 自己的 `read_blob` 对照校验结果；`duckfn::duck_vfs`
+示例扩展在聚合函数里用了它（`src/extension/functions/file_system.rs` 的 `dfn_agg_file_size`），
+`test/sql/functions/file_system.test` 用 DuckDB 自己的 `read_blob` 对照校验结果；`duckfn::duck_vfs`
  这一层（往返读写、覆盖更长的旧文件、追加、已存在就报错、非法 UTF-8、按行读）由
-`duckfn-quack/test/sql/functions/file_util.test` 覆盖。
+`test/sql/functions/file_util.test` 覆盖。

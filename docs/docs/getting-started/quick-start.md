@@ -7,7 +7,7 @@ description: Write, build and load a minimal duckfn extension, then call it from
 # Quick start
 
 This page builds a minimal extension called `my_ext`. The repository's own example extension is
-`duckfn_quack` — see [the example extension](../examples/duckfn-quack.md) for one that covers every
+`duckfn` — see [the example extension](../examples/duckfn.md) for one that covers every
 feature.
 
 To start from a working skeleton with CI already in place instead, see
@@ -110,4 +110,4 @@ symbol name makes the extension unloadable.
 - [Attributes](../guide/attributes.md) — every attribute and macro argument in one place.
 - [Scalar functions](../guide/scalar-functions.md) — return shapes, overloads and function sets.
 - [Type mapping](../guide/types.md) — the Rust types accepted as arguments and results.
-- [The example extension](../examples/duckfn-quack.md) — runnable SQL for every feature.
+- [The example extension](../examples/duckfn.md) — runnable SQL for every feature.

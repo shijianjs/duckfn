@@ -22,24 +22,28 @@ same ones every DuckDB extension uses:
 The repository wraps the common combinations in its `Justfile`:
 
 ```bash
-just build                  # cargo duckdb-ext build
+just build                  # cargo duckdb-ext build -- --features quack
 just sql "SELECT double_it5(21);"          # build, then LOAD and run one statement
 just test                   # make configure debug test
 just doc                    # cargo doc -p duckfn
 ```
 
-Two settings in the `Makefile` are worth knowing:
+Four settings in the `Makefile` are worth knowing:
 
 ```make
-EXTENSION_NAME=duckfn_quack
+EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
 TARGET_DUCKDB_VERSION=v1.5.5
+TARGET_INFO += --features quack
 ```
 
 `USE_UNSTABLE_C_API=1` is what makes the built extension loadable only with `-unsigned`, and only in
 a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metadata is written for.
-`EXTENSION_NAME` has to match `duckfn_entrypoint!` in `duckfn-quack/src/extension/mod.rs` and the
-`require` lines of the sqllogictest files.
+`EXTENSION_NAME` has to match `duckfn_entrypoint!` in `src/extension/entry.rs` and the `require` lines
+of the sqllogictest files. `TARGET_INFO += --features quack` is what gets the example compiled: it
+lives behind the `quack` feature (off by default), and `TARGET_INFO` is the one variable DuckDB's
+shared makefiles splice verbatim into `cargo build`. Without it the build would hand back a cdylib
+with no entry-point symbol.
 
 ## WebAssembly
 
@@ -51,11 +55,11 @@ just build_wasm
 ```
 
 Because `emcc` performs the final link, the crate type has to be `staticlib` for that target rather
-than `cdylib`. The example crate handles this with an extra `[[example]]` target in
-`duckfn-quack/Cargo.toml` that points at `duckfn-quack/src/wasm_lib.rs` and declares
-`crate-type = ["staticlib"]`. That file is a crate root of its own: like `duckfn-quack/src/lib.rs`
-and the CLI's `duckfn-quack/src/bin/duckfn.rs`, it declares `mod extension;`, so all of them compile
-the same `duckfn-quack/src/extension/` tree — see
+than `cdylib`. This package handles that with an extra `[[example]]` target in
+`Cargo.toml` that points at `src/wasm_lib.rs` and declares
+`crate-type = ["staticlib"]`. That file is a crate root of its own: like `src/lib.rs`
+and the CLI's `src/bin/duckfn.rs`, it includes the same `src/extension/` tree (with the entry point
+itself shared through `src/extension/entry.rs`) — see
 [Project structure](./getting-started/project-structure.md).
 
 ## Continuous integration
@@ -75,7 +79,7 @@ jobs:
     with:
       duckdb_version: v1.5.5
       ci_tools_version: v1.5-variegata
-      extension_name: duckfn_quack
+      extension_name: duckfn
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
 ```
@@ -88,9 +92,9 @@ use.
 
 A second job turns the pushed tag into a GitHub Release:
 
-1. Download every `duckfn_quack-*-extension-*` artefact.
+1. Download every `duckfn-*-extension-*` artefact.
 2. Collect the `*.duckdb_extension` and `*.duckdb_extension.wasm` files into
-   `duckfn_quack-<arch>.duckdb_extension`.
+   `duckfn-<arch>.duckdb_extension`.
 3. Build release notes from the commit list since the previous `v*` tag.
 4. Create the release, or upload to it if it already exists.
 
@@ -114,18 +118,19 @@ version = "{{DUCKFN_VERSION}}"
 rust-version = "1.86"
 ```
 
-The example extension in `duckfn-quack/` is `publish = false`; it is never uploaded as a crate of its
-own.
+The example extension ships as part of this package instead of as a crate of its own, so it is never
+uploaded separately.
 
-The published `duckfn` package is more than the runtime, though: the `include` list in the root
-`Cargo.toml` also packs the documentation sources (`docs/README.md`, `docs/docs/**` and the
-Simplified Chinese translations under `docs/i18n/`), so the crate on crates.io carries the full
-documentation — the example page with its runnable SQL included. `cargo package -p duckfn --list`
-prints the exact file list.
+The published `duckfn` package is more than the runtime: the `include` list in the root `Cargo.toml`
+packs the example extension (`src/extension/**`, `src/wasm_lib.rs`, `src/bin/duckfn.rs`), its
+sqllogictest suite (`test/sql/**/*.test`), the documentation sources (`docs/README.md`,
+`docs/docs/**` and the Simplified Chinese translations under `docs/i18n/`), `demo.sh`, the READMEs
+and the license. Unpacking the crate therefore hands you both the full documentation and a runnable
+example — which is the point of keeping them in one package. `cargo package -p duckfn --list` prints
+the exact file list.
 
-One thing the package can never carry is the example extension itself: cargo skips any subdirectory
-that contains a `Cargo.toml`, and no `include` pattern overrides that, so `duckfn-quack/` — sources,
-tests and all — stays in the repository.
+The example only compiles when the `quack` feature is on (`cargo build --features quack`), so its
+presence leaves a dependency on `duckfn` untouched.
 
 ## Documentation site
 

@@ -303,11 +303,11 @@ fn my_dynamic_register(c: &Connection) -> DuckResult<()> {
 
 ## 源码与测试
 
-- [`duckfn-quack/src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/table_function.rs) —— 示例表函数及其行结构体
-- [`duckfn-quack/test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/table_function.test) —— 期望结果
+- [`src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/table_function.rs) —— 示例表函数及其行结构体
+- [`test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/table_function.test) —— 期望结果
 - [`src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/table_function_adapter.rs) —— 运行时侧
-- [`duckfn-quack/src/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/dynamic_table_function.rs) —— 动态列示例（宏层与底层）
-- [`duckfn-quack/test/sql/functions/dynamic_table_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/dynamic_table_function.test) —— 对应的期望结果
+- [`src/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/dynamic_table_function.rs) —— 动态列示例（宏层与底层）
+- [`test/sql/functions/dynamic_table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/dynamic_table_function.test) —— 对应的期望结果
 - [`src/dynamic`](https://github.com/shijianjs/duckfn/blob/main/src/duck_dynamic/mod.rs) —— 动态列的运行时侧
 
 ## 接下来

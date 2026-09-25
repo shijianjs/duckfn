@@ -395,5 +395,5 @@ fn first_word(input: Option<String>) -> Option<String> {
 
 ## 接下来
 
-- [示例扩展](./duckfn-quack.md) —— 用同样的思路覆盖 duckfn 的每一项功能。
+- [示例扩展](./duckfn.md) —— 用同样的思路覆盖 duckfn 的每一项功能。
 - [聚合函数](../guide/aggregate-functions.md) —— 状态类型与 `combine` 的细节。

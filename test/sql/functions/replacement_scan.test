@@ -1,0 +1,194 @@
+# name: test/sql/functions/replacement_scan.test
+# description: duck_replacement_scan 的返回形式、路径匹配（命中/不命中）、路径作为参数传入、错误与 panic、目标表函数不存在、注册控制
+# group: [functions]
+
+require duckfn
+
+# replacement scan 是「未知表名（通常是文件路径）-> 表函数」的重定向：
+#   SELECT * FROM '3.points'  =>  dfn_scan_read_points('3.points')
+#
+# 测试重点：
+#   - 四种返回形式（Option<String> / Option<&'static str> /
+#     DuckOptionResult<String> / DuckOptionResult<&'static str>）；
+#   - 命中才接管，不命中必须放行（否则别人的表名会被抢走）；
+#   - 适配层把路径作为目标表函数的第一个 VARCHAR 参数传进去（用 echo 表函数证明）；
+#   - Err / panic 变成查询错误；接管到不存在的表函数是 DuckDB 报的错；
+#   - auto_register = false + replacement_scan_register 手动注册。
+#
+# 这里用「假文件路径」当数据源，不依赖真实文件：`<n>.points` -> n 行点 (i, i*i)。
+
+# ============================================================================
+# 返回形式 1/4：-> DuckOptionResult<String>，命中 .points
+# ============================================================================
+
+query II
+SELECT * FROM '3.points';
+----
+0	0
+1	1
+2	4
+
+query I
+SELECT count(*) FROM '1.points';
+----
+1
+
+# 空结果集
+query II
+SELECT * FROM '0.points';
+----
+
+# path 只影响数据，投影 / 过滤 / JOIN 都是普通表函数语义
+query I
+SELECT x FROM '4.points' WHERE y > 1 ORDER BY x;
+----
+2
+3
+
+query II
+SELECT p.x, r.range FROM '3.points' p JOIN range(2) r ON p.x = r.range ORDER BY p.x;
+----
+0	0
+1	1
+
+# 目标表函数单独也能用：SQL 层看不到 replacement scan 的存在
+query II
+SELECT * FROM dfn_scan_read_points('2.points');
+----
+0	0
+1	1
+
+# 列名/列类型来自目标表函数的输出结构体
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM '2.points');
+----
+x	BIGINT
+y	BIGINT
+
+# ============================================================================
+# 路径匹配：不命中必须放行
+# ============================================================================
+
+# 后缀不匹配 -> 所有回调都返回 Ok(None) -> DuckDB 报「表不存在」
+statement error
+SELECT * FROM 'nope.txt';
+----
+Table with name nope.txt does not exist
+
+# 匹配是大小写敏感的（字符串字面量不是标识符，不做大小写折叠）
+statement error
+SELECT * FROM '3.POINTS';
+----
+Table with name 3.POINTS does not exist
+
+# 未解析的普通标识符同样会走回调，同样不命中
+statement error
+SELECT * FROM dfn_scan_not_a_table;
+----
+Table with name dfn_scan_not_a_table does not exist
+
+# replacement scan 不会影响正常存在的表
+statement ok
+CREATE TABLE dfn_scan_real_table(i INTEGER);
+
+statement ok
+INSERT INTO dfn_scan_real_table VALUES (1), (2);
+
+query I
+SELECT sum(i) FROM dfn_scan_real_table;
+----
+3
+
+# 命中后接管，但目标表函数自己解析 path 失败 -> 绑定阶段报错
+statement error
+SELECT * FROM 'abc.points';
+----
+dfn_scan_read_points: file name must be an integer: abc.points
+
+# 目标表函数直接调用时同样校验
+statement error
+SELECT * FROM dfn_scan_read_points('abc.txt');
+----
+dfn_scan_read_points: not a .points file: abc.txt
+
+# ============================================================================
+# 返回形式 2/4：-> Option<String>（入参写成 String）
+# ============================================================================
+
+# 路径被作为第一个 VARCHAR 参数传给目标表函数
+query TI
+SELECT * FROM 'hi.echo';
+----
+hi.echo	7
+
+# 非 ASCII 路径按字符数（而不是字节数）统计
+query TI
+SELECT * FROM '中文.echo';
+----
+中文.echo	7
+
+statement error
+SELECT * FROM 'hi.echo2';
+----
+Table with name hi.echo2 does not exist
+
+# ============================================================================
+# 返回形式 3/4：-> Option<&'static str>
+# ============================================================================
+
+query TI
+SELECT * FROM 'hi.static';
+----
+hi.static	9
+
+# ============================================================================
+# 返回形式 4/4：-> DuckOptionResult<&'static str>
+# ============================================================================
+
+query TI
+SELECT * FROM 'hi.checked';
+----
+hi.checked	10
+
+statement error
+SELECT * FROM 'x.checked_fail';
+----
+dfn_scan_static_checked: bad name x.checked_fail
+
+# ============================================================================
+# 错误与 panic：都变成 bound 阶段的查询错误
+# ============================================================================
+
+# 回调返回 Err
+statement error
+SELECT * FROM 'boom.error';
+----
+dfn_scan_points: refuses boom.error
+
+# 回调 panic（适配层 catch_unwind 转成错误，不跨 FFI 展开）
+statement error
+SELECT * FROM 'boom.panic';
+----
+dfn_scan_points: panic while handling boom.panic
+
+# 接管到一个不存在的表函数：由 DuckDB 在解析函数名时报错
+statement error
+SELECT * FROM 'hi.missing';
+----
+Table Function with name dfn_scan_no_such_function does not exist
+
+# ============================================================================
+# 注册控制：auto_register = false 与手动注册
+# ============================================================================
+
+# 只声明、不注册：所有回调都不认它 -> 表不存在
+statement error
+SELECT * FROM 'hi.unregistered';
+----
+Table with name hi.unregistered does not exist
+
+# #[duck_custom_register] + replacement_scan_register() 手动注册后可用
+query TI
+SELECT * FROM 'hi.manual';
+----
+hi.manual	9

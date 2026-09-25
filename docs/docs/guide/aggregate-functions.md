@@ -250,7 +250,7 @@ row count (`self.rows`, the same counter that distinguishes "no rows" from a rea
 is how.
 
 The example extension measures both spellings in
-`duckfn-quack/test/sql/demo/lazy_config_demo.test`: over 5000 rows the `DuckLazy` argument parses the
+`test/sql/demo/lazy_config_demo.test`: over 5000 rows the `DuckLazy` argument parses the
 configuration **once** while the eager `Config` argument parses it **5000 times**, with identical
 results. The same file also covers the nullable argument and a
 `PRAGMA threads=4` run, where merging the partial states must carry the configuration over rather than
@@ -271,8 +271,8 @@ attribute's string literal, which is exactly the copy that drifts.
 
 ## Source and tests
 
-- [`duckfn-quack/src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/aggregate_function.rs) — the example aggregates and their state types
-- [`duckfn-quack/test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/aggregate_function.test) — the expected results
+- [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) — the example aggregates and their state types
+- [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the expected results
 - [`src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/aggregate_function_adapter.rs) — the runtime side
 - [`src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_lazy_slot.rs) — `DuckLazySlot<T>`, the parse-once slot used above
 

@@ -41,15 +41,17 @@ The repository is a Cargo workspace whose root is also the `duckfn` crate root:
 | Path | Description | Published to crates.io |
 | --- | --- | --- |
 | `/` (`duckfn`) | Runtime framework: traits, type adapters, function registration. Also the workspace root. | Yes |
+| `src/extension/`, `test/sql/` | The example extension (`duckfn`): runnable SQL for every feature, its three entry points (`src/lib.rs`, `src/wasm_lib.rs`, `src/bin/duckfn.rs`) and its sqllogictest suite. Part of this package, compiled only with the `quack` feature. | Yes — sources only, never compiled for a dependent |
 | [`duckfn-macro/`](duckfn-macro/) | Procedural macros: `#[duck_scalar_function]`, `#[derive(DuckStruct)]`, `#[derive(DuckEnum)]`, ... | Yes |
-| [`duckfn-quack/`](duckfn-quack/) | Example extension built with `duckfn`, with runnable SQL for every feature and a sqllogictest suite under `test/sql/`. Kept in-tree to reuse DuckDB's official multi-platform CI. | No, example only — cargo never packages a subdirectory that has its own `Cargo.toml`, so it stays in the repository |
 | [`docs/`](docs/) | Docusaurus documentation site: `docs/docs/**` (English) and `docs/i18n/zh-Hans/**` (Simplified Chinese). | No, docs site — but its sources ship inside the `duckfn` package |
 
-The published `duckfn` package carries the runtime, its tests, this README, the license and the
-whole documentation source, so the guide — including the example page with its runnable SQL — is
-readable without cloning the repository (`cargo package --list` in the repository root prints the
-exact file list). The example extension's own Rust sources are not in the package: cargo never
-packages a subdirectory that contains a `Cargo.toml`, which is why `duckfn-quack/` stays here.
+The published `duckfn` package carries the runtime, its tests, this README, the license, the whole
+documentation source and the example extension with its sqllogictest suite, so the guide, the example
+page and a complete worked extension are readable without cloning the repository
+(`cargo package --list` in the repository root prints the exact file list). The example is compiled
+only when the `quack` feature is on — off by default — so a dependency on `duckfn` compiles none of
+it. Keeping the example inside this package is also what lets cargo ship it at all: cargo never
+packages a subdirectory that contains its own `Cargo.toml`.
 
 ## Installation
 
@@ -70,9 +72,9 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
-`duckfn` has six optional features. `cli` adds the command-line tool that exports a
+`duckfn` has seven optional features. `cli` adds the command-line tool that exports a
 `function_descriptions.csv` for DuckDB's community-extension pages
-(`cargo run -p duckfn_quack --bin duckfn -- function_descriptions` in this repository); only an
+(`cargo run --features quack --bin duckfn-cli -- function_descriptions` in this repository); only an
 extension project's `src/bin/duckfn.rs` needs it. `duckdb-1-5` enables what DuckDB's 1.5 C API
 added: the logical types from DuckDB 1.5 (currently `TIME_NS`), copy functions, and host
 file-system access. The other three are interop and independent of each other: `chrono` converts
@@ -88,6 +90,10 @@ duckfn = { version = "0.0.10", features = ["duckdb-1-5", "chrono", "uuid", "rust
 `all` is the aggregate switch: it turns all five of the real features on at once. duckfn normally
 sits at the end of the dependency tree, so `features = ["all"]` is the convenient spelling; pick the
 individual features above when you want a leaner tree.
+
+`quack` is the one feature that is not meant for dependents: it compiles this package's own example
+extension (`src/extension/`). It depends on `all`, never the other way round, so asking for `all` does
+not drag the example and its test functions into your build.
 
 ## Quick start
 
@@ -143,7 +149,7 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability and known gaps. |
 | [Community extension docs](https://shijianjs.github.io/duckfn/docs/community-extension-docs) | The `description` / `comment` / `example` attributes, and the CSV DuckDB's community-extension pages read. |
 | [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) · [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) | Error handling, expansion, registration and adapters. |
-| [Example extension](https://shijianjs.github.io/duckfn/docs/examples/duckfn-quack) | `duckfn_quack`, the example shipped with this package, with runnable SQL for every feature. |
+| [Example extension](https://shijianjs.github.io/duckfn/docs/examples/duckfn) | `duckfn`, the example shipped with this package, with runnable SQL for every feature. |
 | [Build and release](https://shijianjs.github.io/duckfn/docs/build-and-release) · [Contributing](https://shijianjs.github.io/duckfn/docs/contributing) · [FAQ](https://shijianjs.github.io/duckfn/docs/faq) | Local builds, CI, and troubleshooting. |
 
 中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>

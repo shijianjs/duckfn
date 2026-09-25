@@ -3,14 +3,22 @@
 PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # DuckDB 扩展名。必须与这三处保持一致：
-#   duckfn-quack/src/extension/mod.rs 的 duckfn_entrypoint!("...")
-#   duckfn-quack/test/sql/**/*.test   的 `require ...`
+#   src/extension/entry.rs 的 duckfn_entrypoint!("...")
+#   test/sql/**/*.test   的 `require ...`
 #   .github/workflows/MainDistributionPipeline.yml 的 extension_name / EXTENSION_NAME
 #
+# 它与 crate 名（包名就是 duckfn）一致不是巧合：原生扩展就是本包的 cdylib，产物名由 crate 名决定
+# （libduckfn.so / duckfn.dll / wasm 的 libduckfn.a），而上游 rust.Makefile 是按
+# lib$(EXTENSION_NAME).* 推这个名字的 —— 对齐之后这里一行平台条件都不用写。
+#
 # The DuckDB extension name. It has to stay in sync with duckfn_entrypoint! in
-# duckfn-quack/src/extension/mod.rs, the `require` lines of duckfn-quack/test/sql/**/*.test and
-# extension_name / EXTENSION_NAME in .github/workflows/MainDistributionPipeline.yml.
-EXTENSION_NAME=duckfn_quack
+# src/extension/entry.rs, the `require` lines of test/sql/**/*.test and extension_name / EXTENSION_NAME
+# in .github/workflows/MainDistributionPipeline.yml. Its matching the crate name (the package is
+# `duckfn`) is no accident: the native extension *is* this package's cdylib, so the artifact is named
+# after the crate (libduckfn.so / duckfn.dll / libduckfn.a for wasm), while the upstream
+# rust.Makefile derives the file it copies from lib$(EXTENSION_NAME).* — aligning the two saves every
+# platform-specific override.
+EXTENSION_NAME=duckfn
 
 # Set to 1 to enable Unstable API (binaries will only work on TARGET_DUCKDB_VERSION, forwards compatibility will be broken)
 # Note: currently extension-template-rs requires this, as duckdb-rs relies on unstable C API functionality
@@ -26,29 +34,34 @@ all: configure debug
 # 这个 Makefile 必须留在仓库根目录：CI 的 extension-ci-tools/scripts/ci_phase.py 一律在根目录执行
 # `make configure_ci|debug|release|test_*|upload`，上游工作流不支持自定义工作目录。
 #
-# rust.Makefile 里的构建命令是裸 `cargo build`（wasm 时带 `--example $(EXTENSION_NAME)`）。示例
-# crate 现在位于 duckfn-quack/，之所以不用在这里覆盖目标、也不需要任何 `-p duckfn_quack`，是因为
-# 根 Cargo.toml 的 [workspace] 声明了 `default-members = ["duckfn-quack"]`：在根目录不带包选择参数
-# 时，cargo 选中的正是这个成员，于是 cdylib 与 example 都能被找到。（根包 duckfn 不能写进这个
-# 列表，cargo 会报 not a member。）改动那个列表前请先读回来这一条。
+# 示例扩展已经并进根包（src/extension/），于是 rust.Makefile 里那两条裸构建命令 —— `cargo build`，
+# wasm 时再加 `--example $(EXTENSION_NAME)` —— 正好分别命中本包的 lib（rlib + cdylib）与
+# `[[example]] duckfn`，所以这里不需要覆盖任何 recipe。唯一要补的是 feature：示例挂在 `quack` 上
+# （默认关闭，下游依赖树才不受影响），而上游 recipe 没给 feature 留位置 —— 只有 TARGET_INFO 会被
+# 原样拼进 `cargo build`（native 为空，wasm 是 --target/--example），因此在 include 之后追加一次。
+#
+# 用例目录不用改：上游默认就是 `--test-dir test/sql`，sqllogictest 现在正好回到仓库根的 test/sql/。
 #
 # This Makefile has to stay at the repository root: CI's extension-ci-tools/scripts/ci_phase.py
 # always runs `make configure_ci|debug|release|test_*|upload` from the root, and the upstream
 # workflow offers no way to set a different working directory.
 #
-# rust.Makefile builds with a bare `cargo build` (plus `--example $(EXTENSION_NAME)` for wasm).
-# The example crate now sits in duckfn-quack/ and no target has to be overridden here, nor is a
-# `-p duckfn_quack` needed anywhere: the root Cargo.toml declares
-# `default-members = ["duckfn-quack"]` in its [workspace] section, so a package-less cargo
-# invocation from the root selects exactly that member and finds both the cdylib and the example.
-# (The root package duckfn cannot be listed there — cargo rejects it as "not a member".) Read this
-# comment again before touching that list.
+# The example extension now lives inside the root package (src/extension/), so the two bare build
+# commands in rust.Makefile — `cargo build`, plus `--example $(EXTENSION_NAME)` for wasm — hit this
+# package's lib (rlib + cdylib) and its `[[example]] duckfn` respectively, which is why no recipe has
+# to be overridden here. The one thing to add is the feature: the example sits behind `quack` (off by
+# default, so a downstream dependency tree is unaffected) and the upstream recipes leave no slot for
+# features. TARGET_INFO is the single variable they splice verbatim into `cargo build` (empty
+# natively, `--target`/`--example` for wasm), so it is appended to right after the includes.
+#
+# The test directory needs no override either: the upstream default is `--test-dir test/sql`, and the
+# sqllogictest suite is now back at the repository root's test/sql/.
 include extension-ci-tools/makefiles/c_api_extensions/base.Makefile
 include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 
-# sqllogictest 用例随示例一起迁到 duckfn-quack/test/sql。
-# The sqllogictest suite moved together with the example, to duckfn-quack/test/sql.
-TEST_RUNNER_BASE=$(TEST_RUNNER) --test-dir duckfn-quack/test/sql $(EXTRA_EXTENSIONS_PARAM)
+# 见上面的说明；`+=` 让 native、wasm 与 macOS 交叉编译各分支都带上这个 feature。
+# See the note above: `+=` carries the feature into the native, wasm and macOS cross-compile branches.
+TARGET_INFO += --features quack
 
 configure: venv platform extension_version
 

@@ -342,9 +342,9 @@ scalar functions are always registered positionally, so the `name := value` name
 
 ## Source and tests
 
-- [`duckfn-quack/src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/src/extension/functions/scalar_function.rs) — the example functions
-- [`duckfn-quack/test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/scalar_function.test) — the expected results
-- [`duckfn-quack/test/sql/functions/scalar_function_batch.test`](https://github.com/shijianjs/duckfn/blob/main/duckfn-quack/test/sql/functions/scalar_function_batch.test) — the batch-mode expected results
+- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) — the example functions
+- [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the expected results
+- [`test/sql/functions/scalar_function_batch.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function_batch.test) — the batch-mode expected results
 - [`src/functions/scalar_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/scalar_function_adapter.rs) — the runtime side
 
 ## Next

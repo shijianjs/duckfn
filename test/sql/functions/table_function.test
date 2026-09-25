@@ -1,0 +1,294 @@
+# name: test/sql/functions/table_function.test
+# description: duck_table_function 的返回形式、参数（位置/命名/可空/复杂类型）、输出 schema、数据规模与注册控制
+# group: [functions]
+
+require duckfn
+
+# LIST / STRUCT 列统一用 CAST(... AS VARCHAR) 后按文本比对
+
+# ============================================================================
+# 返回类型：三种形式
+# ============================================================================
+
+# -> impl Iterator<Item = RangeRow>：参数解析成功后不会再失败
+query II
+SELECT * FROM dfn_table_range(3);
+----
+0	0
+1	1
+2	4
+
+# 空结果集
+query II
+SELECT * FROM dfn_table_range(0);
+----
+
+query I
+SELECT count(*) FROM dfn_table_range(0);
+----
+0
+
+# 负数由函数自己夹成空
+query I
+SELECT count(*) FROM dfn_table_range(-5);
+----
+0
+
+# FROM 语法等价（不需要 SELECT *)
+query II
+FROM dfn_table_range(2);
+----
+0	0
+1	1
+
+# -> DuckResult<impl Iterator<...>>：入参语义错误在 bind 阶段报错
+query II
+SELECT * FROM dfn_table_checked(3);
+----
+0	0
+1	1
+2	4
+
+statement error
+SELECT * FROM dfn_table_checked(-1);
+----
+dfn_table_checked: n must be >= 0
+
+# -> DuckFullIteratorResult<...>：行级 NULL（Ok(None)）让该行所有列为 NULL
+query II
+SELECT * FROM dfn_table_full(2);
+----
+0	0
+NULL	NULL
+
+# 行级错误（Err）让整条查询失败
+statement error
+SELECT * FROM dfn_table_full(5);
+----
+dfn_table_full: bad row 2
+
+# ============================================================================
+# 参数：位置 / 命名 / 可空 / 复杂类型
+# ============================================================================
+
+# 零参数：DuckArgsImpl 是空结构体
+query II
+SELECT * FROM dfn_table_zero_args();
+----
+0	0
+1	1
+2	4
+
+statement error
+SELECT * FROM dfn_table_zero_args(1);
+----
+No function matches
+
+# 命名参数：step 是位置参数，start/count 从 named_param_from 开始是命名参数
+query I
+SELECT n FROM dfn_table_countdown(2, start=10, count=3);
+----
+10
+8
+6
+
+# 位置参数不能用命名形式传（named_param_from 之前的位置参数没有名字）
+statement error
+SELECT n FROM dfn_table_countdown(step=2, start=10, count=3);
+----
+No function matches
+
+# 未知命名参数会被 DuckDB 拦下
+statement error
+SELECT * FROM dfn_table_countdown(2, start=10, count=3, foo=1);
+----
+Invalid named parameter "foo"
+
+# 可空命名参数：不传就是 None，函数给默认值
+query I
+SELECT n FROM dfn_table_opt(start=1);
+----
+1
+2
+3
+
+query I
+SELECT n FROM dfn_table_opt(start=1, step=10, count=2);
+----
+1
+11
+
+# 显式传 NULL 和不传等价
+query I
+SELECT n FROM dfn_table_opt(start=1, step=NULL, count=NULL);
+----
+1
+2
+3
+
+# 不可空命名参数：不传报错
+statement error
+SELECT * FROM dfn_table_req();
+----
+Parameter start cannot be null
+
+# 不可空命名参数：传 NULL 同样报错
+statement error
+SELECT * FROM dfn_table_req(start=NULL);
+----
+Parameter start cannot be null
+
+query II
+SELECT * FROM dfn_table_req(start=5);
+----
+5	25
+
+# LIST 参数：Vec<i64>，元素不允许为 NULL
+query II
+SELECT * FROM dfn_table_from_list([3, 1, 2]);
+----
+3	9
+1	1
+2	4
+
+statement error
+SELECT * FROM dfn_table_from_list([1, NULL, 3]);
+----
+Vec<T> value is None
+
+# MAP 参数：IndexMap<String, i64>，保持字面量插入顺序
+query TI
+SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2});
+----
+a	1
+b	2
+
+# 参数类型不匹配
+statement error
+SELECT * FROM dfn_table_range('x');
+----
+No function matches
+
+statement error
+SELECT * FROM dfn_table_from_list(1);
+----
+No function matches
+
+# ============================================================================
+# 输出 schema：多列、可空列、LIST 列、嵌套 STRUCT 列
+# ============================================================================
+
+query IT
+SELECT id, name FROM dfn_table_typed(3);
+----
+0	row_0
+1	row_1
+2	row_2
+
+# Option<f64> 字段是可空列
+query IR
+SELECT id, score FROM dfn_table_typed(3);
+----
+0	0.0
+1	NULL
+2	1.0
+
+# Vec<Option<i64>> 字段是 LIST(BIGINT) 列，空列表是 []
+query TT
+SELECT id, CAST(tags AS VARCHAR) FROM dfn_table_typed(3);
+----
+0	[]
+1	[0]
+2	[0, 1]
+
+# 列名与列类型来自输出结构体
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dfn_table_typed(1));
+----
+id	BIGINT
+name	VARCHAR
+score	DOUBLE
+tags	BIGINT[]
+
+# 嵌套 DuckStruct 字段是 STRUCT 列
+query TT
+SELECT name, CAST(from_point AS VARCHAR) FROM dfn_table_nested(2);
+----
+s0	{'x': 0, 'y': 1}
+s1	{'x': 1, 'y': 2}
+
+# STRUCT 列可以直接取子字段
+query II
+SELECT from_point.x, to_point.y FROM dfn_table_nested(2);
+----
+0	0
+1	3
+
+query T
+SELECT column_type FROM (DESCRIBE SELECT * FROM dfn_table_nested(1)) WHERE column_name = 'from_point';
+----
+STRUCT(x BIGINT, y BIGINT)
+
+# ============================================================================
+# 数据规模与在 SQL 中的使用
+# ============================================================================
+
+# 正好一个 chunk（vector_size 默认 2048）
+query I
+SELECT count(*) FROM dfn_table_range(2048);
+----
+2048
+
+# 跨 chunk：2048 之后的行不能被丢掉或串位
+query III
+SELECT count(*), min(n), max(n) FROM dfn_table_range(2049);
+----
+2049	0	2048
+
+query I
+SELECT n FROM dfn_table_range(2049) WHERE n >= 2047 ORDER BY n;
+----
+2047
+2048
+
+query III
+SELECT count(*), min(n), max(n) FROM dfn_table_range(5000);
+----
+5000	0	4999
+
+# WHERE / ORDER BY
+query I
+SELECT n FROM dfn_table_range(5) WHERE n % 2 = 1;
+----
+1
+3
+
+# JOIN
+query II
+SELECT t.n, x.n FROM dfn_table_range(3) t JOIN dfn_table_range(2) x ON t.n = x.n ORDER BY t.n;
+----
+0	0
+1	1
+
+# CTE + 聚合
+query I
+SELECT sum(square)::BIGINT FROM (SELECT * FROM dfn_table_range(4)) t;
+----
+14
+
+# ============================================================================
+# 注册控制：auto_register = false 与手动注册
+# ============================================================================
+
+# 只声明、不注册：SQL 层看不到这个名字
+statement error
+SELECT * FROM dfn_table_reg_unregistered(1);
+----
+Table Function with name dfn_table_reg_unregistered does not exist
+
+# #[duck_custom_register] + table_function_builder() 手动注册后可用
+query II
+SELECT * FROM dfn_table_reg_manual(2);
+----
+100	10000
+101	10201

@@ -8,33 +8,60 @@
 
 | 路径 | 内容 | 是否发布 |
 | --- | --- | --- |
-| `/`（根） | `duckfn` 运行时：`src/`、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
+| `/`（根） | `duckfn` 运行时：`src/`（不含 `src/extension/`）、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
+| `src/extension/` | 示例扩展的模块树（`demo/`、`functions/`、`types/`），默认不编译（见下） | 是（随 `duckfn` 包） |
+| `src/wasm_lib.rs`、`src/bin/duckfn.rs` | 示例的另外两个入口：WebAssembly（`[[example]] duckfn`）与命令行工具（`[[bin]] duckfn-cli`，文件名仍是 duckfn.rs，原因见下） | 是（随 `duckfn` 包） |
+| `test/sql/` | 示例的 sqllogictest 用例（41 个 `.test`） | 是（随 `duckfn` 包，只收 `.test`） |
 | `duckfn-macro/` | 过程宏 crate | 是（crates.io） |
-| `duckfn-quack/` | 示例扩展 `duckfn_quack`：`src/`、`test/sql/`、`demo.sh`。不单独发布，只用于复用 DuckDB 官方多平台 CI | 否 |
-| `docs/` | Docusaurus 文档站：`docs/docs/**`（英）与 `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`（中） | 是（随 `duckfn` 包一起发布，仅正文源文件） |
+| `docs/` | Docusaurus 文档站：`docs/docs/**`（英）与 `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`（中） | 是（随 `duckfn` 包，仅正文源文件） |
 | `Makefile` / `Justfile` | 本地与 CI 的构建入口。Makefile 必须留在仓库根（CI 在根目录执行 `make`） | — |
 | `extension-ci-tools/` | DuckDB 官方 CI 子模块，不要修改它的内容 | — |
 
-`duckfn` 发布包的内容由根 `Cargo.toml` 的 `include` 白名单决定：运行时代码与测试、README、
-LICENSE、文档站正文（英 + 中）。改这个白名单后，用 `cargo package -p duckfn --list` 核对一遍，
-确认没有把 `docs/node_modules`、`docs/package-lock.json`、`target/`、`build/`、`configure/`
-之类打进去。两条容易踩的坑：
+示例扩展是**本包的一部分**，不再是独立 crate —— 这个区别是关键：cargo 会无条件跳过任何含
+`Cargo.toml` 的子目录，独立打包的示例永远进不了 `duckfn` 的 `.crate`，而并进本包后它随包发布。
+
+### 示例的开关：`quack` feature
+
+示例的模块树由默认关闭的 `quack` feature 控制（`src/lib.rs` 里 `#[cfg(feature = "quack")] mod
+extension;`），`[[bin]] duckfn-cli` 与 `[[example]] duckfn` 都写了 `required-features = ["quack"]`：
+
+- **下游**：`duckfn = "0.0.11"` 的依赖树与示例并入前完全一致，示例源码在包里但不参与编译。
+- **本仓库**：所有构建扩展的命令都必须带上它 —— `make debug`（根 Makefile 里
+  `TARGET_INFO += --features quack`）、`cargo build --features quack`、`just build`、
+  `just build_wasm`。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口符号的 cdylib），
+  `LOAD` 时才报错，很难查。
+- `quack = ["all"]`，而 `all` **不**依赖 `quack`：`all` 是给下游用户用的，用户不需要示例与那些测试函数。
+
+### 发布包内容
+
+`duckfn` 发布包的内容由根 `Cargo.toml` 的 `include` 白名单决定：运行时代码与测试、示例扩展
+（`src/extension/**`、`src/wasm_lib.rs`、`src/bin/duckfn.rs`）、`test/sql/**/*.test`、`demo.sh`、
+README、LICENSE、文档站正文（英 + 中）。改这个白名单后，用 `cargo package -p duckfn --list`
+核对一遍。三条容易踩的坑：
 
 - **模式必须以 `/` 开头**。gitignore 风格里裸的 `LICENSE` / `README.md` 会匹配任意层级的同名
   文件 —— 实测会把 `docs/node_modules/**/LICENSE`、`configure/venv/**/LICENSE` 一起收进包
   （1600 多个文件）。
-- **`duckfn-quack/` 进不了包**，这是 cargo 的硬规则：任何含 `Cargo.toml` 的子目录一律跳过，
-  `include` 里写 `duckfn-quack/src/**` 也匹配不到任何文件。所以示例扩展只能在仓库里，
-  包内靠 README 与 `docs/docs/examples/duckfn-quack.md` 指路。
+- **写了 `include` 就绕过 gitignore**。sqllogictest 会在 `test/sql` 下写出 `dfn_file_*`、
+  `dfn_copy_*.tsv` 之类的临时文件，所以白名单只收 `*.test`；`test/sql` 里也请只留 `.test`。
+- **含 `Cargo.toml` 的子目录一律被跳过**（`duckfn-macro/` 因此进不了包，这是对的：它单独发布）。
 
-两条与构建强相关的约定：
+### 名字必须一致
 
-- DuckDB 扩展名 `duckfn_quack` 必须四处一致：`duckfn-quack/src/extension/mod.rs` 的
-  `duckfn_entrypoint!`、根 `Makefile` 的 `EXTENSION_NAME`、CI 的 `extension_name`，以及
-  `duckfn-quack/test/sql/**/*.test` 里的 `require`。
-- 根目录裸跑 `cargo build` / `cargo test` 只作用于示例包（根 `Cargo.toml` 的
-  `default-members`，DuckDB 官方 makefile 依赖这一点才能找到扩展）；跑运行时自身的测试用
-  `cargo test -p duckfn`，跑全部用 `cargo test --workspace`。
+DuckDB 扩展名 `duckfn` 必须四处一致：`src/extension/entry.rs` 的 `duckfn_entrypoint!`、根
+`Makefile` 的 `EXTENSION_NAME`、CI 的 `extension_name` / `EXTENSION_NAME`，以及
+`test/sql/**/*.test` 里的 `require`。它与 crate 名相同不是巧合 —— 原生扩展就是本包的 cdylib，
+产物名由 crate 名决定（上游 makefile 按 `lib$(EXTENSION_NAME).*` 取产物），对齐后根 Makefile
+一行平台条件都不用写。
+
+两处因此而来的命名细节，改动前先读回来：
+
+- **入口符号单独一个文件**（`src/extension/entry.rs`）：原生 lib 与 wasm 目标各声明一次，而 CLI
+  虽然也编同一棵模块树（`#[path]` 那套），却链接了本包的 lib —— lib 里已经有一份入口符号，再定义
+  一次就是重复定义（Windows 上 LNK2005），所以它只包含 `extension/mod.rs`。
+- **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：本包 cdylib 的产物也叫
+  duckfn，Windows 上两者的 `.pdb` 会撞名（cargo 报 output filename collision）。下游项目的包名
+  不同，不会撞，所以模板里那个 bin 依旧叫 `duckfn`。
 
 ## 仓库约定
 
@@ -100,7 +127,7 @@ sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
 ### 0. 前置检查
 
 ```bash
-just release_check   # cargo clippy --workspace --all-targets -- -D warnings 与 cargo build --workspace
+just release_check   # cargo clippy --workspace --all-targets --all-features -- -D warnings 与 cargo build --workspace --all-features
 just test            # 需要时（等价 make configure debug test，make 部分要在 Git Bash 里跑）
 ```
 
@@ -131,9 +158,8 @@ just release_bump 0.0.5
 最后用 `cargo update -p duckfn -p duckfn-macro` 同步 `Cargo.lock`，并打印残留的旧版本号
 （应当为空）以及 `git diff --stat`。
 
-> `duckfn-quack/` 里示例扩展的版本（`0.1.0`）与 `duckfn` 的版本无关，脚本不会碰它——
-> 它是随包发行的示例与 sqllogictest 夹具，夹具里的字面量不该被发版脚本改写。
-> `Cargo.lock`、`docs/package-lock.json`、本文件与 `duckfn-quack/` 被排除在替换之外。
+> 示例扩展（`src/extension/**`、`test/sql/**`）与本 crate 同属一个包，没有独立版本号，
+> 发版脚本自然会把它们一起带上；`Cargo.lock`、`docs/package-lock.json` 与本文件被排除在替换之外。
 
 ### 2. 提交并打 tag
 
@@ -209,7 +235,7 @@ just release_dev 0.0.6-dev.0
 ## 相关文档
 
 - [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md)：`duckfn` 的 crate README（根 README，同时在 GitHub 首页与 crates.io 上展示）。
-- [`duckfn-quack/`](duckfn-quack/)：随包发行的示例扩展与 sqllogictest 用例；`duckfn-quack/demo.sh` 是一组可直接跑的 `just sql` 示例。
+- [`src/extension/`](src/extension/) 与 [`test/sql/`](test/sql/)：随包发布的示例扩展与 sqllogictest 用例；[`demo.sh`](demo.sh) 是一组可直接跑的 `just sql` 示例。
 - [`scripts/release.sh`](scripts/release.sh)：`release_bump` / `release_dev` / `release_tag` 的实际实现。
 - [`docs/duckfn-version.ts`](docs/duckfn-version.ts) 与 [`docs/plugins/remark-version-placeholder.ts`](docs/plugins/remark-version-placeholder.ts)：文档站的版本占位符机制。
 - [duckfn-extension-template](https://github.com/shijianjs/duckfn-extension-template)：给下游扩展项目的

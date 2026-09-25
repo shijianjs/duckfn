@@ -41,13 +41,14 @@
 | --- | --- | --- |
 | `/`（`duckfn`） | 运行时框架：trait、类型适配、函数注册。同时是 workspace 根。 | 是 |
 | [`duckfn-macro/`](duckfn-macro/) | 过程宏：`#[duck_scalar_function]`、`#[derive(DuckStruct)]`、`#[derive(DuckEnum)]` 等。 | 是 |
-| [`duckfn-quack/`](duckfn-quack/) | 使用 `duckfn` 编写的示例扩展，每个功能都配可运行的 SQL，`test/sql/` 下是它的 sqllogictest 用例。放在仓库里是为了复用官方多平台 CI。 | 否，仅作示例 —— cargo 不会打包任何含 `Cargo.toml` 的子目录，所以它只能留在仓库里 |
+| `src/extension/`、`test/sql/` | 示例扩展（`duckfn`）：每个功能都配可运行的 SQL，三个入口（`src/lib.rs`、`src/wasm_lib.rs`、`src/bin/duckfn.rs`）与 sqllogictest 用例。属于本包，只在打开 `quack` feature 时才编译。 | 是 —— 仅源码，下游依赖不会编译它 |
 | [`docs/`](docs/) | Docusaurus 文档站：`docs/docs/**`（英文）与 `docs/i18n/zh-Hans/**`（简体中文）。 | 否，文档站 —— 但正文会随 `duckfn` 包一起发布 |
 
-发布到 crates.io 的 `duckfn` 包里带着运行时、测试、本 README、许可证与整份文档源文件，所以想读
-文档（包括那页可以照着跑的示例页）都不必再克隆仓库（在仓库根跑 `cargo package --list` 可以看到确切的
-文件清单）。示例扩展自身的 Rust 源码不在包里：cargo 不会打包任何含 `Cargo.toml` 的子目录，所以
-`duckfn-quack/` 留在这里。
+发布到 crates.io 的 `duckfn` 包里带着运行时、测试、本 README、许可证、整份文档源文件与示例扩展及它的
+sqllogictest 用例，所以想读文档、看示例页、抄一份完整扩展都不必再克隆仓库（在仓库根跑
+`cargo package --list` 可以看到确切的文件清单）。示例只在打开 `quack` feature（默认关闭）时才参与编译，
+因此依赖 `duckfn` 的下游一行都不会编到它。把示例放进本包也正是它能被打包的原因：cargo 不会打包任何
+含自己 `Cargo.toml` 的子目录。
 
 ## 安装
 
@@ -66,8 +67,8 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 如果只想用宏、不要运行时，可以直接依赖
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
-`duckfn` 有六个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
-扩展文档页使用，本仓库里的命令是 `cargo run -p duckfn_quack --bin duckfn -- function_descriptions`），
+`duckfn` 有七个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
+扩展文档页使用，本仓库里的命令是 `cargo run --features quack --bin duckfn-cli -- function_descriptions`），
 只有扩展项目的 `src/bin/duckfn.rs` 需要它。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5
 新增的逻辑类型（目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问。另外三个是互转，彼此独立：
 `chrono` 让时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`uuid` 让 `DuckUuid` 与
@@ -81,6 +82,9 @@ duckfn = { version = "0.0.10", features = ["duckdb-1-5", "chrono", "uuid", "rust
 
 `all` 是聚合开关，一次把上面这五个都打开。duckfn 通常就在依赖树的末端，所以直接写
 `features = ["all"]` 最省事；想精简依赖树时再按上面的单项挑着开。
+
+`quack` 是唯一一个不面向下游的 feature：它编译本包自己的示例扩展（`src/extension/`）。它依赖 `all`，
+而不是反过来，所以下游写 `features = ["all"]` 不会被带进示例和那些测试函数。
 
 ## 快速开始
 
@@ -134,7 +138,7 @@ duckfn_entrypoint!("my_ext");
 | [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
 | [社区扩展文档页](https://shijianjs.github.io/duckfn/zh-Hans/docs/community-extension-docs) | `description` / `comment` / `example` 三个属性，以及 DuckDB 社区扩展文档页读取的那份 CSV。 |
 | [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) · [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) | 错误处理、宏展开、注册与适配器。 |
-| [示例扩展](https://shijianjs.github.io/duckfn/zh-Hans/docs/examples/duckfn-quack) | `duckfn_quack`，随本包一起发布的示例，每个功能都配可运行的 SQL。 |
+| [示例扩展](https://shijianjs.github.io/duckfn/zh-Hans/docs/examples/duckfn) | `duckfn`，随本包一起发布的示例，每个功能都配可运行的 SQL。 |
 | [构建与发布](https://shijianjs.github.io/duckfn/zh-Hans/docs/build-and-release) · [贡献指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/contributing) · [常见问题](https://shijianjs.github.io/duckfn/zh-Hans/docs/faq) | 本地构建、CI 与排错。 |
 
 English docs: <https://shijianjs.github.io/duckfn/>

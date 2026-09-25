@@ -1,0 +1,542 @@
+# name: test/sql/functions/scalar_function.test
+# description: duck_scalar_function 的返回值形式、入参可空性、参数个数与顺序、注册控制（auto_register / 函数集重载 / overloads_name）、special_null_handling
+# group: [functions]
+
+require duckfn
+
+# ============================================================================
+# 返回值形式 1/3：Plain -> T（宏包一层 Ok(Some(..))）
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_plain(21);
+----
+42
+
+query T
+SELECT typeof(dfn_scalar_ret_plain(1));
+----
+INTEGER
+
+# 入参为 NULL 时整行短路（非 Option 参数由 duckfn 参数读取层拦下），函数体不执行
+query I
+SELECT dfn_scalar_ret_plain(NULL::INTEGER);
+----
+NULL
+
+query I
+SELECT dfn_scalar_ret_plain(i) FROM (VALUES (1), (NULL), (3)) t(i);
+----
+2
+NULL
+6
+
+# ============================================================================
+# 返回值形式 2/3：Option -> Option<T>，None 落成 SQL NULL
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_option(i) FROM (VALUES (4), (0), (2)) t(i);
+----
+25
+NULL
+50
+
+query T
+SELECT typeof(dfn_scalar_ret_option(4));
+----
+INTEGER
+
+# ============================================================================
+# 返回值形式 3/3：DuckOptionResult -> DuckOptionResult<T>，既可返回 NULL 也可报错
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_checked(i) FROM (VALUES (4), (-1), (5)) t(i);
+----
+25
+NULL
+20
+
+query T
+SELECT typeof(dfn_scalar_ret_checked(4));
+----
+INTEGER
+
+statement error
+SELECT dfn_scalar_ret_checked(0);
+----
+dfn_scalar_ret_checked: division by zero
+
+# 批内某一行报错，整条查询失败
+statement error
+SELECT dfn_scalar_ret_checked(i) FROM (VALUES (4), (0)) t(i);
+----
+dfn_scalar_ret_checked: division by zero
+
+# ============================================================================
+# panic 传播：函数体 panic 由 duck_scalar_unwind 捕获成查询错误
+# ============================================================================
+
+query I
+SELECT dfn_scalar_ret_panic(1);
+----
+1
+
+statement error
+SELECT dfn_scalar_ret_panic(13);
+----
+unlucky input: 13
+
+# ============================================================================
+# 入参可空性：非 Option 参数短路整行，Option 参数收到 None
+# ============================================================================
+
+# 函数体拿到哨兵值就会 panic，这里没有报错即说明 NULL 行没进入函数体
+query I
+SELECT dfn_scalar_null_arg_plain(a, b) FROM (VALUES (1, 2), (NULL, 2), (1, NULL), (3, 4)) t(a, b);
+----
+3
+NULL
+NULL
+7
+
+# Option 入参：NULL 以 None 进入函数体，语义由函数决定（这里返回 -1）
+query I
+SELECT dfn_scalar_null_arg_option(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+7
+-1
+8
+
+# 混合入参：非 Option 参数拦下 NULL，Option 参数放行 NULL
+query I
+SELECT dfn_scalar_null_arg_mixed(a, b) FROM (VALUES (1, 2), (1, NULL), (5, 6)) t(a, b);
+----
+102
+-1
+506
+
+# 非 Option 参数为 NULL 时整行短路，后面的 Option 参数根本没被读
+query I
+SELECT dfn_scalar_null_arg_mixed(a, b) FROM (VALUES (NULL, 2)) t(a, b);
+----
+NULL
+
+# 整列 NULL：每行都短路
+query I
+SELECT dfn_scalar_null_arg_all(a) FROM (VALUES (NULL), (NULL)) t(a);
+----
+NULL
+NULL
+
+query I
+SELECT dfn_scalar_null_arg_all(NULL::INTEGER);
+----
+NULL
+
+# ============================================================================
+# 参数个数与顺序
+# ============================================================================
+
+query I
+SELECT dfn_scalar_arity_zero();
+----
+42
+
+query T
+SELECT typeof(dfn_scalar_arity_zero());
+----
+INTEGER
+
+statement error
+SELECT dfn_scalar_arity_zero(1);
+----
+No function matches
+
+query I
+SELECT dfn_scalar_arity_one(1);
+----
+2
+
+# 多参数：逐个位置匹配类型
+query T
+SELECT dfn_scalar_arity_three(1, 'x', 2.5);
+----
+1|x|2.5
+
+query T
+SELECT dfn_scalar_arity_order(3, 2, 1);
+----
+3-2-1
+
+# 第二个参数类型不符
+statement error
+SELECT dfn_scalar_arity_three(1, 2, 2.5);
+----
+No function matches
+
+# 参数少于签名
+statement error
+SELECT dfn_scalar_arity_three(1, 'x');
+----
+No function matches
+
+# 显式 NULL 不改变签名匹配，只让该行走 NULL
+query T
+SELECT dfn_scalar_arity_three(NULL::INTEGER, NULL::VARCHAR, NULL::DOUBLE);
+----
+NULL
+
+# 有效值与 NULL 混合
+query T
+SELECT dfn_scalar_arity_three(a, b, c) FROM (VALUES (1, 'x', 2.5), (2, NULL, 3.5)) t(a, b, c);
+----
+1|x|2.5
+NULL
+
+# ============================================================================
+# 注册控制 1/3：auto_register = false 只生成 builder，不写 inventory 提交
+# ============================================================================
+
+# 只声明、不手动注册：SQL 层永远看不到这个名字
+statement error
+SELECT dfn_scalar_reg_unregistered(1);
+----
+Scalar Function with name dfn_scalar_reg_unregistered does not exist
+
+# 手动注册（#[duck_custom_register] + scalar_function_builder()）后可用
+query I
+SELECT dfn_scalar_reg_manual(1);
+----
+2
+
+# ============================================================================
+# 注册控制 2/3：函数集重载，一个 SQL 名字挂多个签名
+# ============================================================================
+
+query T
+SELECT dfn_scalar_reg_overload(1);
+----
+integer:1
+
+query T
+SELECT dfn_scalar_reg_overload('x');
+----
+varchar:x
+
+# 两个重载分支的函数名本身没有被自动注册
+statement error
+SELECT dfn_scalar_reg_over_int(1);
+----
+Scalar Function with name dfn_scalar_reg_over_int does not exist
+
+statement error
+SELECT dfn_scalar_reg_over_varchar('x');
+----
+Scalar Function with name dfn_scalar_reg_over_varchar does not exist
+
+# 重载按参数类型分派，匹配不到就报错
+statement error
+SELECT dfn_scalar_reg_overload([1, 2]);
+----
+No function matches
+
+# ============================================================================
+# 注册控制：overloads_name —— 宏直接管理函数集重载
+#
+# 属性写 overloads_name = "函数集名" 的函数不注册自己的名字，而是由宏提交
+# duckfn::DuckScalarOverloadItem，register_all_scalar_overload 把
+# 同名（函数集名相同）的重载合并成一个函数集。无需手写 #[duck_custom_register]。
+# ============================================================================
+
+# 分支 1：INTEGER -> VARCHAR
+query T
+SELECT dfn_scalar_ovl_set(1);
+----
+int:1
+
+query T
+SELECT typeof(dfn_scalar_ovl_set(1));
+----
+VARCHAR
+
+# 分支 2：VARCHAR -> BIGINT（返回类型与分支 1 不同）
+query I
+SELECT dfn_scalar_ovl_set('abcd');
+----
+4
+
+query T
+SELECT typeof(dfn_scalar_ovl_set('abcd'));
+----
+BIGINT
+
+# 分支 3：INTEGER, INTEGER -> BIGINT（参数个数不同）
+query I
+SELECT dfn_scalar_ovl_set(3, 4);
+----
+12
+
+# 三个分支的函数名本身都没有被注册
+statement error
+SELECT dfn_scalar_ovl_int(1);
+----
+Scalar Function with name dfn_scalar_ovl_int does not exist
+
+statement error
+SELECT dfn_scalar_ovl_varchar('x');
+----
+Scalar Function with name dfn_scalar_ovl_varchar does not exist
+
+statement error
+SELECT dfn_scalar_ovl_int_int(1, 2);
+----
+Scalar Function with name dfn_scalar_ovl_int_int does not exist
+
+# 参数类型匹配不到就报错
+statement error
+SELECT dfn_scalar_ovl_set([1, 2]);
+----
+No function matches
+
+# ============================================================================
+# 注册控制 3/3：scalar 只用位置参数，`名字 := 值` 里的名字被 DuckDB 忽略
+# ============================================================================
+
+query I
+SELECT dfn_scalar_reg_named_param(1, 2);
+----
+12
+
+query I
+SELECT dfn_scalar_reg_named_param(NULL::INTEGER, 2);
+----
+NULL
+
+# `:=` 的名字对 scalar 没有任何作用：DuckDB 按书写顺序绑定到位置参数，
+# 名字与参数名不一致、甚至完全不存在都不报错
+query I
+SELECT dfn_scalar_reg_named_param(a := 1, b := 2);
+----
+12
+
+query I
+SELECT dfn_scalar_reg_named_param(b := 2, a := 1);
+----
+21
+
+query I
+SELECT dfn_scalar_reg_named_param(x := 1, y := 2);
+----
+12
+
+# ============================================================================
+# special_null_handling：常量 NULL 是否被 DuckDB 折叠
+#
+# 这是适配层 null_handling() 覆盖唯一能观察到的差异：
+#   - 默认（DefaultNullHandling）：入参是常量 NULL 时，DuckDB 在 bind 阶段就把
+#     结果折叠成常量 NULL，回调不执行 —— 所以拿不到哨兵值 -1；
+#   - special_null_handling = true：不折叠，NULL 以 None 进回调。
+# 列里的 NULL 两者都会进回调，见下面「列 NULL」一段。
+# ============================================================================
+
+# 默认：常量 NULL 直接折叠成 NULL
+query I
+SELECT dfn_scalar_null_handling_default(NULL::INTEGER);
+----
+NULL
+
+query I
+SELECT dfn_scalar_null_handling_default(NULL::INTEGER) FROM range(3);
+----
+NULL
+NULL
+NULL
+
+# special：常量 NULL 不折叠，函数体拿到 None（返回哨兵值 -1）
+query I
+SELECT dfn_scalar_null_handling_special(NULL::INTEGER);
+----
+-1
+
+query I
+SELECT dfn_scalar_null_handling_special(NULL::INTEGER) FROM range(3);
+----
+-1
+-1
+-1
+
+# 判定的是「参数是不是 NULL 常量」，表达式折叠出来的 NULL 也算
+query I
+SELECT dfn_scalar_null_handling_default(NULL::INTEGER + 0);
+----
+NULL
+
+query I
+SELECT dfn_scalar_null_handling_special(NULL::INTEGER + 0);
+----
+-1
+
+# 列里的 NULL：两种设置都进函数体（差异只出现在常量折叠这条路径上）
+query I
+SELECT dfn_scalar_null_handling_default(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+7
+-1
+8
+
+query I
+SELECT dfn_scalar_null_handling_special(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+7
+-1
+8
+
+# 整列 NULL 同理
+query I
+SELECT dfn_scalar_null_handling_default(a) FROM (VALUES (NULL::INTEGER), (NULL::INTEGER)) t(a);
+----
+-1
+-1
+
+# special_null_handling 只改 DuckDB 的交参策略；入参写 T 时读取层仍会把
+# NULL 短路成 NULL，函数体不执行（哨兵值不会触发 panic）
+query I
+SELECT dfn_scalar_null_handling_special_plain(a) FROM (VALUES (7), (NULL), (8)) t(a);
+----
+14
+NULL
+16
+
+query I
+SELECT dfn_scalar_null_handling_special_plain(NULL::INTEGER);
+----
+NULL
+
+# ============================================================================
+# volatile：注册期调用 duckdb_scalar_function_set_volatile
+#
+# 适配层 volatile() 默认返回 false，注册时不开 volatile；属性写 volatile = true 时
+# 宏在 impl 块里覆盖成 true，quack-rs 注册时调用上面那个 FFI 设置函数。
+# DuckDB 侧的行为（不缓存 / 不复用相同参数的调用结果）无法从 SQL 直接观察，
+# 这里验证的是开关通路没有破坏注册与调用：值、类型都对，且可与其它属性共存。
+# ============================================================================
+
+query I
+SELECT dfn_scalar_volatile_random(1);
+----
+2654435762
+
+query T
+SELECT typeof(dfn_scalar_volatile_random(1));
+----
+BIGINT
+
+# 逐行求值：每个 seed 都算一遍
+query I
+SELECT dfn_scalar_volatile_random(i) FROM (VALUES (0), (1), (2)) t(i);
+----
+1
+2654435762
+5308871523
+
+# 常量参数：非 volatile 时 DuckDB 可能折叠成只执行一次，volatile 下每行都重新求值；
+# 本函数是纯函数，两者取值相同
+query I
+SELECT dfn_scalar_volatile_random(1) FROM range(3);
+----
+2654435762
+2654435762
+2654435762
+
+# volatile 与 special_null_handling 同用：常量 NULL 不折叠，哨兵值 -1 出现
+query I
+SELECT dfn_scalar_volatile_special(NULL::INTEGER);
+----
+-1
+
+query I
+SELECT dfn_scalar_volatile_special(NULL::INTEGER) FROM range(3);
+----
+-1
+-1
+-1
+
+# ============================================================================
+# varargs：注册期调用 duckdb_scalar_function_set_varargs
+#
+# 属性写 varargs = true 时函数签名最后一个参数必须是 Vec<T>（可变参数集合），
+# 宏把 T 的逻辑类型交给上面那个 FFI 设置函数，并把固定参数之后的每一列按 T 读成 Vec<T>。
+# 固定参数照常走 DuckArgsImpl；任一非可空固定参数或元素为 NULL 时整行短路为 NULL。
+# ============================================================================
+
+# 只有可变参数：所有入参都是 BIGINT
+query I
+SELECT dfn_scalar_varargs_sum(1, 2, 3);
+----
+6
+
+query T
+SELECT typeof(dfn_scalar_varargs_sum(1, 2, 3));
+----
+BIGINT
+
+# 零个可变参数也合法，得到空集合
+query I
+SELECT dfn_scalar_varargs_sum();
+----
+0
+
+# 逐行读取：range 的每一行都作为「一个可变参数」传进来
+query I
+SELECT dfn_scalar_varargs_sum(i) FROM range(3) t(i);
+----
+0
+1
+2
+
+# 固定参数 + 可变参数，元素类型是 Option<String>（每个可变参数可空）
+# 列里的 NULL 会进入函数体，被 flatten 掉
+query T
+SELECT dfn_scalar_varargs_join(sep, p1, p2)
+FROM (VALUES ('-', 'a', NULL), ('+', NULL, 'b'), ('*', 'x', 'y')) t(sep, p1, p2);
+----
+a
+b
+x*y
+
+# 只有固定参数、没有可变参数：可变参数集合为空
+query I
+SELECT length(dfn_scalar_varargs_join('-'));
+----
+0
+
+# 常量 NULL 与普通参数一样会被 DuckDB 折叠，回调不执行
+query T
+SELECT dfn_scalar_varargs_join('-', 'a', NULL);
+----
+NULL
+
+query T
+SELECT dfn_scalar_varargs_join(NULL, 'a');
+----
+NULL
+
+# 非可空元素遇到 NULL：读取层整行短路为 NULL（第二行正常计算）
+query I
+SELECT dfn_scalar_varargs_sum(a, b, c) FROM (VALUES (1, NULL, 3), (4, 5, 6)) t(a, b, c);
+----
+NULL
+15
+
+# 可变参数本身是 LIST：Vec<Vec<i64>> 对应 varargs_logical(LIST(BIGINT))
+query I
+SELECT dfn_scalar_varargs_merge([1, 2], [3], []);
+----
+[1, 2, 3]
+
+query T
+SELECT typeof(dfn_scalar_varargs_merge([1]));
+----
+BIGINT[]

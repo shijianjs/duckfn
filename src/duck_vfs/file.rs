@@ -484,11 +484,11 @@ fn split_lines(text: &str) -> Vec<String> {
 mod tests {
     use super::{WriteMode, path_c_string, split_lines, utf8_error};
 
-    // 只测纯逻辑：真正读写的部分要 DuckDB 运行时（见 `duckfn-quack/test/sql/functions/file_system.test`），
+    // 只测纯逻辑：真正读写的部分要 DuckDB 运行时（见 `test/sql/functions/file_system.test`），
     // 单测不去碰 FFI。
     //
     // Pure logic only: real I/O needs the DuckDB runtime (see
-    // `duckfn-quack/test/sql/functions/file_system.test`), so unit tests stay away from FFI.
+    // `test/sql/functions/file_system.test`), so unit tests stay away from FFI.
 
     #[test]
     fn write_mode_defaults_to_replace() {

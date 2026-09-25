@@ -15,13 +15,11 @@ set -euo pipefail
 
 # 核对「旧版本号残留」时跳过的文件：
 # Cargo.lock 由 cargo update 负责；package-lock.json 与本项目版本号无关；
-# AGENTS.md 是流程说明，里面的版本号只是示例；duckfn-quack/ 是示例扩展与
-# sqllogictest 夹具，它自己的版本号（0.1.0）与 duckfn 无关，也不该被发版脚本改写。
+# AGENTS.md 是流程说明，里面的版本号只是示例。
 CHECK_EXCLUDES=(
     ':(exclude)Cargo.lock'
     ':(exclude)docs/package-lock.json'
     ':(exclude)AGENTS.md'
-    ':(exclude)duckfn-quack'
 )
 
 # 批量替换时额外跳过：Cargo 清单单独处理（根 Cargo.toml 是唯一出现字面版本号的地方）；

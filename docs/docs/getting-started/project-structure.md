@@ -6,28 +6,31 @@ description: The one rule this repository's layout follows — every crate root 
 
 # Project structure
 
-This repository has three crate roots and exactly one rule: **every crate root declares `mod
-extension;`, and nothing re-exports another root.** Get that right and nesting works at any depth,
-the IDE stops complaining about the WebAssembly file, and the command-line tool sees every
-function. Get it wrong and you get `error[E0583]` the first time a module gains a submodule.
+This repository has three crate roots and exactly one rule: **every crate root includes
+`src/extension/` — a *directory* module — and nothing re-exports another root.** Get that right and
+nesting works at any depth, the IDE stops complaining about the WebAssembly file, and the
+command-line tool sees every function. Get it wrong and you get `error[E0583]` the first time a module
+gains a submodule.
 
 ```text
-duckfn-quack/src/
-├─ lib.rs              mod extension;                       native, crate-type = ["cdylib"]
-├─ wasm_lib.rs         mod extension;                       wasm example, crate-type = ["staticlib"]
+src/
+├─ lib.rs              #[cfg(feature = "quack")] mod extension;        native, crate-type = ["rlib", "cdylib"]
+│                      #[cfg(feature = "quack")] mod extension_entry;
+├─ wasm_lib.rs         mod extension; mod extension_entry;             wasm, crate-type = ["staticlib"]
 ├─ bin/
-│  └─ duckfn.rs        #[path = "../extension/mod.rs"]
-│                      mod extension;                       CLI, cargo run -p duckfn_quack --bin duckfn
+│  └─ duckfn.rs        #[path = "../extension/mod.rs"] mod extension;  CLI (bin target `duckfn-cli`)
 └─ extension/
    ├─ mod.rs           mod demo; mod functions; mod types;
-   │                   duckfn_entrypoint!("duckfn_quack");
+   ├─ entry.rs         duckfn_entrypoint!("duckfn");
    ├─ demo/
    ├─ functions/
    └─ types/
 ```
 
-Every root points at `duckfn-quack/src/extension/mod.rs` — a *directory* module — so all three see
-the same tree, and `duckfn_entrypoint!` sits in exactly one place.
+Every root points at `src/extension/mod.rs` — a *directory* module — so all of them see the same tree.
+The entry point lives one file over, in `src/extension/entry.rs`, because it may only be defined
+once: `src/lib.rs` and `src/wasm_lib.rs` each declare it, while the CLI links this package's lib
+(which already carries a copy) and therefore includes `extension/mod.rs` only.
 
 ## Keep the two entry points identical
 
@@ -53,7 +56,7 @@ mod lib;
 …and that is where `error[E0583]` comes from. `mod lib;` resolves to `src/lib.rs`, and from that
 point on `lib.rs` is a **file** module: its children are looked up *beside* it, under `src/lib/`.
 A `mod demo;` written inside `src/lib.rs` is therefore searched for at `src/lib/demo.rs` instead of
-`duckfn-quack/src/extension/demo.rs`, and rustc reports:
+`src/extension/demo.rs`, and rustc reports:
 
 ```
 error[E0583]: file not found for module `demo`
@@ -64,21 +67,21 @@ error[E0583]: file not found for module `types`
 ```
 
 A flat `lib.rs` hides the problem; nesting exposes it. Declaring the same path in both roots
-avoids it entirely, because `mod demo;` inside `duckfn-quack/src/extension/mod.rs` is looked up at
-`duckfn-quack/src/extension/demo.rs` or `duckfn-quack/src/extension/demo/mod.rs`.
+avoids it entirely, because `mod demo;` inside `src/extension/mod.rs` is looked up at
+`src/extension/demo.rs` or `src/extension/demo/mod.rs`.
 
-That is why `duckfn-quack/src/lib.rs` and `duckfn-quack/src/wasm_lib.rs` are three lines each, and
-why every module you add goes under `duckfn-quack/src/extension/` rather than next to a crate root.
+That is why `src/lib.rs` and `src/wasm_lib.rs` are three lines each, and
+why every module you add goes under `src/extension/` rather than next to a crate root.
 
 ## The command-line tool is a third root
 
-`duckfn-quack/src/bin/duckfn.rs` (see
+`src/bin/duckfn.rs` (see
 [community extension docs](../community-extension-docs.md)) is a crate
 root of its own too, and it has to end up with the same tree in its binary. It cannot simply
 depend on the library, for two reasons:
 
 - **Paths.** A crate root under `src/bin/` resolves `mod extension;` to `src/bin/extension.rs`, not
-  to `duckfn-quack/src/extension/`. `#[path]` points it back at the directory module the other two
+  to `src/extension/`. `#[path]` points it back at the directory module the other two
   roots use.
 - **Registration.** The documentation metadata behind `#[duck_*]` is collected by `inventory`'s
   static constructors, which only fire for object files that are really linked into the final
@@ -92,12 +95,18 @@ So it declares the module itself:
 mod extension;
 ```
 
+It deliberately skips `extension/entry.rs`: the lib it links already defines the entry symbol, and a
+second definition is a duplicate-symbol error (`LNK2005` on Windows). Its Cargo target is called
+`duckfn-cli` rather than `duckfn` like its file, because this package's cdylib produces a `duckfn`
+artefact too and the two Windows `.pdb` files would collide. A downstream project has no such clash
+and keeps the plain `duckfn` name.
+
 Adding a new crate root to the project means the same two lines, pointed at
-`duckfn-quack/src/extension/mod.rs`. Nothing else changes.
+`src/extension/mod.rs`. Nothing else changes.
 
 ## The IDE flags `src/wasm_lib.rs`
 
-RustRover or rust-analyzer marks up `duckfn-quack/src/wasm_lib.rs` with errors that `make debug`,
+RustRover or rust-analyzer marks up `src/wasm_lib.rs` with errors that `make debug`,
 `just build` or `cargo duckdb-ext build` never reproduce.
 
 An IDE checks *every* target by default (`cargo check --all-targets`), which compiles that example
@@ -117,5 +126,5 @@ The second attribute silences the lint about a crate root that is not named `lib
 
 - [Create a project](./create-a-project.md) — the template this layout comes from.
 - [Build and release](../build-and-release.md#webassembly) — how the WebAssembly target is built.
-- [Community extension docs](../community-extension-docs.md) — what `duckfn-quack/src/bin/duckfn.rs` is for.
+- [Community extension docs](../community-extension-docs.md) — what `src/bin/duckfn.rs` is for.
 - [Troubleshooting](../troubleshooting.md) — problems that are not about the layout.

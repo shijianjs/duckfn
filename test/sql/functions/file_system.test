@@ -1,0 +1,102 @@
+# name: test/sql/functions/file_system.test
+# description: 聚合函数里用宿主文件系统（duckfn::with_file_system）：读文件字节数、多文件求和、与 DuckDB 自己的 read_blob 对齐、NULL 与文件缺失的行为
+# group: [functions]
+
+require duckfn
+
+# ============================================================================
+# 聚合函数的 C API 既没有 bind 回调，也没有 *_get_client_context，回调里拿不到
+# ClientContext / FileSystem；duckfn 在扩展加载时开了一条自有长连接，聚合等回调通过
+# duckfn::with_file_system 取用宿主文件系统（这里读的是文件大小）。
+#
+# 下面所有期望值都用 DuckDB 内置的 read_blob（返回 filename / content / size / last_modified，
+# 走的是同一套文件系统）现推出来，而不是写死字节数，避免平台差异。
+# __TEST_DIR__ 是测试运行器提供的临时目录。
+# ============================================================================
+
+# 造两个大小不同的文件
+statement ok
+COPY (SELECT * FROM (VALUES (1), (2), (3)) t(i)) TO '__TEST_DIR__/dfn_fs_a.csv' (FORMAT csv, HEADER false);
+
+statement ok
+COPY (SELECT * FROM (VALUES (1), (2), (3), (4), (5)) t(i)) TO '__TEST_DIR__/dfn_fs_b.csv' (FORMAT csv, HEADER false);
+
+# ============================================================================
+# 单文件：聚合结果与 DuckDB 自己量出来的字节数一致（相减为 0）
+# ============================================================================
+
+query I
+SELECT dfn_agg_file_size(p) - (SELECT size FROM read_blob('__TEST_DIR__/dfn_fs_a.csv'))
+FROM (VALUES ('__TEST_DIR__/dfn_fs_a.csv')) t(p);
+----
+0
+
+# ============================================================================
+# 多文件：组内每个路径各读一次再求和，同样与 read_blob 对齐
+# ============================================================================
+
+query I
+SELECT sum(diff) FROM (
+    SELECT dfn_agg_file_size('__TEST_DIR__/dfn_fs_a.csv')
+         - (SELECT size FROM read_blob('__TEST_DIR__/dfn_fs_a.csv')) AS diff
+    UNION ALL
+    SELECT dfn_agg_file_size('__TEST_DIR__/dfn_fs_b.csv')
+         - (SELECT size FROM read_blob('__TEST_DIR__/dfn_fs_b.csv'))
+);
+----
+0
+
+# 同一个路径出现两次就是读两次（聚合按行处理，不做去重）
+query I
+SELECT dfn_agg_file_size(p) - 2 * (SELECT size FROM read_blob('__TEST_DIR__/dfn_fs_a.csv'))
+FROM (VALUES ('__TEST_DIR__/dfn_fs_a.csv'), ('__TEST_DIR__/dfn_fs_a.csv')) t(p);
+----
+0
+
+# 文件确实被读到了：聚合结果等于 DuckDB 量出来的字节数，而且这个值大于 0
+# （防止「不读文件也永远返回 0」这种假通过）
+query I
+SELECT CASE
+         WHEN dfn_agg_file_size(p) = (SELECT size FROM read_blob('__TEST_DIR__/dfn_fs_a.csv'))
+              AND dfn_agg_file_size(p) > 0
+         THEN 1 ELSE 0
+       END
+FROM (VALUES ('__TEST_DIR__/dfn_fs_a.csv')) t(p);
+----
+1
+
+# ============================================================================
+# 边界：空输入与 NULL 路径都不读文件
+# ============================================================================
+
+# 没有任何输入行：不应尝试读文件（coalesce 兜住 DuckDB 对空组的 NULL 语义）
+query I
+SELECT coalesce(dfn_agg_file_size(p), 0)
+FROM (VALUES ('__TEST_DIR__/dfn_fs_a.csv')) t(p)
+WHERE false;
+----
+0
+
+# 路径为 NULL：非可空参数被 NULL 拦下，整行跳过，状态保持默认值
+query I
+SELECT dfn_agg_file_size(p)
+FROM (VALUES (NULL::VARCHAR)) t(p);
+----
+0
+
+# ============================================================================
+# 错误路径：文件不存在时整条查询报错。
+# 错误文案由示例函数加前缀（dfn_agg_file_size: cannot read），因此不依赖各平台
+# 各自的系统错误措辞。
+# ============================================================================
+
+statement error
+SELECT dfn_agg_file_size(p) FROM (VALUES ('__TEST_DIR__/dfn_fs_missing.csv')) t(p);
+----
+dfn_agg_file_size: cannot read
+
+# 含 NUL 字节的路径在转成 C 字符串时就失败，不进入文件系统
+statement error
+SELECT dfn_agg_file_size(p) FROM (VALUES ('a' || chr(0) || 'b')) t(p);
+----
+dfn_agg_file_size: path contains a NUL byte
