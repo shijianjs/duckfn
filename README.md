@@ -57,7 +57,7 @@ packages a subdirectory that contains its own `Cargo.toml`.
 
 ```toml
 [dependencies]
-duckfn = "0.0.10"
+duckfn = "0.0.11"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
@@ -84,7 +84,7 @@ the time wrapper types to and from [`chrono`](https://crates.io/crates/chrono), 
 epoch / 128-bit / scaled-integer arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.0.10", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.0.11", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
 ```
 
 `all` is the aggregate switch: it turns all five of the real features on at once. duckfn normally

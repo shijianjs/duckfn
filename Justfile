@@ -87,11 +87,11 @@ ci-release: ci-init
 release_check: lint
     cargo build --workspace --all-features
 
-# 提升版本号（项目 + 文档）：just release_bump 0.0.10
+# 提升版本号（项目 + 文档）：just release_bump 0.0.11
 release_bump new_version:
     bash scripts/release.sh bump "{{new_version}}"
 
-# 打 tag 并推送，触发 CI 发版：just release_tag 0.0.10
+# 打 tag 并推送，触发 CI 发版：just release_tag 0.0.11
 release_tag version:
     bash scripts/release.sh tag "{{version}}"
 
