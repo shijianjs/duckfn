@@ -46,13 +46,43 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 
 根清单锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
 
-有一条 Cargo 细节值得知道：示例扩展是 **`duckfn` 包自己的一部分** —— `src/extension/` 下的模块树，
-加上 `src/bin/duckfn.rs` 这个命令行入口（wasm 入口不用单独文件，lib 的 `staticlib` 就是它）—— 而不是
-独立 crate。原因是 cargo 永远不会
-打包含自己 `Cargo.toml` 的子目录。真正编译它的是默认关闭的 `quack` feature：`make debug` 通过根
-`Makefile` 里的 `TARGET_INFO += --features quack` 把它带上。所以依赖 `duckfn` 的下游看到的依赖树与
-以前完全一致 —— 源码在包里，但什么都不编译。跑运行时自身的测试用 `cargo test -p duckfn`，
-跑全部用 `cargo test --workspace`。
+扩展项目有三个 crate root —— 见[项目结构约定](./getting-started/project-structure.md) —— 而本仓库只有
+两个：没有单独的 wasm root，因为示例扩展就在本包里，编到 WebAssembly 的那份也是本包的 lib。
+
+### 示例为什么在本包里
+
+cargo 永远不会打包含自己 `Cargo.toml` 的子目录，所以独立成 crate 的示例扩展根本进不了 `duckfn`
+的发布包。并进本包是唯一能让包里带上完整示例的做法 —— `src/extension/` 的模块树、
+`src/bin/duckfn.rs` 这个命令行入口、`test/sql/` 的 sqllogictest 用例（确切清单见
+[构建与发布](./build-and-release.md)）。
+
+真正编译它的是默认关闭的 `quack` feature：`make debug` 通过根 `Makefile` 里的
+`TARGET_INFO += --features quack` 把它带上，`just build`、`just build_wasm` 同理。裸跑 `cargo build`
+只会静默跳过目标，交出一个没有入口符号的 cdylib，DuckDB 要到 `LOAD` 才报错。依赖 `duckfn` 的下游
+完全不受影响：源码在包里，feature 关着，依赖树与以前一致。跑运行时自身的测试用
+`cargo test -p duckfn`，跑全部用 `cargo test --workspace`。
+
+### 本仓库的 lib 与插件项目的差别
+
+示例就在 lib 里，由此产生两点与扩展项目不同的地方：
+
+```toml
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+```
+
+`crate-type` 不能按 target 覆写，而本包被当成多种东西使用：`cdylib` 是 DuckDB 加载的原生扩展、
+`staticlib` 给 WebAssembly（那边由 `emcc` 完成最终链接，要的是 `.a`）、`rlib` 给下游。三个都列上也
+正是这里不需要 `[[example]]` wasm root 的原因 —— 示例树只由 lib 编一遍，入口符号与 `inventory`
+注册项都只有一份；多编一遍会把每个函数注册两次，wasm 上重复的入口符号直接链接失败。
+
+同一件事还带来两处命名细节：
+
+- **入口符号单独放在 `src/extension/entry.rs`**：lib 提供一份，而 CLI 链接这个 lib、又用 `#[path]`
+  编进 `extension/mod.rs`，在那里再定义一次就是重复定义（Windows 上直接 `LNK2005`）。
+- **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：本包 cdylib 的产物也叫
+  duckfn，Windows 上两者的 `.pdb` 会撞名。下游项目的包名不同、不会撞，所以模板里那个 bin 依旧叫
+  `duckfn`。
 
 ## 日常命令
 

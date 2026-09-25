@@ -34,11 +34,12 @@ all: configure debug
 # 这个 Makefile 必须留在仓库根目录：CI 的 extension-ci-tools/scripts/ci_phase.py 一律在根目录执行
 # `make configure_ci|debug|release|test_*|upload`，上游工作流不支持自定义工作目录。
 #
-# 示例扩展已经并进根包（src/extension/），于是 rust.Makefile 里那两条裸构建命令 —— `cargo build`，
-# wasm 时再加 `--example $(EXTENSION_NAME)` —— 正好分别命中本包的 lib（rlib + cdylib）与
-# `[[example]] duckfn`，所以这里不需要覆盖任何 recipe。唯一要补的是 feature：示例挂在 `quack` 上
+# 示例扩展已经并进根包（src/extension/），于是 rust.Makefile 里那条裸构建命令 `cargo build` 正好命中
+# 本包的 lib（rlib + cdylib），所以这里不需要覆盖任何 recipe。唯一要补的是 feature：示例挂在 `quack` 上
 # （默认关闭，下游依赖树才不受影响），而上游 recipe 没给 feature 留位置 —— 只有 TARGET_INFO 会被
-# 原样拼进 `cargo build`（native 为空，wasm 是 --target/--example），因此在 include 之后追加一次。
+# 原样拼进 `cargo build`，因此在 include 之后追加一次。wasm 那边稍特殊：上游默认会带
+# `--example $(EXTENSION_NAME)`，而本包没有这个 example 目标，产物来自 lib 的 staticlib —— 见下面
+# TARGET_INFO 的 wasm 分支，它把整条 TARGET_INFO 换掉，`--example` 随之消失。
 #
 # 用例目录不用改：上游默认就是 `--test-dir test/sql`，sqllogictest 现在正好回到仓库根的 test/sql/。
 #

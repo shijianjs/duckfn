@@ -54,14 +54,15 @@ rustup target add wasm32-unknown-emscripten
 just build_wasm
 ```
 
-Because `emcc` performs the final link, that target needs a `staticlib` rather than a `cdylib`. Since
-`crate-type` cannot be overridden per target, the lib simply lists both — `["rlib", "cdylib",
-"staticlib"]` — and the wasm build picks the `.a` up. Both extension artefacts then come out of one
-compilation of `src/extension/`, which matters: a second copy of the tree would register every function
-twice, and the duplicate entry symbol fails to link on wasm. `make` does the rest — it links the archive
-into a side module with `emcc` and appends the extension metadata. See
-[Project structure](./getting-started/project-structure.md) for the alternative (a separate wasm root
-target, as the upstream template uses) and what it costs.
+Because `emcc` performs the final link, that target needs a `staticlib` rather than a `cdylib`.
+`crate-type` cannot be overridden per target, so the lib lists all three types it is taken as:
+`["rlib", "cdylib", "staticlib"]`. Both extension artefacts then come out of one compilation of
+`src/extension/`, which matters: a second copy of the tree would register every function twice, and
+the duplicate entry symbol fails to link on wasm. `make` does the rest — it links the archive into a
+side module with `emcc` and appends the extension metadata. An extension project needs none of this:
+there the wasm target is a separate `[[example]]` root (see
+[Project structure](./getting-started/project-structure.md)); why this repository folds it into the
+lib is in [Contributing](./contributing.md).
 
 ## Continuous integration
 

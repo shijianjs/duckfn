@@ -59,8 +59,9 @@ crate-type = ["cdylib"]
 ```
 
 For a WebAssembly build the crate type changes instead to `staticlib`, because the final linking is
-done by `emcc`. The repository's example extension does this with a separate
-`[[example]]` target that carries `crate-type = ["staticlib"]`.
+done by `emcc`. Leave the library alone and give the wasm target a crate root of its own — a
+`[[example]]` carrying `crate-type = ["staticlib"]`, as described in
+[Project structure](./project-structure.md).
 
 ## Why no local DuckDB build
 

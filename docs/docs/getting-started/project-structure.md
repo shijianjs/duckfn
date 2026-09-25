@@ -1,51 +1,39 @@
 ---
 title: Project structure
 sidebar_position: 2
-description: The one rule this repository's layout follows — every crate root declares the same extension module — and the two errors you get when you break it.
+description: The one rule an extension project follows — every crate root declares the same extension module — and the two errors you get when you break it.
 ---
 
 # Project structure
 
-This repository has two crate roots and exactly one rule: **every crate root includes `src/extension/` —
-a *directory* module — and nothing re-exports another root.** Get that right and nesting works at any
-depth, and the command-line tool sees every function. Get it wrong and you get `error[E0583]` the first
-time a module gains a submodule.
+A project built with `duckfn` has three crate roots and exactly one rule: **every crate root
+declares `mod extension;`, and nothing re-exports another root.** Get that right and nesting works
+at any depth, the IDE stops complaining about the WebAssembly file, and the command-line tool sees
+every function. Get it wrong and you get `error[E0583]` the first time a module gains a submodule.
 
 ```text
 src/
-├─ lib.rs              #[cfg(feature = "quack")] mod extension;        the runtime and the extension:
-│                      #[cfg(feature = "quack")] mod extension_entry;  crate-type = ["rlib", "cdylib", "staticlib"]
+├─ lib.rs              mod extension;                       native, crate-type = ["cdylib"]
+├─ wasm_lib.rs         mod extension;                       wasm example, crate-type = ["staticlib"]
 ├─ bin/
-│  └─ duckfn.rs        #[path = "../extension/mod.rs"] mod extension;  CLI (bin target `duckfn-cli`)
+│  └─ duckfn.rs        #[path = "../extension/mod.rs"]
+│                      mod extension;                       CLI, cargo run --bin duckfn
 └─ extension/
    ├─ mod.rs           mod demo; mod functions; mod types;
-   ├─ entry.rs         duckfn_entrypoint!("duckfn");
+   │                   duckfn_entrypoint!("my_ext");
    ├─ demo/
    ├─ functions/
    └─ types/
 ```
 
-Both roots point at `src/extension/mod.rs` — a *directory* module — so they see the same tree. The
-entry point lives one file over, in `src/extension/entry.rs`, because it may only be defined once: the
-lib carries it, while the CLI links that lib and therefore includes `extension/mod.rs` only.
+All three roots point at `src/extension/mod.rs` — a *directory* module — so they all see the same
+tree, and `duckfn_entrypoint!` sits in exactly one place.
 
-## One lib, three crate types
+## Keep the two entry points identical
 
-`crate-type` cannot be overridden per target, so the lib lists every type it is needed as and each
-platform picks its own: `rlib` for dependents, `cdylib` for the native extension DuckDB loads, and
-`staticlib` for WebAssembly, where `emcc` does the final link and wants a `.a`:
-
-```toml
-[lib]
-crate-type = ["rlib", "cdylib", "staticlib"]
-```
-
-Both extension artefacts therefore come out of one compilation of `src/extension/`, which matters: a
-second copy of the tree would register every function twice, and on wasm the duplicate entry symbol
-fails to link outright.
-
-The upstream template takes the other road, and it is the one to take whenever a project needs a
-separate root for the wasm target: a `[[example]]` whose own root declares `mod extension;`.
+`crate-type` cannot be chosen per target, and the two targets need different ones: `cdylib` when
+compiling natively, `staticlib` for WebAssembly. So `Cargo.toml` carries a second crate root as an
+extra example:
 
 ```toml
 [[example]]
@@ -54,10 +42,8 @@ path = "src/wasm_lib.rs"
 crate-type = ["staticlib"]
 ```
 
-That keeps the roots side by side and lets the wasm build avoid linking the native `cdylib` under
-emscripten at all — but only as long as that example does not depend on the package's own lib.
-
-Such a root is **not** an alias for `src/lib.rs`; the official upstream template instead writes:
+That file is **not** an alias for `src/lib.rs` — it declares `mod extension;` itself. The official
+upstream template instead writes:
 
 ```rust
 // src/wasm_lib.rs, the official template
@@ -81,19 +67,17 @@ A flat `lib.rs` hides the problem; nesting exposes it. Declaring the same path i
 avoids it entirely, because `mod demo;` inside `src/extension/mod.rs` is looked up at
 `src/extension/demo.rs` or `src/extension/demo/mod.rs`.
 
-That is why a wasm root like that one is three lines long, and why every module you add goes under
-`src/extension/` rather than next to a crate root.
+That is why `src/lib.rs` and `src/wasm_lib.rs` are three lines each, and why every module you add
+goes under `src/extension/` rather than next to a crate root.
 
-## The command-line tool is a second root
+## The command-line tool is a third root
 
-`src/bin/duckfn.rs` (see
-[community extension docs](../community-extension-docs.md)) is a crate
+`src/bin/duckfn.rs` (see [community extension docs](../community-extension-docs.md)) is a crate
 root of its own too, and it has to end up with the same tree in its binary. It cannot simply
 depend on the library, for two reasons:
 
 - **Paths.** A crate root under `src/bin/` resolves `mod extension;` to `src/bin/extension.rs`, not
-  to `src/extension/`. `#[path]` points it back at the directory module the other two
-  roots use.
+  to `src/extension/`. `#[path]` points it back at the directory module the other two roots use.
 - **Registration.** The documentation metadata behind `#[duck_*]` is collected by `inventory`'s
   static constructors, which only fire for object files that are really linked into the final
   binary. Depending on the library lets the linker drop those modules, and the exported CSV comes
@@ -106,19 +90,13 @@ So it declares the module itself:
 mod extension;
 ```
 
-It deliberately skips `extension/entry.rs`: the lib it links already defines the entry symbol, and a
-second definition is a duplicate-symbol error (`LNK2005` on Windows). Its Cargo target is called
-`duckfn-cli` rather than `duckfn` like its file, because this package's cdylib produces a `duckfn`
-artefact too and the two Windows `.pdb` files would collide. A downstream project has no such clash
-and keeps the plain `duckfn` name.
-
 Adding a new crate root to the project means the same two lines, pointed at
 `src/extension/mod.rs`. Nothing else changes.
 
-## The IDE flags a separate wasm root
+## The IDE flags `src/wasm_lib.rs`
 
-If your project uses a wasm example like the one above, RustRover or rust-analyzer marks that file up
-with errors that `make debug`, `just build` or `cargo duckdb-ext build` never reproduce.
+RustRover or rust-analyzer marks up `src/wasm_lib.rs` with errors that `make debug`, `just build`
+or `cargo duckdb-ext build` never reproduce.
 
 An IDE checks *every* target by default (`cargo check --all-targets`), which compiles that example
 for your host platform as well — a configuration it was never written for. Gate the file on the
@@ -138,4 +116,7 @@ The second attribute silences the lint about a crate root that is not named `lib
 - [Create a project](./create-a-project.md) — the template this layout comes from.
 - [Build and release](../build-and-release.md#webassembly) — how the WebAssembly target is built.
 - [Community extension docs](../community-extension-docs.md) — what `src/bin/duckfn.rs` is for.
+- [Contributing](../contributing.md) — the duckfn repository itself, whose layout deliberately
+  differs: there the example extension sits inside the published package, so its library carries the
+  native, wasm and `rlib` crate types itself instead of adding a separate wasm root.
 - [Troubleshooting](../troubleshooting.md) — problems that are not about the layout.

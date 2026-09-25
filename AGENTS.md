@@ -23,7 +23,8 @@
 ### 示例的开关：`quack` feature
 
 示例的模块树由默认关闭的 `quack` feature 控制（`src/lib.rs` 里 `#[cfg(feature = "quack")] mod
-extension;`），`[[bin]] duckfn-cli` 与 `[[example]] duckfn` 都写了 `required-features = ["quack"]`：
+extension;`），`[[bin]] duckfn-cli` 也写了 `required-features = ["quack"]`（wasm 没有单独的
+`[[example]]` 目标，产物来自 lib 的 staticlib）：
 
 - **下游**：`duckfn = "0.0.11"` 的依赖树与示例并入前完全一致，示例源码在包里但不参与编译。
 - **本仓库**：所有构建扩展的命令都必须带上它 —— `make debug`（根 Makefile 里

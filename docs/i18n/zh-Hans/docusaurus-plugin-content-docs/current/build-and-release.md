@@ -53,11 +53,12 @@ just build_wasm
 ```
 
 由于最终链接由 `emcc` 完成，该目标需要的是 `staticlib` 而不是 `cdylib`。`crate-type` 不能按 target
-覆写，于是 lib 干脆把两个都列上（`["rlib", "cdylib", "staticlib"]`），wasm 那边取其中的 `.a` 用。
-两个扩展产物因此都出自 `src/extension/` 的同一次编译 —— 这点很关键：多编一份就会把每个函数注册两次，
-而且在 wasm 上重复的入口符号会直接链接失败。剩下的交给 `make`：它用 `emcc` 把归档链成 side module，
-再补上扩展元数据。另一种做法（像上游模板那样另开一个 wasm root 目标）与它的代价见
-[项目结构约定](./getting-started/project-structure.md)。
+覆写，于是本仓库的 lib 干脆把它被当成的东西都列上（`["rlib", "cdylib", "staticlib"]`），wasm 那边取
+其中的 `.a` 用。两个扩展产物因此都出自 `src/extension/` 的同一次编译 —— 这点很关键：多编一份就会把
+每个函数注册两次，而且在 wasm 上重复的入口符号会直接链接失败。剩下的交给 `make`：它用 `emcc` 把归档链
+成 side module，再补上扩展元数据。扩展项目不需要这些 —— 那边 wasm 目标是单独一个 `[[example]]`
+root（见[项目结构约定](./getting-started/project-structure.md)）；本仓库为什么并进 lib，见
+[贡献指南](./contributing.md)。
 
 ## 持续集成
 

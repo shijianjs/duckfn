@@ -48,13 +48,51 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 
 The root manifest pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
 
-One Cargo detail worth knowing: the example extension is **part of the `duckfn` package** — the module
-tree in `src/extension/` plus the `src/bin/duckfn.rs` entry point — rather than
-a crate of its own, because cargo never packages a subdirectory that contains its own `Cargo.toml`.
+An extension project has three crate roots — see
+[Project structure](./getting-started/project-structure.md) — and this repository has two: there is
+no separate wasm root, because the example extension is part of the package and its library is what
+gets compiled for WebAssembly.
+
+### Why the example is part of this package
+
+Cargo never packages a subdirectory that contains its own `Cargo.toml`, so an example extension kept
+as a crate of its own could never ship inside `duckfn`. Folding it into the package is what lets
+the crate carry a complete worked example — the module tree in `src/extension/`, the CLI at
+`src/bin/duckfn.rs` and the sqllogictest suite in `test/sql/` — which is the point of the
+arrangement (see [Build and release](./build-and-release.md) for the exact file list).
+
 What compiles it is the `quack` feature, off by default: `make debug` passes it on through
-`TARGET_INFO += --features quack` in the root `Makefile`. A dependency on `duckfn` therefore sees the
-same dependency tree as before — sources present in the package, nothing compiled. Use
+`TARGET_INFO += --features quack` in the root `Makefile`, and `just build` / `just build_wasm` do
+the same. A bare `cargo build` skips the target silently and hands back a cdylib with no entry-point
+symbol, which DuckDB only rejects at `LOAD`. A dependency on `duckfn` is unaffected: the sources
+are in the package, the feature is off, and the dependency tree is unchanged. Use
 `cargo test -p duckfn` for the runtime's own tests, or `cargo test --workspace` for everything.
+
+### How this repository's lib differs from a plugin's
+
+Two things follow from the example living inside the library, and both differ from what an extension
+project does:
+
+```toml
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+```
+
+`crate-type` cannot be overridden per target, and the package is taken as three things:
+`cdylib` for the native extension DuckDB loads, `staticlib` for WebAssembly (where `emcc` does the
+final link and wants a `.a`), and `rlib` for dependents. Listing all three is also why no
+`[[example]]` wasm root is needed — the example tree is compiled once, by the library, so the entry
+symbol and the `inventory` registrations exist exactly once. A second copy would register every
+function twice, and on wasm the duplicate entry symbol fails to link outright.
+
+Two naming details follow from the same arrangement:
+
+- **The entry symbol lives alone in `src/extension/entry.rs`.** The library provides it, and the CLI
+  links that library while re-including `extension/mod.rs` through `#[path]` — defining it a second
+  time there would be a duplicate definition, an outright `LNK2005` on Windows.
+- **The CLI's target is `duckfn-cli`**, though its file is `src/bin/duckfn.rs`: this package's
+  cdylib also produces a `duckfn` artefact and the two Windows `.pdb` files would collide. A
+  downstream project has a different package name, no collision, and keeps the plain `duckfn`.
 
 ## Day-to-day commands
 

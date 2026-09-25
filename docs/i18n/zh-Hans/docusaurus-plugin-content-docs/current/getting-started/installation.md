@@ -54,8 +54,9 @@ DuckDB 以动态库的形式加载扩展：
 crate-type = ["cdylib"]
 ```
 
-构建 WebAssembly 版本时 crate 类型则要改成 `staticlib`，因为最终链接由 `emcc` 完成。本仓库的示例扩展
-采用单独一个 `[[example]]` 目标承载 `crate-type = ["staticlib"]` 来做到这一点。
+构建 WebAssembly 版本时 crate 类型则要改成 `staticlib`，因为最终链接由 `emcc` 完成。做法不是改 lib，
+而是给 wasm 那边单独一个 crate root：一个 `[[example]]` 目标承载 `crate-type = ["staticlib"]`，见
+[项目结构约定](./project-structure.md)。
 
 ## 为什么不需要本地编译 DuckDB
 
