@@ -1,3 +1,16 @@
 # statically linking the C runtime on windows seems sensible?
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-Ctarget-feature=+crt-static"]
+
+# 本包的 lib 是 cdylib（原生扩展本体），wasm 目标下 cargo 在为 wasm example 解析依赖时会连它一起链接。
+# emscripten 默认按「主模块」链接、要求有 main，于是 `wasm-ld: undefined symbol: main` 直接失败；显式
+# 要求按 side module（也就是库）链接就正常了。真正给 DuckDB 加载的 wasm 产物来自那一步 staticlib 的
+# emcc 链接（见 Makefile 的 link_wasm_*），这个 cdylib 只是绕不开的副产物。
+#
+# The package's lib is a cdylib (the native extension itself), and for the wasm target cargo links it as
+# well while resolving the wasm example's dependencies. emcc links a main module by default and wants a
+# `main`, which fails with `wasm-ld: undefined symbol: main`; asking for a side module (a library) links
+# fine instead. The artefact DuckDB actually loads comes from the staticlib step linked by emcc in the
+# Makefile (see link_wasm_*), so this cdylib is unavoidable baggage.
+[target.wasm32-unknown-emscripten]
+rustflags = ["-C", "link-arg=-sSIDE_MODULE=2"]
