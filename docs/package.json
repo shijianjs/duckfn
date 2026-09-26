@@ -31,6 +31,9 @@
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
+    "@iconify-icons/lucide": "^2.0.12",
+    "@iconify-icons/simple-icons": "^2.0.4",
+    "@iconify/react": "^6.0.2",
     "@types/react": "^19.0.0",
     "typescript": "~6.0.2"
   },
