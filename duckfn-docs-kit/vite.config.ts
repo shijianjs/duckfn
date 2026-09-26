@@ -33,9 +33,9 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2022',
     rollupOptions: {
-      // Vite lib mode externalises package dependencies by default; the
-      // @iconify-icons data must be bundled in so consumers only install this
-      // package.
+      // Vite lib mode externalises package dependencies by default;
+      // `iconify-icon` (the official web component) is bundled in so a
+      // consuming site only needs this package.
       external: [],
     },
   },

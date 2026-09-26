@@ -7,16 +7,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
-import {Icon} from '@iconify/react';
 import {
-  iconArrowRight,
-  iconBraces,
-  iconGithub,
-  iconHash,
-  iconLifeBuoy,
-  iconPackage,
-  iconShieldCheck,
-  iconSparkles,
   registerDfkElements,
   type FeaturesData,
   type HeroData,
@@ -25,8 +16,9 @@ import {
 
 import styles from './index.module.css';
 
-// Defining the `dfk-*` custom elements is a one-time side effect. It is
-// idempotent and a no-op during Docusaurus' Node prerender pass.
+// Defining the `dfk-*` custom elements is a one-time side effect (it also
+// registers the official `<iconify-icon>` element). Idempotent, and a no-op
+// during Docusaurus' Node prerender pass.
 registerDfkElements();
 
 /**
@@ -153,7 +145,7 @@ function heroData(
         message: 'GitHub',
       }),
       href: GITHUB_URL,
-      icon: iconGithub,
+      icon: 'simple-icons:github',
     },
     badges: BADGES,
   };
@@ -168,7 +160,7 @@ function featuresData(): FeaturesData {
     }),
     items: [
       {
-        icon: iconSparkles,
+        icon: 'lucide:sparkles',
         title: translate({
           id: 'homepage.features.noGlue.title',
           description: 'Home page feature card title',
@@ -182,7 +174,7 @@ function featuresData(): FeaturesData {
         }),
       },
       {
-        icon: iconPackage,
+        icon: 'lucide:package',
         title: translate({
           id: 'homepage.features.noBuild.title',
           description: 'Home page feature card title',
@@ -196,7 +188,7 @@ function featuresData(): FeaturesData {
         }),
       },
       {
-        icon: iconShieldCheck,
+        icon: 'lucide:shield-check',
         title: translate({
           id: 'homepage.features.safe.title',
           description: 'Home page feature card title',
@@ -210,7 +202,7 @@ function featuresData(): FeaturesData {
         }),
       },
       {
-        icon: iconHash,
+        icon: 'lucide:hash',
         title: translate({
           id: 'homepage.features.attributes.title',
           description: 'Home page feature card title',
@@ -224,7 +216,7 @@ function featuresData(): FeaturesData {
         }),
       },
       {
-        icon: iconLifeBuoy,
+        icon: 'lucide:life-buoy',
         title: translate({
           id: 'homepage.features.panic.title',
           description: 'Home page feature card title',
@@ -238,7 +230,7 @@ function featuresData(): FeaturesData {
         }),
       },
       {
-        icon: iconBraces,
+        icon: 'lucide:braces',
         title: translate({
           id: 'homepage.features.nested.title',
           description: 'Home page feature card title',
@@ -368,11 +360,14 @@ function CodeShowcase(): ReactNode {
               description="Home page link to the side-by-side comparison page">
               Same functions, two ways: four of them written both ways
             </Translate>
-            <Icon
-              icon={iconArrowRight}
-              className={styles.showcaseLinkArrow}
-              aria-hidden="true"
-            />
+            {/* The official Iconify web component (registered by
+                registerDfkElements()); a string `icon` attribute is all it
+                needs. createElement keeps it out of the JSX namespace. */}
+            {createElement('iconify-icon', {
+              icon: 'lucide:arrow-right',
+              className: styles.showcaseLinkArrow,
+              'aria-hidden': 'true',
+            })}
           </Link>
         </p>
       </div>

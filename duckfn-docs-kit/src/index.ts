@@ -2,8 +2,10 @@ import type {HTMLAttributes} from 'react';
 import type {FeaturesData, HeroData, NextStepsData} from './types';
 
 /**
- * Browser entry for duckfn-docs-kit: the home-page custom elements, the icon
- * set and the shared data types.
+ * Browser entry for duckfn-docs-kit: the home-page custom elements and the
+ * shared data types. Icons are rendered by the official `<iconify-icon>` web
+ * component (registered as a side effect of `registerDfkElements()`), so this
+ * package ships no icon data.
  *
  * Import `duckfn-docs-kit/remark` (Node build code) and `duckfn-docs-kit/toc-toggle`
  * from their own subpaths instead of here, so a Docusaurus config file never
@@ -12,18 +14,6 @@ import type {FeaturesData, HeroData, NextStepsData} from './types';
 export {DfkFeatures} from './elements/features';
 export {DfkHero} from './elements/hero';
 export {DfkNextSteps} from './elements/next-steps';
-export {
-  applyIconMask,
-  iconArrowRight,
-  iconBraces,
-  iconGithub,
-  iconHash,
-  iconLifeBuoy,
-  iconPackage,
-  iconShieldCheck,
-  iconSparkles,
-  iconToDataUrl,
-} from './icons';
 export {registerDfkElements} from './register';
 export type {
   FeatureItem,

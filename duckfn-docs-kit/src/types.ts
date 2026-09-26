@@ -1,14 +1,16 @@
-import type {IconifyIcon} from '@iconify/types';
-
 /**
  * Data contracts for the home-page web components.
  *
- * Every field is a plain string (or an icon object) for the *current* locale:
- * a custom element cannot render Docusaurus' React `<Translate>`, so the docs
- * site resolves the strings with the imperative `translate()` API and hands
- * them in through the component's `data` property. Internal `href`s are already
- * baseUrl-resolved by the caller (`useBaseUrl`), because a raw `<a href>` inside
- * a custom element gets no Docusaurus prefixing.
+ * Every field is a plain string for the *current* locale: a custom element
+ * cannot render Docusaurus' React `<Translate>`, so the docs site resolves the
+ * strings with the imperative `translate()` API and hands them in through the
+ * component's `data` property. Internal `href`s are already baseUrl-resolved by
+ * the caller (`useBaseUrl`), because a raw `<a href>` inside a custom element
+ * gets no Docusaurus prefixing.
+ *
+ * Icon fields are Iconify icon *names* (e.g. `lucide:arrow-right`), rendered by
+ * the official `<iconify-icon>` web component, which fetches the glyph from the
+ * public Iconify API. The package ships no icon data of its own.
  */
 
 /** A hero call-to-action. `external` adds `target=_blank` + `rel` for the link. */
@@ -20,7 +22,8 @@ export interface HeroLink {
 
 /** The secondary hero action (the GitHub button), which also carries a glyph. */
 export interface HeroAction extends HeroLink {
-  icon: IconifyIcon;
+  /** Iconify icon name, e.g. `simple-icons:github`. */
+  icon: string;
 }
 
 /** A shields.io-style badge in the hero row. Always an external link. */
@@ -41,7 +44,8 @@ export interface HeroData {
 }
 
 export interface FeatureItem {
-  icon: IconifyIcon;
+  /** Iconify icon name, e.g. `lucide:sparkles`. */
+  icon: string;
   title: string;
   details: string;
 }

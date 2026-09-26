@@ -35,9 +35,7 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
-    "@iconify-icons/lucide": "^2.0.12",
-    "@iconify-icons/simple-icons": "^2.0.4",
-    "@iconify/types": "^2.0.0"
+    "iconify-icon": "^3.0.3"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

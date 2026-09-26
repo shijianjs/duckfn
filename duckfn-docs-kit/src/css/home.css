@@ -191,18 +191,9 @@
 
 /* ------------------------------------------------------------ icons */
 
-/* An icon is an inline-block painted through a CSS mask: `applyIconMask()`
-   writes the iconify glyph into `--dfk-icon` as a data URL, and the element's
-   own colour shows through `background-color: currentColor`. The mask keeps
-   the painted (stroked or filled) area, so both lucide's stroked glyphs and
-   filled marks like GitHub work without injecting any SVG into the page. */
-.dfk-icon {
-  display: inline-block;
-  background-color: currentColor;
-  -webkit-mask: var(--dfk-icon) center / contain no-repeat;
-  mask: var(--dfk-icon) center / contain no-repeat;
-}
-
+/* Icons are official `<iconify-icon>` web components: the glyph is fetched from
+   the public Iconify API and painted with `currentColor`, so these rules only
+   set the size (and, where needed, the colour the glyph inherits). */
 .dfk-button-icon {
   width: 1.125rem;
   height: 1.125rem;

@@ -1,61 +1,72 @@
-import {applyIconMask, iconArrowRight} from '../icons';
+import type {IconifyIconHTMLElement} from 'iconify-icon';
 import type {NextStepItem, NextStepsData} from '../types';
 import {DfkElement} from './base';
 
 /**
  * `<dfk-next-steps>` — the "Where to go next" row of link cards. Ported from
- * the home page's `NextSteps()`; each card is an anchor holding a title, a
- * description and a trailing arrow.
+ * the home page's `NextSteps()`.
+ *
+ * Same persistent-DOM shape as `DfkFeatures`: the grid is built once and each
+ * card holds its own nodes; `apply()` grows/shrinks the list and mutates in
+ * place.
  */
 export class DfkNextSteps extends DfkElement<NextStepsData> {
-  protected override build(data: NextStepsData): void {
-    const section = this.el('section', {class: 'dfk-section'});
+  readonly #heading = this.el('h2', {class: 'dfk-section-title'});
+  readonly #grid = this.el('div', {class: 'dfk-next-grid'});
+  #cards: DfkNextStepCard[] = [];
+
+  protected override create(): void {
     const inner = this.el('div', {class: 'dfk-section-inner'});
-    const heading = this.el('h2', {class: 'dfk-section-title', text: data.sectionTitle});
-
-    const grid = this.el('div', {class: 'dfk-next-grid'});
-    for (const item of data.items) {
-      grid.appendChild(new DfkNextStepCard(item).render());
-    }
-
-    inner.append(heading, grid);
+    inner.append(this.#heading, this.#grid);
+    const section = this.el('section', {class: 'dfk-section'});
     section.appendChild(inner);
     this.appendChild(section);
   }
+
+  protected override apply(data: NextStepsData): void {
+    this.#heading.textContent = data.sectionTitle;
+    while (this.#cards.length > data.items.length) {
+      this.#cards.pop()?.root.remove();
+    }
+    while (this.#cards.length < data.items.length) {
+      const card = new DfkNextStepCard();
+      this.#cards.push(card);
+      this.#grid.appendChild(card.root);
+    }
+    data.items.forEach((item, i) => this.#cards[i].apply(item));
+  }
 }
 
-/** One "next step" card: the whole card is the link. */
+/** One "next step" card: the whole card is the link. Built once. */
 class DfkNextStepCard {
-  readonly #item: NextStepItem;
-  readonly #root: HTMLAnchorElement;
-  readonly #body: HTMLElement;
+  readonly root: HTMLAnchorElement;
   readonly #title: HTMLElement;
   readonly #details: HTMLElement;
-  readonly #arrow: HTMLElement;
+  readonly #arrow: IconifyIconHTMLElement;
 
-  constructor(item: NextStepItem) {
-    this.#item = item;
-    this.#root = document.createElement('a');
-    this.#root.className = 'dfk-next-card';
-    this.#root.setAttribute('href', item.href);
+  constructor() {
+    this.root = document.createElement('a');
+    this.root.className = 'dfk-next-card';
 
-    this.#body = document.createElement('span');
-    this.#body.className = 'dfk-next-card-body';
     this.#title = document.createElement('span');
     this.#title.className = 'dfk-next-card-title';
     this.#details = document.createElement('span');
     this.#details.className = 'dfk-next-card-details';
+    const body = document.createElement('span');
+    body.className = 'dfk-next-card-body';
+    body.append(this.#title, this.#details);
 
-    this.#arrow = document.createElement('span');
-    this.#arrow.className = 'dfk-icon dfk-next-card-arrow';
-    applyIconMask(this.#arrow, iconArrowRight);
+    this.#arrow = document.createElement('iconify-icon');
+    this.#arrow.className = 'dfk-next-card-arrow';
+    this.#arrow.setAttribute('icon', 'lucide:arrow-right');
+    this.#arrow.setAttribute('aria-hidden', 'true');
+
+    this.root.append(body, this.#arrow);
   }
 
-  render(): HTMLAnchorElement {
-    this.#title.textContent = this.#item.title;
-    this.#details.textContent = this.#item.details;
-    this.#body.replaceChildren(this.#title, this.#details);
-    this.#root.replaceChildren(this.#body, this.#arrow);
-    return this.#root;
+  apply(item: NextStepItem): void {
+    this.root.setAttribute('href', item.href);
+    this.#title.textContent = item.title;
+    this.#details.textContent = item.details;
   }
 }

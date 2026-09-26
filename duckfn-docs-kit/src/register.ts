@@ -1,3 +1,7 @@
+// Side-effect import: registers the official `<iconify-icon>` custom element,
+// which the `dfk-*` components use for every glyph. It loads icon data on
+// demand from the public Iconify API, so this package ships no icon sets.
+import 'iconify-icon';
 import {DfkFeatures} from './elements/features';
 import {DfkHero} from './elements/hero';
 import {DfkNextSteps} from './elements/next-steps';

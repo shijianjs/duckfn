@@ -1,14 +1,17 @@
 import {el, HTMLElementBase} from '../dom';
 
 /**
- * Base class for the `dfk-*` custom elements.
+ * Base class for the `dfk-*` custom elements — persistent DOM, not a render loop.
+ *
+ * `create()` runs exactly once and builds the whole skeleton; every node the
+ * component later touches is kept in a class field. `apply(data)` only mutates
+ * those held nodes (`textContent`, `setAttribute`, …). There is no teardown,
+ * no `replaceChildren()` of the subtree, nothing that re-creates nodes when the
+ * data changes — the DOM is built once and then edited in place.
  *
  * Contract: a component receives all of its content through the `data`
  * property, never through attributes or light-DOM children. Setting `data`
- * (before or after the element is connected) (re)builds the subtree; the build
- * only ever runs `document.createElement` via `el()` and keeps references to
- * the nodes it cares about in class fields — no `innerHTML`, no
- * `querySelector` round-trips.
+ * before the element is connected is fine; `connectedCallback` picks it up.
  *
  * Light DOM on purpose: the components render into the document tree, not a
  * shadow root, so they keep seeing the site's Infima variables, the
@@ -17,15 +20,12 @@ import {el, HTMLElementBase} from '../dom';
  */
 export abstract class DfkElement<TData> extends HTMLElementBase {
   #data: TData | null = null;
-  #connected = false;
+  #created = false;
 
   set data(value: TData) {
     this.#data = value;
-    // Before connection there is nothing to build into yet; connectedCallback
-    // picks the data up. After a client-side re-render the element may already
-    // be connected with fresh data, so rebuild.
-    if (this.#connected) {
-      this.#rebuild();
+    if (this.#created) {
+      this.apply(value);
     }
   }
 
@@ -34,23 +34,21 @@ export abstract class DfkElement<TData> extends HTMLElementBase {
   }
 
   connectedCallback(): void {
-    this.#connected = true;
-    if (this.#data !== null && this.childElementCount === 0) {
-      this.#rebuild();
+    if (this.#created) {
+      return;
     }
-  }
-
-  #rebuild(): void {
-    // replaceChildren() detaches the previous subtree, which also drops its
-    // event listeners together with the nodes.
-    this.replaceChildren();
+    this.#created = true;
+    this.create();
     if (this.#data !== null) {
-      this.build(this.#data);
+      this.apply(this.#data);
     }
   }
 
-  /** Renders `data` into this element. Must only use `el()` / `createElement`. */
-  protected abstract build(data: TData): void;
+  /** Builds the skeleton once. Must only use `el()` / `createElement`. */
+  protected abstract create(): void;
+
+  /** Mutates the held nodes to reflect `data`. Must not create or remove nodes. */
+  protected abstract apply(data: TData): void;
 
   /** `el()` re-exposed as a protected member so subclasses need no extra import. */
   protected el<K extends keyof HTMLElementTagNameMap>(
