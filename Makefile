@@ -3,7 +3,7 @@
 PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # DuckDB 扩展名。必须与这三处保持一致：
-#   src/extension/entry.rs 的 duckfn_entrypoint!("...")
+#   test/extension/entry.rs 的 duckfn_entrypoint!("...")
 #   test/sql/**/*.test   的 `require ...`
 #   .github/workflows/MainDistributionPipeline.yml 的 extension_name / EXTENSION_NAME
 #
@@ -12,7 +12,7 @@ PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 # lib$(EXTENSION_NAME).* 推这个名字的 —— 对齐之后这里一行平台条件都不用写。
 #
 # The DuckDB extension name. It has to stay in sync with duckfn_entrypoint! in
-# src/extension/entry.rs, the `require` lines of test/sql/**/*.test and extension_name / EXTENSION_NAME
+# test/extension/entry.rs, the `require` lines of test/sql/**/*.test and extension_name / EXTENSION_NAME
 # in .github/workflows/MainDistributionPipeline.yml. Its matching the crate name (the package is
 # `duckfn`) is no accident: the native extension *is* this package's cdylib, so the artifact is named
 # after the crate (libduckfn.so / duckfn.dll / libduckfn.a for wasm), while the upstream
@@ -34,7 +34,7 @@ all: configure debug
 # 这个 Makefile 必须留在仓库根目录：CI 的 extension-ci-tools/scripts/ci_phase.py 一律在根目录执行
 # `make configure_ci|debug|release|test_*|upload`，上游工作流不支持自定义工作目录。
 #
-# 示例扩展已经并进根包（src/extension/），于是 rust.Makefile 里那条裸构建命令 `cargo build` 正好命中
+# 示例扩展已经并进根包（test/extension/），于是 rust.Makefile 里那条裸构建命令 `cargo build` 正好命中
 # 本包的 lib（rlib + cdylib），所以这里不需要覆盖任何 recipe。唯一要补的是 feature：示例挂在 `quack` 上
 # （默认关闭，下游依赖树才不受影响），而上游 recipe 没给 feature 留位置 —— 只有 TARGET_INFO 会被
 # 原样拼进 `cargo build`，因此在 include 之后追加一次。wasm 那边稍特殊：上游默认会带
@@ -47,7 +47,7 @@ all: configure debug
 # always runs `make configure_ci|debug|release|test_*|upload` from the root, and the upstream
 # workflow offers no way to set a different working directory.
 #
-# The example extension now lives inside the root package (src/extension/), so the two bare build
+# The example extension now lives inside the root package (test/extension/), so the two bare build
 # commands in rust.Makefile — `cargo build`, plus `--example $(EXTENSION_NAME)` for wasm — hit this
 # package's lib (rlib + cdylib) and its `[[example]] duckfn` respectively, which is why no recipe has
 # to be overridden here. The one thing to add is the feature: the example sits behind `quack` (off by

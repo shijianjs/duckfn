@@ -159,8 +159,8 @@ SELECT dfn_macro_quad(3);  -- 12
 
 ## 源码与测试
 
-- [`src/extension/functions/sql_macro.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/sql_macro.rs) —— 用 Rust 构造的宏
-- [`src/extension/functions/sql/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/functions/sql) —— 那批 `.sql` 文件
+- [`test/extension/functions/sql_macro.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/sql_macro.rs) —— 用 Rust 构造的宏
+- [`test/extension/functions/sql/`](https://github.com/shijianjs/duckfn/tree/main/test/extension/functions/sql) —— 那批 `.sql` 文件
 - [`test/sql/functions/sql_macro.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/sql_macro.test) —— 期望结果
 - [`src/functions/sql_macro_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/sql_macro_adapter.rs) —— 运行时侧
 

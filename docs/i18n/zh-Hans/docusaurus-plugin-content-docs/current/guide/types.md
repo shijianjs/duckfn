@@ -443,13 +443,13 @@ bind 参数、以及 `LIST` / `MAP` / `STRUCT` 值的子元素，都是以 `Valu
 
 ## 源码与测试
 
-- [`src/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/src/extension/types) —— 每种类型的 echo 函数
+- [`test/extension/types/`](https://github.com/shijianjs/duckfn/tree/main/test/extension/types) —— 每种类型的 echo 函数
 - [`test/sql/types/`](https://github.com/shijianjs/duckfn/tree/main/test/sql/types) —— 期望结果
 - [`src/value_types/`](https://github.com/shijianjs/duckfn/tree/main/src/value_types) —— 类型实现本身
-- [`src/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/chrono_bridge.rs) —— `chrono` 转换的实际用法
+- [`test/extension/functions/chrono_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/chrono_bridge.rs) —— `chrono` 转换的实际用法
 - [`test/sql/functions/chrono_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/chrono_bridge.test) —— 期望结果，含 `infinity` 报错
-- [`src/extension/functions/uuid_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/uuid_bridge.rs) · [`test/sql/functions/uuid_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/uuid_bridge.test) —— `uuid` 一对，与 DuckDB 自己的渲染对照
-- [`src/extension/functions/rust_decimal_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/rust_decimal_bridge.rs) · [`test/sql/functions/rust_decimal_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/rust_decimal_bridge.test) —— `rust_decimal` 一对，含越界的情形
+- [`test/extension/functions/uuid_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/uuid_bridge.rs) · [`test/sql/functions/uuid_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/uuid_bridge.test) —— `uuid` 一对，与 DuckDB 自己的渲染对照
+- [`test/extension/functions/rust_decimal_bridge.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/rust_decimal_bridge.rs) · [`test/sql/functions/rust_decimal_bridge.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/rust_decimal_bridge.test) —— `rust_decimal` 一对，含越界的情形
 
 ## 接下来
 

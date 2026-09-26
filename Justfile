@@ -6,7 +6,7 @@
 # Windows 下 recipe 交给 Git Bash 执行；按自己的 Git 安装路径调整。
 set windows-shell := ["C:\\Program Files\\Git\\bin\\bash.exe", "-c"]
 
-# 示例扩展名（根包 duckfn 的 cdylib 就是它），与 src/extension/entry.rs 里
+# 示例扩展名（根包 duckfn 的 cdylib 就是它），与 test/extension/entry.rs 里
 # duckfn_entrypoint!("...")、根 Makefile 的 EXTENSION_NAME、CI 的 extension_name 一致
 extension_name := "duckfn"
 

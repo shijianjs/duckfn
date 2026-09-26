@@ -190,7 +190,7 @@ handler returning `Err` fails the query (the adapter reports it through
   exist.
 
 The example extension uses this from an aggregate (`dfn_agg_file_size` in
-`src/extension/functions/file_system.rs`), and `test/sql/functions/file_system.test` checks the
+`test/extension/functions/file_system.rs`), and `test/sql/functions/file_system.test` checks the
 results against DuckDB's own `read_blob`. The `duckfn::duck_vfs` helpers — round-trips, overwriting a
 longer file, append, fail-if-exists, invalid UTF-8, line splitting — are covered by
 `test/sql/functions/file_util.test`.

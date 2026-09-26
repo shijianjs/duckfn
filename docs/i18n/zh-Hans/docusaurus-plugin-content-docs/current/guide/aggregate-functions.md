@@ -252,7 +252,7 @@ fn result(&self) -> DuckOptionResult<f64> {
 
 ## 源码与测试
 
-- [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
+- [`test/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
 - [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 期望结果
 - [`src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/aggregate_function_adapter.rs) —— 运行时侧
 - [`src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_lazy_slot.rs) —— 上面用到的 `DuckLazySlot<T>`（只解析一次的槽）

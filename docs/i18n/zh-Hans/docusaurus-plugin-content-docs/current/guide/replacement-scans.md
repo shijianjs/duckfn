@@ -69,7 +69,7 @@ SELECT * FROM 'nope.txt';                        -- 报错：Table with name nop
 
 ## 源码与测试
 
-- [`src/extension/functions/replacement_scan.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/replacement_scan.rs) —— 回调与它转调的表函数
+- [`test/extension/functions/replacement_scan.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/replacement_scan.rs) —— 回调与它转调的表函数
 - [`test/sql/functions/replacement_scan.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/replacement_scan.test) —— 期望结果
 - [`src/functions/replacement_scan_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/replacement_scan_adapter.rs) —— 运行时侧
 

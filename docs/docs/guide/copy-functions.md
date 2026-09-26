@@ -231,9 +231,9 @@ fn dfn_copy_manual_register(c: &Connection) -> DuckResult<()> {
 
 ## Source and tests
 
-- [`src/extension/functions/copy_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/copy_function.rs) — the `dfn_copy_tsv` writer
-- [`src/extension/functions/copy_from_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/copy_from_function.rs) — the `dfn_copy_tsv_from` reader
-- [`src/extension/functions/tsv_format.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/tsv_format.rs) — the shared cell codec (escaping and parsing)
+- [`test/extension/functions/copy_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/copy_function.rs) — the `dfn_copy_tsv` writer
+- [`test/extension/functions/copy_from_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/copy_from_function.rs) — the `dfn_copy_tsv_from` reader
+- [`test/extension/functions/tsv_format.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/tsv_format.rs) — the shared cell codec (escaping and parsing)
 - [`test/sql/functions/copy_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/copy_function.test) and [`copy_from_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/copy_from_function.test) — the expected results
 - [`src/functions/copy_to_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/copy_to_adapter.rs) / [`copy_from_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/copy_from_adapter.rs) — the runtime side
 

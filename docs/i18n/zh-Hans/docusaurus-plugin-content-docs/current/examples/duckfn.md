@@ -6,7 +6,7 @@ description: duckfn —— 随 duckfn 一起发布的示例扩展，用可运行
 
 # 示例扩展
 
-示例扩展是 `duckfn` 包自己的一部分：模块树在 `src/extension/`，`src/bin/duckfn.rs` 是它的命令行
+示例扩展是 `duckfn` 包自己的一部分：模块树在 `test/extension/`，`src/bin/duckfn.rs` 是它的命令行
 入口；WebAssembly 那边也不需要单独的 root，同一个 lib 编成 `staticlib` 即可。它不单独发布，
 存在的意义是把每一项功能都跑
 一遍；`test/sql/` 下的 sqllogictest 用例则是各函数行为的权威依据。由于它**随已发布的 `duckfn` 包一起
@@ -37,15 +37,15 @@ SELECT rusty_echo('Jane');
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/extension/mod.rs` | 模块树 —— 入口不在这个文件里。 |
-| `src/extension/entry.rs` | `duckfn_entrypoint!("duckfn")`；单独一个文件，CLI 才能只编模块树、不重复定义入口符号。 |
-| `src/extension/demo/` | 每个功能域一个文件，另有若干手写 FFI 版本用于对照。 |
-| `src/extension/functions/` | 每种注册方式一个文件：标量、聚合、表函数、类型转换、替换扫描、SQL 宏。 |
-| `src/extension/functions/sql/` | 通过 `include_str!` 与 `duck_sql_macro_files!` 注册的 `.sql` 文件。 |
-| `src/extension/types/` | 每种受支持类型的 echo 函数，标量与表函数两种形式。 |
+| `test/extension/mod.rs` | 模块树 —— 入口不在这个文件里。 |
+| `test/extension/entry.rs` | `duckfn_entrypoint!("duckfn")`；单独一个文件，CLI 才能只编模块树、不重复定义入口符号。 |
+| `test/extension/demo/` | 每个功能域一个文件，另有若干手写 FFI 版本用于对照。 |
+| `test/extension/functions/` | 每种注册方式一个文件：标量、聚合、表函数、类型转换、替换扫描、SQL 宏。 |
+| `test/extension/functions/sql/` | 通过 `include_str!` 与 `duck_sql_macro_files!` 注册的 `.sql` 文件。 |
+| `test/extension/types/` | 每种受支持类型的 echo 函数，标量与表函数两种形式。 |
 | `test/sql/` | 41 个 sqllogictest 文件，与源码目录一一对应。 |
 
-`src/extension/demo/rewrite_official_template_demo.rs` 是最小的可用起点 —— 它是把 DuckDB 官方的模板示例
+`test/extension/demo/rewrite_official_template_demo.rs` 是最小的可用起点 —— 它是把 DuckDB 官方的模板示例
 用 duckfn 重写了一遍：
 
 ```rust

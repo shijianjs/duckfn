@@ -73,7 +73,7 @@ If the returned table function does not exist, the query fails with
 
 ## Source and tests
 
-- [`src/extension/functions/replacement_scan.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/replacement_scan.rs) — the callback and its target table functions
+- [`test/extension/functions/replacement_scan.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/replacement_scan.rs) — the callback and its target table functions
 - [`test/sql/functions/replacement_scan.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/replacement_scan.test) — the expected results
 - [`src/functions/replacement_scan_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/replacement_scan_adapter.rs) — the runtime side
 

@@ -143,7 +143,7 @@ SELECT double_it(21);
 它要解决的问题是「依赖能带过去什么、带不过去什么」。`cargo` 会把 `duckfn` 与 `duckfn-macro`
 解包到本地 registry，因此运行时与宏的实现 —— 也就是「某个属性收哪些参数、允许哪些返回形状」的
 真相来源 —— 就在磁盘上，可以直接读。发布出去的 `duckfn` 包还不止这些：它一并带着 `docs/docs/**`
-下的文档正文及其简体中文译文，**以及**示例扩展 —— `src/extension/**` 连同 `test/sql/` 下的
+下的文档正文及其简体中文译文，**以及**示例扩展 —— `test/extension/**` 连同 `test/sql/` 下的
 sqllogictest 用例 —— 所以用户指南、示例页和一份完整可抄的扩展都能直接从解包后的 crate 里读，
 确切清单见[构建与发布](../build-and-release.md)。
 

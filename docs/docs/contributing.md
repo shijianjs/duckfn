@@ -44,7 +44,7 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 | --- | --- | --- |
 | `/` (`duckfn`) | yes | The runtime framework, the example extension and the workspace root. |
 | `duckfn-macro/` | yes | The procedural macros; depends on the runtime for nothing, only on `darling`, `syn`, `quote`. |
-| `src/extension/`, `test/sql/` | shipped, never compiled | The example extension (`duckfn`) with its sqllogictest suite: part of the `duckfn` package, switched on by the `quack` feature. |
+| `test/extension/`, `test/sql/` | shipped, never compiled | The example extension (`duckfn`) with its sqllogictest suite: part of the `duckfn` package, switched on by the `quack` feature. |
 
 The root manifest pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
 
@@ -57,7 +57,7 @@ gets compiled for WebAssembly.
 
 Cargo never packages a subdirectory that contains its own `Cargo.toml`, so an example extension kept
 as a crate of its own could never ship inside `duckfn`. Folding it into the package is what lets
-the crate carry a complete worked example — the module tree in `src/extension/`, the CLI at
+the crate carry a complete worked example — the module tree in `test/extension/`, the CLI at
 `src/bin/duckfn.rs` and the sqllogictest suite in `test/sql/` — which is the point of the
 arrangement (see [Build and release](./build-and-release.md) for the exact file list).
 
@@ -87,7 +87,7 @@ function twice, and on wasm the duplicate entry symbol fails to link outright.
 
 Two naming details follow from the same arrangement:
 
-- **The entry symbol lives alone in `src/extension/entry.rs`.** The library provides it, and the CLI
+- **The entry symbol lives alone in `test/extension/entry.rs`.** The library provides it, and the CLI
   links that library while re-including `extension/mod.rs` through `#[path]` — defining it a second
   time there would be a duplicate definition, an outright `LNK2005` on Windows.
 - **The CLI's target is `duckfn-cli`**, though its file is `src/bin/duckfn.rs`: this package's

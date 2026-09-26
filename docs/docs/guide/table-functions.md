@@ -313,10 +313,10 @@ fn my_dynamic_register(c: &Connection) -> DuckResult<()> {
 
 ## Source and tests
 
-- [`src/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/table_function.rs) — the example table functions and their row structs
+- [`test/extension/functions/table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/table_function.rs) — the example table functions and their row structs
 - [`test/sql/functions/table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/table_function.test) — the expected results
 - [`src/functions/table_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/table_function_adapter.rs) — the runtime side
-- [`src/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/dynamic_table_function.rs) — the dynamic-column examples (macro and low level)
+- [`test/extension/functions/dynamic_table_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/dynamic_table_function.rs) — the dynamic-column examples (macro and low level)
 - [`test/sql/functions/dynamic_table_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/dynamic_table_function.test) — their expected results
 - [`src/dynamic`](https://github.com/shijianjs/duckfn/blob/main/src/duck_dynamic/mod.rs) — the runtime side of dynamic columns
 

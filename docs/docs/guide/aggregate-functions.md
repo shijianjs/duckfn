@@ -271,7 +271,7 @@ attribute's string literal, which is exactly the copy that drifts.
 
 ## Source and tests
 
-- [`src/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/aggregate_function.rs) — the example aggregates and their state types
+- [`test/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/aggregate_function.rs) — the example aggregates and their state types
 - [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the expected results
 - [`src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/aggregate_function_adapter.rs) — the runtime side
 - [`src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_lazy_slot.rs) — `DuckLazySlot<T>`, the parse-once slot used above

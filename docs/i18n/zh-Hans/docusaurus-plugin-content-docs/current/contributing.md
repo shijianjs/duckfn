@@ -42,7 +42,7 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 | --- | --- | --- |
 | `/`（`duckfn`） | 是 | 运行时框架、示例扩展，同时是 workspace 根。 |
 | `duckfn-macro/` | 是 | 过程宏；不依赖运行时，只依赖 `darling`、`syn`、`quote`。 |
-| `src/extension/`、`test/sql/` | 随包发布，但不编译 | 示例扩展（`duckfn`）与它的 sqllogictest 用例：属于 `duckfn` 包，由 `quack` feature 打开。 |
+| `test/extension/`、`test/sql/` | 随包发布，但不编译 | 示例扩展（`duckfn`）与它的 sqllogictest 用例：属于 `duckfn` 包，由 `quack` feature 打开。 |
 
 根清单锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
 
@@ -52,7 +52,7 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 ### 示例为什么在本包里
 
 cargo 永远不会打包含自己 `Cargo.toml` 的子目录，所以独立成 crate 的示例扩展根本进不了 `duckfn`
-的发布包。并进本包是唯一能让包里带上完整示例的做法 —— `src/extension/` 的模块树、
+的发布包。并进本包是唯一能让包里带上完整示例的做法 —— `test/extension/` 的模块树、
 `src/bin/duckfn.rs` 这个命令行入口、`test/sql/` 的 sqllogictest 用例（确切清单见
 [构建与发布](./build-and-release.md)）。
 
@@ -78,7 +78,7 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 
 同一件事还带来两处命名细节：
 
-- **入口符号单独放在 `src/extension/entry.rs`**：lib 提供一份，而 CLI 链接这个 lib、又用 `#[path]`
+- **入口符号单独放在 `test/extension/entry.rs`**：lib 提供一份，而 CLI 链接这个 lib、又用 `#[path]`
   编进 `extension/mod.rs`，在那里再定义一次就是重复定义（Windows 上直接 `LNK2005`）。
 - **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：本包 cdylib 的产物也叫
   duckfn，Windows 上两者的 `.pdb` 会撞名。下游项目的包名不同、不会撞，所以模板里那个 bin 依旧叫

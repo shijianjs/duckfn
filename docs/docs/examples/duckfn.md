@@ -7,7 +7,7 @@ description: duckfn, the example extension shipped with duckfn, with runnable SQ
 # The example extension
 
 The example extension is part of the `duckfn` package itself: its module tree lives in
-`src/extension/`, and `src/bin/duckfn.rs` is its command-line entry point. The WebAssembly build needs
+`test/extension/`, and `src/bin/duckfn.rs` is its command-line entry point. The WebAssembly build needs
 no root of its own either — the same lib is compiled as a `staticlib` for it. It is never published on
 its own — it exists to exercise every feature, and its
 sqllogictest suite under `test/sql/` is the reference for what each function returns. Because it
@@ -40,15 +40,15 @@ During development `just sql "<SQL>"` rebuilds and runs a statement in one step,
 
 | Path | Contents |
 | --- | --- |
-| `src/extension/mod.rs` | The module tree — the entry point is not here. |
-| `src/extension/entry.rs` | `duckfn_entrypoint!("duckfn")`, alone in a file so the CLI can include the tree without a second copy of the entry symbol. |
-| `src/extension/demo/` | One file per feature area, including several hand-written FFI variants kept for comparison. |
-| `src/extension/functions/` | One file per registration kind: scalar, aggregate, table, cast, replacement scan, SQL macro. |
-| `src/extension/functions/sql/` | `.sql` files registered through `include_str!` and `duck_sql_macro_files!`. |
-| `src/extension/types/` | Echo functions for every supported type, in scalar and table form. |
+| `test/extension/mod.rs` | The module tree — the entry point is not here. |
+| `test/extension/entry.rs` | `duckfn_entrypoint!("duckfn")`, alone in a file so the CLI can include the tree without a second copy of the entry symbol. |
+| `test/extension/demo/` | One file per feature area, including several hand-written FFI variants kept for comparison. |
+| `test/extension/functions/` | One file per registration kind: scalar, aggregate, table, cast, replacement scan, SQL macro. |
+| `test/extension/functions/sql/` | `.sql` files registered through `include_str!` and `duck_sql_macro_files!`. |
+| `test/extension/types/` | Echo functions for every supported type, in scalar and table form. |
 | `test/sql/` | 41 sqllogictest files mirroring the source layout. |
 
-`src/extension/demo/rewrite_official_template_demo.rs` is the smallest useful starting point — it is
+`test/extension/demo/rewrite_official_template_demo.rs` is the smallest useful starting point — it is
 the DuckDB template's demo rewritten with duckfn:
 
 ```rust

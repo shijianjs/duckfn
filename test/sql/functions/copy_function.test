@@ -55,7 +55,7 @@ FROM read_csv('__TEST_DIR__/dfn_copy_table.tsv', delim='\t', header=false, nulls
 4|false|NULL|y
 
 # ============================================================================
-# 动态列：嵌套类型也能写出（编码约定见 src/extension/functions/tsv_format.rs）
+# 动态列：嵌套类型也能写出（编码约定见 test/extension/functions/tsv_format.rs）
 #   容器 → [1, 2] / {'k': 1} / {'m'=1}；BLOB → \xHH；嵌套里的字符串带引号
 # ============================================================================
 

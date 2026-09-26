@@ -8,8 +8,8 @@
 
 | 路径 | 内容 | 是否发布 |
 | --- | --- | --- |
-| `/`（根） | `duckfn` 运行时：`src/`（不含 `src/extension/`）、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
-| `src/extension/` | 示例扩展的模块树（`demo/`、`functions/`、`types/`），默认不编译（见下） | 是（随 `duckfn` 包） |
+| `/`（根） | `duckfn` 运行时：`src/`、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
+| `test/extension/` | 示例扩展的模块树（`demo/`、`functions/`、`types/`），与 `test/sql/` 并列 —— 它是跑在真实 DuckDB 里的用例，不是 `tests/` 下的单元测试，所以放在 `src/` 之外，由 `src/lib.rs` 与 `src/bin/duckfn.rs` 用 `#[path]` 挂进来；默认不编译（见下） | 是（随 `duckfn` 包） |
 | `src/bin/duckfn.rs` | 命令行工具入口（`[[bin]] duckfn-cli`，文件名仍是 duckfn.rs，原因见下）。WebAssembly 入口不需要单独文件 —— lib 自己产出 `staticlib`，见下 | 是（随 `duckfn` 包） |
 | `test/sql/` | 示例的 sqllogictest 用例（41 个 `.test`） | 是（随 `duckfn` 包，只收 `.test`） |
 | `duckfn-macro/` | 过程宏 crate | 是（crates.io） |
@@ -36,7 +36,7 @@ extension;`），`[[bin]] duckfn-cli` 也写了 `required-features = ["quack"]`�
 ### 发布包内容
 
 `duckfn` 发布包的内容由根 `Cargo.toml` 的 `include` 白名单决定：运行时代码与测试、示例扩展
-（`src/extension/**`、`src/bin/duckfn.rs`）、`test/sql/**/*.test`、`demo.sh`、
+（`test/extension/**`、`src/bin/duckfn.rs`）、`test/sql/**/*.test`、`demo.sh`、
 README、LICENSE、文档站正文（英 + 中）。改这个白名单后，用 `cargo package -p duckfn --list`
 核对一遍。三条容易踩的坑：
 
@@ -49,7 +49,7 @@ README、LICENSE、文档站正文（英 + 中）。改这个白名单后，用 
 
 ### 名字必须一致
 
-DuckDB 扩展名 `duckfn` 必须四处一致：`src/extension/entry.rs` 的 `duckfn_entrypoint!`、根
+DuckDB 扩展名 `duckfn` 必须四处一致：`test/extension/entry.rs` 的 `duckfn_entrypoint!`、根
 `Makefile` 的 `EXTENSION_NAME`、CI 的 `extension_name` / `EXTENSION_NAME`，以及
 `test/sql/**/*.test` 里的 `require`。它与 crate 名相同不是巧合 —— 原生扩展就是本包的 cdylib，
 产物名由 crate 名决定（上游 makefile 按 `lib$(EXTENSION_NAME).*` 取产物），对齐后根 Makefile
@@ -57,7 +57,7 @@ DuckDB 扩展名 `duckfn` 必须四处一致：`src/extension/entry.rs` 的 `duc
 
 两处因此而来的命名细节，改动前先读回来：
 
-- **入口符号单独一个文件**（`src/extension/entry.rs`）：原生 lib 与 wasm 目标各声明一次，而 CLI
+- **入口符号单独一个文件**（`test/extension/entry.rs`）：原生 lib 与 wasm 目标各声明一次，而 CLI
   虽然也编同一棵模块树（`#[path]` 那套），却链接了本包的 lib —— lib 里已经有一份入口符号，再定义
   一次就是重复定义（Windows 上 LNK2005），所以它只包含 `extension/mod.rs`。
 - **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：本包 cdylib 的产物也叫
@@ -159,7 +159,7 @@ just release_bump 0.0.5
 最后用 `cargo update -p duckfn -p duckfn-macro` 同步 `Cargo.lock`，并打印残留的旧版本号
 （应当为空）以及 `git diff --stat`。
 
-> 示例扩展（`src/extension/**`、`test/sql/**`）与本 crate 同属一个包，没有独立版本号，
+> 示例扩展（`test/extension/**`、`test/sql/**`）与本 crate 同属一个包，没有独立版本号，
 > 发版脚本自然会把它们一起带上；`Cargo.lock`、`docs/package-lock.json` 与本文件被排除在替换之外。
 
 ### 2. 提交并打 tag
@@ -218,7 +218,7 @@ just release_dev 0.0.6-dev.0
 ## 相关文档
 
 - [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md)：`duckfn` 的 crate README（根 README，同时在 GitHub 首页与 crates.io 上展示）。
-- [`src/extension/`](src/extension/) 与 [`test/sql/`](test/sql/)：随包发布的示例扩展与 sqllogictest 用例；[`demo.sh`](demo.sh) 是一组可直接跑的 `just sql` 示例。
+- [`test/extension/`](test/extension/) 与 [`test/sql/`](test/sql/)：随包发布的示例扩展与 sqllogictest 用例；[`demo.sh`](demo.sh) 是一组可直接跑的 `just sql` 示例。
 - [`scripts/release.sh`](scripts/release.sh)：`release_bump` / `release_dev` / `release_tag` 的实际实现。
 - [`docs/duckfn-version.ts`](docs/duckfn-version.ts) 与 [`docs/plugins/remark-version-placeholder.ts`](docs/plugins/remark-version-placeholder.ts)：文档站的版本占位符机制。
 - [duckfn-extension-template](https://github.com/shijianjs/duckfn-extension-template)：给下游扩展项目的

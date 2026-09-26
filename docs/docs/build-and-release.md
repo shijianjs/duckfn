@@ -39,7 +39,7 @@ TARGET_INFO += --features quack
 
 `USE_UNSTABLE_C_API=1` is what makes the built extension loadable only with `-unsigned`, and only in
 a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metadata is written for.
-`EXTENSION_NAME` has to match `duckfn_entrypoint!` in `src/extension/entry.rs` and the `require` lines
+`EXTENSION_NAME` has to match `duckfn_entrypoint!` in `test/extension/entry.rs` and the `require` lines
 of the sqllogictest files. `TARGET_INFO += --features quack` is what gets the example compiled: it
 lives behind the `quack` feature (off by default), and `TARGET_INFO` is the one variable DuckDB's
 shared makefiles splice verbatim into `cargo build`. Without it the build would hand back a cdylib
@@ -57,7 +57,7 @@ just build_wasm
 Because `emcc` performs the final link, that target needs a `staticlib` rather than a `cdylib`.
 `crate-type` cannot be overridden per target, so the lib lists all three types it is taken as:
 `["rlib", "cdylib", "staticlib"]`. Both extension artefacts then come out of one compilation of
-`src/extension/`, which matters: a second copy of the tree would register every function twice, and
+`test/extension/`, which matters: a second copy of the tree would register every function twice, and
 the duplicate entry symbol fails to link on wasm. `make` does the rest — it links the archive into a
 side module with `emcc` and appends the extension metadata. An extension project needs none of this:
 there the wasm target is a separate `[[example]]` root (see
@@ -124,7 +124,7 @@ The example extension ships as part of this package instead of as a crate of its
 uploaded separately.
 
 The published `duckfn` package is more than the runtime: the `include` list in the root `Cargo.toml`
-packs the example extension (`src/extension/**`, `src/bin/duckfn.rs`), its
+packs the example extension (`test/extension/**`, `src/bin/duckfn.rs`), its
 sqllogictest suite (`test/sql/**/*.test`), the documentation sources (`docs/README.md`,
 `docs/docs/**` and the Simplified Chinese translations under `docs/i18n/`), `demo.sh`, the READMEs
 and the license. Unpacking the crate therefore hands you both the full documentation and a runnable

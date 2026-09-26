@@ -8,7 +8,7 @@ description: Implement DuckValueType for your own types, and how to reach logica
 
 `DuckValueType` is a public, unsealed trait, so a type defined outside `duckfn` can be mapped to a
 DuckDB type. The example extension does exactly that in
-`src/extension/types/custom_type_echo.rs`, and this page walks through it.
+`test/extension/types/custom_type_echo.rs`, and this page walks through it.
 
 ## Why write one
 
@@ -131,7 +131,7 @@ SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 `c_duckdb_vector` next to the high-level `vector_reader` / `vector_writer`, so an implementation can
 drop to the DuckDB C API when it has to. That is the route for `ENUM` (read the index, then look the
 label up in the enum dictionary), `BIT` and `VARINT`, all of which have no quack-rs accessor. The `Color`
-enum in `src/extension/types/custom_type_echo.rs` is the worked example: it declares the dictionary with
+enum in `test/extension/types/custom_type_echo.rs` is the worked example: it declares the dictionary with
 `LogicalType::enum_type(&[...])`, overrides the raw-vector `read_valid` / `write_valid` to move the index
 in and out of the vector, and reads the label from a bind-time `duckdb_value` with `Value::as_str()`.
 For `ENUM` specifically you rarely need to write that by hand: `#[derive(DuckEnum)]` generates exactly
@@ -153,7 +153,7 @@ undefined behaviour into a query error.
 
 ## Source and tests
 
-- [`src/extension/types/custom_type_echo.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/types/custom_type_echo.rs) — the `Celsius` type, implemented outside duckfn
+- [`test/extension/types/custom_type_echo.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/types/custom_type_echo.rs) — the `Celsius` type, implemented outside duckfn
 - [`test/sql/types/custom_type_echo.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/types/custom_type_echo.test) — the expected results
 - [`src/value_types/duck_value_type.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_value_type.rs) — the trait itself
 

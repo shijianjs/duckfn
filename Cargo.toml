@@ -24,7 +24,7 @@ categories = ["database", "api-bindings", "development-tools::ffi"]
 #    dfn_file_*、dfn_copy_*.tsv 之类的临时文件，因此这里只收 `.test` 用例本身。
 # 3. cargo 无条件跳过任何**含 Cargo.toml 的子目录**（Cargo Book："Any subdirectory that
 #    contains a `Cargo.toml` file"），且不受 include 模式影响。这就是 `duckfn-macro/` 不在这里
-#    列出的原因 —— 它是独立 crate、单独发布。示例扩展已经并进本包（src/extension/、
+#    列出的原因 —— 它是独立 crate、单独发布。示例扩展已经并进本包（test/extension/、
 #    src/bin/duckfn.rs、test/sql/），所以能随包一起发布。
 #
 # 除了运行时代码与测试，包内含全量文档站正文（英文 + 简体中文）与示例扩展及其用例，这样解包即得
@@ -41,7 +41,7 @@ categories = ["database", "api-bindings", "development-tools::ffi"]
 # 3. cargo unconditionally skips any subdirectory containing a `Cargo.toml` (Cargo Book: "Any
 #    subdirectory that contains a `Cargo.toml` file"), and no `include` pattern overrides that. That
 #    is why `duckfn-macro/` is not listed here — it is a crate of its own, published separately. The
-#    example extension now lives inside this package (src/extension/, src/bin/duckfn.rs, test/sql/)
+#    example extension now lives inside this package (test/extension/, src/bin/duckfn.rs, test/sql/)
 #    and therefore ships with it.
 #
 # Besides the runtime and its tests the package carries the whole documentation site (English and
@@ -51,6 +51,7 @@ include = [
     "/Cargo.toml",
     "/src/**",
     "/tests/**",
+    "/test/extension/**",
     "/test/sql/**/*.test",
     "/demo.sh",
     "/README.md",
@@ -84,7 +85,7 @@ authors = ["shijianjs"]
 # 三种 crate-type，各给一个平台用：
 #   rlib     下游当依赖用；
 #   cdylib   原生扩展本体 —— 打开 `quack` 时导出 DuckDB 要的 `duckfn_init_c_api`
-#            （见 src/extension/entry.rs 的 `duckfn_entrypoint!("duckfn")`）；
+#            （见 test/extension/entry.rs 的 `duckfn_entrypoint!("duckfn")`）；
 #   staticlib WebAssembly 用 —— emcc 负责最终链接，所以 wasm 那边要的是 .a（libduckfn.a）。
 # 三个一起列出，是因为 crate-type 不能按 target 覆写；cargo 每次都会把三种产物都做出来，
 # 各平台取自己需要的那份。这样也就不需要一个单独的 `[[example]]` wasm 根了：示例树只由 lib
@@ -92,7 +93,7 @@ authors = ["shijianjs"]
 #
 # Three crate types, one per consumer: rlib for dependents, cdylib as the native extension (it
 # exports `duckfn_init_c_api` when `quack` is on — see `duckfn_entrypoint!("duckfn")` in
-# src/extension/entry.rs), and staticlib for WebAssembly, where emcc does the final link and wants a
+# test/extension/entry.rs), and staticlib for WebAssembly, where emcc does the final link and wants a
 # `.a` (libduckfn.a). They are listed together because crate-type cannot be overridden per target, so
 # cargo builds all three and each platform picks the one it needs. That also removes the need for a
 # separate `[[example]]` wasm root: the example tree is compiled once, by the lib, so the entry symbol
@@ -103,7 +104,7 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 [[bin]]
 # 命令行工具（导出 function_descriptions.csv）。它自己用 `#[path]` 再编一遍示例源码：直接依赖 rlib
 # 时链接器可能把 inventory 的注册项整块丢掉，导出的 CSV 会静默变空。也因此它只包含
-# `extension/mod.rs`，不含入口符号（见 src/extension/entry.rs）。
+# `extension/mod.rs`，不含入口符号（见 test/extension/entry.rs）。
 #
 # 目标名是 `duckfn-cli` 而不是文件名的 `duckfn`：本包的 lib 是 cdylib，产物也叫 duckfn，
 # Windows 上两者的 .pdb 会撞名（cargo 报 output filename collision）。下游项目的包名不同，
@@ -112,7 +113,7 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 # The command-line tool (it exports function_descriptions.csv). It compiles the example sources again
 # through `#[path]`, because depending on the rlib alone lets the linker drop the inventory
 # registrations and the CSV would come out silently empty. That is also why it includes
-# `extension/mod.rs` without the entry symbol (see src/extension/entry.rs).
+# `extension/mod.rs` without the entry symbol (see test/extension/entry.rs).
 #
 # The target is named `duckfn-cli`, not `duckfn` like its file: this package's lib is a cdylib whose
 # artifact is also called duckfn, and on Windows the two .pdb files would collide (cargo reports an
@@ -177,14 +178,14 @@ uuid = ["dep:uuid"]
 # values come back as an error.
 rust_decimal = ["dep:rust_decimal"]
 
-# 示例扩展与 CLI 的开关（示例源码在 src/extension/，CLI 在 src/bin/duckfn.rs）：它依赖 `all`，
+# 示例扩展与 CLI 的开关（示例源码在 test/extension/，CLI 在 src/bin/duckfn.rs）：它依赖 `all`，
 # 因为示例把每一档可选能力都演示了一遍。
 # 反过来 `all` **不**依赖它 —— `all` 是给下游用户用的，用户不需要示例与那些测试函数进自己的依赖树。
 # 默认关闭还有一个原因：`required-features` 的失败是静默的（裸 `cargo build` 只会产出一个没有入口
 # 符号的 cdylib，LOAD 时才报错），所以构建扩展的命令一律显式带上它 —— 不带上时示例源码在包里却
 # 不参与编译，正好就是「只有源码、不生效」。
 #
-# The example extension and CLI switch (the example lives in src/extension/, the CLI in
+# The example extension and CLI switch (the example lives in test/extension/, the CLI in
 # src/bin/duckfn.rs): it depends on `all`, since the example exercises every optional capability.
 # The reverse does not hold — `all` is meant for downstream users, who have no use for the example
 # and its test functions in their dependency tree. Being off by default also means `required-features`

@@ -162,7 +162,7 @@ It exists because of what a dependency does and does not carry. `cargo` unpacks 
 truth for which attribute accepts which arguments and which return shapes it allows — are on disk
 and readable. The published `duckfn` package is more than that: it also carries the documentation
 sources under `docs/docs/**` with their Simplified Chinese translations *and* the example extension —
-`src/extension/**` together with its sqllogictest suite under `test/sql/` — so the guide, the example
+`test/extension/**` together with its sqllogictest suite under `test/sql/` — so the guide, the example
 page and a complete worked extension can all be read straight out of the unpacked crate. See
 [Build and release](../build-and-release.md) for the exact file list.
 

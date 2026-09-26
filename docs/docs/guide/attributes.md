@@ -296,4 +296,4 @@ see [SQL macros](./sql-macros.md).
 ## Source and tests
 
 - [`duckfn-macro/src/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-macro/src) — one file per macro holding its own arguments and expansion, plus `common.rs` for the shared scaffolding
-- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) and [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the manual-registration examples
+- [`test/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/scalar_function.rs) and [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) — the manual-registration examples

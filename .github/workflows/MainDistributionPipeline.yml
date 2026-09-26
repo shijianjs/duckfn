@@ -25,12 +25,12 @@ jobs:
       duckdb_version: v1.5.5
       ci_tools_version: v1.5-variegata
       # 扩展并进根包后由 `quack` feature 打开（根 Makefile 里 `TARGET_INFO += --features quack`）；
-      # 这个名字必须与根 Makefile 的 EXTENSION_NAME、src/extension/entry.rs 的 duckfn_entrypoint!
+      # 这个名字必须与根 Makefile 的 EXTENSION_NAME、test/extension/entry.rs 的 duckfn_entrypoint!
       # 一致。
       #
       # The extension lives in the root package behind the `quack` feature (see the root Makefile's
       # `TARGET_INFO += --features quack`); the name has to match EXTENSION_NAME in that Makefile and
-      # duckfn_entrypoint! in src/extension/entry.rs.
+      # duckfn_entrypoint! in test/extension/entry.rs.
       extension_name: duckfn
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'

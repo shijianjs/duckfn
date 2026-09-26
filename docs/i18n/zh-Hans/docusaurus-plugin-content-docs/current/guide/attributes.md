@@ -281,4 +281,4 @@ duck_sql_macro_files!(
 ## 源码与测试
 
 - [`duckfn-macro/src/`](https://github.com/shijianjs/duckfn/tree/main/duckfn-macro/src) —— 每个宏一个文件，各自维护参数与展开逻辑；公共脚手架在 `common.rs`
-- [`src/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/src/extension/functions/scalar_function.rs) 与 [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 手动注册的示例
+- [`test/extension/functions/scalar_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/scalar_function.rs) 与 [`test/sql/functions/scalar_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/scalar_function.test) —— 手动注册的示例

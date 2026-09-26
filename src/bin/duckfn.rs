@@ -28,7 +28,7 @@
 //! `duckfn` its file is named after to avoid colliding with this package's cdylib artifact — see the
 //! note in the root Cargo.toml.
 
-#[path = "../extension/mod.rs"]
+#[path = "../../test/extension/mod.rs"]
 mod extension;
 
 fn main() -> std::process::ExitCode {

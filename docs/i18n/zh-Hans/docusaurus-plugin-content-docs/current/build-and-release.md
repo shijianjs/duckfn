@@ -38,7 +38,7 @@ TARGET_INFO += --features quack
 
 `USE_UNSTABLE_C_API=1` 决定了产出的扩展只能在兼容版本的 DuckDB 里、并加 `-unsigned` 才能加载。
 `TARGET_DUCKDB_VERSION` 指明写入元数据时针对的版本。`EXTENSION_NAME` 必须与
-`src/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
+`test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
 `TARGET_INFO += --features quack` 决定示例会不会被编译：它挂在默认关闭的 `quack` feature 上，而
 `TARGET_INFO` 是 DuckDB 官方 makefile 唯一会原样拼进 `cargo build` 的变量。少了这一行，产出的是一个
 没有入口符号的 cdylib。
@@ -54,7 +54,7 @@ just build_wasm
 
 由于最终链接由 `emcc` 完成，该目标需要的是 `staticlib` 而不是 `cdylib`。`crate-type` 不能按 target
 覆写，于是本仓库的 lib 干脆把它被当成的东西都列上（`["rlib", "cdylib", "staticlib"]`），wasm 那边取
-其中的 `.a` 用。两个扩展产物因此都出自 `src/extension/` 的同一次编译 —— 这点很关键：多编一份就会把
+其中的 `.a` 用。两个扩展产物因此都出自 `test/extension/` 的同一次编译 —— 这点很关键：多编一份就会把
 每个函数注册两次，而且在 wasm 上重复的入口符号会直接链接失败。剩下的交给 `make`：它用 `emcc` 把归档链
 成 side module，再补上扩展元数据。扩展项目不需要这些 —— 那边 wasm 目标是单独一个 `[[example]]`
 root（见[项目结构约定](./getting-started/project-structure.md)）；本仓库为什么并进 lib，见
@@ -115,7 +115,7 @@ rust-version = "1.86"
 示例扩展随本包一起发布，而不是独立 crate，所以也不会单独上传。
 
 而且发布出去的 `duckfn` 包并不只有运行时：根 `Cargo.toml` 的 `include` 会把示例扩展
-（`src/extension/**`、`src/bin/duckfn.rs`）、它的 sqllogictest 用例
+（`test/extension/**`、`src/bin/duckfn.rs`）、它的 sqllogictest 用例
 （`test/sql/**/*.test`）、文档站正文（`docs/README.md`、`docs/docs/**` 与 `docs/i18n/` 下的简体
 中文译文）、`demo.sh`、README 与许可证一起打进去。所以解包即得完整文档**和**一份可以直接跑的示例 ——
 这正是把它们放进同一个包的意义。确切清单用 `cargo package -p duckfn --list` 查看。

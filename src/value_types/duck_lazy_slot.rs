@@ -115,7 +115,7 @@ impl<T> Clone for SlotInner<T> {
 /// The "`DuckLazy<T>` slot" of an aggregate state: parsed once and reused by every later row and
 /// every merge.
 ///
-/// 典型用法（完整示例见 `src/extension/demo/lazy_config_demo.rs`）：
+/// 典型用法（完整示例见 `test/extension/demo/lazy_config_demo.rs`）：
 ///
 /// ```ignore
 /// #[derive(Default, Debug, Clone)]

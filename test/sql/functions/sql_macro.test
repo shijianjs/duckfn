@@ -236,7 +236,7 @@ SELECT dfn_macro_double(5);
 # ============================================================================
 # include_str!：字符串返回形式直接内联外部 .sql 脚本
 #
-# 脚本 src/extension/functions/sql/macro_inc.sql 在编译期被读成 &'static str，
+# 脚本 test/extension/functions/sql/macro_inc.sql 在编译期被读成 &'static str，
 # 一份脚本里有注释和三条语句（分号分隔），注册出三个宏。
 # ============================================================================
 

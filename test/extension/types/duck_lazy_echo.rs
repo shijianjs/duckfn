@@ -13,7 +13,7 @@ use duckfn::{duck_scalar_function, duck_table_function, DuckLazy, DuckStruct};
 //   - 只读：把凭证当返回值时，写路径 panic → 查询报错
 //   - bind 参数：表函数 bind 走 Value 路径，明确不支持 → bind 报错
 //
-// 聚合场景（复杂配置项只解析一次）见 src/extension/demo/lazy_config_demo.rs。
+// 聚合场景（复杂配置项只解析一次）见 test/extension/demo/lazy_config_demo.rs。
 // ============================================================================
 
 /// INTEGER // DuckLazy<i32>
