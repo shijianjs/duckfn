@@ -1,0 +1,504 @@
+/**
+ * Styles for the `dfk-*` home-page custom elements.
+ *
+ * Unlike the original page-private CSS module, these are global class names
+ * (prefixed `dfk-` so nothing collides with Infima or the consuming site):
+ * custom elements render into the light DOM, which is what lets them see the
+ * site's Infima variables and the `[data-theme]` switch.
+ *
+ * Every colour comes from the `--duckfn-*` tokens in `tokens.css`, which is the
+ * single place the brand palette is defined; dark mode therefore needs no rules
+ * of its own.
+ *
+ * Motion rules, deliberately:
+ *
+ * - all animations live inside `@media (prefers-reduced-motion: no-preference)`
+ *   and no static declaration sets `opacity: 0`, so a reader who disabled
+ *   animation sees the page complete rather than blank;
+ * - entrance animations fill `backwards` instead of `forwards`. The delay then
+ *   holds the start frame, but once the animation ends the element goes back to
+ *   its normal styles — which is what lets the `:hover` transforms on the cards
+ *   work. With `forwards` the finished animation would keep overriding them.
+ */
+
+/* --------------------------------------------------------------- hero */
+
+.dfk-hero {
+  position: relative;
+  /* Contains the glow pseudo-elements below without needing a z-index race, and
+     clips them on the horizontal axis only: their offsets (the 52rem circle centred
+     with `left: 50%`, and the warm one at `right: -10rem`) reach past the viewport,
+     which would otherwise widen the page and add a scrollbar.
+     `clip`, not `hidden`. Both keep the page narrow, but `hidden` also made this
+     section a scroll container and clipped the vertical axis, slicing the warm glow
+     in half along this section's bottom edge. `clip` leaves the other axis visible,
+     so the glow fades out over the next section instead of ending on a straight
+     line. It is also what makes the clip invisible: the horizontal cut lands on the
+     viewport edge, where there is nothing to see anyway. */
+  isolation: isolate;
+  overflow-x: clip;
+  padding: 4.5rem 1.5rem 4rem;
+  text-align: center;
+}
+
+/* Two soft pools of light: brand blue from above, a hint of the logo's beak
+   yellow from the lower right. Purely decorative. */
+.dfk-hero::before,
+.dfk-hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.dfk-hero::before {
+  top: -18rem;
+  left: 50%;
+  width: 52rem;
+  height: 52rem;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--duckfn-glow), transparent 70%);
+}
+
+.dfk-hero::after {
+  right: -10rem;
+  bottom: -14rem;
+  width: 34rem;
+  height: 34rem;
+  background: radial-gradient(circle, var(--duckfn-glow-warm), transparent 70%);
+}
+
+.dfk-hero-inner {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+
+.dfk-logo-stage {
+  display: inline-block;
+  line-height: 0;
+}
+
+/* The logo is a vector, so this stays sharp at any density. */
+.dfk-logo {
+  display: block;
+  width: clamp(7rem, 16vw, 10rem);
+  height: auto;
+  filter: drop-shadow(0 14px 28px var(--duckfn-glow));
+}
+
+.dfk-title {
+  margin: 1.5rem 0 0;
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  /* The plain colour is the fallback for the gradient below: without
+     `background-clip: text` a `transparent` colour would hide the name. */
+  color: var(--duckfn-blue);
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .dfk-title {
+    background-image: linear-gradient(
+      120deg,
+      var(--duckfn-blue-deep),
+      var(--duckfn-blue-bright)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* Room for descenders, which the tight line box would otherwise clip. */
+    padding-bottom: 0.06em;
+  }
+}
+
+/* The only yellow on this page, and it carries no text: a short rule under the
+   name that echoes the beak. See the note on the token in tokens.css. */
+.dfk-title::after {
+  content: '';
+  display: block;
+  width: 3rem;
+  height: 0.25rem;
+  margin: 1rem auto 0;
+  border-radius: 999px;
+  background-color: var(--duckfn-yellow);
+}
+
+.dfk-tagline {
+  max-width: 34rem;
+  margin: 1.25rem auto 0;
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  line-height: 1.65;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.dfk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 1rem;
+  margin-top: 2.25rem;
+}
+
+.dfk-button-primary,
+.dfk-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.6rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: background-color 0.2s var(--ifm-transition-timing-default),
+    border-color 0.2s var(--ifm-transition-timing-default),
+    color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-button-primary {
+  background-color: var(--duckfn-btn-bg);
+  border-color: var(--duckfn-btn-bg);
+  color: var(--duckfn-btn-fg);
+}
+
+.dfk-button-primary:hover,
+.dfk-button-primary:focus-visible {
+  background-color: var(--duckfn-btn-bg-hover);
+  border-color: var(--duckfn-btn-bg-hover);
+  color: var(--duckfn-btn-fg);
+  box-shadow: var(--duckfn-shadow);
+  text-decoration: none;
+}
+
+.dfk-button-secondary {
+  background-color: transparent;
+  border-color: var(--duckfn-outline-border);
+  color: var(--duckfn-blue);
+}
+
+.dfk-button-secondary:hover,
+.dfk-button-secondary:focus-visible {
+  background-color: var(--duckfn-blue-soft);
+  border-color: var(--duckfn-blue);
+  color: var(--duckfn-blue);
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------ icons */
+
+/* An icon is an inline-block painted through a CSS mask: `applyIconMask()`
+   writes the iconify glyph into `--dfk-icon` as a data URL, and the element's
+   own colour shows through `background-color: currentColor`. The mask keeps
+   the painted (stroked or filled) area, so both lucide's stroked glyphs and
+   filled marks like GitHub work without injecting any SVG into the page. */
+.dfk-icon {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask: var(--dfk-icon) center / contain no-repeat;
+  mask: var(--dfk-icon) center / contain no-repeat;
+}
+
+.dfk-button-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.dfk-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.dfk-badge {
+  display: inline-flex;
+}
+
+.dfk-badge-image {
+  display: block;
+  width: auto;
+  height: 20px;
+}
+
+/* ------------------------------------------------------------ sections */
+
+.dfk-section {
+  padding: 4.5rem 0;
+}
+
+.dfk-section-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.dfk-section-title {
+  margin-bottom: 0;
+  text-align: center;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------ features */
+
+.dfk-feature-grid {
+  display: grid;
+  /* min(17rem, 100%) rather than a bare 17rem: a track can then never be wider
+     than the viewport, which is what keeps the narrowest phones from scrolling
+     sideways. */
+  grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+  gap: 1.25rem;
+  margin-top: 2.75rem;
+}
+
+.dfk-feature-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border: 1px solid var(--duckfn-card-border);
+  border-radius: 1rem;
+  background-color: var(--duckfn-card-bg);
+  transition: border-color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-feature-card:hover {
+  border-color: var(--duckfn-blue);
+  box-shadow: var(--duckfn-shadow);
+}
+
+.dfk-feature-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  background-color: var(--duckfn-blue-soft);
+  color: var(--duckfn-blue);
+}
+
+.dfk-feature-icon {
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+.dfk-feature-title {
+  margin-bottom: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.dfk-feature-details {
+  margin-bottom: 0;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* ---------------------------------------------------------- next steps */
+
+.dfk-next-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  gap: 1rem;
+  max-width: 54rem;
+  margin: 2.75rem auto 0;
+}
+
+.dfk-next-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.375rem;
+  border: 1px solid var(--duckfn-card-border);
+  border-radius: 0.875rem;
+  background-color: var(--duckfn-card-bg);
+  /* The card is the link, so it must not pick up the anchor colour. */
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-next-card:hover,
+.dfk-next-card:focus-visible {
+  border-color: var(--duckfn-blue);
+  box-shadow: var(--duckfn-shadow);
+  color: inherit;
+  text-decoration: none;
+}
+
+.dfk-next-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.dfk-next-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--duckfn-blue);
+}
+
+.dfk-next-card-details {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.dfk-next-card-arrow {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--ifm-color-emphasis-500);
+  transition: color 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-next-card:hover .dfk-next-card-arrow,
+.dfk-next-card:focus-visible .dfk-next-card-arrow {
+  color: var(--duckfn-blue);
+}
+
+/* -------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  .dfk-logo-stage,
+  .dfk-title,
+  .dfk-tagline,
+  .dfk-actions,
+  .dfk-badges {
+    animation: dfk-rise 0.6s var(--ifm-transition-timing-default) backwards;
+  }
+
+  .dfk-title {
+    animation-delay: 0.06s;
+  }
+
+  .dfk-tagline {
+    animation-delay: 0.12s;
+  }
+
+  .dfk-actions {
+    animation-delay: 0.18s;
+  }
+
+  .dfk-badges {
+    animation-delay: 0.24s;
+  }
+
+  /* Two elements on purpose: `rise` plays once on the stage, `float` loops on
+     the image. One element cannot run two animations that both set transform. */
+  .dfk-logo {
+    animation: dfk-float 7s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .dfk-feature-card,
+  .dfk-next-card {
+    animation: dfk-rise 0.5s var(--ifm-transition-timing-default) backwards;
+  }
+
+  /* Cards arrive in reading order. Filling backwards keeps them invisible during
+     their delay and hands the element back to `:hover` when the animation ends. */
+  .dfk-feature-card:nth-child(2),
+  .dfk-next-card:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+
+  .dfk-feature-card:nth-child(3),
+  .dfk-next-card:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+
+  .dfk-feature-card:nth-child(4),
+  .dfk-next-card:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+
+  .dfk-feature-card:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+
+  .dfk-feature-card:nth-child(6) {
+    animation-delay: 0.3s;
+  }
+
+  .dfk-feature-card,
+  .dfk-next-card,
+  .dfk-next-card-arrow {
+    transition: transform 0.2s var(--ifm-transition-timing-default),
+      border-color 0.2s var(--ifm-transition-timing-default),
+      box-shadow 0.2s var(--ifm-transition-timing-default),
+      color 0.2s var(--ifm-transition-timing-default);
+  }
+
+  .dfk-feature-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .dfk-next-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .dfk-next-card:hover .dfk-next-card-arrow {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes dfk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dfk-float {
+  0%,
+  100% {
+    transform: translateY(-4px);
+  }
+
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+/* -------------------------------------------------------- breakpoints */
+
+@media screen and (max-width: 996px) {
+  .dfk-hero {
+    padding: 3rem 1.5rem;
+  }
+
+  .dfk-section {
+    padding: 3.5rem 0;
+  }
+}
+
+@media screen and (max-width: 576px) {
+  .dfk-section-inner {
+    padding: 0 1rem;
+  }
+
+  /* Full-width buttons stack better than two pills on a phone. */
+  .dfk-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

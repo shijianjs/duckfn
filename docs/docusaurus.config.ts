@@ -1,7 +1,8 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
-import remarkVersionPlaceholder from './plugins/remark-version-placeholder';
+import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
+import {DUCKFN_VERSION} from './duckfn-version';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -70,7 +71,9 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           // Replaces the `{{DUCKFN_VERSION}}` placeholder with the version from
           // docs/duckfn-version.ts, so a release only has to update that one file.
-          remarkPlugins: [remarkVersionPlaceholder],
+          // The plugin itself ships in duckfn-docs-kit for reuse by other
+          // extension docs sites; the version value stays site-specific.
+          remarkPlugins: [[remarkVersionPlaceholder, {version: DUCKFN_VERSION}]],
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/shijianjs/duckfn/tree/main/docs/',
           // Without this, translated pages link back to the English source in docs/docs/;

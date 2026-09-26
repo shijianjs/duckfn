@@ -4,6 +4,11 @@
  * work well for content-centric websites.
  */
 
+/* Shared building blocks from duckfn-docs-kit: the `--duckfn-*` brand tokens,
+   the TOC-toggle styles and the `dfk-*` home-component styles. They live in the
+   kit so other extension docs sites get the same look without copying code. */
+@import 'duckfn-docs-kit/css/kit.css';
+
 /* Brand colours.
    The palette comes from `static/img/duckfn-logo.svg`, which is drawn with a deep
    blue body (#14459b, with #17469b / #16459b / #304d90 / #143070 shading) and a
@@ -22,10 +27,9 @@
      #fcb103 on #14459b         4.8:1   -> yellow is only legible on brand blue
      #fcb103 on white           1.8:1   -> NOT a text colour; see the note below.
 
-   `--duckfn-*` are the tokens the homepage picks its tints, glows and borders
-   from, so the brand colour stays defined in exactly one place. They are written
-   out explicitly instead of derived with `color-mix()` to avoid relying on a
-   newer CSS feature for something this central. */
+   The `--duckfn-*` tokens the home page picks its tints, glows and borders from
+   are defined in the kit's `tokens.css` (imported above); this file only owns
+   the Infima ramp. */
 :root {
   --ifm-color-primary: #14459b;
   --ifm-color-primary-dark: #123d8a;
@@ -36,31 +40,6 @@
   --ifm-color-primary-lightest: #1a5aca;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
-
-  --duckfn-blue: #14459b;
-  /* Ends of the gradient the homepage headline is painted with. */
-  --duckfn-blue-deep: #0e306c;
-  --duckfn-blue-bright: #1a5aca;
-  /* Tinted surfaces: card icon chips, the code showcase band, hover shadows. */
-  --duckfn-blue-soft: #e8eefb;
-  --duckfn-tint: #f6f8fc;
-  /* Kept faint on purpose: the home page stretches these over a very large
-     radius, and a stronger tint shows the gradient's steps as visible bands. */
-  --duckfn-glow: rgba(20, 69, 155, 0.12);
-  --duckfn-glow-warm: rgba(252, 177, 3, 0.16);
-  --duckfn-card-bg: #ffffff;
-  --duckfn-card-border: #e3e8f2;
-  --duckfn-shadow: 0 8px 24px rgba(20, 69, 155, 0.12);
-  --duckfn-yellow: #fcb103;
-  /* Home page buttons, kept apart from the primary because the dark mode value
-     of `--ifm-color-primary` is too light to carry white text. Measured against
-     their own label: white on #14459b is 8.9:1, white on the hover #0e306c is
-     12.7:1. The outline border is decorative — the label above it carries the
-     contrast — so it is allowed to stay faint. */
-  --duckfn-btn-bg: #14459b;
-  --duckfn-btn-bg-hover: #0e306c;
-  --duckfn-btn-fg: #ffffff;
-  --duckfn-outline-border: #bccbe8;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode.
@@ -75,25 +54,6 @@
   --ifm-color-primary-lighter: #59a5ff;
   --ifm-color-primary-lightest: #64baff;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
-
-  --duckfn-blue: #4d8fe8;
-  --duckfn-blue-deep: #4d8fe8;
-  --duckfn-blue-bright: #9ecbff;
-  --duckfn-blue-soft: #17253d;
-  --duckfn-tint: #1f2733;
-  --duckfn-glow: rgba(77, 143, 232, 0.16);
-  --duckfn-glow-warm: rgba(252, 177, 3, 0.12);
-  --duckfn-card-bg: #242526;
-  --duckfn-card-border: #33405c;
-  --duckfn-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --duckfn-yellow: #fcb103;
-  /* The dark primary is a light blue, so white on it would only reach 3.3:1.
-     The button therefore gets its own deeper blue: white on #2f6fd0 is 4.9:1,
-     and the one-notch-lighter hover stays at 4.4:1. */
-  --duckfn-btn-bg: #2f6fd0;
-  --duckfn-btn-bg-hover: #3576dd;
-  --duckfn-btn-fg: #ffffff;
-  --duckfn-outline-border: #33405c;
 }
 
 /* The yellow is an accent, never a text colour: #fcb103 on white is 1.8:1.
@@ -117,69 +77,3 @@
   min-width: 0;
 }
 
-/* Table-of-contents toggle.
-   Docusaurus has no `hideable` option for the right-hand TOC, so the control and
-   the layout switch are provided by src/clientModules/tocToggle.ts: the button is
-   injected above the TOC, and the `toc-collapsed` class on <body> drives the
-   rules below. */
-
-.toc-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  /* Right edge of the TOC column, next to the list it controls. */
-  margin-left: auto;
-  margin-bottom: 0.5rem;
-  border-radius: 50%;
-  background-color: var(--ifm-color-emphasis-200);
-  color: var(--ifm-color-emphasis-800);
-  transition: background-color var(--ifm-transition-fast)
-    var(--ifm-transition-timing-default);
-}
-
-.toc-toggle:hover {
-  background-color: var(--ifm-color-emphasis-300);
-}
-
-.toc-toggle::after {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  background-color: currentColor;
-  /* chevron-right: "push the TOC away"; it is flipped when collapsed. */
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  transition: transform var(--ifm-transition-fast)
-    var(--ifm-transition-timing-default);
-}
-
-body.toc-collapsed .toc-toggle::after {
-  transform: rotate(180deg);
-}
-
-/* Collapsed: the column shrinks to a strip that keeps the button reachable, the
-   list is hidden, and the article takes the freed width. Infima sizes columns
-   through --ifm-col-width, so overriding that one property covers the width.
-
-   These rules go into the theme's own cascade layer on purpose: `future.v4`
-   makes Docusaurus emit layered CSS, and for `!important` declarations layer
-   order wins over specificity — an unlayered `!important` loses to a layered
-   one, so the `max-width` below would silently do nothing outside this layer. */
-@layer docusaurus.theme-classic {
-  body.toc-collapsed .toc-column {
-    --ifm-col-width: 2.5rem;
-    padding: 0;
-  }
-
-  body.toc-collapsed .toc-column .theme-doc-toc-desktop {
-    display: none;
-  }
-
-  body.toc-collapsed [class*='docItemCol'] {
-    max-width: 100% !important;
-  }
-}

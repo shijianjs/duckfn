@@ -1,0 +1,18 @@
+{
+  "name": "duckfn-docs-workspace",
+  "private": true,
+  "workspaces": [
+    "docs",
+    "duckfn-docs-kit"
+  ],
+  "scripts": {
+    "build": "npm run build -w duckfn-docs-kit && npm run build -w docs",
+    "typecheck": "npm run typecheck -w duckfn-docs-kit && npm run typecheck -w docs",
+    "start": "npm run build -w duckfn-docs-kit && npm start -w docs"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "@swc/core@1.16.2": true,
+    "core-js@3.50.0": true
+  }
+}

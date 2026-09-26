@@ -42,7 +42,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: docs/package-lock.json
+          # npm workspaces: the lockfile lives at the repository root and covers
+          # both docs/ and duckfn-docs-kit/.
+          cache-dependency-path: package-lock.json
 
       # Resolves the Pages base URL, honouring a custom domain when one is configured.
       - name: Configure Pages
@@ -50,11 +52,11 @@ jobs:
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Install dependencies
-        working-directory: docs
+        # Install the whole workspace from the root (docs + duckfn-docs-kit).
         run: npm ci
 
       - name: Build site
-        working-directory: docs
+        # The root script builds duckfn-docs-kit first, then the docs site.
         # A project site is served from /<repo>/, so Docusaurus is told the real url/baseUrl
         # instead of relying on the local-development fallbacks in docusaurus.config.ts.
         run: |

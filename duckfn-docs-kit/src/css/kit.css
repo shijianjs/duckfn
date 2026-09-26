@@ -1,0 +1,9 @@
+/**
+ * One-line entry point: brand tokens + TOC toggle + home components.
+ *
+ * A consuming site can also @import the individual files instead, e.g. to use
+ * the TOC toggle without the home-page styles.
+ */
+@import './tokens.css';
+@import './toc-toggle.css';
+@import './home.css';

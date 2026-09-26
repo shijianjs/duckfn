@@ -1,0 +1,51 @@
+{
+  "name": "duckfn-docs-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Docusaurus building blocks (TOC toggle, home-page web components, brand tokens, remark version placeholder) for duckfn-family extension docs sites.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./toc-toggle": {
+      "types": "./dist/toc-toggle.d.ts",
+      "default": "./dist/toc-toggle.js"
+    },
+    "./remark": {
+      "types": "./dist/remark/version-placeholder.d.ts",
+      "default": "./dist/remark/version-placeholder.js"
+    },
+    "./css/kit.css": "./src/css/kit.css",
+    "./css/tokens.css": "./src/css/tokens.css",
+    "./css/toc-toggle.css": "./src/css/toc-toggle.css",
+    "./css/home.css": "./src/css/home.css"
+  },
+  "files": [
+    "dist",
+    "src/css",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@iconify-icons/lucide": "^2.0.12",
+    "@iconify-icons/simple-icons": "^2.0.4",
+    "@iconify/types": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "~6.0.2",
+    "unified": "^11.0.5",
+    "vite": "^5.4.11"
+  },
+  "engines": {
+    "node": ">=20.0"
+  }
+}
