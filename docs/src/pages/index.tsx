@@ -7,16 +7,17 @@ import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
 
-import {
-  ArrowRightIcon,
-  BracesIcon,
-  GitHubIcon,
-  HashIcon,
-  LifeBuoyIcon,
-  PackageIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
-} from '../components/icons';
+import {Icon} from '@iconify/react';
+import type {IconifyIcon} from '@iconify/types';
+import arrowRight from '@iconify-icons/lucide/arrow-right';
+import braces from '@iconify-icons/lucide/braces';
+import hash from '@iconify-icons/lucide/hash';
+import lifeBuoy from '@iconify-icons/lucide/life-buoy';
+import packageIcon from '@iconify-icons/lucide/package';
+import shieldCheck from '@iconify-icons/lucide/shield-check';
+import sparkles from '@iconify-icons/lucide/sparkles';
+import github from '@iconify-icons/simple-icons/github';
+
 import styles from './index.module.css';
 
 /**
@@ -29,9 +30,6 @@ import styles from './index.module.css';
  * Copy lives in `<Translate>` so both locales stay in sync; the Chinese strings
  * are in `i18n/zh-Hans/code.json` under the same `homepage.*` keys.
  */
-
-/** Icons only need a class name: colour comes from `currentColor`. */
-type IconComponent = (props: {className?: string}) => ReactNode;
 
 const GITHUB_URL = 'https://github.com/shijianjs/duckfn';
 
@@ -66,13 +64,13 @@ SELECT double_it(13);    -- error: unlucky input`;
 
 const FEATURES: {
   key: string;
-  Icon: IconComponent;
+  icon: IconifyIcon;
   title: ReactNode;
   details: ReactNode;
 }[] = [
   {
     key: 'noGlue',
-    Icon: SparklesIcon,
+    icon: sparkles,
     title: (
       <Translate
         id="homepage.features.noGlue.title"
@@ -92,7 +90,7 @@ const FEATURES: {
   },
   {
     key: 'noBuild',
-    Icon: PackageIcon,
+    icon: packageIcon,
     title: (
       <Translate
         id="homepage.features.noBuild.title"
@@ -112,7 +110,7 @@ const FEATURES: {
   },
   {
     key: 'safe',
-    Icon: ShieldCheckIcon,
+    icon: shieldCheck,
     title: (
       <Translate
         id="homepage.features.safe.title"
@@ -131,7 +129,7 @@ const FEATURES: {
   },
   {
     key: 'attributes',
-    Icon: HashIcon,
+    icon: hash,
     title: (
       <Translate
         id="homepage.features.attributes.title"
@@ -150,7 +148,7 @@ const FEATURES: {
   },
   {
     key: 'panic',
-    Icon: LifeBuoyIcon,
+    icon: lifeBuoy,
     title: (
       <Translate
         id="homepage.features.panic.title"
@@ -169,7 +167,7 @@ const FEATURES: {
   },
   {
     key: 'nested',
-    Icon: BracesIcon,
+    icon: braces,
     title: (
       <Translate
         id="homepage.features.nested.title"
@@ -322,7 +320,7 @@ function Hero(): ReactNode {
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer">
-            <GitHubIcon className={styles.buttonIcon} />
+            <Icon icon={github} className={styles.buttonIcon} aria-hidden="true" />
             <Translate id="homepage.github" description="Home page button linking to the repository">
               GitHub
             </Translate>
@@ -357,10 +355,10 @@ function Features(): ReactNode {
           </Translate>
         </Heading>
         <div className={styles.featureGrid}>
-          {FEATURES.map(({key, Icon, title, details}) => (
+          {FEATURES.map(({key, icon, title, details}) => (
             <article className={styles.featureCard} key={key}>
               <span className={styles.featureIconChip}>
-                <Icon className={styles.featureIcon} />
+                <Icon icon={icon} className={styles.featureIcon} aria-hidden="true" />
               </span>
               <Heading as="h3" className={styles.featureTitle}>
                 {title}
@@ -420,7 +418,7 @@ function CodeShowcase(): ReactNode {
               description="Home page link to the side-by-side comparison page">
               Same functions, two ways: four of them written both ways
             </Translate>
-            <ArrowRightIcon className={styles.showcaseLinkArrow} />
+            <Icon icon={arrowRight} className={styles.showcaseLinkArrow} aria-hidden="true" />
           </Link>
         </p>
       </div>
@@ -446,7 +444,7 @@ function NextSteps(): ReactNode {
                 <span className={styles.nextCardTitle}>{title}</span>
                 <span className={styles.nextCardDetails}>{details}</span>
               </span>
-              <ArrowRightIcon className={styles.nextCardArrow} />
+              <Icon icon={arrowRight} className={styles.nextCardArrow} aria-hidden="true" />
             </Link>
           ))}
         </div>
