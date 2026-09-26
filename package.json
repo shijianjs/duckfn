@@ -8,7 +8,8 @@
   "scripts": {
     "build": "npm run build -w duckfn-docs-kit && npm run build -w docs",
     "typecheck": "npm run typecheck -w duckfn-docs-kit && npm run typecheck -w docs",
-    "start": "npm run build -w duckfn-docs-kit && npm start -w docs"
+    "start": "npm run build -w duckfn-docs-kit && npm start -w docs",
+    "start:zh-Hans": "npm run build -w duckfn-docs-kit && npm run start:zh-Hans -w docs"
   },
   "allowScripts": {
     "esbuild@0.21.5": true,
