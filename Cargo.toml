@@ -73,7 +73,7 @@ resolver = "3"
 members = ["duckfn-macro"]
 
 [workspace.package]
-version = "0.0.13"
+version = "0.0.14-dev.0"
 edition = "2024"
 rust-version = "1.86"
 license = "MIT"
@@ -258,7 +258,7 @@ indexmap = "2"
 #
 # The proc-macro crate is a sibling directory inside this workspace; the release script rewrites
 # this exact pin (=X.Y.Z) together with the crate version, hence the manifest-relative path.
-duckfn-macro = { version = "=0.0.13", path = "duckfn-macro" }
+duckfn-macro = { version = "=0.0.14-dev.0", path = "duckfn-macro" }
 
 inventory = "0.3"
 itertools = "0.15"
