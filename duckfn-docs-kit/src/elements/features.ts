@@ -52,7 +52,6 @@ export class DfkFeatures extends HTMLElementBase {
 /** One feature card: an icon chip, a title and a description. Built once. */
 class DfkFeatureCard {
   readonly root = el('article', {class: 'dfk-feature-card'});
-  readonly #chip = el('span', {class: 'dfk-feature-icon-chip'});
   readonly #icon: IconifyIconHTMLElement = el('iconify-icon', {
     class: 'dfk-feature-icon',
     attrs: {'aria-hidden': 'true'},
@@ -61,8 +60,15 @@ class DfkFeatureCard {
   readonly #details = el('p', {class: 'dfk-feature-details'});
 
   constructor() {
-    this.#chip.appendChild(this.#icon);
-    this.root.append(this.#chip, this.#title, this.#details);
+    // The chip only wraps the icon and is never touched again, so it is
+    // described in place instead of being held in a field.
+    this.root.append(
+      el('span', {class: 'dfk-feature-icon-chip'}, (chip) =>
+        chip.appendChild(this.#icon),
+      ),
+      this.#title,
+      this.#details,
+    );
   }
 
   setFeature(item: FeatureItem): void {

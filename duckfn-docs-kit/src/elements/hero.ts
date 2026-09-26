@@ -18,7 +18,9 @@ export class DfkHero extends HTMLElementBase {
   // The <h1> spells out the name, so the logo is decorative: alt="".
   readonly #logo = el('img', {
     class: 'dfk-logo',
-    attrs: {alt: '', width: '480', height: '480'},
+    alt: '',
+    width: 480,
+    height: 480,
   });
   readonly #title = el('h1', {class: 'dfk-title'});
   readonly #tagline = el('p', {class: 'dfk-tagline'});
@@ -92,7 +94,8 @@ export class DfkHero extends HTMLElementBase {
     while (this.#badgeLinks.length < badges.length) {
       const link = el('a', {
         class: 'dfk-badge',
-        attrs: {target: '_blank', rel: 'noopener noreferrer'},
+        target: '_blank',
+        rel: 'noopener noreferrer',
       });
       link.appendChild(el('img', {class: 'dfk-badge-image'}));
       this.#badgeLinks.push(link);

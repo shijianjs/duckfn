@@ -70,6 +70,30 @@ constructor() {
 存成字段；`querySelector` 只允许出现在「从外部挂载点找目标」（如
 `toc-toggle.ts` 里找 `.theme-doc-toc-desktop`）这类不属于组件自身结构的地方。
 
+纯结构节点用 `el()`（`src/dom.ts`）建，不必展开成 `createElement` + 逐行赋值。它的
+options 按标签收窄，直接写标签自己的属性；`class` / `text` 是 `className` /
+`textContent` 的简写，`aria-*` / `data-*` 以及没有同名属性的自定义元素属性走 `attrs`
+兜底。属性名拼错、值类型不对、把 `style` / `dataset` / 方法名塞进去，都是编译错误：
+
+```ts
+readonly #logo = el('img', {class: 'dfk-logo', alt: '', width: 480, height: 480});
+```
+
+第三个参数是可选的 `init` 回调，用来**就地描述不会再被单独引用的结构**，省掉一个
+字段；需要反复访问的节点仍然存成字段：
+
+```ts
+this.root.append(
+  el('span', {class: 'dfk-next-card-body'}, (body) =>
+    body.append(this.#title, this.#details),
+  ),
+  this.#arrow,
+);
+```
+
+`init` 里不要读**声明顺序在其后**的 `#字段`（字段初始化器按声明顺序求值，会踩 TDZ）：
+在构造函数里传 `init` 最稳妥，构造函数执行时所有字段都已初始化。
+
 ### 3. 更新是局部、直接、明确的；不得有通用刷新机制
 
 状态变化 = 改**相关的那几个**节点，用命名的领域 setter 表达，而不是把整个 UI

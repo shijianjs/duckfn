@@ -51,7 +51,6 @@ export class DfkNextSteps extends HTMLElementBase {
 /** One "next step" card: the whole card is the link. Built once. */
 class DfkNextStepCard {
   readonly root = el('a', {class: 'dfk-next-card'});
-  readonly #body = el('span', {class: 'dfk-next-card-body'});
   readonly #title = el('span', {class: 'dfk-next-card-title'});
   readonly #details = el('span', {class: 'dfk-next-card-details'});
   readonly #arrow: IconifyIconHTMLElement = el('iconify-icon', {
@@ -60,8 +59,14 @@ class DfkNextStepCard {
   });
 
   constructor() {
-    this.#body.append(this.#title, this.#details);
-    this.root.append(this.#body, this.#arrow);
+    // The body only groups the two text spans and is never touched again, so it
+    // is described in place instead of being held in a field.
+    this.root.append(
+      el('span', {class: 'dfk-next-card-body'}, (body) =>
+        body.append(this.#title, this.#details),
+      ),
+      this.#arrow,
+    );
   }
 
   setStep(item: NextStepItem): void {
