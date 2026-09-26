@@ -1,71 +1,71 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
-import type {NextStepItem, NextStepsData} from '../types';
-import {DfkElement} from './base';
+import {el, HTMLElementBase} from '../dom';
+import type {NextStepItem} from '../types';
 
 /**
  * `<dfk-next-steps>` — the "Where to go next" row of link cards. Ported from
  * the home page's `NextSteps()`.
  *
- * Same persistent-DOM shape as `DfkFeatures`: the grid is built once and each
- * card holds its own nodes; `apply()` grows/shrinks the list and mutates in
- * place.
+ * Same retained-mode shape as `DfkFeatures`: the grid is built once, each card
+ * holds its own nodes, `setSteps()` grows/shrinks the list and mutates in place.
  */
-export class DfkNextSteps extends DfkElement<NextStepsData> {
-  readonly #heading = this.el('h2', {class: 'dfk-section-title'});
-  readonly #grid = this.el('div', {class: 'dfk-next-grid'});
-  #cards: DfkNextStepCard[] = [];
+export class DfkNextSteps extends HTMLElementBase {
+  readonly #section = el('section', {class: 'dfk-section'});
+  readonly #inner = el('div', {class: 'dfk-section-inner'});
+  readonly #heading = el('h2', {class: 'dfk-section-title'});
+  readonly #grid = el('div', {class: 'dfk-next-grid'});
+  readonly #cards: DfkNextStepCard[] = [];
+  #attached = false;
 
-  protected override create(): void {
-    const inner = this.el('div', {class: 'dfk-section-inner'});
-    inner.append(this.#heading, this.#grid);
-    const section = this.el('section', {class: 'dfk-section'});
-    section.appendChild(inner);
-    this.appendChild(section);
+  constructor() {
+    super();
+    this.#inner.append(this.#heading, this.#grid);
+    this.#section.appendChild(this.#inner);
   }
 
-  protected override apply(data: NextStepsData): void {
-    this.#heading.textContent = data.sectionTitle;
-    while (this.#cards.length > data.items.length) {
+  connectedCallback(): void {
+    if (this.#attached) {
+      return;
+    }
+    this.#attached = true;
+    this.append(this.#section);
+  }
+
+  setSectionTitle(text: string): void {
+    this.#heading.textContent = text;
+  }
+
+  setSteps(items: readonly NextStepItem[]): void {
+    while (this.#cards.length > items.length) {
       this.#cards.pop()?.root.remove();
     }
-    while (this.#cards.length < data.items.length) {
+    while (this.#cards.length < items.length) {
       const card = new DfkNextStepCard();
       this.#cards.push(card);
       this.#grid.appendChild(card.root);
     }
-    data.items.forEach((item, i) => this.#cards[i].apply(item));
+    items.forEach((item, index) => this.#cards[index].setStep(item));
   }
 }
 
 /** One "next step" card: the whole card is the link. Built once. */
 class DfkNextStepCard {
-  readonly root: HTMLAnchorElement;
-  readonly #title: HTMLElement;
-  readonly #details: HTMLElement;
-  readonly #arrow: IconifyIconHTMLElement;
+  readonly root = el('a', {class: 'dfk-next-card'});
+  readonly #body = el('span', {class: 'dfk-next-card-body'});
+  readonly #title = el('span', {class: 'dfk-next-card-title'});
+  readonly #details = el('span', {class: 'dfk-next-card-details'});
+  readonly #arrow: IconifyIconHTMLElement = el('iconify-icon', {
+    class: 'dfk-next-card-arrow',
+    attrs: {icon: 'lucide:arrow-right', 'aria-hidden': 'true'},
+  });
 
   constructor() {
-    this.root = document.createElement('a');
-    this.root.className = 'dfk-next-card';
-
-    this.#title = document.createElement('span');
-    this.#title.className = 'dfk-next-card-title';
-    this.#details = document.createElement('span');
-    this.#details.className = 'dfk-next-card-details';
-    const body = document.createElement('span');
-    body.className = 'dfk-next-card-body';
-    body.append(this.#title, this.#details);
-
-    this.#arrow = document.createElement('iconify-icon');
-    this.#arrow.className = 'dfk-next-card-arrow';
-    this.#arrow.setAttribute('icon', 'lucide:arrow-right');
-    this.#arrow.setAttribute('aria-hidden', 'true');
-
-    this.root.append(body, this.#arrow);
+    this.#body.append(this.#title, this.#details);
+    this.root.append(this.#body, this.#arrow);
   }
 
-  apply(item: NextStepItem): void {
-    this.root.setAttribute('href', item.href);
+  setStep(item: NextStepItem): void {
+    this.root.href = item.href;
     this.#title.textContent = item.title;
     this.#details.textContent = item.details;
   }

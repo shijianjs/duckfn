@@ -1,67 +1,71 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
-import type {FeatureItem, FeaturesData} from '../types';
-import {DfkElement} from './base';
+import {el, HTMLElementBase} from '../dom';
+import type {FeatureItem} from '../types';
 
 /**
  * `<dfk-features>` — the "Why duckfn" grid of feature cards. Ported from the
  * home page's `Features()`.
  *
- * Persistent DOM: the grid skeleton is built once, and each card is a
- * {@link DfkFeatureCard} that holds its own nodes. `apply()` grows or shrinks
- * the card list to the data length and mutates the cards in place — the grid is
- * never cleared and rebuilt.
+ * Retained-mode: the grid is built once and each card (a {@link DfkFeatureCard})
+ * holds its own nodes. `setFeatures()` grows or shrinks the list to the new
+ * length and mutates the cards in place — the grid is never cleared and rebuilt.
  */
-export class DfkFeatures extends DfkElement<FeaturesData> {
-  readonly #heading = this.el('h2', {class: 'dfk-section-title'});
-  readonly #grid = this.el('div', {class: 'dfk-feature-grid'});
-  #cards: DfkFeatureCard[] = [];
+export class DfkFeatures extends HTMLElementBase {
+  readonly #section = el('section', {class: 'dfk-section'});
+  readonly #inner = el('div', {class: 'dfk-section-inner'});
+  readonly #heading = el('h2', {class: 'dfk-section-title'});
+  readonly #grid = el('div', {class: 'dfk-feature-grid'});
+  readonly #cards: DfkFeatureCard[] = [];
+  #attached = false;
 
-  protected override create(): void {
-    const inner = this.el('div', {class: 'dfk-section-inner'});
-    inner.append(this.#heading, this.#grid);
-    const section = this.el('section', {class: 'dfk-section'});
-    section.appendChild(inner);
-    this.appendChild(section);
+  constructor() {
+    super();
+    this.#inner.append(this.#heading, this.#grid);
+    this.#section.appendChild(this.#inner);
   }
 
-  protected override apply(data: FeaturesData): void {
-    this.#heading.textContent = data.sectionTitle;
-    while (this.#cards.length > data.items.length) {
+  connectedCallback(): void {
+    if (this.#attached) {
+      return;
+    }
+    this.#attached = true;
+    this.append(this.#section);
+  }
+
+  setSectionTitle(text: string): void {
+    this.#heading.textContent = text;
+  }
+
+  setFeatures(items: readonly FeatureItem[]): void {
+    while (this.#cards.length > items.length) {
       this.#cards.pop()?.root.remove();
     }
-    while (this.#cards.length < data.items.length) {
+    while (this.#cards.length < items.length) {
       const card = new DfkFeatureCard();
       this.#cards.push(card);
       this.#grid.appendChild(card.root);
     }
-    data.items.forEach((item, i) => this.#cards[i].apply(item));
+    items.forEach((item, index) => this.#cards[index].setFeature(item));
   }
 }
 
 /** One feature card: an icon chip, a title and a description. Built once. */
 class DfkFeatureCard {
-  readonly root: HTMLElement;
-  readonly #icon: IconifyIconHTMLElement;
-  readonly #title: HTMLHeadingElement;
-  readonly #details: HTMLParagraphElement;
+  readonly root = el('article', {class: 'dfk-feature-card'});
+  readonly #chip = el('span', {class: 'dfk-feature-icon-chip'});
+  readonly #icon: IconifyIconHTMLElement = el('iconify-icon', {
+    class: 'dfk-feature-icon',
+    attrs: {'aria-hidden': 'true'},
+  });
+  readonly #title = el('h3', {class: 'dfk-feature-title'});
+  readonly #details = el('p', {class: 'dfk-feature-details'});
 
   constructor() {
-    this.root = document.createElement('article');
-    this.root.className = 'dfk-feature-card';
-    const chip = document.createElement('span');
-    chip.className = 'dfk-feature-icon-chip';
-    this.#icon = document.createElement('iconify-icon');
-    this.#icon.className = 'dfk-feature-icon';
-    this.#icon.setAttribute('aria-hidden', 'true');
-    chip.appendChild(this.#icon);
-    this.#title = document.createElement('h3');
-    this.#title.className = 'dfk-feature-title';
-    this.#details = document.createElement('p');
-    this.#details.className = 'dfk-feature-details';
-    this.root.append(chip, this.#title, this.#details);
+    this.#chip.appendChild(this.#icon);
+    this.root.append(this.#chip, this.#title, this.#details);
   }
 
-  apply(item: FeatureItem): void {
+  setFeature(item: FeatureItem): void {
     this.#icon.setAttribute('icon', item.icon);
     this.#title.textContent = item.title;
     this.#details.textContent = item.details;

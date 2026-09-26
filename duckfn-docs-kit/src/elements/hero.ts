@@ -1,115 +1,126 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
-import type {HeroData, HeroLink} from '../types';
-import {DfkElement} from './base';
+import {el, HTMLElementBase} from '../dom';
+import type {HeroAction, HeroBadge, HeroLink} from '../types';
 
 /**
  * `<dfk-hero>` — the landing hero: logo, title, tagline, the two call-to-action
  * buttons and the badge row. Ported from the Docusaurus home page's `Hero()`.
  *
- * The skeleton is built once in `create()`; `apply()` writes the data into the
- * held nodes. The badge row is the only variable-length list: its items are
- * appended/removed to match the data instead of the row being rebuilt.
+ * Retained-mode: every node is held in a field, the structure is assembled once
+ * in the constructor (into a detached `section`, because a custom element's
+ * constructor must not add children to the element it is building), and the
+ * `set*` methods only mutate the nodes they own.
  */
-export class DfkHero extends DfkElement<HeroData> {
-  readonly #logo = this.el('img', {
+export class DfkHero extends HTMLElementBase {
+  readonly #section = el('section', {class: 'dfk-hero'});
+  readonly #inner = el('div', {class: 'dfk-hero-inner'});
+  readonly #stage = el('span', {class: 'dfk-logo-stage'});
+  // The <h1> spells out the name, so the logo is decorative: alt="".
+  readonly #logo = el('img', {
     class: 'dfk-logo',
     attrs: {alt: '', width: '480', height: '480'},
   });
-  readonly #title = this.el('h1', {class: 'dfk-title'});
-  readonly #tagline = this.el('p', {class: 'dfk-tagline'});
-  readonly #primary: HTMLAnchorElement;
-  readonly #primaryLabel = this.el('span');
-  readonly #secondary: HTMLAnchorElement;
-  readonly #secondaryLabel = this.el('span');
-  readonly #secondaryIcon: IconifyIconHTMLElement;
-  readonly #badges = this.el('div', {class: 'dfk-badges'});
-  #badgeLinks: HTMLAnchorElement[] = [];
+  readonly #title = el('h1', {class: 'dfk-title'});
+  readonly #tagline = el('p', {class: 'dfk-tagline'});
+  readonly #actions = el('div', {class: 'dfk-actions'});
+  readonly #primary = el('a', {class: 'dfk-button-primary'});
+  readonly #primaryLabel = el('span');
+  readonly #secondary = el('a', {class: 'dfk-button-secondary'});
+  readonly #secondaryIcon: IconifyIconHTMLElement = el('iconify-icon', {
+    class: 'dfk-button-icon',
+    attrs: {'aria-hidden': 'true'},
+  });
+  readonly #secondaryLabel = el('span');
+  readonly #badges = el('div', {class: 'dfk-badges'});
+  readonly #badgeLinks: HTMLAnchorElement[] = [];
+  #attached = false;
 
   constructor() {
     super();
-    this.#primary = this.#buildLink('dfk-button-primary', this.#primaryLabel);
-    this.#secondary = this.#buildLink('dfk-button-secondary', this.#secondaryLabel);
-    // The <h1> spells out the name, so the logo is decorative: alt="".
-    this.#secondaryIcon = this.el('iconify-icon', {
-      class: 'dfk-button-icon',
-      attrs: {'aria-hidden': 'true'},
-    });
-    this.#secondary.replaceChildren(
-      this.#secondaryIcon,
-      this.#secondaryLabel,
+    // Assembled into the detached `section`, never into `this`.
+    this.#stage.appendChild(this.#logo);
+    this.#primary.appendChild(this.#primaryLabel);
+    this.#secondary.append(this.#secondaryIcon, this.#secondaryLabel);
+    this.#actions.append(this.#primary, this.#secondary);
+    this.#inner.append(
+      this.#stage,
+      this.#title,
+      this.#tagline,
+      this.#actions,
+      this.#badges,
     );
+    this.#section.appendChild(this.#inner);
   }
 
-  protected override create(): void {
-    const stage = this.el('span', {class: 'dfk-logo-stage'});
-    stage.appendChild(this.#logo);
-
-    const actions = this.el('div', {class: 'dfk-actions'});
-    actions.append(this.#primary, this.#secondary);
-
-    const inner = this.el('div', {class: 'dfk-hero-inner'});
-    inner.append(stage, this.#title, this.#tagline, actions, this.#badges);
-
-    const section = this.el('section', {class: 'dfk-hero'});
-    section.appendChild(inner);
-    this.appendChild(section);
+  connectedCallback(): void {
+    // React can detach and re-attach the same node; the structure is built once.
+    if (this.#attached) {
+      return;
+    }
+    this.#attached = true;
+    this.append(this.#section);
   }
 
-  protected override apply(data: HeroData): void {
-    this.#logo.setAttribute('src', data.logoSrc);
-    this.#title.textContent = data.title;
-    this.#tagline.textContent = data.tagline;
-    this.#applyLink(this.#primary, this.#primaryLabel, data.primary);
-    this.#applyLink(this.#secondary, this.#secondaryLabel, {
-      ...data.secondary,
-      external: true,
+  setLogo(src: string): void {
+    this.#logo.src = src;
+  }
+
+  setTitle(text: string): void {
+    this.#title.textContent = text;
+  }
+
+  setTagline(text: string): void {
+    this.#tagline.textContent = text;
+  }
+
+  /** The "Get started" button: an internal link, so it stays in the same tab. */
+  setPrimaryAction(link: HeroLink): void {
+    this.#fillLink(this.#primary, this.#primaryLabel, link, false);
+  }
+
+  /** The GitHub button: always external, always carries the glyph. */
+  setSecondaryAction(action: HeroAction): void {
+    this.#fillLink(this.#secondary, this.#secondaryLabel, action, true);
+    this.#secondaryIcon.setAttribute('icon', action.icon);
+  }
+
+  setBadges(badges: readonly HeroBadge[]): void {
+    // Grow/shrink the row to the new length and reuse the links already there.
+    while (this.#badgeLinks.length > badges.length) {
+      this.#badgeLinks.pop()?.remove();
+    }
+    while (this.#badgeLinks.length < badges.length) {
+      const link = el('a', {
+        class: 'dfk-badge',
+        attrs: {target: '_blank', rel: 'noopener noreferrer'},
+      });
+      link.appendChild(el('img', {class: 'dfk-badge-image'}));
+      this.#badgeLinks.push(link);
+      this.#badges.appendChild(link);
+    }
+    badges.forEach((badge, index) => {
+      const link = this.#badgeLinks[index];
+      link.href = badge.href;
+      const image = link.firstElementChild as HTMLImageElement;
+      image.src = badge.src;
+      image.alt = badge.alt;
     });
-    this.#secondaryIcon.setAttribute('icon', data.secondary.icon);
-    this.#applyBadges(data);
   }
 
-  #buildLink(className: string, label: HTMLElement): HTMLAnchorElement {
-    const anchor = this.el('a', {class: className});
-    anchor.appendChild(label);
-    return anchor;
-  }
-
-  #applyLink(
+  #fillLink(
     anchor: HTMLAnchorElement,
     label: HTMLElement,
     link: HeroLink,
+    external: boolean,
   ): void {
-    anchor.setAttribute('href', link.href);
+    anchor.href = link.href;
     label.textContent = link.label;
-    if (link.external) {
-      anchor.setAttribute('target', '_blank');
-      anchor.setAttribute('rel', 'noopener noreferrer');
+    if (external) {
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
     } else {
       anchor.removeAttribute('target');
       anchor.removeAttribute('rel');
     }
-  }
-
-  #applyBadges(data: HeroData): void {
-    // Grow/shrink the row to the data length; existing links are reused.
-    while (this.#badgeLinks.length > data.badges.length) {
-      this.#badgeLinks.pop()?.remove();
-    }
-    while (this.#badgeLinks.length < data.badges.length) {
-      const link = this.el('a', {
-        class: 'dfk-badge',
-        attrs: {target: '_blank', rel: 'noopener noreferrer'},
-      });
-      link.appendChild(this.el('img', {class: 'dfk-badge-image'}));
-      this.#badgeLinks.push(link);
-      this.#badges.appendChild(link);
-    }
-    data.badges.forEach((badge, i) => {
-      const link = this.#badgeLinks[i];
-      link.setAttribute('href', badge.href);
-      const image = link.firstElementChild as HTMLImageElement;
-      image.setAttribute('src', badge.src);
-      image.alt = badge.alt;
-    });
   }
 }

@@ -15,23 +15,31 @@ Static site for <https://shijianjs.github.io/duckfn/>, built with
 | `docs/internals/architecture.md` | How duckfn works internally. |
 | `docs/build-and-release.md`, `docs/contributing.md`, `docs/faq.md` | Project-level pages, at the top level of the sidebar. |
 | `i18n/zh-Hans/` | Simplified Chinese translations of all of the above, plus the UI strings. |
-| `src/pages/index.tsx` | Home page: hero, feature cards, the Rust/SQL showcase, and the "where to go next" cards. Every string is a `<Translate>` and has an entry in `i18n/zh-Hans/code.json` under `homepage.*`. |
-| `src/components/icons.tsx` | The home page's inline SVG glyphs (Lucide and Simple Icons paths, quoted at the top of the file) — an icon package would be the only new runtime dependency on the landing page. |
-| `src/css/custom.css` | Brand palette and theme overrides. The `--duckfn-*` tokens here are the single definition of the brand blue and accent yellow, so the home page never hard-codes a colour. |
+| `src/pages/index.tsx` | Home page: hero, feature cards, the Rust/SQL showcase, and the "where to go next" cards. Every string is a `<Translate>` and has an entry in `i18n/zh-Hans/code.json` under `homepage.*`. The hero, feature grid and "next steps" grid are `<dfk-*>` custom elements from `duckfn-docs-kit`, fed through callback refs. |
+| `src/css/custom.css` | Palette and theme overrides: the seven `--ifm-color-primary*` steps come from the logo blue. The `--duckfn-*` brand tokens themselves are defined once in `duckfn-docs-kit/src/css/tokens.css` and pulled in by the `@import` at the top of this file. |
 | `static/` | Files copied to the site root (images, `favicon.ico`, `.nojekyll`). |
 | `sidebars.ts` | Sidebar definition. Categories come from `_category_.json`; order from `sidebar_position`. |
 | `docusaurus.config.ts` | Site configuration, including the locale list and the footer links. |
 
+This package is one workspace of the repository root: the shared building blocks
+(`duckfn-docs-kit/` — the `<dfk-*>` home-page elements, the TOC toggle, the brand
+tokens, the version-placeholder remark plugin) are a sibling npm workspace,
+consumed as `duckfn-docs-kit`. The lockfile and `node_modules` live at the root.
+
 ## Commands
 
 ```shell
-npm install          # once
-npm start            # dev server at http://localhost:3000
-npm start -- --locale zh-Hans   # dev server, Chinese
-npm run build        # static site into build/
-npm run serve        # preview the build
-npm run typecheck    # tsc
+npm install          # once, from the repository root (npm workspaces)
+npm start -w docs    # dev server at http://localhost:3000
+npm start -w docs -- --locale zh-Hans   # dev server, Chinese
+npm run build -w docs        # static site into docs/build/
+npm run serve -w docs        # preview the build
+npm run typecheck -w docs    # tsc
 ```
+
+`duckfn-docs-kit` is a source dependency, so rebuild it (`npm run build -w duckfn-docs-kit`)
+after editing anything under `duckfn-docs-kit/src/`. The kit's CSS is imported as source files
+and needs no build step.
 
 `npm run build` is the check that matters: `onBrokenLinks` is set to `throw`, so a link to a page
 that does not exist fails the build for both locales.

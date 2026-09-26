@@ -8,10 +8,15 @@ import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
 import {
+  DfkFeatures,
+  DfkHero,
+  DfkNextSteps,
   registerDfkElements,
-  type FeaturesData,
-  type HeroData,
-  type NextStepsData,
+  type FeatureItem,
+  type HeroAction,
+  type HeroBadge,
+  type HeroLink,
+  type NextStepItem,
 } from 'duckfn-docs-kit';
 
 import styles from './index.module.css';
@@ -29,8 +34,8 @@ registerDfkElements();
  * from duckfn-docs-kit, so the whole landing layout is reusable by other
  * extension docs sites. A custom element cannot render React's `<Translate>`,
  * so the copy is resolved with the imperative `translate()` API into plain
- * strings for the active locale and handed to the components through their
- * `data` property; the strings still live in `i18n/zh-Hans/code.json` under the
+ * strings for the active locale and handed to the components through their own
+ * setters; the strings still live in `i18n/zh-Hans/code.json` under the
  * same `homepage.*` keys. The code showcase stays here because it needs the
  * theme's `CodeBlock`.
  *
@@ -41,29 +46,72 @@ registerDfkElements();
 
 const GITHUB_URL = 'https://github.com/shijianjs/duckfn';
 
+type DfkTag = 'dfk-hero' | 'dfk-features' | 'dfk-next-steps';
+
 /**
- * Renders a `dfk-*` custom element and hands its content over through the
- * `data` **property**.
+ * Mounts a `dfk-*` element and hands its content over through the component's
+ * own setters.
  *
  * React's SSR/hydration path only reconciles string/number props onto custom
- * elements — an object like our `data` payload is never serialised into the
- * prerendered HTML, so hydration leaves the property untouched and the element
- * renders nothing. A callback ref is the reliable channel: React calls it with
- * the live node after mount, where we can assign the property directly. The
- * element's own `data` setter then builds the subtree whether this runs before
- * or after `connectedCallback`.
+ * elements — an object payload is never serialised into the prerendered HTML,
+ * so hydration would leave the component empty. A callback ref is the reliable
+ * channel: React calls it with the live node after mount, where the setters are
+ * invoked. The components are retained-mode, so each setter only mutates the
+ * nodes it owns; nothing is re-rendered.
  */
-function dfk<TData>(
-  tag: 'dfk-hero' | 'dfk-features' | 'dfk-next-steps',
-  data: TData,
+function dfk<TContent>(
+  tag: DfkTag,
+  mount: (node: HTMLElement, content: TContent) => void,
+  content: TContent,
 ): ReactNode {
   return createElement(tag, {
     ref: (node: HTMLElement | null) => {
       if (node) {
-        (node as unknown as {data: TData}).data = data;
+        mount(node, content);
       }
     },
   });
+}
+
+interface HeroContent {
+  logoSrc: string;
+  title: string;
+  tagline: string;
+  primary: HeroLink;
+  secondary: HeroAction;
+  badges: HeroBadge[];
+}
+
+function mountHero(node: HTMLElement, content: HeroContent): void {
+  const hero = node as DfkHero;
+  hero.setLogo(content.logoSrc);
+  hero.setTitle(content.title);
+  hero.setTagline(content.tagline);
+  hero.setPrimaryAction(content.primary);
+  hero.setSecondaryAction(content.secondary);
+  hero.setBadges(content.badges);
+}
+
+interface FeaturesContent {
+  sectionTitle: string;
+  items: FeatureItem[];
+}
+
+function mountFeatures(node: HTMLElement, content: FeaturesContent): void {
+  const features = node as DfkFeatures;
+  features.setSectionTitle(content.sectionTitle);
+  features.setFeatures(content.items);
+}
+
+interface NextStepsContent {
+  sectionTitle: string;
+  items: NextStepItem[];
+}
+
+function mountNextSteps(node: HTMLElement, content: NextStepsContent): void {
+  const steps = node as DfkNextSteps;
+  steps.setSectionTitle(content.sectionTitle);
+  steps.setSteps(content.items);
 }
 
 /**
@@ -124,12 +172,12 @@ const BADGES = [
   },
 ];
 
-function heroData(
+function heroContent(
   logoSrc: string,
   introHref: string,
   title: string,
   tagline: string,
-): HeroData {
+): HeroContent {
   return {
     logoSrc,
     title,
@@ -151,7 +199,7 @@ function heroData(
   };
 }
 
-function featuresData(): FeaturesData {
+function featuresContent(): FeaturesContent {
   return {
     sectionTitle: translate({
       id: 'homepage.features.title',
@@ -247,9 +295,9 @@ function featuresData(): FeaturesData {
   };
 }
 
-function nextStepsData(
+function nextStepsContent(
   hrefs: readonly [string, string, string, string],
-): NextStepsData {
+): NextStepsContent {
   const [quickStart, attributes, example, architecture] = hrefs;
   return {
     sectionTitle: translate({
@@ -398,16 +446,17 @@ export default function Home(): ReactNode {
       <main>
         {dfk(
           'dfk-hero',
-          heroData(
+          mountHero,
+          heroContent(
             logoUrl,
             introUrl,
             siteConfig.title,
             translate({id: 'homepage.tagline', message: siteConfig.tagline}),
           ),
         )}
-        {dfk('dfk-features', featuresData())}
+        {dfk('dfk-features', mountFeatures, featuresContent())}
         <CodeShowcase />
-        {dfk('dfk-next-steps', nextStepsData(nextHrefs))}
+        {dfk('dfk-next-steps', mountNextSteps, nextStepsContent(nextHrefs))}
       </main>
     </Layout>
   );
