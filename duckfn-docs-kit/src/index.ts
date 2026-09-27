@@ -9,13 +9,15 @@ import type {HTMLAttributes} from 'react';
  * by the official `<iconify-icon>` web component, which `registerDfkElements()`
  * registers as a side effect, so this package ships no icon data.
  *
- * Import `duckfn-docs-kit/remark` (Node build code) and `duckfn-docs-kit/toc-toggle`
- * from their own subpaths instead of here, so a Docusaurus config file never
- * pulls browser code into Node.
+ * `TocToggle` and the remark plugin keep their own subpaths
+ * (`duckfn-docs-kit/TocToggle`, `duckfn-docs-kit/remark`) instead of being
+ * merged here: a Docusaurus config file must never pull browser code into Node,
+ * and a site that only wants the TOC collapse button should not pay for the
+ * bundled `iconify-icon` that this entry carries.
  */
-export {DfkFeatures} from './elements/features';
-export {DfkHero} from './elements/hero';
-export {DfkNextSteps} from './elements/next-steps';
+export {DfkFeatures} from './elements/DfkFeatures';
+export {DfkHero} from './elements/DfkHero';
+export {DfkNextSteps} from './elements/DfkNextSteps';
 export {registerDfkElements} from './register';
 export type {
   FeatureItem,

@@ -11,18 +11,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./toc-toggle": {
-      "types": "./dist/toc-toggle.d.ts",
-      "default": "./dist/toc-toggle.js"
-    },
-    "./remark": {
-      "types": "./dist/remark/version-placeholder.d.ts",
-      "default": "./dist/remark/version-placeholder.js"
-    },
-    "./css/kit.css": "./src/css/kit.css",
-    "./css/tokens.css": "./src/css/tokens.css",
-    "./css/toc-toggle.css": "./src/css/toc-toggle.css",
-    "./css/home.css": "./src/css/home.css"
+    "./css/*": "./src/css/*",
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
   },
   "files": [
     "dist",

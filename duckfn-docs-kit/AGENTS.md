@@ -9,12 +9,15 @@ web components、品牌 CSS tokens、版本占位符 remark 插件。它被 `doc
 
 - 构建：Vite lib 模式产出 ESM（`dist/`），`tsc -p tsconfig.build.json` 产出
   `.d.ts`。`npm run build` 一步完成。CSS 不经构建，作为源文件直接导出。
-- 三个运行时入口，对应 `exports` 的三个子路径：
-  - `duckfn-docs-kit`（浏览器：CE + 类型）
-  - `duckfn-docs-kit/toc-toggle`（浏览器：TocToggle 类）
+- `exports` 用通配模式（`./* → ./dist/*.js`），新增运行时入口只需在
+  `vite.config.ts` 的 `entry` 里加一行，不必改 `package.json`。入口文件名与
+  其主导出的类名一致（大驼峰），ts 源文件同理：
+  - `duckfn-docs-kit`（浏览器：`index.ts` 桶文件，CE + 类型）
+  - `duckfn-docs-kit/TocToggle`（浏览器：TocToggle 类）
   - `duckfn-docs-kit/remark`（**Node 构建期**：remark 插件）
-- CSS 子路径：`css/kit.css`（聚合）、`css/tokens.css`、`css/toc-toggle.css`、
-  `css/home.css`，下游在 Docusaurus 的 CSS 管线里 `@import`。
+- CSS 子路径：`./css/*` 直接映射到 `src/css/`，如 `css/kit.css`（聚合）、
+  `css/tokens.css`、`css/toc-toggle.css`、`css/home.css`，下游在 Docusaurus
+  的 CSS 管线里 `@import`。
 
 ## 代码风格（硬性要求）
 
@@ -68,7 +71,7 @@ constructor() {
 
 **`querySelector` 不得当作组件内部的状态管理方式**。需要反复访问的节点一律
 存成字段；`querySelector` 只允许出现在「从外部挂载点找目标」（如
-`toc-toggle.ts` 里找 `.theme-doc-toc-desktop`）这类不属于组件自身结构的地方。
+`TocToggle.ts` 里找 `.theme-doc-toc-desktop`）这类不属于组件自身结构的地方。
 
 纯结构节点用 `el()`（`src/dom.ts`）建，不必展开成 `createElement` + 逐行赋值。它的
 options 按标签收窄，直接写标签自己的属性；`class` / `text` 是 `className` /
@@ -135,7 +138,7 @@ rebuild() { this.replaceChildren(); this.build(); }           // 同上，换个
 - 禁止：拿它清空组件自己的根子树再重建 —— 那是第 3 条里的 `rebuild()`。
 
 变长列表能增量就增量：按数据长度**增删条目**、复用已有条目对象
-（`hero.ts` 的 `setBadges()` 就是这么做的），只有条目语义整体失效时才整批替换。
+（`DfkHero.ts` 的 `setBadges()` 就是这么做的），只有条目语义整体失效时才整批替换。
 
 ### 5. 内容入口：命名的领域 setter（本包已统一）
 
@@ -239,7 +242,7 @@ Docusaurus 预渲染在 Node 里 import 本包。
 - 触碰 `window` / `document` / `customElements` 的入口（`registerDfkElements()`、
   `TocToggle.init()`）要么带守卫，要么由消费方在浏览器环境调用。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
-- `src/remark/` 是唯一允许在 Node 构建期跑的目录，它不得 import 任何浏览器模块。
+- `src/remark.ts` 是唯一允许在 Node 构建期跑的模块，它不得 import 任何浏览器模块。
 
 ### 11. React 19 自定义元素
 

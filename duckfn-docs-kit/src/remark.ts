@@ -58,5 +58,3 @@ export const remarkVersionPlaceholder: Plugin<[VersionPlaceholderOptions]> =
 
     walk(tree);
   };
-
-export default remarkVersionPlaceholder;
