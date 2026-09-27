@@ -247,6 +247,12 @@ CSS 也漏不出去，组件边界干净，不依赖「人工命名空间」去�
 `[data-theme]` 上（这正是 `tokens.css` 必须留在全局、不能塞进 shadow 的原因）。
 组件内部**不要**写 `[data-theme]` 选择器，也不要依赖宿主的 class。
 
+**只有「继承属性」能穿过边界**：`box-sizing` 不是继承属性，宿主 Infima 的
+`* { box-sizing: border-box }` 选不进 shadow tree，组件内所有盒子会退回
+`content-box`，带 padding / max-width 的盒子尺寸随之变化 —— 足以把布局阈值挪位
+（实测：feature grid 在 72rem 容器上限处从 3 列变 4 列）。所以 `home.css` 顶部
+必须在 shadow 作用域里**重新声明一次** box-sizing 重置，别指望宿主的通用规则。
+
 **例外（万不得已才退回 light DOM）**：仅当组件必须直接复用消费站 light DOM 的
 CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其规则必须落在
 `@layer docusaurus.theme-classic` 里 —— 才不用 shadow root。这种组件的类名一律

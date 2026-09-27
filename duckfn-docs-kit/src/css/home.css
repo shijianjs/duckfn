@@ -33,6 +33,18 @@
   display: block;
 }
 
+/* The shadow-scoped box-sizing reset. The host page's universal selector
+   (Infima's `* { box-sizing: border-box }`) does not match into a shadow tree,
+   so without this every padded box in the components silently switches to
+   content-box — which is wide enough to push the feature grid from three
+   columns to four at the 72rem cap. The rules below are written against
+   border-box, so it is re-established here. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /* --------------------------------------------------------------- hero */
 
 .dfk-hero {
