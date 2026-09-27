@@ -138,7 +138,10 @@
 /* --- Fullscreen ---------------------------------------------------------- */
 
 /* Also carries `.dfk-sql-result`, so `overflow` and the radius are re-declared
-   here rather than fought with `!important`. */
+   here rather than fought with `!important`.
+   The background must be the *surface* colour, not `--ifm-background-color`:
+   a site may legitimately define the latter as `transparent` (this one does),
+   which would leave the overlay see-through with the page showing underneath. */
 .dfk-sql-result-expanded {
   position: fixed;
   inset: 0;
@@ -150,7 +153,7 @@
   overflow: hidden;
   border: none;
   border-radius: 0;
-  background: var(--ifm-background-color, #fff);
+  background: var(--ifm-background-surface-color, #fff);
 }
 
 .dfk-sql-result-expanded .dfk-sql-panels,
@@ -164,5 +167,11 @@
 }
 
 .dfk-sql-result-expanded .dfk-sql-frame {
+  height: 100%;
+}
+
+/* An inline `<svg>` gets the same treatment as the frame and the table so the
+   panel is one full-height scroll area rather than a strip. */
+.dfk-sql-result-expanded .dfk-sql-svg {
   height: 100%;
 }

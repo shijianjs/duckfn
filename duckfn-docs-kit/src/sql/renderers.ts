@@ -119,10 +119,25 @@ async function mountTable(
     return {dispose: () => {}};
   }
 
-  const observer = new ResizeObserver(() => table.resize());
+  // `resize()` re-measures and repaints inside `record`, so running it straight
+  // from the observer callback feeds the resulting box change back into the very
+  // delivery pass that is still going — the browser reports that as
+  // "ResizeObserver loop completed with undelivered notifications" (and
+  // webpack-dev-server turns it into a full-screen error overlay). Deferring to
+  // the next frame keeps the notification and the re-measure in separate passes.
+  let frame = 0;
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      table.resize();
+    });
+  });
   observer.observe(record);
   return {
     dispose: () => {
+      // The box may have shrunk a frame ago; never resize a released table.
+      cancelAnimationFrame(frame);
       observer.disconnect();
       table.release();
     },

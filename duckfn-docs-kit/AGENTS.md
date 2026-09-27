@@ -100,10 +100,17 @@ src/
   `href`/`xlink:href`）；解析失败退化为 `pre` 文本，绝不把裸标记塞进 DOM。
 - 预览尺寸用 CSS 自定义属性表达（`--dfk-sql-preview-width` / `-height`、
   `--dfk-sql-table-height`），靠选择器特异性覆盖，不写 `!important`。
+- **结果面底色一律用 `--ifm-background-surface-color`，不要用
+  `--ifm-background-color`**：后者可以被站点声明成 `transparent`（本仓库文档站
+  正是如此，页面底色另有来源），全屏 overlay 会因此变成透明、内容直接透出。
 - `PreviewTabs` 是「一页签一行 + 末尾恒定 `Table`」的部件：`button` / `panel` 全在
   构造函数里一次建好，切换只改 `classList` / `aria-selected` / `tabIndex` / `hidden`；
   `Table` 面板懒挂载（首次切入才 `mountTable`），若挂载还在飞行中就被 `dispose()`，
-  落地后立刻释放。VTable 的尺寸变化交给 `ResizeObserver`，不向外传 resize 管道。
+  落地后立刻释放。VTable 的尺寸变化交给 `ResizeObserver`，不向外传 resize 管道；但
+  回调里**必须把 `table.resize()` 延到 `requestAnimationFrame`**（并在 disposer 里
+  `cancelAnimationFrame`）—— `resize()` 本身会改变被观察的盒子，同步调用会被浏览器
+  判为 `ResizeObserver loop completed with undelivered notifications`（dev server 会
+  把它弹成整屏错误浮层）。
 
 **扩展加载（`runtime.ts`）**
 
