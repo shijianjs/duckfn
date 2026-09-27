@@ -223,6 +223,9 @@ npm 包 `iconify-icon`，`register.ts` 里 side-effect import 注册。
   `@iconify/types`、不装 `@iconify-icons/*` 本地图标集。
 - 尺寸/颜色用 CSS 作用在 `iconify-icon` 元素上（`home.css` 的
   `.dfk-button-icon` 等），字形自带 `currentColor`。
+- **尺寸只认 `font-size`**：组件内部渲染的是 `<svg width="1em" height="1em">`，
+  字形大小跟随宿主的 font-size；给宿主设 CSS `width`/`height` 只会撑大空盒子，
+  图标本身不变。
 
 ### 9. 不用 Shadow DOM
 

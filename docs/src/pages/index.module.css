@@ -93,9 +93,10 @@
   text-decoration: underline;
 }
 
+/* `<iconify-icon>` renders an inner `<svg width="1em">`, so size it with
+   font-size; a CSS width/height only grows the empty host box. */
 .showcaseLinkArrow {
-  width: 1.125rem;
-  height: 1.125rem;
+  font-size: 1.125rem;
 }
 
 /* -------------------------------------------------------- breakpoints */
