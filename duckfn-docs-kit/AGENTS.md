@@ -35,9 +35,9 @@ src/
 ├── home/            # 首页三件套：DfkHero.ts / DfkFeatures.ts / DfkNextSteps.ts
 │                    #   + home.css（三组件共享的样式）+ styles.ts（?inline 注入）
 ├── toc-toggle/      # TocToggle.ts + TocToggle.css（light-DOM 例外，见第 9 条）
-├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow 工具栏）
-│                    #   + sql.css（light-DOM 编辑器/结果，见第 9 条）+ runtime.ts
-│                    #   （DuckDB-Wasm 单例）+ editor.ts / renderers.ts
+├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow：编辑器
+│                    #   + 悬浮图标按钮）+ sql.css（light-DOM 结果区，见第 9 条）
+│                    #   + runtime.ts（DuckDB-Wasm 单例）+ editor.ts / renderers.ts
 │                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
@@ -103,14 +103,44 @@ src/
 - **结果面底色一律用 `--ifm-background-surface-color`，不要用
   `--ifm-background-color`**：后者可以被站点声明成 `transparent`（本仓库文档站
   正是如此，页面底色另有来源），全屏 overlay 会因此变成透明、内容直接透出。
-- `PreviewTabs` 是「一页签一行 + 末尾恒定 `Table`」的部件：`button` / `panel` 全在
-  构造函数里一次建好，切换只改 `classList` / `aria-selected` / `tabIndex` / `hidden`；
-  `Table` 面板懒挂载（首次切入才 `mountTable`），若挂载还在飞行中就被 `dispose()`，
-  落地后立刻释放。VTable 的尺寸变化交给 `ResizeObserver`，不向外传 resize 管道；但
-  回调里**必须把 `table.resize()` 延到 `requestAnimationFrame`**（并在 disposer 里
+
+**界面契约（`DfkSql.ts` + `PreviewTabs.ts`）**
+
+- **没有静态预览、没有工具栏、没有「编辑」模式**：CodeMirror 编辑器就是代码视图，
+  在 `connectedCallback()` 里挂载（`#mounting` 守卫 + await 后 `isConnected` 守卫，
+  断开即 `destroy()`）。`remark.ts` 保留下来的 `code` 子节点只是预渲染文本，
+  元素没有默认 slot、`sql.css` 里 `dfk-sql > :not([slot]) { display: none }` 把它压掉。
+- **每个结果都有 tab 栏**，包括只有一个 `Table` 页签的普通表格结果 —— 因为 tab 栏是
+  全屏按钮唯一的落脚点。`text` 结果是 `[Text, Table]`；`table` 结果是 `[]` + 末尾 Table。
+- **全屏按钮归 `DfkSql` 所有**（状态在它手里），节点经 `RenderContext.fullscreenButton`
+  交给 `PreviewTabs`，由后者摆到 tab 栏右端、`role="tablist"` 之外，所以不随页签滚动。
+  全屏 overlay 不再需要 `padding-top` 给悬浮工具栏让位，退出按钮就在原来的位置。
+- 代码块那四个按钮（执行 / 重置 / 折行 / 复制）是紧凑的图标按钮，悬浮在代码区右上角
+  （`.dfk-sql-code:hover / :focus-within` 时才 `opacity: 1` + `pointer-events: auto`，
+  隐藏时不可点）；提示用 `data-tip` + `::after`。这套图标按钮与 tooltip 规则**在
+  `DfkSql.css`（shadow）与 `sql.css`（light）各写一份** —— 前四个按钮在 shadow 树里，
+  全屏按钮在 light DOM 的结果区，一条规则够不着两处；两处都留了交叉引用注释。
+- 折行默认**开启**，用 `Compartment` + `wrap.reconfigure(lineWrapping)` 切换，不重建
+  编辑器（`@codemirror/state` 因此是动态 import 列表的一员，也在 vite external 里）。
+  复制成功后按钮变 `lucide:check` + `Copied` 约 1.6s 再复位，定时器在
+  `disconnectedCallback()` 里清掉。
+
+**表格（VTable）**
+
+- 行高紧凑靠**构造函数选参** `defaultRowHeight` / `defaultHeaderRowHeight`（不是主题
+  对象，写在 `theme` 里无效），容器高度公式随之用同一个常量。
+- **结果区/表格/面板都要 `overscroll-behavior: contain`**：它不是继承属性，必须打到
+  每个真正滚动的盒子上（含 `.dfk-sql-table *`，VTable 的内部滚动容器藏在里面）。
+  否则滚轮滑到表格底部会继续链式滚动整页 —— 表现是「页面刷一下飞上去、表格消失」。
+- VTable 的尺寸变化交给 `ResizeObserver`，不向外传 resize 管道；但回调里**必须把
+  `table.resize()` 延到 `requestAnimationFrame`**（并在 disposer 里
   `cancelAnimationFrame`）—— `resize()` 本身会改变被观察的盒子，同步调用会被浏览器
   判为 `ResizeObserver loop completed with undelivered notifications`（dev server 会
   把它弹成整屏错误浮层）。
+- `PreviewTabs` 的 `button` / `panel` 全在构造函数里一次建好，切换只改 `classList` /
+  `aria-selected` / `tabIndex` / `hidden`；`Table` 面板懒挂载（首次切入才 `mountTable`，
+  因为 VTable 构造时要量容器，而 `hidden` 的盒子量出来是 0），若挂载还在飞行中就被
+  `dispose()`，落地后立刻释放。
 
 **扩展加载（`runtime.ts`）**
 
@@ -365,13 +395,18 @@ CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其
 `dfk-` 前缀（或 `toc-` 这类自有前缀），避免与宿主撞名。新增例外要在评审时说清楚
 「依赖了宿主的哪条规则」。
 
-`<dfk-sql>` 是**混合**形态：工具栏在 shadow root 里，CodeMirror 编辑器与 VTable
-结果容器挂在 light DOM（命名 slot 定位）。理由是 CodeMirror 的 style-mod 与
-VTable 都向 `document.head` 注入全局样式表，shadow 边界会把它们挡在外面，编辑器
-和表格直接失去样式。其 light-DOM 样式（`.dfk-sql-editor` / `.dfk-sql-result`）
-因此走 `sql/sql.css` → `kit.css` 的全局通道，同样全部 `dfk-sql-` 前缀。light DOM
-节点只在用户点「编辑」/「执行」之后才创建，hydration 早已完成，不违反第 11 条
-「light DOM 恒为空」。
+`<dfk-sql>` 是**混合**形态，且 light-DOM 部分只剩一件事：CodeMirror 编辑器与那簇悬浮
+图标按钮**全在 shadow root 里**（编辑器不再 slot，因为 style-mod 会把 `.cm-*` 基础主题
+以 `adoptedStyleSheets` 挂到 `getRoot()` 解析出的根上 —— 编辑器在 shadow 里，解析出的
+就是同一个 shadow root，样式正好落在用它的那棵树里；反过来把编辑器放 light DOM、样式
+却落进 shadow root，就是第一阶段那个「编辑器没样式」的 bug）。只有 **VTable 结果容器**
+在 light DOM（`slot="dfk-result"`），因为 VTable 往**文档级**注入样式表，shadow 边界
+挡得住它。其 light-DOM 样式（`.dfk-sql-result` 一族）走 `sql/sql.css` → `kit.css` 的全局
+通道，同样全部 `dfk-sql-` 前缀。
+
+这条也是第 11 条「light DOM 恒为空」的例外之所以安全的原因：编辑器在构造函数里就挂进
+shadow root，light DOM 唯一的节点（结果容器）只在**用户点「执行」之后**才创建，
+hydration 早已完成。
 
 ### 10. SSR 安全
 

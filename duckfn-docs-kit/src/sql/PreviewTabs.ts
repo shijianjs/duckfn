@@ -1,10 +1,11 @@
 /**
- * The tab strip the markup renderers share: one tab per preview row, plus a
- * `Table` tab that always comes **last**, holding the raw rows in VTable.
+ * Every renderer's result shell: a tab strip plus the panels behind it.
  *
- * `iframe`, `html` and `svg` differ only in how a panel gets filled, so the tab
- * bar, the trailing table tab, the lazy mounting and the teardown are written
- * once here rather than once per renderer.
+ * The strip is one tab per preview row plus a `Table` tab that always comes
+ * **last**; a renderer with a single view passes no items at all, so a plain
+ * table result is a strip holding nothing but that trailing `Table` tab. Every
+ * result therefore has the same chrome — which is where the fullscreen toggle
+ * lives.
  *
  * Retained mode: every button and panel is built in the constructor and held in
  * a field. Activating a tab mutates the nodes it owns (`hidden`, `classList`,
@@ -42,15 +43,27 @@ export class PreviewTabs {
   #tableHandle: PreviewTableHandle | null = null;
   #disposed = false;
 
+  /**
+   * @param corner Node parked at the right end of the strip, outside the
+   * scrolling tab list. `<dfk-sql>` passes its fullscreen toggle: it owns that
+   * button's state, so it owns the node and only lends it here.
+   */
   constructor(
     host: HTMLElement,
     items: readonly PreviewTabItem[],
     tableLabel: string,
     mountTable: (panel: HTMLElement) => Promise<PreviewTableHandle>,
+    corner?: HTMLElement,
   ) {
     this.#mountTable = mountTable;
     const uid = `dfk-sql-tabs-${(sequence += 1)}`;
-    const bar = el('div', {class: 'dfk-sql-tabs', attrs: {role: 'tablist'}});
+    const bar = el('div', {class: 'dfk-sql-tabs'});
+    // Only the tab buttons belong to the tablist; the corner button must not be
+    // scrollable with them, hence the nested list.
+    const list = el('div', {
+      class: 'dfk-sql-tab-list',
+      attrs: {role: 'tablist'},
+    });
     const panels = el('div', {class: 'dfk-sql-panels'});
 
     const add = (label: string, item: PreviewTabItem | null): void => {
@@ -83,7 +96,7 @@ export class PreviewTabs {
       this.#panels.push(panel);
       this.#items.push(item);
       this.#mounted.push(false);
-      bar.appendChild(button);
+      list.appendChild(button);
       panels.appendChild(panel);
     };
 
@@ -92,6 +105,10 @@ export class PreviewTabs {
     }
     add(tableLabel, null);
 
+    bar.appendChild(list);
+    if (corner) {
+      bar.appendChild(corner);
+    }
     // The one-time installation of this widget's own subtree.
     host.replaceChildren(bar, panels);
     this.#select(0);

@@ -58,7 +58,7 @@ export default defineConfig({
         '@codemirror/lang-sql',
         '@codemirror/view',
         '@codemirror/commands',
-        '@vaadin/button',
+        '@codemirror/state',
       ],
     },
   },

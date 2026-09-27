@@ -7,10 +7,12 @@ import type {Plugin} from 'unified';
  *
  * The original `code` node is kept as the element's *child*: Docusaurus'
  * `codeCompatPlugin` still stamps `metastring` onto it and the classic theme
- * renders it as a regular `@theme/CodeBlock`, which `<dfk-sql>` slots in as the
- * static preview. The SQL text and the parsed config travel as string
- * attributes (`sql` / `config`) — React 19 reconciles string props onto custom
- * elements as attributes, so they survive prerendering and hydration.
+ * renders it as a regular `@theme/CodeBlock`. That child is the block's
+ * prerendered text and nothing else — `<dfk-sql>` has no default slot and hides
+ * unslotted children through CSS, because the code view is a CodeMirror editor.
+ * The SQL text and the parsed config travel as string attributes (`sql` /
+ * `config`) — React 19 reconciles string props onto custom elements as
+ * attributes, so they survive prerendering and hydration.
  *
  * Unlike Docusaurus' own `key=value` metastring format, the config here is
  * JSON, which allows nested fields (`option: {…}`) for future renderers.
@@ -124,8 +126,8 @@ function wrapRunnableSql(code: CodeNode, config: RunnableSqlConfig): Record<stri
       {type: 'mdxJsxAttribute', name: 'config', value: JSON.stringify(config)},
       {type: 'mdxJsxAttribute', name: 'sql', value: String(code.value ?? '')},
     ],
-    // The code node stays a child so the classic theme still renders it as a
-    // CodeBlock; `dfk-sql` slots it as the static preview.
+    // Kept as a child for the prerendered text; `<dfk-sql>` never slots it
+    // (the code view is CodeMirror) and hides it through CSS.
     children: [code],
   };
 }

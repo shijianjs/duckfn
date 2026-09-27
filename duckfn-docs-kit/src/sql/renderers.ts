@@ -22,6 +22,12 @@ export interface RenderContext {
   config: RunnableSqlConfig;
   /** Localised strings resolved by the component (labels-by-html-lang). */
   labels: Record<string, string>;
+  /**
+   * The component's fullscreen toggle, parked at the right end of the tab
+   * strip. `<dfk-sql>` owns the button's state and therefore the node; the
+   * renderer only borrows it so every result has the same chrome.
+   */
+  fullscreenButton: HTMLElement;
 }
 
 /**
@@ -44,6 +50,14 @@ export type Renderer = (
  * so the frame keeps an opaque origin and cannot reach this page.
  */
 const DEFAULT_SANDBOX = 'allow-scripts';
+
+/**
+ * VTable's stock row height leaves a lot of air around a short cell; a docs
+ * example is an aside, so the rows are tightened up. The header is a touch
+ * taller than the body on purpose.
+ */
+const ROW_HEIGHT = 30;
+const HEADER_HEIGHT = 32;
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -93,7 +107,7 @@ async function mountTable(
 ): Promise<PreviewTableHandle> {
   const document = parent.ownerDocument;
   const record = el('div', {class: 'dfk-sql-table'});
-  record.style.setProperty('--dfk-sql-table-height', `${Math.min(360, 60 + result.rows.length * 32)}px`);
+  record.style.setProperty('--dfk-sql-table-height', `${Math.min(360, 36 + result.rows.length * ROW_HEIGHT)}px`);
   parent.appendChild(record);
 
   const surface = cssColor(record, '--ifm-background-surface-color', '#fff');
@@ -108,6 +122,8 @@ async function mountTable(
       container: record,
       records: result.rows,
       columns: result.columns.map((field) => ({field, title: field})),
+      defaultRowHeight: ROW_HEIGHT,
+      defaultHeaderRowHeight: HEADER_HEIGHT,
       // Follow the site's Infima palette, resolved to concrete colours.
       theme: {
         bodyStyle: {bgColor: surface, color: text, borderColor: border},
@@ -144,22 +160,47 @@ async function mountTable(
   };
 }
 
-const tableRenderer: Renderer = async ({host, labels}, result) => {
-  host.replaceChildren();
-  const handle = await mountTable(host, result, labels);
-  return () => handle.dispose();
+const tableRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
+  const tabs = new PreviewTabs(
+    host,
+    [],
+    labels.table ?? 'Table',
+    (panel) => mountTable(panel, result, labels),
+    fullscreenButton,
+  );
+  return () => tabs.dispose();
 };
 
-/** Plain-text fallback: one line per row, columns tab-joined. */
-const textRenderer: Renderer = async ({host}, result) => {
-  const pre = host.ownerDocument.createElement('pre');
+/** Plain text: one line per row, columns tab-joined. */
+function textBlock(document: Document, result: QueryResult): HTMLPreElement {
+  const pre = document.createElement('pre');
   pre.className = 'dfk-sql-text';
   const lines = [result.columns.join('\t')];
   for (const row of result.rows) {
     lines.push(result.columns.map((c) => stringify(row[c])).join('\t'));
   }
   pre.textContent = lines.join('\n');
-  host.replaceChildren(pre);
+  return pre;
+}
+
+/**
+ * Text results get the same chrome as every other result: a `Text` tab plus the
+ * trailing `Table` tab, so a scalar can still be inspected as a table.
+ */
+const textRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
+  const tabs = new PreviewTabs(
+    host,
+    [
+      {
+        label: labels.text ?? 'Text',
+        mount: (panel) => panel.appendChild(textBlock(panel.ownerDocument, result)),
+      },
+    ],
+    labels.table ?? 'Table',
+    (panel) => mountTable(panel, result, labels),
+    fullscreenButton,
+  );
+  return () => tabs.dispose();
 };
 
 /** Shared error view: a styled block, never a thrown exception. */
@@ -274,7 +315,7 @@ function mountPreviewPanel(
  * `Table` tab. `iframe` and `svg` share everything except how a panel is filled.
  */
 function previewRenderer(kind: 'iframe' | 'svg'): Renderer {
-  return async ({host, config, labels}, result) => {
+  return async ({host, config, labels, fullscreenButton}, result) => {
     const field = resolveField(config, result);
     if (!field) {
       host.replaceChildren(
@@ -295,8 +336,12 @@ function previewRenderer(kind: 'iframe' | 'svg'): Renderer {
       };
     });
 
-    const tabs = new PreviewTabs(host, items, labels.table ?? 'Table', (panel) =>
-      mountTable(panel, result, labels),
+    const tabs = new PreviewTabs(
+      host,
+      items,
+      labels.table ?? 'Table',
+      (panel) => mountTable(panel, result, labels),
+      fullscreenButton,
     );
     return () => tabs.dispose();
   };

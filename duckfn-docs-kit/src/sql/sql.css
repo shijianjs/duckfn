@@ -1,28 +1,23 @@
-/* Light-DOM styles for `<dfk-sql>`: the CodeMirror editor host and the result
-   container. These nodes live in the element's light DOM (not the shadow root)
-   because CodeMirror's style-mod and VTable inject *global* stylesheets that a
-   shadow boundary could not host — the same light-DOM exception as the TOC
-   toggle (see AGENTS.md rule 9). Every class carries the `dfk-sql-` prefix so
-   nothing can collide with the host site.
+/* Light-DOM styles for `<dfk-sql>`: the result container. It lives in the
+   element's light DOM (not the shadow root) because VTable injects a
+   *document-level* stylesheet that a shadow boundary could not host — the same
+   light-DOM exception as the TOC toggle (see AGENTS.md rule 9). It is created
+   only when a query runs, so the light DOM still starts empty (rule 11). Every
+   class carries the `dfk-sql-` prefix so nothing can collide with the host site.
+ *
+ * The code area — the editor and the buttons floating over it — is in the shadow
+ * root instead, and is styled by `DfkSql.css`.
  *
  * Imported through `kit.css`; the consuming site gets it with the one-line
  * `@import 'duckfn-docs-kit/src/kit.css'` it already has. */
 
-.dfk-sql-editor {
-  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
-  border-radius: 0;
-  background: var(--ifm-background-surface-color, #fff);
-  font-size: var(--ifm-code-font-size, 95%);
-}
-
-.dfk-sql-editor .cm-editor {
-  outline: none;
-}
-
-.dfk-sql-editor .cm-scroller {
-  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
-    Menlo, monospace);
-  line-height: 1.6;
+/* The remark plugin keeps the original code node as a child of `<dfk-sql>`, and
+   the class dates from when it was slotted as a read-only preview. The code view
+   is the CodeMirror editor now, so the leftover copy must never show — hiding it
+   here rather than deleting it in JS also removes the flash between parsing the
+   prerendered HTML and the element upgrading. */
+dfk-sql > :not([slot]) {
+  display: none;
 }
 
 .dfk-sql-result {
@@ -40,7 +35,7 @@
 
 .dfk-sql-text {
   margin: 0;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
     Menlo, monospace);
   font-size: var(--ifm-code-font-size, 95%);
@@ -50,7 +45,7 @@
 
 .dfk-sql-error {
   margin: 0;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
     Menlo, monospace);
   font-size: var(--ifm-code-font-size, 95%);
@@ -60,19 +55,29 @@
   background: var(--ifm-color-danger, #d32f2f);
 }
 
-/* --- Result tabs (the markup renderers) ---------------------------------- */
+/* --- Result tabs --------------------------------------------------------- */
 
+/* The strip is a row holding the scrolling tab list and the corner button
+   (the fullscreen toggle, owned by `<dfk-sql>`). */
 .dfk-sql-tabs {
   display: flex;
-  gap: 0.25rem;
-  padding: 0.35rem 0.5rem 0;
-  overflow-x: auto;
+  align-items: center;
+  padding-right: 0.3rem;
   border-bottom: 1px solid var(--ifm-global-border-color, #e0e0e0);
   background: var(--ifm-color-emphasis-100, #f5f5f5);
 }
 
+.dfk-sql-tab-list {
+  display: flex;
+  flex: 1;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.3rem 0.5rem 0;
+  overflow-x: auto;
+}
+
 .dfk-sql-tab {
-  padding: 0.25rem 0.75rem;
+  padding: 0.15rem 0.65rem;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: var(--ifm-global-radius, 0.4rem)
@@ -80,7 +85,7 @@
   background: transparent;
   color: var(--ifm-color-emphasis-700, #666);
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   line-height: 1.5;
   white-space: nowrap;
   cursor: pointer;
@@ -96,9 +101,92 @@
   color: var(--ifm-font-color-base, #181818);
 }
 
+/* --- Icon buttons and their tooltips ------------------------------------- */
+
+/* The same rules (and the `[data-tip]` tooltip below) are declared in
+   `DfkSql.css`, because the buttons are split across the shadow boundary: the
+   code-block actions live in the shadow tree, the fullscreen toggle lives in
+   this light-DOM tab strip. Keep the two copies in sync. */
+.dfk-sql-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: transparent;
+  color: var(--ifm-color-emphasis-700, #666);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.dfk-sql-icon-button:hover:not(:disabled),
+.dfk-sql-icon-button:focus-visible {
+  background: var(--ifm-color-emphasis-200, #e6e6e6);
+  color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-sql-icon-button:disabled {
+  opacity: 0.45;
+  cursor: progress;
+}
+
+.dfk-sql-icon-button[hidden] {
+  display: none;
+}
+
+/* A sticky state, e.g. the wrap toggle while wrapping is on. */
+.dfk-sql-icon-on {
+  color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-sql-icon {
+  font-size: 1rem;
+}
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 2;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: var(--ifm-color-emphasis-800, #333);
+  color: var(--ifm-color-emphasis-0, #fff);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+}
+
+/* --- Panels -------------------------------------------------------------- */
+
 .dfk-sql-panels {
   display: flex;
   flex-direction: column;
+}
+
+/* `overscroll-behavior: contain` is what stops a wheel that has reached the
+   bottom of the table from continuing into the page scroll (the page lurches
+   upward and the example leaves the screen). It is not inherited, so it is
+   declared on every scrolling box, including VTable's inner scroll containers
+   under `.dfk-sql-table`. */
+.dfk-sql-panel,
+.dfk-sql-table,
+.dfk-sql-table *,
+.dfk-sql-svg {
+  overscroll-behavior: contain;
 }
 
 .dfk-sql-panel {
@@ -126,7 +214,7 @@
 .dfk-sql-svg {
   width: var(--dfk-sql-preview-width, 100%);
   height: var(--dfk-sql-preview-height, auto);
-  padding: 0.75rem;
+  padding: 0.5rem;
   overflow: auto;
 }
 
@@ -148,8 +236,6 @@
   z-index: 2147483000;
   display: flex;
   flex-direction: column;
-  /* Clear the toolbar, which floats above this overlay. */
-  padding-top: 3rem;
   overflow: hidden;
   border: none;
   border-radius: 0;

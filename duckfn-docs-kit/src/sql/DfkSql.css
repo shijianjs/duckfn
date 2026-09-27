@@ -1,7 +1,11 @@
-/* Shadow-root styles for `<dfk-sql>`: the toolbar row and the slotted static
-   preview. Theme colours arrive through the inherited `--ifm-*` custom
-   properties; box-sizing must be re-declared here because the host page's
-   universal reset does not cross the shadow boundary. */
+/* Shadow-root styles for `<dfk-sql>`: the box wrapping the slotted editor and
+   the action cluster floating in its top-right corner. The editor and the
+   result are slotted light-DOM nodes (`sql.css` styles them) because CodeMirror
+   and VTable inject global stylesheets a shadow boundary could not host.
+
+   Theme colours arrive through the inherited `--ifm-*` custom properties;
+   box-sizing must be re-declared here because the host page's universal reset
+   does not cross the shadow boundary. */
 
 *,
 *::before,
@@ -14,82 +18,141 @@
   margin: 1rem 0;
 }
 
-.dfk-sql-toolbar {
+.dfk-sql-code {
+  position: relative;
+}
+
+/* The editor and the buttons are in this same tree, so CodeMirror's own base
+   theme (mounted by style-mod into this shadow root, see `editor.ts`) and these
+   rules land in one cascade. Our selectors carry `.dfk-sql-editor`, so they
+   outrank CodeMirror's bare `.cm-*` ones whatever the sheet order turns out to
+   be. */
+.dfk-sql-editor {
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  overflow: hidden;
+  background: var(--ifm-background-surface-color, #fff);
+  font-size: var(--ifm-code-font-size, 95%);
+}
+
+.dfk-sql-editor .cm-editor {
+  outline: none;
+}
+
+.dfk-sql-editor .cm-scroller {
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  line-height: 1.6;
+}
+
+/* CodeMirror's stock padding is generous; a docs example wants the text to
+   start close to the border. */
+.dfk-sql-editor .cm-content,
+.dfk-sql-editor .cm-gutters {
+  padding: 0.4rem 0;
+}
+
+/* Hover/focus-revealed, like the buttons on Docusaurus' own code blocks. The
+   cluster is inert while hidden so an invisible button is never a click target
+   in the middle of the code. */
+.dfk-sql-actions {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
-  border-bottom: none;
-  border-radius: var(--ifm-global-radius, 0.4rem) var(--ifm-global-radius, 0.4rem)
-    0 0;
+  gap: 0.15rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: var(--ifm-global-radius, 0.3rem);
   background: var(--ifm-color-emphasis-100, #f5f5f5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.dfk-sql-code:hover .dfk-sql-actions,
+.dfk-sql-code:focus-within .dfk-sql-actions,
+.dfk-sql-actions-busy {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .dfk-sql-status {
-  margin-left: auto;
-  font-size: 0.8rem;
+  padding: 0 0.25rem;
+  font-size: 0.72rem;
   color: var(--ifm-color-emphasis-700, #666);
+  white-space: nowrap;
 }
 
-/* While the result is fullscreen it covers the page, so the toolbar pins
-   itself to the top of the viewport and rides above the overlay — that keeps
-   the toggle (now "Exit fullscreen") reachable without a keyboard. */
-.dfk-sql-toolbar-float {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 2147483001;
-  border-bottom: 1px solid var(--ifm-global-border-color, #e0e0e0);
-  border-radius: 0;
+.dfk-sql-status:empty {
+  display: none;
 }
 
-.dfk-sql-button {
+/* --- Icon buttons and their tooltips ------------------------------------- */
+
+/* Duplicated in `sql.css`: these buttons live in this shadow tree, while the
+   fullscreen toggle a renderer parks in the result's tab strip lives in the
+   light DOM, where a shadow rule could not reach it. Keep both copies in sync. */
+.dfk-sql-icon-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.85rem;
-  font-family: inherit;
-  line-height: 1.5;
-  color: var(--ifm-navbar-link-color, #181818);
-  background: var(--ifm-background-surface-color, #fff);
-  border: 1px solid var(--ifm-global-border-color, #d0d0d0);
-  border-radius: var(--ifm-global-radius, 0.4rem);
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: transparent;
+  color: var(--ifm-color-emphasis-700, #666);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
-.dfk-sql-button:hover:not(:disabled) {
-  border-color: var(--ifm-color-primary, #14459b);
+.dfk-sql-icon-button:hover:not(:disabled),
+.dfk-sql-icon-button:focus-visible {
+  background: var(--ifm-color-emphasis-200, #e6e6e6);
   color: var(--ifm-color-primary, #14459b);
 }
 
-.dfk-sql-button:disabled {
-  opacity: 0.55;
+.dfk-sql-icon-button:disabled {
+  opacity: 0.45;
   cursor: progress;
 }
 
-.dfk-sql-button-primary {
-  color: #fff;
-  background: var(--ifm-color-primary, #14459b);
-  border-color: var(--ifm-color-primary, #14459b);
+.dfk-sql-icon-button[hidden] {
+  display: none;
 }
 
-.dfk-sql-button-primary:hover:not(:disabled) {
-  background: var(--ifm-color-primary-dark, #123d8a);
-  color: #fff;
+/* A sticky state, e.g. the wrap toggle while wrapping is on. */
+.dfk-sql-icon-on {
+  color: var(--ifm-color-primary, #14459b);
 }
 
-/* The static preview (the slotted CodeBlock) keeps the theme's own look; the
-   toolbar merely attaches to it. */
-::slotted(div) {
-  margin: 0 !important;
+.dfk-sql-icon {
+  font-size: 1rem;
 }
 
-::slotted(div) pre {
-  border-radius: 0 0 var(--ifm-global-radius, 0.4rem)
-    var(--ifm-global-radius, 0.4rem);
-  margin-bottom: 0;
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 2;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: var(--ifm-color-emphasis-800, #333);
+  color: var(--ifm-color-emphasis-0, #fff);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
 }

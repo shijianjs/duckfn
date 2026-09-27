@@ -1,3 +1,4 @@
+import type {IconifyIconHTMLElement} from 'iconify-icon';
 import type {RunnableSqlConfig} from './remark';
 import {DuckDBRuntime, type QueryResult} from './runtime';
 import {rendererFor, type RenderContext} from './renderers';
@@ -8,16 +9,26 @@ import {el, HTMLElementBase} from '../dom';
 /**
  * `<dfk-sql>` — a runnable SQL example produced by `remarkRunnableSql`.
  *
- * Static by default: the original code block is rendered by the classic theme
- * and flows through the shadow's default `<slot>`, so it looks like any other
- * docs code block. Clicking **Edit** lazily mounts CodeMirror (in the light
- * DOM, so its global styles apply) into a named slot; clicking **Run** executes
- * the current text through the shared {@link DuckDBRuntime} and renders the
- * result with the configured {@link rendererFor} renderer.
+ * A code block, a row of icon buttons floating in its top-right corner on
+ * hover (run / reset / wrap / copy — the same idiom as Docusaurus' own code
+ * blocks), and a result area that appears only once something has run. The
+ * CodeMirror editor *is* the code view: there is no read-only preview and no
+ * edit mode to enter.
  *
- * Retained-mode: the toolbar and slots are built once in the constructor; the
- * `#set*` / `#show*` helpers only mutate the nodes they own. Each block keeps
- * its own `#currentSql`, so editing one never touches another.
+ * Everything but the result is in the shadow root. The result is a slotted
+ * light-DOM sibling because VTable injects a *document-level* stylesheet that a
+ * shadow boundary could not host — and it is only created when a query runs,
+ * long after hydration, so the light DOM still starts empty (AGENTS.md rule 11).
+ * The editor has no such problem: it sits in this shadow root, so CodeMirror's
+ * style-mod resolves the root to the same tree its styles are used in.
+ *
+ * Retained-mode: every node is built once in the constructor and held in a
+ * field; the `#set*` / `#show*` helpers mutate the nodes they own. Each block
+ * keeps its own `#currentSql`, so editing one never touches another.
+ *
+ * The fullscreen toggle is the exception: it belongs in the result's tab strip,
+ * which a renderer builds, so the component keeps the node (and its state) and
+ * hands it over through `RenderContext.fullscreenButton`.
  *
  * Content entry is an **attribute seed** (see AGENTS.md rule 5 exception): the
  * `config` / `sql` attributes are read once in `connectedCallback` because the
@@ -30,10 +41,14 @@ import {el, HTMLElementBase} from '../dom';
 // `Record<string, string>` index signature. It carries the renderers' strings
 // too, because a renderer resolves everything through the labels it is handed.
 type SqlLabels = {
-  edit: string;
-  preview: string;
   run: string;
   reset: string;
+  /** Tooltip for the wrap toggle while wrapping is *off* (i.e. "turn it on"). */
+  wrapOn: string;
+  /** Tooltip for the wrap toggle while wrapping is *on* (i.e. "turn it off"). */
+  wrapOff: string;
+  copy: string;
+  copied: string;
   running: string;
   initializing: string;
   loadingExtensions: string;
@@ -42,16 +57,19 @@ type SqlLabels = {
   fullscreen: string;
   exitFullscreen: string;
   table: string;
+  text: string;
   row: string;
   noField: string;
 };
 
 const LABELS: Record<string, SqlLabels> = {
   en: {
-    edit: 'Edit',
-    preview: 'Preview',
     run: 'Run',
     reset: 'Reset',
+    wrapOn: 'Wrap long lines',
+    wrapOff: 'Stop wrapping lines',
+    copy: 'Copy',
+    copied: 'Copied',
     running: 'Running…',
     initializing: 'Initializing DuckDB…',
     loadingExtensions: 'Loading extensions…',
@@ -60,14 +78,17 @@ const LABELS: Record<string, SqlLabels> = {
     fullscreen: 'Fullscreen',
     exitFullscreen: 'Exit fullscreen',
     table: 'Table',
+    text: 'Text',
     row: 'Row',
     noField: 'this result has no markup column; set `field`',
   },
   'zh-hans': {
-    edit: '编辑',
-    preview: '预览',
     run: '执行',
     reset: '重置',
+    wrapOn: '折行显示',
+    wrapOff: '取消折行',
+    copy: '复制',
+    copied: '已复制',
     running: '执行中…',
     initializing: '正在初始化 DuckDB…',
     loadingExtensions: '正在加载扩展…',
@@ -76,93 +97,80 @@ const LABELS: Record<string, SqlLabels> = {
     fullscreen: '全屏',
     exitFullscreen: '退出全屏',
     table: '表格',
+    text: '文本',
     row: '行',
     noField: '该结果没有可展示的标记列，请设置 `field`',
   },
 };
 
-type Mode = 'static' | 'edit';
+/** How long the copy button shows its "copied" confirmation, in ms. */
+const COPIED_HOLD = 1600;
 
 export class DfkSql extends HTMLElementBase {
-  // Toolbar buttons are mutable so the Vaadin upgrade can swap the nodes.
-  #editBtn: HTMLElement;
-  #runBtn: HTMLElement;
-  #resetBtn: HTMLElement;
-  #fullscreenBtn: HTMLElement;
-  readonly #editLabel = el('span');
-  readonly #runLabel = el('span');
-  readonly #resetLabel = el('span');
-  readonly #fullscreenLabel = el('span');
+  /** The CodeMirror host; it lives in the shadow tree, so `DfkSql.css` styles it. */
+  readonly #editorHost = el('div', {class: 'dfk-sql-editor'});
+  /** Wraps the editor and anchors the floating action cluster. */
+  readonly #code = el('div', {class: 'dfk-sql-code'});
+  readonly #actions = el('div', {class: 'dfk-sql-actions'});
   readonly #status = el('span', {class: 'dfk-sql-status', attrs: {'aria-live': 'polite'}});
-  readonly #toolbar = el('div', {class: 'dfk-sql-toolbar'});
+  readonly #runBtn: IconButton;
+  readonly #resetBtn: IconButton;
+  readonly #wrapBtn: IconButton;
+  readonly #copyBtn: IconButton;
+  readonly #fullscreenBtn: IconButton;
 
   #labels: SqlLabels = LABELS.en;
   #config: RunnableSqlConfig = {type: 'duckfn'};
   #originalSql = '';
   #currentSql = '';
-  #mode: Mode = 'static';
+  /** Long SQL lines are the norm in a docs example, so wrapping starts on. */
+  #wrapped = true;
   #running = false;
   #seeded = false;
-  #upgraded = false;
+  #mounting = false;
   #expanded = false;
   /** Whether the document-level Esc handler is currently attached. */
   #escBound = false;
+  /** Pending "copied" reset timer; 0 when none is scheduled. */
+  #copyTimer = 0;
   readonly #onEsc = (event: KeyboardEvent): void => {
     if (event.key === 'Escape') {
       this.#setExpanded(false);
     }
   };
 
-  #static: HTMLElement | null = null;
-  #editorHost: HTMLElement | null = null;
   #resultHost: HTMLElement | null = null;
   #editor: SqlEditor | null = null;
   #disposeResult: (() => void) | null = null;
 
   constructor() {
     super();
-    this.#editBtn = this.#makeButton('dfk-sql-button', this.#editLabel, () =>
-      this.#onToggleEdit(),
+    this.#runBtn = new IconButton('lucide:play', () => void this.#onRun());
+    this.#resetBtn = new IconButton('lucide:rotate-ccw', () => this.#onReset());
+    this.#wrapBtn = new IconButton('lucide:wrap-text', () => this.#onToggleWrap());
+    this.#copyBtn = new IconButton('lucide:copy', () => void this.#onCopy());
+    // Not in this subtree: a renderer parks it at the right end of the result's
+    // tab strip, so it sits exactly where the result's chrome is.
+    this.#fullscreenBtn = new IconButton('lucide:maximize', () =>
+      this.#setExpanded(!this.#expanded),
     );
-    this.#runBtn = this.#makeButton(
-      'dfk-sql-button dfk-sql-button-primary',
-      this.#runLabel,
-      () => this.#onRun(),
-    );
-    this.#resetBtn = this.#makeButton('dfk-sql-button', this.#resetLabel, () =>
-      this.#onReset(),
-    );
-    this.#fullscreenBtn = this.#makeButton('dfk-sql-button', this.#fullscreenLabel, () =>
-      this.#onToggleFullscreen(),
-    );
-    this.#fullscreenBtn.setAttribute('disabled', '');
-    this.#toolbar.append(
-      this.#editBtn,
-      this.#runBtn,
-      this.#resetBtn,
-      this.#fullscreenBtn,
+
+    this.#actions.append(
       this.#status,
+      this.#runBtn.root,
+      this.#resetBtn.root,
+      this.#wrapBtn.root,
+      this.#copyBtn.root,
     );
+    this.#code.append(this.#editorHost, this.#actions);
 
     const shadow = this.attachShadow({mode: 'open'});
     shadow.adoptedStyleSheets = [sqlStyles()];
-    // Default slot: the slotted static CodeBlock. Named slots: the lazily
-    // created editor / result hosts (they carry matching `slot` attributes),
-    // so they never fall into the default slot.
-    shadow.append(
-      this.#toolbar,
-      el('slot'),
-      el('slot', {attrs: {name: 'dfk-editor'}}),
-      el('slot', {attrs: {name: 'dfk-result'}}),
-    );
+    // No default slot: the original code node the remark plugin keeps as a
+    // child is the prerendered fallback only, and `sql.css` hides it — the
+    // editor is the one code view.
+    shadow.append(this.#code, el('slot', {attrs: {name: 'dfk-result'}}));
     this.#applyLabels();
-  }
-
-  #makeButton(className: string, label: HTMLElement, onClick: () => void): HTMLElement {
-    const button = el('button', {class: className, type: 'button'});
-    button.appendChild(label);
-    button.addEventListener('click', onClick);
-    return button;
   }
 
   connectedCallback(): void {
@@ -170,12 +178,7 @@ export class DfkSql extends HTMLElementBase {
       this.#seed();
       this.#seeded = true;
     }
-    // Vaadin upgrade is best-effort and browser-only; native buttons already
-    // work, so a failed import (offline, older browser) is silently ignored.
-    if (!this.#upgraded) {
-      this.#upgraded = true;
-      void this.#upgradeToVaadin();
-    }
+    void this.#mountEditor();
   }
 
   disconnectedCallback(): void {
@@ -184,9 +187,13 @@ export class DfkSql extends HTMLElementBase {
     this.#disposeResult = null;
     this.#editor?.destroy();
     this.#editor = null;
+    if (this.#copyTimer !== 0) {
+      window.clearTimeout(this.#copyTimer);
+      this.#copyTimer = 0;
+    }
   }
 
-  /** Reads the `config` / `sql` attributes once and wires the static preview. */
+  /** Reads the `config` / `sql` attributes once. */
   #seed(): void {
     this.#labels =
       LABELS[(document.documentElement.getAttribute('lang') ?? 'en').toLowerCase()] ??
@@ -201,106 +208,47 @@ export class DfkSql extends HTMLElementBase {
     }
     this.#originalSql = this.getAttribute('sql') ?? '';
     this.#currentSql = this.#originalSql;
-    this.#static = this.firstElementChild as HTMLElement | null;
     this.#applyLabels();
   }
 
   #applyLabels(): void {
-    this.#editLabel.textContent = this.#mode === 'edit' ? this.#labels.preview : this.#labels.edit;
-    this.#runLabel.textContent = this.#labels.run;
-    this.#resetLabel.textContent = this.#labels.reset;
-    this.#fullscreenLabel.textContent = this.#expanded
-      ? this.#labels.exitFullscreen
-      : this.#labels.fullscreen;
+    this.#runBtn.setLabel(this.#labels.run);
+    this.#resetBtn.setLabel(this.#labels.reset);
+    this.#wrapBtn.setLabel(this.#wrapped ? this.#labels.wrapOff : this.#labels.wrapOn);
+    this.#wrapBtn.setOn(this.#wrapped);
+    this.#copyBtn.setLabel(this.#labels.copy);
+    this.#fullscreenBtn.setLabel(
+      this.#expanded ? this.#labels.exitFullscreen : this.#labels.fullscreen,
+    );
   }
 
-  async #upgradeToVaadin(): Promise<void> {
+  // --- Editor ----------------------------------------------------------------
+
+  async #mountEditor(): Promise<void> {
+    if (this.#editor || this.#mounting) {
+      return;
+    }
+    this.#mounting = true;
     try {
-      await import('@vaadin/button');
-    } catch {
-      return; // Keep the native buttons.
-    }
-    const swap = (old: HTMLElement, className: string, label: HTMLElement, handler: () => void) => {
-      const vb = document.createElement('vaadin-button');
-      vb.className = className;
-      // The upgrade can land mid-run (or before any result exists), so the
-      // replacement starts in the state the button it replaces was in.
-      if (old.hasAttribute('disabled')) {
-        vb.setAttribute('disabled', '');
-      }
-      vb.appendChild(label);
-      vb.addEventListener('click', handler);
-      old.replaceWith(vb);
-      return vb;
-    };
-    this.#editBtn = swap(this.#editBtn, 'dfk-sql-button', this.#editLabel, () =>
-      this.#onToggleEdit(),
-    );
-    this.#runBtn = swap(
-      this.#runBtn,
-      'dfk-sql-button dfk-sql-button-primary',
-      this.#runLabel,
-      () => this.#onRun(),
-    );
-    this.#resetBtn = swap(this.#resetBtn, 'dfk-sql-button', this.#resetLabel, () =>
-      this.#onReset(),
-    );
-    this.#fullscreenBtn = swap(
-      this.#fullscreenBtn,
-      'dfk-sql-button',
-      this.#fullscreenLabel,
-      () => this.#onToggleFullscreen(),
-    );
-    this.#toolbar.replaceChildren(
-      this.#editBtn,
-      this.#runBtn,
-      this.#resetBtn,
-      this.#fullscreenBtn,
-      this.#status,
-    );
-  }
-
-  // --- Edit / preview toggle -------------------------------------------------
-
-  #onToggleEdit(): void {
-    if (this.#mode === 'static') {
-      void this.#enterEdit();
-    } else {
-      this.#exitEdit();
-    }
-  }
-
-  async #enterEdit(): Promise<void> {
-    this.#mode = 'edit';
-    this.#applyLabels();
-    if (this.#static) {
-      this.#static.hidden = true;
-    }
-    if (!this.#editorHost) {
-      this.#editorHost = el('div', {class: 'dfk-sql-editor'});
-      this.#editorHost.slot = 'dfk-editor';
-      this.appendChild(this.#editorHost);
-    }
-    this.#editorHost.hidden = false;
-    if (!this.#editor) {
-      this.#editor = await mountSqlEditor(this.#editorHost, this.#currentSql, (value) => {
+      const editor = await mountSqlEditor(this.#editorHost, this.#currentSql, (value) => {
         this.#currentSql = value;
       });
+      if (!this.isConnected) {
+        // Disconnected while the CodeMirror modules were loading: nothing will
+        // ever dispose this editor, so dispose it here.
+        editor.destroy();
+        return;
+      }
+      editor.setWrap(this.#wrapped);
+      this.#editor = editor;
+    } catch (error) {
+      this.#setStatus(messageOf(error));
+    } finally {
+      this.#mounting = false;
     }
   }
 
-  #exitEdit(): void {
-    this.#mode = 'static';
-    this.#applyLabels();
-    if (this.#editorHost) {
-      this.#editorHost.hidden = true;
-    }
-    if (this.#static) {
-      this.#static.hidden = false;
-    }
-  }
-
-  // --- Reset -----------------------------------------------------------------
+  // --- Code-block actions ----------------------------------------------------
 
   #onReset(): void {
     this.#currentSql = this.#originalSql;
@@ -308,24 +256,43 @@ export class DfkSql extends HTMLElementBase {
     this.#clearResult();
   }
 
-  // --- Fullscreen ------------------------------------------------------------
-
-  #onToggleFullscreen(): void {
-    if (!this.#resultHost) {
-      return; // Nothing to expand yet; the button is disabled until then.
-    }
-    this.#setExpanded(!this.#expanded);
+  #onToggleWrap(): void {
+    this.#wrapped = !this.#wrapped;
+    this.#editor?.setWrap(this.#wrapped);
+    this.#applyLabels();
   }
 
+  async #onCopy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.#currentSql);
+    } catch {
+      // Clipboard access can be denied (insecure context, permissions); the
+      // button simply keeps its idle look.
+      return;
+    }
+    this.#copyBtn.setIcon('lucide:check');
+    this.#copyBtn.setLabel(this.#labels.copied);
+    if (this.#copyTimer !== 0) {
+      window.clearTimeout(this.#copyTimer);
+    }
+    this.#copyTimer = window.setTimeout(() => {
+      this.#copyTimer = 0;
+      this.#copyBtn.setIcon('lucide:copy');
+      this.#copyBtn.setLabel(this.#labels.copy);
+    }, COPIED_HOLD);
+  }
+
+  // --- Fullscreen ------------------------------------------------------------
+
   /**
-   * The whole fullscreen state: the result panel becomes a fixed overlay, and
-   * the shadow toolbar floats above it so the toggle (now labelled "Exit
-   * fullscreen") stays reachable. Esc exits too, from anywhere on the page.
+   * The whole fullscreen state: the result panel becomes a fixed overlay and
+   * its own tab strip carries the toggle back out (now "Exit fullscreen"). Esc
+   * exits too, from anywhere on the page.
    */
   #setExpanded(value: boolean): void {
     this.#expanded = value;
     this.#resultHost?.classList.toggle('dfk-sql-result-expanded', value);
-    this.#toolbar.classList.toggle('dfk-sql-toolbar-float', value);
+    this.#fullscreenBtn.setIcon(value ? 'lucide:minimize' : 'lucide:maximize');
     this.#applyLabels();
     if (value !== this.#escBound) {
       if (value) {
@@ -385,13 +352,11 @@ export class DfkSql extends HTMLElementBase {
   }
 
   #setBusy(busy: boolean): void {
-    for (const button of [this.#editBtn, this.#runBtn, this.#resetBtn]) {
-      if (busy) {
-        button.setAttribute('disabled', '');
-      } else {
-        button.removeAttribute('disabled');
-      }
-    }
+    this.#runBtn.setDisabled(busy);
+    this.#resetBtn.setDisabled(busy);
+    // A run started from a click keeps the cluster on screen, so the progress
+    // status in it is actually readable.
+    this.#actions.classList.toggle('dfk-sql-actions-busy', busy);
   }
 
   #setStatus(text: string): void {
@@ -412,16 +377,24 @@ export class DfkSql extends HTMLElementBase {
       this.appendChild(this.#resultHost);
     }
     this.#resultHost.hidden = false;
-    // There is something to expand from here on.
-    this.#fullscreenBtn.removeAttribute('disabled');
     return this.#resultHost;
   }
 
   #showResult(result: QueryResult): void {
     this.#disposeResult?.();
     this.#disposeResult = null;
+    // An error view carries no chrome, so a fullscreen overlay built from a
+    // previous result would leave no visible way out (only Esc).
+    if (result.error) {
+      this.#setExpanded(false);
+    }
     const host = this.#ensureResultHost();
-    const context: RenderContext = {host, config: this.#config, labels: this.#labels};
+    const context: RenderContext = {
+      host,
+      config: this.#config,
+      labels: this.#labels,
+      fullscreenButton: this.#fullscreenBtn.root,
+    };
     const renderer = rendererFor(this.#config, result);
     void renderer(context, result).then((dispose) => {
       this.#disposeResult = dispose ?? null;
@@ -429,6 +402,7 @@ export class DfkSql extends HTMLElementBase {
   }
 
   #renderInto(text: string): void {
+    this.#setExpanded(false);
     const host = this.#ensureResultHost();
     const pre = host.ownerDocument.createElement('pre');
     pre.className = 'dfk-sql-error';
@@ -440,10 +414,49 @@ export class DfkSql extends HTMLElementBase {
     this.#setExpanded(false);
     this.#disposeResult?.();
     this.#disposeResult = null;
-    this.#fullscreenBtn.setAttribute('disabled', '');
     if (this.#resultHost) {
       this.#resultHost.replaceChildren();
       this.#resultHost.hidden = true;
+    }
+  }
+}
+
+/**
+ * A compact icon-only button with a hover tooltip, built once. The tooltip is
+ * also the accessible name — an icon-only control has no text to fall back on.
+ */
+class IconButton {
+  readonly root = el('button', {class: 'dfk-sql-icon-button', type: 'button'});
+  readonly #icon: IconifyIconHTMLElement = el('iconify-icon', {
+    class: 'dfk-sql-icon',
+    attrs: {'aria-hidden': 'true'},
+  });
+
+  constructor(icon: string, onClick: () => void) {
+    this.root.appendChild(this.#icon);
+    this.root.addEventListener('click', onClick);
+    this.setIcon(icon);
+  }
+
+  setIcon(icon: string): void {
+    this.#icon.setAttribute('icon', icon);
+  }
+
+  setLabel(text: string): void {
+    this.root.setAttribute('data-tip', text);
+    this.root.setAttribute('aria-label', text);
+  }
+
+  /** Marks a toggle as currently on (the wrap button). */
+  setOn(on: boolean): void {
+    this.root.classList.toggle('dfk-sql-icon-on', on);
+  }
+
+  setDisabled(disabled: boolean): void {
+    if (disabled) {
+      this.root.setAttribute('disabled', '');
+    } else {
+      this.root.removeAttribute('disabled');
     }
   }
 }

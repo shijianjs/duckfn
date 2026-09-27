@@ -7,10 +7,11 @@ description: SQL blocks that run in your browser — the duckfn-docs-kit runnabl
 # Runnable SQL examples
 
 A fenced SQL block whose info string carries a JSON config turns the code block
-into a runnable example: it stays a plain, read-only code block until you click
-**Edit**, and nothing executes until you click **Run**. The query runs in your
-browser against a single shared DuckDB-Wasm instance, and the result renders
-below the block.
+into a runnable example: the block itself is a CodeMirror editor, and nothing
+executes until you click **Run**. The buttons (Run, Reset, line wrapping, Copy)
+appear in the block's top-right corner when you hover it or tab into it. The
+query runs in your browser against a single shared DuckDB-Wasm instance, and the
+result renders below the block.
 
 The config is JSON (not `key=value`), so it can grow nested fields later:
 
@@ -22,7 +23,8 @@ SELECT * FROM range(10);
 
 ## The smallest example
 
-`show` may be left out; a single scalar result renders as text.
+`show` may be left out; a single scalar result opens on a `Text` tab instead of
+a table.
 
 ```sql {"type":"duckfn"}
 SELECT 1;
@@ -105,9 +107,10 @@ SELECT '127.0.0.1'::INET AS ip, '10.0.0.0/8'::INET AS network;
 
 ## Fullscreen
 
-Every result has a **Fullscreen** button once it exists: the result area fills
-the viewport and the toolbar pins itself to the top of it, so the same button
-(now labelled *Exit fullscreen*) is where you left it. <kbd>Esc</kbd> exits too.
+Every result carries the same tab strip — a plain table result included — and
+the fullscreen toggle sits at the right end of it. Clicking it fills the viewport
+with the result, and the same button (now *Exit fullscreen*) stays in place.
+<kbd>Esc</kbd> exits too.
 
 ```sql {"type":"duckfn","show":"table"}
 SELECT i AS n, repeat('wide column ', 3) AS filler

@@ -23,7 +23,8 @@ SELECT * FROM range(5) AS t(n);
 
 ## A scalar
 
-`show` may be omitted; a single scalar result renders as text.
+`show` may be omitted; a single scalar result opens on a `Text` tab instead of a
+table.
 
 ```sql {"type":"duckfn"}
 SELECT 40 + 2 AS answer;
