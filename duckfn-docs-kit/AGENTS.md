@@ -7,11 +7,28 @@ web components、品牌 CSS tokens、版本占位符 remark 插件。它被 `doc
 
 ## 包结构 / 导出
 
-### 目录按业务语义组织，不按技术类型
+### 目录按业务语义组织，不按技术类型（默认逻辑，可递归）
 
 **一个能力一个文件夹，它的 TS、CSS（以及将来的测试、资源）都放进去。** 目录
 首先回答「这东西属于哪个业务」，而不是「这是 TS 还是 CSS」。技术类型只是业务
 模块内部的次级文件，不单独开 `css/`、`utils/` 这类技术分类目录。
+
+这条不是只管 `src/` 一层的局部偏好，而是**跨尺度的默认逻辑，可以递归**：类、
+模块、多级目录、包、项目、多层项目，每一层都用同一个判断 —— 先问「属于哪个
+业务语义」，再把它的实现材料（代码、样式、测试、资源）收拢在同一处。
+
+- **类**：一个类的字段、方法、事件处理聚在一个 class 里，不拆成摊在多文件的
+  partial / mixin。
+- **模块 / 目录**：`home/` 一个目录装齐首页三件套的 TS、CSS、样式注入。
+- **包**：本包的 `src/` 按能力分目录（`home/`、`toc-toggle/`、`theme/`），
+  不按 `css/`、`elements/`、`utils/` 分。
+- **项目 / 多层项目**：仓库根同理 —— Rust 运行时（根 `src/` + `test/`）与
+  文档站（`docs/`）各是一个业务，各自内部再按同一逻辑递归。
+
+**万不得已才允许按技术栈分**：两种实现材料在工具链上放不到一块儿时，才拆成
+并列的顶层目录 —— 例如 Rust 代码（Cargo workspace）和文档站（npm +
+Docusaurus）：构建系统、依赖管理、产物形态完全不同，强行合并只会互相污染。
+这是生态系统的物理限制，不是「按技术分类更好」；能收拢的必须收拢。
 
 ```
 src/
@@ -267,7 +284,7 @@ npm 包 `iconify-icon`，`register.ts` 里 side-effect import 注册。
 ### 9. 默认用 Shadow DOM
 
 `dfk-*` 组件**默认渲染进 shadow root**（`mode: 'open'`），样式用
-`adoptedStyleSheets` 注入（`src/styles.ts` 把 `home.css` 以 `?inline` 内联进
+`adoptedStyleSheets` 注入（`home/styles.ts` 把 `home.css` 以 `?inline` 内联进
 bundle，全局共享一个 `CSSStyleSheet`）。这样宿主页面的全局 CSS 进不来、组件的
 CSS 也漏不出去，组件边界干净，不依赖「人工命名空间」去避免污染。
 
