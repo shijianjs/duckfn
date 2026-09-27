@@ -4,18 +4,17 @@ import {defineConfig} from 'vite';
 const src = (p: string) => fileURLToPath(new URL(`./src/${p}`, import.meta.url));
 
 /**
- * Library build: one ESM entry per runtime subpath in package.json.
+ * Library build: one ESM entry per public runtime module.
  *
- * Entry keys double as output paths. Root-level entries (`index`, `remark`)
- * land at `dist/index.js` etc. and resolve through the wildcard `exports` map
- * (`./*` → `./dist/*.js`); an entry that lives in a feature folder uses a
- * slashed key so its JS lands beside its `.d.ts` — `toc-toggle/TocToggle` emits
- * `dist/toc-toggle/TocToggle.js`, matching the `tsc` declaration at
- * `dist/toc-toggle/TocToggle.d.ts`. That subpath then gets an explicit `exports`
- * entry in package.json (the wildcard would otherwise look for
- * `dist/TocToggle.*`). Type declarations come from
- * `tsc -p tsconfig.build.json` instead of a Vite plugin, which keeps the
- * toolchain to one extra dependency.
+ * Entry keys double as output paths, and package.json never lists them: the
+ * wildcard `exports` map (`./*` → `./dist/*.js`) resolves every entry,
+ * including the ones that live in a feature folder — `toc-toggle/TocToggle`
+ * emits `dist/toc-toggle/TocToggle.js` beside the `tsc` declaration at
+ * `dist/toc-toggle/TocToggle.d.ts`, and consumers import it as
+ * `duckfn-docs-kit/toc-toggle/TocToggle`. Adding or moving a public module
+ * means one line in this file and nothing in package.json. Type declarations
+ * come from `tsc -p tsconfig.build.json` instead of a Vite plugin, which keeps
+ * the toolchain to one extra dependency.
  *
  * `index` is the browser barrel (home-page elements + value types); `TocToggle`
  * and `remark` stay separate so a Docusaurus config never pulls browser code

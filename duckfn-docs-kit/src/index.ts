@@ -7,16 +7,17 @@ import type {HTMLAttributes} from 'react';
  * The components are retained-mode (build once, then mutate held nodes) and
  * expose named setters such as `setTitle()` / `setBadges()`. They render into
  * shadow roots and inject their own stylesheet, so the consuming site imports
- * only the global CSS the kit cannot host in a shadow (`css/kit.css`: brand
- * tokens + TOC toggle). Icons are rendered by the official `<iconify-icon>`
+ * only the global CSS the kit cannot host in a shadow (`src/kit.css`: brand
+ * tokens + TOC toggle, imported as `duckfn-docs-kit/src/kit.css`). Icons are
+ * rendered by the official `<iconify-icon>`
  * web component, which `registerDfkElements()` registers as a side effect, so
  * this package ships no icon data.
  *
  * `TocToggle` and the remark plugin keep their own subpaths
- * (`duckfn-docs-kit/TocToggle`, `duckfn-docs-kit/remark`) instead of being
- * merged here: a Docusaurus config file must never pull browser code into Node,
- * and a site that only wants the TOC collapse button should not pay for the
- * bundled `iconify-icon` that this entry carries.
+ * (`duckfn-docs-kit/toc-toggle/TocToggle`, `duckfn-docs-kit/remark`) instead of
+ * being merged here: a Docusaurus config file must never pull browser code into
+ * Node, and a site that only wants the TOC collapse button should not pay for
+ * the bundled `iconify-icon`.
  */
 export {DfkFeatures} from './home/DfkFeatures';
 export {DfkHero} from './home/DfkHero';

@@ -11,25 +11,13 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./TocToggle": {
-      "types": "./dist/toc-toggle/TocToggle.d.ts",
-      "default": "./dist/toc-toggle/TocToggle.js"
-    },
-    "./css/kit.css": "./src/kit.css",
-    "./css/tokens.css": "./src/theme/tokens.css",
-    "./css/toc-toggle.css": "./src/toc-toggle/TocToggle.css",
+    "./src/*": "./src/*",
     "./*": {
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
     }
   },
-  "files": [
-    "dist",
-    "src/kit.css",
-    "src/theme",
-    "src/toc-toggle/TocToggle.css",
-    "AGENTS.md"
-  ],
+  "files": ["dist", "src", "AGENTS.md"],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

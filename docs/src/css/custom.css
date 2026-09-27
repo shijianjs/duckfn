@@ -9,7 +9,7 @@
    styles inside the JS bundle (shadow DOM), so they need nothing here. Both
    files live in the kit so other extension docs sites get the same look
    without copying code. */
-@import 'duckfn-docs-kit/css/kit.css';
+@import 'duckfn-docs-kit/src/kit.css';
 
 /* Brand colours.
    The palette comes from `static/img/duckfn-logo.svg`, which is drawn with a deep

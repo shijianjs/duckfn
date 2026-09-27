@@ -39,18 +39,21 @@ src/
   `.d.ts`。`npm run build` 一步完成。全局 CSS（`theme/tokens.css`、
   `toc-toggle/TocToggle.css`）不经构建、作为源文件直接导出；组件自己的
   `home/home.css` 由 `home/styles.ts` 以 `?inline` 内联进 bundle（见第 9 条）。
-- JS 运行时入口用通配模式（`./* → ./dist/*.js`），入口文件名与其主导出的类名
-  一致（大驼峰），ts 源文件同理。新增运行时入口只需在 `vite.config.ts` 的
-  `entry` 里加一行（值指向它在 `src/` 下的实际路径），不必改 `package.json`：
+- **package.json 与业务解耦（硬性要求）**：`exports` 只有三条**永远不改**的规则
+  —— `.`（主入口）、`./src/*`（源文件直出，CSS 走这里）、`./*`（通配，
+  `dist/` 下任何产物自动成为可导入子路径）。新增 / 移动 / 重命名模块**一律不碰
+  package.json**，改 `vite.config.ts` 的 `entry` 一行即可。评审时看到 package.json
+  里出现逐个文件、逐个入口的映射，就是违反本条。
+- 运行时入口文件名与其主导出的类名一致（大驼峰），ts 源文件同理；入口的
+  **导入子路径 = 它在 `src/` 下的相对路径**（通配映射到 `dist/` 同路径产物）：
   - `duckfn-docs-kit`（浏览器：`index.ts` 桶文件，CE + 类型）
-  - `duckfn-docs-kit/TocToggle`（浏览器：`toc-toggle/TocToggle.ts` 的类）
+  - `duckfn-docs-kit/toc-toggle/TocToggle`（浏览器：TOC 折叠类）
   - `duckfn-docs-kit/remark`（**Node 构建期**：remark 插件）
-- CSS 子路径：因为样式文件分散在各业务目录，`exports` 里用**显式映射**而非通配
-  —— 对消费方保持稳定别名，源文件挪动只改这一处：`css/kit.css → src/kit.css`、
-  `css/tokens.css → src/theme/tokens.css`、
-  `css/toc-toggle.css → src/toc-toggle/TocToggle.css`。下游在 Docusaurus 的 CSS
-  管线里一行 `@import 'duckfn-docs-kit/css/kit.css'`。`home.css` **不作为**全局
-  CSS 导出 —— 它由 `home/styles.ts` 内联进 JS bundle，注入各组件的 shadow root。
+- CSS 子路径：消费方直接按源文件路径引 —— `@import
+  'duckfn-docs-kit/src/kit.css'`（聚合入口），或单独引
+  `duckfn-docs-kit/src/theme/tokens.css` 等。不再维护 `css/kit.css` 这类
+  与源路径脱钩的别名。`home.css` **不作为**全局 CSS 导出 —— 它由
+  `home/styles.ts` 内联进 JS bundle，注入各组件的 shadow root。
 
 ## 代码风格（硬性要求）
 
