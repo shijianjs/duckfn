@@ -110,20 +110,30 @@ src/
   在 `connectedCallback()` 里挂载（`#mounting` 守卫 + await 后 `isConnected` 守卫，
   断开即 `destroy()`）。`remark.ts` 保留下来的 `code` 子节点只是预渲染文本，
   元素没有默认 slot、`sql.css` 里 `dfk-sql > :not([slot]) { display: none }` 把它压掉。
+- **不要覆盖 `.cm-content` 的垂直 padding，也不要给 `.cm-gutters` 加**：CodeMirror 的
+  `ViewState.measure()` 用 `parseInt` 读 `.cm-content` 的 computed `padding-top` 算出
+  `paddingTop`，再把同一数值作为第一个 gutter 元素的 `marginTop` 施加下去（经 gutter 的
+  `above` 偏移）。因此覆盖值不是整像素就会留下小数偏移（`0.4rem` = 6.4px 被读成 6px，
+  行号偏高 0.4px），而两侧都加等于把同一段内缩算两遍、行号整体低于代码行约 6px。基类主题
+  自带的 `padding: 4px 0` 既是整数又够紧凑，**保持原样**。
 - **每个结果都有 tab 栏**，包括只有一个 `Table` 页签的普通表格结果 —— 因为 tab 栏是
   全屏按钮唯一的落脚点。`text` 结果是 `[Text, Table]`；`table` 结果是 `[]` + 末尾 Table。
 - **全屏按钮归 `DfkSql` 所有**（状态在它手里），节点经 `RenderContext.fullscreenButton`
   交给 `PreviewTabs`，由后者摆到 tab 栏右端、`role="tablist"` 之外，所以不随页签滚动。
   全屏 overlay 不再需要 `padding-top` 给悬浮工具栏让位，退出按钮就在原来的位置。
-- 代码块那四个按钮（执行 / 重置 / 折行 / 复制）是紧凑的图标按钮，悬浮在代码区右上角
+- 代码块那五个按钮（执行 / 格式化 / 重置 / 折行 / 复制）是紧凑的图标按钮，悬浮在代码区右上角
   （`.dfk-sql-code:hover / :focus-within` 时才 `opacity: 1` + `pointer-events: auto`，
   隐藏时不可点）；提示用 `data-tip` + `::after`。这套图标按钮与 tooltip 规则**在
-  `DfkSql.css`（shadow）与 `sql.css`（light）各写一份** —— 前四个按钮在 shadow 树里，
+  `DfkSql.css`（shadow）与 `sql.css`（light）各写一份** —— 前五个按钮在 shadow 树里，
   全屏按钮在 light DOM 的结果区，一条规则够不着两处；两处都留了交叉引用注释。
 - 折行默认**开启**，用 `Compartment` + `wrap.reconfigure(lineWrapping)` 切换，不重建
   编辑器（`@codemirror/state` 因此是动态 import 列表的一员，也在 vite external 里）。
   复制成功后按钮变 `lucide:check` + `Copied` 约 1.6s 再复位，定时器在
   `disconnectedCallback()` 里清掉。
+- 格式化走 `sql-formatter`（`duckdb` dialect，它认 DuckDB 的 `EXCLUDE` / `PIVOT`），与
+  CodeMirror 同一套懒加载动态 import，同样列在 vite 的 external 里。它只改空白、保留
+  作者的关键字大小写（默认 `keywordCase: "preserve"`），所以格式化**不清结果**；写回
+  走 `setValue()`，属于普通编辑，CodeMirror 的撤销历史覆盖得到。
 
 **表格（VTable）**
 

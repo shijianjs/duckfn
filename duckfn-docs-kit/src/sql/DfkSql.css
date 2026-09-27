@@ -45,12 +45,14 @@
   line-height: 1.6;
 }
 
-/* CodeMirror's stock padding is generous; a docs example wants the text to
-   start close to the border. */
-.dfk-sql-editor .cm-content,
-.dfk-sql-editor .cm-gutters {
-  padding: 0.4rem 0;
-}
+/* The editor's vertical inset is CodeMirror's own (`padding: 4px 0` in its base
+   theme) and is deliberately left alone. ViewState reads the content's computed
+   `padding-top` with `parseInt` and re-applies it as the first gutter element's
+   `marginTop` (it arrives as the gutter's `above` offset), so an override that
+   is not a whole number of pixels — `0.4rem` is 6.4px, mirrored as 6px — leaves
+   the line numbers fractionally off, and padding `.cm-gutters` as well would
+   count the inset twice: the numbers then sit ~6px below the lines they
+   belong to. */
 
 /* Hover/focus-revealed, like the buttons on Docusaurus' own code blocks. The
    cluster is inert while hidden so an invisible button is never a click target

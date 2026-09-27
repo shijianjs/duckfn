@@ -47,7 +47,8 @@ export default defineConfig({
     rollupOptions: {
       // Heavy runtime dependencies stay external so the consuming site's
       // bundler (Docusaurus' webpack) resolves them from node_modules and can
-      // code-split the dynamic `import()`s (CodeMirror, VTable, DuckDB-Wasm).
+      // code-split the dynamic `import()`s (CodeMirror, VTable, DuckDB-Wasm,
+      // sql-formatter).
       // Vite lib mode's *default* externalisation is unreliable in this kit
       // (`iconify-icon` used to end up bundled despite it), so list them
       // explicitly.
@@ -59,6 +60,7 @@ export default defineConfig({
         '@codemirror/view',
         '@codemirror/commands',
         '@codemirror/state',
+        'sql-formatter',
       ],
     },
   },

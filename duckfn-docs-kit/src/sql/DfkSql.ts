@@ -10,8 +10,8 @@ import {el, HTMLElementBase} from '../dom';
  * `<dfk-sql>` — a runnable SQL example produced by `remarkRunnableSql`.
  *
  * A code block, a row of icon buttons floating in its top-right corner on
- * hover (run / reset / wrap / copy — the same idiom as Docusaurus' own code
- * blocks), and a result area that appears only once something has run. The
+ * hover (run / format / reset / wrap / copy — the same idiom as Docusaurus' own
+ * code blocks), and a result area that appears only once something has run. The
  * CodeMirror editor *is* the code view: there is no read-only preview and no
  * edit mode to enter.
  *
@@ -42,6 +42,7 @@ import {el, HTMLElementBase} from '../dom';
 // too, because a renderer resolves everything through the labels it is handed.
 type SqlLabels = {
   run: string;
+  format: string;
   reset: string;
   /** Tooltip for the wrap toggle while wrapping is *off* (i.e. "turn it on"). */
   wrapOn: string;
@@ -54,6 +55,7 @@ type SqlLabels = {
   loadingExtensions: string;
   initFailed: string;
   error: string;
+  formatFailed: string;
   fullscreen: string;
   exitFullscreen: string;
   table: string;
@@ -65,6 +67,7 @@ type SqlLabels = {
 const LABELS: Record<string, SqlLabels> = {
   en: {
     run: 'Run',
+    format: 'Format SQL',
     reset: 'Reset',
     wrapOn: 'Wrap long lines',
     wrapOff: 'Stop wrapping lines',
@@ -75,6 +78,7 @@ const LABELS: Record<string, SqlLabels> = {
     loadingExtensions: 'Loading extensions…',
     initFailed: 'DuckDB failed to start',
     error: 'Error',
+    formatFailed: 'Could not format the SQL',
     fullscreen: 'Fullscreen',
     exitFullscreen: 'Exit fullscreen',
     table: 'Table',
@@ -84,6 +88,7 @@ const LABELS: Record<string, SqlLabels> = {
   },
   'zh-hans': {
     run: '执行',
+    format: '格式化',
     reset: '重置',
     wrapOn: '折行显示',
     wrapOff: '取消折行',
@@ -94,6 +99,7 @@ const LABELS: Record<string, SqlLabels> = {
     loadingExtensions: '正在加载扩展…',
     initFailed: 'DuckDB 初始化失败',
     error: '错误',
+    formatFailed: '格式化失败',
     fullscreen: '全屏',
     exitFullscreen: '退出全屏',
     table: '表格',
@@ -106,6 +112,17 @@ const LABELS: Record<string, SqlLabels> = {
 /** How long the copy button shows its "copied" confirmation, in ms. */
 const COPIED_HOLD = 1600;
 
+/**
+ * `sql-formatter` is loaded on first use, like the CodeMirror modules: a reader
+ * who never presses Format pays nothing for its parser. `duckdb` is a dialect
+ * of its own there, so DuckDB-only syntax (`EXCLUDE`, `PIVOT`) survives.
+ */
+let formatterModule: Promise<typeof import('sql-formatter')> | null = null;
+function loadFormatter(): Promise<typeof import('sql-formatter')> {
+  formatterModule ??= import('sql-formatter');
+  return formatterModule;
+}
+
 export class DfkSql extends HTMLElementBase {
   /** The CodeMirror host; it lives in the shadow tree, so `DfkSql.css` styles it. */
   readonly #editorHost = el('div', {class: 'dfk-sql-editor'});
@@ -114,6 +131,7 @@ export class DfkSql extends HTMLElementBase {
   readonly #actions = el('div', {class: 'dfk-sql-actions'});
   readonly #status = el('span', {class: 'dfk-sql-status', attrs: {'aria-live': 'polite'}});
   readonly #runBtn: IconButton;
+  readonly #formatBtn: IconButton;
   readonly #resetBtn: IconButton;
   readonly #wrapBtn: IconButton;
   readonly #copyBtn: IconButton;
@@ -126,6 +144,8 @@ export class DfkSql extends HTMLElementBase {
   /** Long SQL lines are the norm in a docs example, so wrapping starts on. */
   #wrapped = true;
   #running = false;
+  /** True while `sql-formatter` is loading or laying the SQL out. */
+  #formatting = false;
   #seeded = false;
   #mounting = false;
   #expanded = false;
@@ -146,6 +166,7 @@ export class DfkSql extends HTMLElementBase {
   constructor() {
     super();
     this.#runBtn = new IconButton('lucide:play', () => void this.#onRun());
+    this.#formatBtn = new IconButton('lucide:wand-sparkles', () => void this.#onFormat());
     this.#resetBtn = new IconButton('lucide:rotate-ccw', () => this.#onReset());
     this.#wrapBtn = new IconButton('lucide:wrap-text', () => this.#onToggleWrap());
     this.#copyBtn = new IconButton('lucide:copy', () => void this.#onCopy());
@@ -158,6 +179,7 @@ export class DfkSql extends HTMLElementBase {
     this.#actions.append(
       this.#status,
       this.#runBtn.root,
+      this.#formatBtn.root,
       this.#resetBtn.root,
       this.#wrapBtn.root,
       this.#copyBtn.root,
@@ -213,6 +235,7 @@ export class DfkSql extends HTMLElementBase {
 
   #applyLabels(): void {
     this.#runBtn.setLabel(this.#labels.run);
+    this.#formatBtn.setLabel(this.#labels.format);
     this.#resetBtn.setLabel(this.#labels.reset);
     this.#wrapBtn.setLabel(this.#wrapped ? this.#labels.wrapOff : this.#labels.wrapOn);
     this.#wrapBtn.setOn(this.#wrapped);
@@ -254,6 +277,33 @@ export class DfkSql extends HTMLElementBase {
     this.#currentSql = this.#originalSql;
     this.#editor?.setValue(this.#currentSql);
     this.#clearResult();
+  }
+
+  /**
+   * Re-lays-out the SQL through `sql-formatter`. It only changes whitespace —
+   * the author's keyword casing is preserved — so the last result stays valid
+   * and is deliberately left on screen. Formatting goes through `setValue()`,
+   * which is a normal edit: CodeMirror's undo history covers it.
+   */
+  async #onFormat(): Promise<void> {
+    if (this.#formatting) {
+      return; // The formatter module is still on its way in.
+    }
+    this.#formatting = true;
+    this.#formatBtn.setDisabled(true);
+    try {
+      const {format} = await loadFormatter();
+      const formatted = format(this.#currentSql, {language: 'duckdb'});
+      this.#currentSql = formatted;
+      // A block whose editor has not finished mounting keeps the formatted text
+      // in `#currentSql`; `#mountEditor` seeds the editor from it.
+      this.#editor?.setValue(formatted);
+    } catch {
+      this.#setStatus(this.#labels.formatFailed);
+    } finally {
+      this.#formatting = false;
+      this.#formatBtn.setDisabled(false);
+    }
   }
 
   #onToggleWrap(): void {
@@ -353,6 +403,7 @@ export class DfkSql extends HTMLElementBase {
 
   #setBusy(busy: boolean): void {
     this.#runBtn.setDisabled(busy);
+    this.#formatBtn.setDisabled(busy);
     this.#resetBtn.setDisabled(busy);
     // A run started from a click keeps the cluster on screen, so the progress
     // status in it is actually readable.

@@ -8,10 +8,11 @@ description: SQL blocks that run in your browser — the duckfn-docs-kit runnabl
 
 A fenced SQL block whose info string carries a JSON config turns the code block
 into a runnable example: the block itself is a CodeMirror editor, and nothing
-executes until you click **Run**. The buttons (Run, Reset, line wrapping, Copy)
-appear in the block's top-right corner when you hover it or tab into it. The
-query runs in your browser against a single shared DuckDB-Wasm instance, and the
-result renders below the block.
+executes until you click **Run**. The buttons (Run, Format, Reset, line
+wrapping, Copy) appear in the block's top-right corner when you hover it or tab
+into it; **Format** re-lays-out the SQL in place — whitespace only, your keyword
+casing is kept. The query runs in your browser against a single shared
+DuckDB-Wasm instance, and the result renders below the block.
 
 The config is JSON (not `key=value`), so it can grow nested fields later:
 
