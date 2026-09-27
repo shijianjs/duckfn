@@ -4,9 +4,11 @@
  * work well for content-centric websites.
  */
 
-/* Shared building blocks from duckfn-docs-kit: the `--duckfn-*` brand tokens,
-   the TOC-toggle styles and the `dfk-*` home-component styles. They live in the
-   kit so other extension docs sites get the same look without copying code. */
+/* Shared building blocks from duckfn-docs-kit: the `--duckfn-*` brand tokens
+   and the TOC-toggle styles. The `dfk-*` home components carry their own
+   styles inside the JS bundle (shadow DOM), so they need nothing here. Both
+   files live in the kit so other extension docs sites get the same look
+   without copying code. */
 @import 'duckfn-docs-kit/css/kit.css';
 
 /* Brand colours.

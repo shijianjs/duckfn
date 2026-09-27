@@ -1,5 +1,6 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
 import {el, HTMLElementBase} from '../dom';
+import {homeStyles} from '../styles';
 import type {HeroAction, HeroBadge, HeroLink} from '../types';
 
 /**
@@ -7,9 +8,11 @@ import type {HeroAction, HeroBadge, HeroLink} from '../types';
  * buttons and the badge row. Ported from the Docusaurus home page's `Hero()`.
  *
  * Retained-mode: every node is held in a field, the structure is assembled once
- * in the constructor (into a detached `section`, because a custom element's
- * constructor must not add children to the element it is building), and the
- * `set*` methods only mutate the nodes they own.
+ * in the constructor and the `set*` methods only mutate the nodes they own.
+ *
+ * The tree lives in a shadow root (adopting the shared `homeStyles()` sheet), so
+ * the site's global CSS cannot reach it; theme colours cross the boundary
+ * through the inherited `--duckfn-*` / `--ifm-*` custom properties.
  */
 export class DfkHero extends HTMLElementBase {
   readonly #section = el('section', {class: 'dfk-hero'});
@@ -35,11 +38,9 @@ export class DfkHero extends HTMLElementBase {
   readonly #secondaryLabel = el('span');
   readonly #badges = el('div', {class: 'dfk-badges'});
   readonly #badgeLinks: HTMLAnchorElement[] = [];
-  #attached = false;
 
   constructor() {
     super();
-    // Assembled into the detached `section`, never into `this`.
     this.#stage.appendChild(this.#logo);
     this.#primary.appendChild(this.#primaryLabel);
     this.#secondary.append(this.#secondaryIcon, this.#secondaryLabel);
@@ -52,15 +53,13 @@ export class DfkHero extends HTMLElementBase {
       this.#badges,
     );
     this.#section.appendChild(this.#inner);
-  }
-
-  connectedCallback(): void {
-    // React can detach and re-attach the same node; the structure is built once.
-    if (this.#attached) {
-      return;
-    }
-    this.#attached = true;
-    this.append(this.#section);
+    // A custom element's constructor may call `attachShadow` (it only must not
+    // add children or attributes to `this`), so the whole tree lives in the
+    // shadow root from the first moment the element exists — the setters are
+    // safe to call before the element is even connected.
+    const shadow = this.attachShadow({mode: 'open'});
+    shadow.adoptedStyleSheets = [homeStyles()];
+    shadow.appendChild(this.#section);
   }
 
   setLogo(src: string): void {

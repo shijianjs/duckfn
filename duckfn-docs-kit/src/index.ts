@@ -5,9 +5,12 @@ import type {HTMLAttributes} from 'react';
  * value types their `set*` methods accept.
  *
  * The components are retained-mode (build once, then mutate held nodes) and
- * expose named setters such as `setTitle()` / `setBadges()`. Icons are rendered
- * by the official `<iconify-icon>` web component, which `registerDfkElements()`
- * registers as a side effect, so this package ships no icon data.
+ * expose named setters such as `setTitle()` / `setBadges()`. They render into
+ * shadow roots and inject their own stylesheet, so the consuming site imports
+ * only the global CSS the kit cannot host in a shadow (`css/kit.css`: brand
+ * tokens + TOC toggle). Icons are rendered by the official `<iconify-icon>`
+ * web component, which `registerDfkElements()` registers as a side effect, so
+ * this package ships no icon data.
  *
  * `TocToggle` and the remark plugin keep their own subpaths
  * (`duckfn-docs-kit/TocToggle`, `duckfn-docs-kit/remark`) instead of being

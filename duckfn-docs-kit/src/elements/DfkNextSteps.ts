@@ -1,5 +1,6 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
 import {el, HTMLElementBase} from '../dom';
+import {homeStyles} from '../styles';
 import type {NextStepItem} from '../types';
 
 /**
@@ -8,6 +9,7 @@ import type {NextStepItem} from '../types';
  *
  * Same retained-mode shape as `DfkFeatures`: the grid is built once, each card
  * holds its own nodes, `setSteps()` grows/shrinks the list and mutates in place.
+ * The tree lives in a shadow root like the other `dfk-*` elements.
  */
 export class DfkNextSteps extends HTMLElementBase {
   readonly #section = el('section', {class: 'dfk-section'});
@@ -15,20 +17,14 @@ export class DfkNextSteps extends HTMLElementBase {
   readonly #heading = el('h2', {class: 'dfk-section-title'});
   readonly #grid = el('div', {class: 'dfk-next-grid'});
   readonly #cards: DfkNextStepCard[] = [];
-  #attached = false;
 
   constructor() {
     super();
     this.#inner.append(this.#heading, this.#grid);
     this.#section.appendChild(this.#inner);
-  }
-
-  connectedCallback(): void {
-    if (this.#attached) {
-      return;
-    }
-    this.#attached = true;
-    this.append(this.#section);
+    const shadow = this.attachShadow({mode: 'open'});
+    shadow.adoptedStyleSheets = [homeStyles()];
+    shadow.appendChild(this.#section);
   }
 
   setSectionTitle(text: string): void {

@@ -38,8 +38,9 @@ npm run typecheck -w docs    # tsc
 ```
 
 `duckfn-docs-kit` is a source dependency, so rebuild it (`npm run build -w duckfn-docs-kit`)
-after editing anything under `duckfn-docs-kit/src/`. The kit's CSS is imported as source files
-and needs no build step.
+after editing anything under `duckfn-docs-kit/src/`. The components' styles are inlined into
+the JS bundle at build time, so rebuild after touching `home.css`; the global CSS that ships
+as source (`tokens.css`, `toc-toggle.css`) needs no build step.
 
 `npm run build` is the check that matters: `onBrokenLinks` is set to `throw`, so a link to a page
 that does not exist fails the build for both locales.

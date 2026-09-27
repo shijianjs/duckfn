@@ -1,5 +1,6 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
 import {el, HTMLElementBase} from '../dom';
+import {homeStyles} from '../styles';
 import type {FeatureItem} from '../types';
 
 /**
@@ -9,6 +10,10 @@ import type {FeatureItem} from '../types';
  * Retained-mode: the grid is built once and each card (a {@link DfkFeatureCard})
  * holds its own nodes. `setFeatures()` grows or shrinks the list to the new
  * length and mutates the cards in place — the grid is never cleared and rebuilt.
+ *
+ * The tree lives in a shadow root (adopting the shared `homeStyles()` sheet);
+ * see `DfkHero` for why the theme crosses the boundary through custom
+ * properties.
  */
 export class DfkFeatures extends HTMLElementBase {
   readonly #section = el('section', {class: 'dfk-section'});
@@ -16,20 +21,14 @@ export class DfkFeatures extends HTMLElementBase {
   readonly #heading = el('h2', {class: 'dfk-section-title'});
   readonly #grid = el('div', {class: 'dfk-feature-grid'});
   readonly #cards: DfkFeatureCard[] = [];
-  #attached = false;
 
   constructor() {
     super();
     this.#inner.append(this.#heading, this.#grid);
     this.#section.appendChild(this.#inner);
-  }
-
-  connectedCallback(): void {
-    if (this.#attached) {
-      return;
-    }
-    this.#attached = true;
-    this.append(this.#section);
+    const shadow = this.attachShadow({mode: 'open'});
+    shadow.adoptedStyleSheets = [homeStyles()];
+    shadow.appendChild(this.#section);
   }
 
   setSectionTitle(text: string): void {

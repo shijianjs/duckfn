@@ -17,13 +17,15 @@ const src = (p: string) => fileURLToPath(new URL(`./src/${p}`, import.meta.url))
  * into Node and a TOC-only site does not bundle `iconify-icon`. Adding a new
  * public module means adding one entry here — package.json needs no change.
  *
- * The @iconify-icons packages are *not* externalised: their data is bundled, so
- * a consuming site only needs this package, not the icon sets.
- *
- * CSS is not processed here at all — `src/css/*.css` ships as source and is
- * exported directly, because the styles must stay in the consuming site's own
- * Docusaurus CSS pipeline (that is what lets `@layer docusaurus.theme-classic`
- * and the Infima variables resolve).
+ * The components' own CSS (`home.css`) is *not* exported as a stylesheet:
+ * `styles.ts` imports it with Vite's `?inline` suffix, so the text is bundled
+ * into the JS and each component injects it into its shadow root. The CSS that
+ * stays in `src/css/` as source is only what a shadow boundary cannot host —
+ * `tokens.css` (the `--duckfn-*` variables must be declared on the document's
+ * `:root` / `[data-theme]` to inherit into the shadow trees) and
+ * `toc-toggle.css` (light-DOM rules that must live inside
+ * `@layer docusaurus.theme-classic`). Both resolve through the site's own
+ * Docusaurus CSS pipeline via `css/kit.css`.
  */
 export default defineConfig({
   build: {

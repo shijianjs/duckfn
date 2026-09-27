@@ -8,16 +8,22 @@ web components、品牌 CSS tokens、版本占位符 remark 插件。它被 `doc
 ## 包结构 / 导出
 
 - 构建：Vite lib 模式产出 ESM（`dist/`），`tsc -p tsconfig.build.json` 产出
-  `.d.ts`。`npm run build` 一步完成。CSS 不经构建，作为源文件直接导出。
+  `.d.ts`。`npm run build` 一步完成。全局 CSS（`tokens.css`、`toc-toggle.css`）
+  不经构建、作为源文件直接导出；组件自己的 `home.css` 由 `styles.ts` 以
+  `?inline` 内联进 bundle（见第 9 条）。
 - `exports` 用通配模式（`./* → ./dist/*.js`），新增运行时入口只需在
   `vite.config.ts` 的 `entry` 里加一行，不必改 `package.json`。入口文件名与
   其主导出的类名一致（大驼峰），ts 源文件同理：
   - `duckfn-docs-kit`（浏览器：`index.ts` 桶文件，CE + 类型）
   - `duckfn-docs-kit/TocToggle`（浏览器：TocToggle 类）
   - `duckfn-docs-kit/remark`（**Node 构建期**：remark 插件）
-- CSS 子路径：`./css/*` 直接映射到 `src/css/`，如 `css/kit.css`（聚合）、
-  `css/tokens.css`、`css/toc-toggle.css`、`css/home.css`，下游在 Docusaurus
-  的 CSS 管线里 `@import`。
+- CSS 子路径：`./css/*` 直接映射到 `src/css/`，只发**必须待在全局样式表里**的
+  文件：`css/tokens.css`（`--duckfn-*` 变量必须声明在文档的 `:root` /
+  `[data-theme]` 上，才能继承进 shadow tree）与 `css/toc-toggle.css`（light DOM
+  规则，必须进 `@layer docusaurus.theme-classic`），`css/kit.css` 聚合两者，
+  下游在 Docusaurus 的 CSS 管线里一行 `@import`。`home.css` **不再**作为全局
+  CSS 导出 —— 它由 `src/styles.ts` 以 `?inline` 内联进 JS bundle，注入各组件的
+  shadow root（见第 9 条）。
 
 ## 代码风格（硬性要求）
 
@@ -167,30 +173,31 @@ features.setFeatures(items);
 - 改 setter 签名属于公开 API 变更，需同步 `docs/src/pages/index.tsx` 的
   `mount*()` 助手、`src/index.ts` 的类型导出，以及下游消费方。
 
-### 6. 生命周期：构造函数建树优先
+### 6. 生命周期：构造函数建树 + 挂 shadow root
 
-优先在 `constructor()` 里创建静态结构并组装；`connectedCallback()` 只做
-**必要的一次性初始化**（挂载、启动监听、注册外部资源），并设明确的初始化标志。
+优先在 `constructor()` 里创建静态结构、`attachShadow` 并组装完毕；
+`connectedCallback()` 只做**必要的一次性初始化**（启动监听、注册外部资源）。
 不要把 `connectedCallback() → rebuild() → build()` 当成标准渲染生命周期。
 
 **Custom Elements 规范限制（必须遵守）**：构造函数里**不得给 `this`
 加属性或子节点**（`this.append(...)`、`this.setAttribute(...)` 都不行），
 否则 `document.createElement()` / `innerHTML` 解析创建的元素会抛错。
-正确拆法是：
+`attachShadow()` 不在禁止之列，所以正确拆法是：构造时把结构挂进 shadow root，
+light DOM 始终空着。
 
 ```ts
 constructor() {
   super();
-  this.#section = document.createElement('section'); // 自有的中间节点
-  this.#section.append(this.#title, this.#body);     // 组装进中间节点，不碰 this
-}
-
-connectedCallback() {
-  if (this.#attached) return;   // 一次性：React 重挂载 / 元素移动会再次触发
-  this.#attached = true;
-  this.append(this.#section);   // 只在这里把结构挂到 this 上
+  this.#section = document.createElement('section');
+  this.#section.append(this.#title, this.#body); // 组装进自有节点
+  const shadow = this.attachShadow({mode: 'open'}); // 构造函数里合法
+  shadow.adoptedStyleSheets = [homeStyles()];
+  shadow.appendChild(this.#section);
 }
 ```
+
+组件因此**从诞生那一刻起结构就完整**，setter 在元素连接前调用也安全，
+`connectedCallback()` 不再承担「挂载」职责。
 
 **监听器按对象归属决定挂在哪**：
 
@@ -227,11 +234,24 @@ npm 包 `iconify-icon`，`register.ts` 里 side-effect import 注册。
   字形大小跟随宿主的 font-size；给宿主设 CSS `width`/`height` 只会撑大空盒子，
   图标本身不变。
 
-### 9. 不用 Shadow DOM
+### 9. 默认用 Shadow DOM
 
-组件渲染进 light DOM（全局 `dfk-` 前缀类名），这样才能看见消费站的 Infima
-变量、`[data-theme]` 与 `@layer docusaurus.theme-classic` 级联。
-新增类名一律 `dfk-` 前缀。
+`dfk-*` 组件**默认渲染进 shadow root**（`mode: 'open'`），样式用
+`adoptedStyleSheets` 注入（`src/styles.ts` 把 `home.css` 以 `?inline` 内联进
+bundle，全局共享一个 `CSSStyleSheet`）。这样宿主页面的全局 CSS 进不来、组件的
+CSS 也漏不出去，组件边界干净，不依赖「人工命名空间」去避免污染。
+
+**主题照样跟随宿主**：CSS 自定义属性会**继承穿过 shadow 边界**，所以组件内部
+用 `var(--duckfn-*)` / `var(--ifm-*)` 即可拿到消费站的 Infima 变量与品牌色，
+`[data-theme]` 切换自动生效 —— 前提是这些变量声明在**文档的** `:root` /
+`[data-theme]` 上（这正是 `tokens.css` 必须留在全局、不能塞进 shadow 的原因）。
+组件内部**不要**写 `[data-theme]` 选择器，也不要依赖宿主的 class。
+
+**例外（万不得已才退回 light DOM）**：仅当组件必须直接复用消费站 light DOM 的
+CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其规则必须落在
+`@layer docusaurus.theme-classic` 里 —— 才不用 shadow root。这种组件的类名一律
+`dfk-` 前缀（或 `toc-` 这类自有前缀），避免与宿主撞名。新增例外要在评审时说清楚
+「依赖了宿主的哪条规则」。
 
 ### 10. SSR 安全
 
@@ -241,9 +261,12 @@ Docusaurus 预渲染在 Node 里 import 本包。
   回退为空基类），否则模块求值直接崩。
 - **类字段初始化器不要碰 `document`**：Node 下类体只被求值、不实例化，所以
   字段初始化器安全的前提是「服务端永远不会 new 这个类」。目前正是如此，
-  浏览器侧由 `connectedCallback` 触达。
+  浏览器侧由元素 upgrade（即 `constructor()`）触达。
 - 触碰 `window` / `document` / `customElements` 的入口（`registerDfkElements()`、
   `TocToggle.init()`）要么带守卫，要么由消费方在浏览器环境调用。
+- `styles.ts` 的 `CSSStyleSheet` 必须**惰性创建**（`homeStyles()` 在构造函数里
+  才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
+  `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
 - `src/remark.ts` 是唯一允许在 Node 构建期跑的模块，它不得 import 任何浏览器模块。
 
@@ -259,17 +282,16 @@ React 19 的 SSR/hydration 不会把对象 prop 设到自定义元素上（对�
 
 - **`mount*()` 助手必须是纯 setter 调用（幂等）**。React 可能对同一节点多次调用
   ref（StrictMode 双调用、元素移动后重挂载），重复喂同样的数据必须无副作用。
-- **预渲染 HTML 里 `<dfk-*>` 是空壳，这是已知取舍**：结构只在浏览器侧
-  `connectedCallback()` 里挂上去，所以外壳有、内容没有，hydration 之前那几块是空的
+- **预渲染 HTML 里 `<dfk-*>` 是空壳，这是已知取舍**：结构挂在 shadow root 里，
+  light DOM 始终为空，所以外壳有、内容没有，hydration 之前那几块是空的
   （未定义的自定义元素默认 `display: inline`，高度为 0）。这个一次性高度跳变是刻意
   接受的代价。不要为此把结构改回「预渲染时也能拼出来」的写法 —— 那必然退回拼字符串
   或响应式 render。
-- **上面这条的副作用是首页会报一次 React 可恢复的 hydration mismatch**（minified
-  #418，`onRecoverableError`，指向 `dfk-hero`）。服务端 HTML 的 `<dfk-*>` 是空的，
-  而 hydration 时元素早已 upgrade 并挂好了子树，React 比对子节点数量发现对不上，
-  于是把该子树改为客户端重建。**这是同一条取舍的必然结果，不是 bug**：控制台里
-  看到它可以忽略，但不要用 `suppressHydrationWarning` 之类的补丁去「修」它 ——
-  那只会掩盖原因。想彻底消除，只能放弃保留模式（回到字符串或响应式 render）。
+- **light DOM 恒为空顺带消除了 hydration mismatch**：以前 `connectedCallback()`
+  往 light DOM 挂子树，React hydration 比对子节点数量对不上，会报一次可恢复的
+  mismatch（minified #418）。现在服务端 HTML 与客户端元素的 light DOM 都是空的，
+  比对一致。若控制台再出现 #418 指向 `dfk-*`，说明有代码把节点挂回了 light DOM，
+  那是 bug，要修原因而不是用 `suppressHydrationWarning` 掩盖。
 
 ## 其它约定
 

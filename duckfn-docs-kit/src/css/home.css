@@ -1,14 +1,18 @@
 /**
  * Styles for the `dfk-*` home-page custom elements.
  *
- * Unlike the original page-private CSS module, these are global class names
- * (prefixed `dfk-` so nothing collides with Infima or the consuming site):
- * custom elements render into the light DOM, which is what lets them see the
- * site's Infima variables and the `[data-theme]` switch.
+ * This file is *not* part of the site's global stylesheet: Vite inlines it into
+ * the bundle (`styles.ts`, `?inline`) and each component adopts it as a
+ * constructed stylesheet on its shadow root. The site's own CSS cannot reach
+ * these rules, and these rules cannot leak out — which is why the class names
+ * still carry the `dfk-` prefix (it keeps the shadow trees self-describing and
+ * greppable, not because they could collide with the host page).
  *
- * Every colour comes from the `--duckfn-*` tokens in `tokens.css`, which is the
- * single place the brand palette is defined; dark mode therefore needs no rules
- * of its own.
+ * Theme colours cross the shadow boundary through inheritance: the `--duckfn-*`
+ * tokens from `tokens.css` and the site's `--ifm-*` variables are custom
+ * properties declared on `:root` / `[data-theme]`, and custom properties
+ * inherit into shadow trees, so dark mode works without a single `[data-theme]`
+ * selector in this file.
  *
  * Motion rules, deliberately:
  *
@@ -20,6 +24,14 @@
  *   its normal styles — which is what lets the `:hover` transforms on the cards
  *   work. With `forwards` the finished animation would keep overriding them.
  */
+
+/* --------------------------------------------------------------- host */
+
+/* A custom element is `display: inline` by default; the shadow content is a
+   full-width section, so the host has to be a block box. */
+:host {
+  display: block;
+}
 
 /* --------------------------------------------------------------- hero */
 

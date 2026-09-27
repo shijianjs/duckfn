@@ -2,9 +2,11 @@
  * Home page styles — the part that stayed behind.
  *
  * The hero, the feature grid and the next-step cards moved to
- * `duckfn-docs-kit/css/home.css` together with the `dfk-*` web components that
- * render them. What is left here belongs to the code showcase, which needs the
- * theme's `CodeBlock` and therefore cannot leave the site.
+ * `duckfn-docs-kit` together with the `dfk-*` web components that render them;
+ * the components inject their own styles into their shadow roots, so nothing
+ * from them leaks into this file. What is left here belongs to the code
+ * showcase, which needs the theme's `CodeBlock` and therefore cannot leave the
+ * site.
  *
  * Class names are hashed by CSS Modules, so nothing here leaks into Infima's
  * own classes, and nothing in the theme can reach these rules.
