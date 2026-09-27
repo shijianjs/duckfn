@@ -56,6 +56,78 @@ typed in the editor is kept, nothing resets.
 SELECT this_function_does_not_exist(1);
 ```
 
+## HTML reports (`show: "html"` / `show: "iframe"`)
+
+`html` and `iframe` are the same renderer: the markup is put into an iframe's
+`srcdoc`, one tab per row, with the raw rows kept in a `Table` tab that is
+always **last**. `field` names the column holding the markup (a single-column
+result is unambiguous and needs no `field`), and `tab_name` picks the column
+that labels each tab.
+
+The frame is sandboxed with `allow-scripts` and **without** `allow-same-origin`,
+so a report's JavaScript runs while the frame keeps an opaque origin. That is
+what makes an HTML report — charts and all — work here; widen it only
+deliberately, through `option.sandbox`.
+
+```sql {"type":"duckfn","show":"iframe","field":"html","tab_name":"label","option":{"height":"170px"}}
+SELECT * FROM (VALUES
+  ('Bars', '<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;margin:0;padding:12px"><h4 style="margin:0 0 8px">Quarterly revenue</h4><svg viewBox="0 0 240 80" width="240" height="80"><rect x="0" y="20" width="60" height="60" fill="#14459b"/><rect x="80" y="40" width="60" height="40" fill="#3d7bd6"/><rect x="160" y="10" width="60" height="70" fill="#8ab4f8"/></svg></body>'),
+  ('Script', '<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;margin:0;padding:12px"><h4 style="margin:0 0 8px">Scripts run</h4><p id="out"></p><script>document.getElementById("out").textContent = "this frame ran JavaScript, with an opaque origin";</script></body>')
+) AS t(label, html);
+```
+
+## Inline SVG (`show: "svg"`)
+
+`svg` splices the markup into the page instead of framing it — the panel is
+still one tab per row plus the trailing table. Because inline SVG shares the
+page, anything that could execute or navigate (scripts, `foreignObject`,
+`on*` handlers, `javascript:` links) is stripped before it is inserted.
+
+```sql {"type":"duckfn","show":"svg","option":{"height":"140px"}}
+SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260" height="100"><circle cx="50" cy="50" r="40" fill="#14459b"/><circle cx="120" cy="50" r="30" fill="#3d7bd6"/><text x="170" y="56" font-family="system-ui" font-size="16" fill="#181818">from SVG</text></svg>';
+```
+
+## Loading extensions
+
+On WebAssembly `INSTALL` is a no-op — there is no persistent storage to install
+*into* — so `LOAD` is the whole mechanism: it fetches the extension's
+`.duckdb_extension.wasm` from the repository and verifies the signature before
+loading it. `extensions` lists what to load before the block runs, and
+`repository` points at a different repository; both are per block, while the
+loaded set is shared by every block on the page.
+
+An extension whose signature does not verify is rejected unless the block that
+**first** initialises the shared runtime sets `allowUnsignedExtensions: true`.
+
+```sql {"type":"duckfn","show":"table","extensions":["inet"]}
+SELECT '127.0.0.1'::INET AS ip, '10.0.0.0/8'::INET AS network;
+```
+
+## Fullscreen
+
+Every result has a **Fullscreen** button once it exists: the result area fills
+the viewport and the toolbar pins itself to the top of it, so the same button
+(now labelled *Exit fullscreen*) is where you left it. <kbd>Esc</kbd> exits too.
+
+```sql {"type":"duckfn","show":"table"}
+SELECT i AS n, repeat('wide column ', 3) AS filler
+FROM range(40) t(i);
+```
+
+## Config reference
+
+| Field | Meaning |
+| --- | --- |
+| `type` | `"duckfn"` — marks the block as runnable. Required. |
+| `show` | `table` (default), `text`, `html`, `iframe`, `svg`. |
+| `field` | Column holding the markup, for `html` / `iframe` / `svg`. |
+| `tab_name` | Column labelling each preview tab. |
+| `option.width` · `option.height` | CSS lengths for the preview box. |
+| `option.sandbox` | Sandbox tokens for the iframe, replacing `allow-scripts`. |
+| `extensions` | Extension names to `LOAD` before running. |
+| `repository` | Repository serving those extensions. |
+| `allowUnsignedExtensions` | Accept an unverifiable signature (first block wins). |
+
 ## Ordinary code blocks are untouched
 
 Only blocks whose metastring parses as JSON with `"type":"duckfn"` become

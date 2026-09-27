@@ -23,12 +23,51 @@ import type {Plugin} from 'unified';
 export interface RunnableSqlConfig {
   /** Marks the block as a duckfn runnable example; the only value today. */
   type: 'duckfn';
-  /** Which result renderer to use. Defaults to `table` at runtime. */
-  show?: 'table' | 'html' | 'svg' | 'text';
   /**
-   * Forward-compatible fields (`field`, `tab_name`, `option`, …): the remark
-   * plugin passes the whole object through untouched, so a newer kit version
-   * can read new keys without the docs source changing.
+   * Which result renderer to use. Defaults to `table` at runtime, except that a
+   * single-column single-row result degrades to `text` (a bare scalar reads
+   * better as a line than as a 1×1 table).
+   *
+   * `html` and `iframe` are the same renderer: both sandbox the markup in an
+   * iframe, so scripts run with an opaque origin.
+   */
+  show?: 'table' | 'html' | 'iframe' | 'svg' | 'text';
+  /**
+   * The column holding the markup, for the preview renderers. A single-column
+   * result is unambiguous and is used as-is.
+   */
+  field?: string;
+  /** The column to label each preview tab with; falls back to `Row N`. */
+  tab_name?: string;
+  /** Presentation knobs for the preview renderers; see `option.width` etc. */
+  option?: {
+    /** CSS length for the preview box (e.g. `'100%'`, `'640px'`). */
+    width?: string;
+    height?: string;
+    /**
+     * `sandbox` tokens for the `iframe` renderer, replacing the default
+     * `allow-scripts`. Only set this to *widen* what the report may do — the
+     * default deliberately omits `allow-same-origin`.
+     */
+    sandbox?: string;
+  };
+  /**
+   * duckfn community extensions to `LOAD` before running the block. The kit
+   * never hard-codes an extension name; the docs source names what it needs.
+   */
+  extensions?: string[];
+  /** A repository serving the extensions, instead of the DuckDB default. */
+  repository?: string;
+  /**
+   * Allows `LOAD` to accept extensions without a valid signature. Opt-in
+   * per block, and only meaningful for the *first* block that initialises the
+   * shared runtime — `open()` fixes it for the instance.
+   */
+  allowUnsignedExtensions?: boolean;
+  /**
+   * Forward-compatible fields: the remark plugin passes the whole object
+   * through untouched, so a newer kit version can read new keys without the
+   * docs source changing.
    */
   [key: string]: unknown;
 }

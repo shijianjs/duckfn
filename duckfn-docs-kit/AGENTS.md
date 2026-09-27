@@ -37,7 +37,8 @@ src/
 ├── toc-toggle/      # TocToggle.ts + TocToggle.css（light-DOM 例外，见第 9 条）
 ├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow 工具栏）
 │                    #   + sql.css（light-DOM 编辑器/结果，见第 9 条）+ runtime.ts
-│                    #   （DuckDB-Wasm 单例）+ editor.ts / renderers.ts / remark.ts
+│                    #   （DuckDB-Wasm 单例）+ editor.ts / renderers.ts
+│                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
@@ -75,6 +76,46 @@ src/
   `duckfn-docs-kit/src/theme/tokens.css` 等。不再维护 `css/kit.css` 这类
   与源路径脱钩的别名。`home.css` **不作为**全局 CSS 导出 —— 它由
   `home/styles.ts` 内联进 JS bundle，注入各组件的 shadow root。
+
+### 可运行 SQL：渲染契约与 DuckDB-Wasm 事实
+
+`sql/` 是一条单向链：`remark.ts`（构建期）→ `DfkSql.ts`（元素）→ `runtime.ts`
+（DuckDB 单例）→ `renderers.ts` + `PreviewTabs.ts`（结果渲染）。改动按这个顺序读。
+
+**渲染器（`renderers.ts`）**
+
+- `rendererFor(config, result)` 是唯一入口：`result.error` 一律走 `errorRenderer`；
+  否则按 `config.show` 查表，`show` 缺省时「单列单行 → `text`，其余 → `table`」。
+- 新增一种 `show` = `registry` 加一项 + `RunnableSqlConfig.show` 联合类型加一个字面量。
+  渲染器签名统一是 `(context, result) => Promise<void | (() => void)>` —— **一律
+  异步**，返回的 disposer 由 `DfkSql` 在重跑 / 断开时调用，调用方只处理一种形态。
+- `html` 与 `iframe` 是**同一个渲染器**（都写 `srcdoc`）；`svg` 是另一个（内联进页面）。
+- iframe 默认 `sandbox="allow-scripts"` 且**不含 `allow-same-origin`**：报告里的
+  JavaScript 照跑，但 frame 持有 opaque origin，与文档站主体隔离。**父文档因此读不到
+  `iframe.contentDocument`（为 `null`）——这是设计，不是 bug**，验证时别拿它当失败。
+  放宽只能显式写 `option.sandbox`（`sandbox` 在 DOM 上是 `DOMTokenList`，`el()` 里
+  必须走 `attrs`）。
+- 内联 SVG 走 `DOMParser` + `parsererror` / `namespaceURI` 检查，插入前**剥离**所有
+  可执行或可导航内容（`script`、`foreignObject`、`on*`、`javascript:` 的
+  `href`/`xlink:href`）；解析失败退化为 `pre` 文本，绝不把裸标记塞进 DOM。
+- 预览尺寸用 CSS 自定义属性表达（`--dfk-sql-preview-width` / `-height`、
+  `--dfk-sql-table-height`），靠选择器特异性覆盖，不写 `!important`。
+- `PreviewTabs` 是「一页签一行 + 末尾恒定 `Table`」的部件：`button` / `panel` 全在
+  构造函数里一次建好，切换只改 `classList` / `aria-selected` / `tabIndex` / `hidden`；
+  `Table` 面板懒挂载（首次切入才 `mountTable`），若挂载还在飞行中就被 `dispose()`，
+  落地后立刻释放。VTable 的尺寸变化交给 `ResizeObserver`，不向外传 resize 管道。
+
+**扩展加载（`runtime.ts`）**
+
+- **wasm 上 `INSTALL` 是空操作**（没有可安装的持久存储），只有 `LOAD` 真的 fetch
+  `.duckdb_extension.wasm`、验签、加载。所以 `loadExtension()` 只发 `LOAD`。
+- 扩展名与仓库 URL 是**白名单校验**（`^[a-z][a-z0-9_]*$` / `^https://…$`）而非转义
+  —— 它们直接进 SQL 文本；仓库先 `SET custom_extension_repository`。
+- 按 `${repository}\0${name}` 记忆化（成功与 in-flight 都记），失败时从表里删掉以便
+  重试；**已加载集合全页共享**，与「每个块状态独立」不冲突。
+- `allowUnsignedExtensions` **只由第一个 `init()` 决定**：配置在 `open()` 时一次性交给
+  worker，之后改不了。所以每个块运行前都调
+  `init({allowUnsignedExtensions: config.allowUnsignedExtensions === true})`，谁先到谁定调。
 
 ## 代码风格（硬性要求）
 
