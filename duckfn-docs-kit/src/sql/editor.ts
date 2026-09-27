@@ -39,6 +39,12 @@ export async function mountSqlEditor(
       }),
     ],
     parent: container,
+    // The editor lives in the host's light DOM (a slotted child), so CodeMirror's
+    // default `getRoot(parent)` walks up through `assignedSlot` and lands on the
+    // shadow root — injecting the `.cm-*` styles into the shadow tree, where they
+    // never match the slotted editor. Pinning the root to the document makes
+    // style-mod mount the base theme in `document.head`, where it applies.
+    root: document,
   });
 
   return {
