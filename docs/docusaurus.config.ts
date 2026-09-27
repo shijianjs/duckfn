@@ -2,6 +2,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
+import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
 import {DUCKFN_VERSION} from './duckfn-version';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
@@ -42,7 +43,10 @@ const config: Config = {
 
   // Small client-side enhancements the theme has no option for; each file under
   // src/clientModules/ documents what it does. Paths resolve from this directory.
-  clientModules: ['./src/clientModules/tocToggle.ts'],
+  clientModules: [
+    './src/clientModules/tocToggle.ts',
+    './src/clientModules/dfkSql.ts',
+  ],
 
   // English is the source language; every page under docs/ can be translated under
   // docs/i18n/zh-Hans/. Add more locales here when needed.
@@ -73,7 +77,12 @@ const config: Config = {
           // docs/duckfn-version.ts, so a release only has to update that one file.
           // The plugin itself ships in duckfn-docs-kit for reuse by other
           // extension docs sites; the version value stays site-specific.
-          remarkPlugins: [[remarkVersionPlaceholder, {version: DUCKFN_VERSION}]],
+          // `remarkRunnableSql` turns ```sql {"type":"duckfn",…}``` blocks into
+          // `<dfk-sql>` runnable examples (also from the kit).
+          remarkPlugins: [
+            [remarkVersionPlaceholder, {version: DUCKFN_VERSION}],
+            [remarkRunnableSql, {}],
+          ],
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/shijianjs/duckfn/tree/main/docs/',
           // Without this, translated pages link back to the English source in docs/docs/;

@@ -16,3 +16,4 @@
  */
 @import './theme/tokens.css';
 @import './toc-toggle/TocToggle.css';
+@import './sql/sql.css';

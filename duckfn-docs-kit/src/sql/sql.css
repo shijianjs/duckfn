@@ -1,0 +1,61 @@
+/* Light-DOM styles for `<dfk-sql>`: the CodeMirror editor host and the result
+   container. These nodes live in the element's light DOM (not the shadow root)
+   because CodeMirror's style-mod and VTable inject *global* stylesheets that a
+   shadow boundary could not host — the same light-DOM exception as the TOC
+   toggle (see AGENTS.md rule 9). Every class carries the `dfk-sql-` prefix so
+   nothing can collide with the host site.
+ *
+ * Imported through `kit.css`; the consuming site gets it with the one-line
+ * `@import 'duckfn-docs-kit/src/kit.css'` it already has. */
+
+.dfk-sql-editor {
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: 0;
+  background: var(--ifm-background-surface-color, #fff);
+  font-size: var(--ifm-code-font-size, 95%);
+}
+
+.dfk-sql-editor .cm-editor {
+  outline: none;
+}
+
+.dfk-sql-editor .cm-scroller {
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  line-height: 1.6;
+}
+
+.dfk-sql-result {
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-top: none;
+  border-radius: 0 0 var(--ifm-global-radius, 0.4rem)
+    var(--ifm-global-radius, 0.4rem);
+  overflow: hidden;
+  background: var(--ifm-background-surface-color, #fff);
+}
+
+.dfk-sql-result:empty {
+  display: none;
+}
+
+.dfk-sql-text {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  font-size: var(--ifm-code-font-size, 95%);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dfk-sql-error {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  font-size: var(--ifm-code-font-size, 95%);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ifm-color-danger-contrast, #fff);
+  background: var(--ifm-color-danger, #d32f2f);
+}

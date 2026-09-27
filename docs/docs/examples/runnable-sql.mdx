@@ -1,0 +1,66 @@
+---
+title: Runnable SQL examples
+sidebar_position: 3
+description: SQL blocks that run in your browser — the duckfn-docs-kit runnable example format, powered by DuckDB-Wasm.
+---
+
+# Runnable SQL examples
+
+A fenced SQL block whose info string carries a JSON config turns the code block
+into a runnable example: it stays a plain, read-only code block until you click
+**Edit**, and nothing executes until you click **Run**. The query runs in your
+browser against a single shared DuckDB-Wasm instance, and the result renders
+below the block.
+
+The config is JSON (not `key=value`), so it can grow nested fields later:
+
+````md
+```sql {"type":"duckfn","show":"table"}
+SELECT * FROM range(10);
+```
+````
+
+## The smallest example
+
+`show` may be left out; a single scalar result renders as text.
+
+```sql {"type":"duckfn"}
+SELECT 1;
+```
+
+## A plain query
+
+```sql {"type":"duckfn","show":"table"}
+SELECT *
+FROM range(10)
+WHERE range > 5;
+```
+
+## Multiple statements
+
+When the block holds several statements, the **last one's** result is shown —
+handy for a `SET` / `CREATE` preamble before the query you actually want to
+see.
+
+```sql {"type":"duckfn","show":"table"}
+CREATE TABLE t AS SELECT * FROM range(5) r(i);
+SELECT i * 10 AS ten FROM t ORDER BY i DESC;
+```
+
+## Errors stay put
+
+Run a failing statement and the error appears in the result area; whatever you
+typed in the editor is kept, nothing resets.
+
+```sql {"type":"duckfn","show":"table"}
+SELECT this_function_does_not_exist(1);
+```
+
+## Ordinary code blocks are untouched
+
+Only blocks whose metastring parses as JSON with `"type":"duckfn"` become
+runnable. A plain SQL block renders as a normal code block:
+
+```sql
+SELECT 'just documentation, no run button';
+```

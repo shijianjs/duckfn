@@ -22,7 +22,9 @@ import type {HTMLAttributes} from 'react';
 export {DfkFeatures} from './home/DfkFeatures';
 export {DfkHero} from './home/DfkHero';
 export {DfkNextSteps} from './home/DfkNextSteps';
+export {DfkSql} from './sql/DfkSql';
 export {registerDfkElements} from './register';
+export type {RunnableSqlConfig} from './sql/remark';
 export type {
   FeatureItem,
   HeroAction,
@@ -51,6 +53,7 @@ declare module 'react' {
       'dfk-hero': DfkElementProps;
       'dfk-features': DfkElementProps;
       'dfk-next-steps': DfkElementProps;
+      'dfk-sql': DfkElementProps;
     }
   }
 }

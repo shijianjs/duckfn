@@ -1,0 +1,82 @@
+/* Shadow-root styles for `<dfk-sql>`: the toolbar row and the slotted static
+   preview. Theme colours arrive through the inherited `--ifm-*` custom
+   properties; box-sizing must be re-declared here because the host page's
+   universal reset does not cross the shadow boundary. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:host {
+  display: block;
+  margin: 1rem 0;
+}
+
+.dfk-sql-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-bottom: none;
+  border-radius: var(--ifm-global-radius, 0.4rem) var(--ifm-global-radius, 0.4rem)
+    0 0;
+  background: var(--ifm-color-emphasis-100, #f5f5f5);
+}
+
+.dfk-sql-status {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-700, #666);
+}
+
+.dfk-sql-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--ifm-navbar-link-color, #181818);
+  background: var(--ifm-background-surface-color, #fff);
+  border: 1px solid var(--ifm-global-border-color, #d0d0d0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.dfk-sql-button:hover:not(:disabled) {
+  border-color: var(--ifm-color-primary, #14459b);
+  color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-sql-button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.dfk-sql-button-primary {
+  color: #fff;
+  background: var(--ifm-color-primary, #14459b);
+  border-color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-sql-button-primary:hover:not(:disabled) {
+  background: var(--ifm-color-primary-dark, #123d8a);
+  color: #fff;
+}
+
+/* The static preview (the slotted CodeBlock) keeps the theme's own look; the
+   toolbar merely attaches to it. */
+::slotted(div) {
+  margin: 0 !important;
+}
+
+::slotted(div) pre {
+  border-radius: 0 0 var(--ifm-global-radius, 0.4rem)
+    var(--ifm-global-radius, 0.4rem);
+  margin-bottom: 0;
+}

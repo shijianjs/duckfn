@@ -5,11 +5,13 @@ import 'iconify-icon';
 import {DfkFeatures} from './home/DfkFeatures';
 import {DfkHero} from './home/DfkHero';
 import {DfkNextSteps} from './home/DfkNextSteps';
+import {DfkSql} from './sql/DfkSql';
 
 const TAGS = {
   hero: 'dfk-hero',
   features: 'dfk-features',
   nextSteps: 'dfk-next-steps',
+  sql: 'dfk-sql',
 } as const;
 
 /**
@@ -28,6 +30,7 @@ export function registerDfkElements(): void {
     [TAGS.hero]: DfkHero,
     [TAGS.features]: DfkFeatures,
     [TAGS.nextSteps]: DfkNextSteps,
+    [TAGS.sql]: DfkSql,
   })) {
     if (!customElements.get(name)) {
       customElements.define(name, ctor);

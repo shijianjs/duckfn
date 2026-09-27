@@ -6,6 +6,7 @@ duckdb_unittest_tempdir
 /test/bin
 venv
 /.codebuddy
+/.trae
 
 # npm workspaces（根 package.json + 根 package-lock.json）
 /node_modules/

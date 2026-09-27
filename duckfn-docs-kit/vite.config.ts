@@ -37,6 +37,7 @@ export default defineConfig({
         index: src('index.ts'),
         'toc-toggle/TocToggle': src('toc-toggle/TocToggle.ts'),
         remark: src('remark.ts'),
+        'sql/remark': src('sql/remark.ts'),
       },
       formats: ['es'],
     },
@@ -44,10 +45,21 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2022',
     rollupOptions: {
-      // Vite lib mode externalises package dependencies by default;
-      // `iconify-icon` (the official web component) is bundled in so a
-      // consuming site only needs this package.
-      external: [],
+      // Heavy runtime dependencies stay external so the consuming site's
+      // bundler (Docusaurus' webpack) resolves them from node_modules and can
+      // code-split the dynamic `import()`s (CodeMirror, VTable, DuckDB-Wasm).
+      // Vite lib mode's *default* externalisation is unreliable in this kit
+      // (`iconify-icon` used to end up bundled despite it), so list them
+      // explicitly.
+      external: [
+        '@duckdb/duckdb-wasm',
+        '@visactor/vtable',
+        'codemirror',
+        '@codemirror/lang-sql',
+        '@codemirror/view',
+        '@codemirror/commands',
+        '@vaadin/button',
+      ],
     },
   },
 });

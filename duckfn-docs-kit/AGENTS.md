@@ -35,8 +35,11 @@ src/
 ├── home/            # 首页三件套：DfkHero.ts / DfkFeatures.ts / DfkNextSteps.ts
 │                    #   + home.css（三组件共享的样式）+ styles.ts（?inline 注入）
 ├── toc-toggle/      # TocToggle.ts + TocToggle.css（light-DOM 例外，见第 9 条）
+├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow 工具栏）
+│                    #   + sql.css（light-DOM 编辑器/结果，见第 9 条）+ runtime.ts
+│                    #   （DuckDB-Wasm 单例）+ editor.ts / renderers.ts / remark.ts
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
-├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle）
+├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
 ├── index.ts         # 浏览器桶文件
 ├── register.ts      # customElements 注册
@@ -65,7 +68,8 @@ src/
   **导入子路径 = 它在 `src/` 下的相对路径**（通配映射到 `dist/` 同路径产物）：
   - `duckfn-docs-kit`（浏览器：`index.ts` 桶文件，CE + 类型）
   - `duckfn-docs-kit/toc-toggle/TocToggle`（浏览器：TOC 折叠类）
-  - `duckfn-docs-kit/remark`（**Node 构建期**：remark 插件）
+  - `duckfn-docs-kit/remark`（**Node 构建期**：版本占位符 remark 插件）
+  - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
 - CSS 子路径：消费方直接按源文件路径引 —— `@import
   'duckfn-docs-kit/src/kit.css'`（聚合入口），或单独引
   `duckfn-docs-kit/src/theme/tokens.css` 等。不再维护 `css/kit.css` 这类
@@ -219,6 +223,13 @@ features.setFeatures(items);
   `apply()` 这类通用入口。
 - 改 setter 签名属于公开 API 变更，需同步 `docs/src/pages/index.tsx` 的
   `mount*()` 助手、`src/index.ts` 的类型导出，以及下游消费方。
+- **例外（attribute 种子）**：`<dfk-sql>` 由 `sql/remark` 插件从 Markdown 自动
+  生成为 `<dfk-sql config="…" sql="…">`，没有 `mount*()` 助手、也挂不上 ref
+  去调 setter —— 内容只能来自 `config` / `sql` 两个字符串属性。因此它在
+  `connectedCallback()` 里 `getAttribute` **各读一次**作初始种子。这与「不做
+  attribute reflection」不冲突：读一次用于初始化，不是 attribute 变化再驱动
+  重渲染，仍是保留模式。新增同类「由构建期插件生成、无 React 挂载点」的元素
+  才可套用此例外，手写 JSX 的元素仍走 setter。
 
 ### 6. 生命周期：构造函数建树 + 挂 shadow root
 
@@ -305,6 +316,14 @@ CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其
 `@layer docusaurus.theme-classic` 里 —— 才不用 shadow root。这种组件的类名一律
 `dfk-` 前缀（或 `toc-` 这类自有前缀），避免与宿主撞名。新增例外要在评审时说清楚
 「依赖了宿主的哪条规则」。
+
+`<dfk-sql>` 是**混合**形态：工具栏在 shadow root 里，CodeMirror 编辑器与 VTable
+结果容器挂在 light DOM（命名 slot 定位）。理由是 CodeMirror 的 style-mod 与
+VTable 都向 `document.head` 注入全局样式表，shadow 边界会把它们挡在外面，编辑器
+和表格直接失去样式。其 light-DOM 样式（`.dfk-sql-editor` / `.dfk-sql-result`）
+因此走 `sql/sql.css` → `kit.css` 的全局通道，同样全部 `dfk-sql-` 前缀。light DOM
+节点只在用户点「编辑」/「执行」之后才创建，hydration 早已完成，不违反第 11 条
+「light DOM 恒为空」。
 
 ### 10. SSR 安全
 
