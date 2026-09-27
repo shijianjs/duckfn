@@ -18,9 +18,9 @@ import type {HTMLAttributes} from 'react';
  * and a site that only wants the TOC collapse button should not pay for the
  * bundled `iconify-icon` that this entry carries.
  */
-export {DfkFeatures} from './elements/DfkFeatures';
-export {DfkHero} from './elements/DfkHero';
-export {DfkNextSteps} from './elements/DfkNextSteps';
+export {DfkFeatures} from './home/DfkFeatures';
+export {DfkHero} from './home/DfkHero';
+export {DfkNextSteps} from './home/DfkNextSteps';
 export {registerDfkElements} from './register';
 export type {
   FeatureItem,

@@ -11,7 +11,13 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./css/*": "./src/css/*",
+    "./TocToggle": {
+      "types": "./dist/toc-toggle/TocToggle.d.ts",
+      "default": "./dist/toc-toggle/TocToggle.js"
+    },
+    "./css/kit.css": "./src/kit.css",
+    "./css/tokens.css": "./src/theme/tokens.css",
+    "./css/toc-toggle.css": "./src/toc-toggle/TocToggle.css",
     "./*": {
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
@@ -19,7 +25,9 @@
   },
   "files": [
     "dist",
-    "src/css",
+    "src/kit.css",
+    "src/theme",
+    "src/toc-toggle/TocToggle.css",
     "AGENTS.md"
   ],
   "scripts": {

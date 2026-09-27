@@ -7,23 +7,50 @@ web components、品牌 CSS tokens、版本占位符 remark 插件。它被 `doc
 
 ## 包结构 / 导出
 
+### 目录按业务语义组织，不按技术类型
+
+**一个能力一个文件夹，它的 TS、CSS（以及将来的测试、资源）都放进去。** 目录
+首先回答「这东西属于哪个业务」，而不是「这是 TS 还是 CSS」。技术类型只是业务
+模块内部的次级文件，不单独开 `css/`、`utils/` 这类技术分类目录。
+
+```
+src/
+├── home/            # 首页三件套：DfkHero.ts / DfkFeatures.ts / DfkNextSteps.ts
+│                    #   + home.css（三组件共享的样式）+ styles.ts（?inline 注入）
+├── toc-toggle/      # TocToggle.ts + TocToggle.css（light-DOM 例外，见第 9 条）
+├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
+├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle）
+├── dom.ts           # el() / HTMLElementBase 纯工具
+├── index.ts         # 浏览器桶文件
+├── register.ts      # customElements 注册
+├── remark.ts        # Node 构建期 remark 插件
+├── types.ts         # 组件值类型
+└── vite-env.d.ts    # `*.css?inline` 的模块声明
+```
+
+- `home.css` 留在 `home/` 而非拆进各组件：`:host`/box-sizing 重置、`.dfk-section`
+  系列、`dfk-rise` keyframes、断点是三组件**真正共享**的规则，拆三份会引入重复
+  或额外的 base 文件。共享样式属于「home 这个业务」，就放 `home/` 里。
+- `tokens.css` 是唯一没有业务归属的全局基础设施，`theme/` 是它的例外单独目录。
+
+### 构建与导出
+
 - 构建：Vite lib 模式产出 ESM（`dist/`），`tsc -p tsconfig.build.json` 产出
-  `.d.ts`。`npm run build` 一步完成。全局 CSS（`tokens.css`、`toc-toggle.css`）
-  不经构建、作为源文件直接导出；组件自己的 `home.css` 由 `styles.ts` 以
-  `?inline` 内联进 bundle（见第 9 条）。
-- `exports` 用通配模式（`./* → ./dist/*.js`），新增运行时入口只需在
-  `vite.config.ts` 的 `entry` 里加一行，不必改 `package.json`。入口文件名与
-  其主导出的类名一致（大驼峰），ts 源文件同理：
+  `.d.ts`。`npm run build` 一步完成。全局 CSS（`theme/tokens.css`、
+  `toc-toggle/TocToggle.css`）不经构建、作为源文件直接导出；组件自己的
+  `home/home.css` 由 `home/styles.ts` 以 `?inline` 内联进 bundle（见第 9 条）。
+- JS 运行时入口用通配模式（`./* → ./dist/*.js`），入口文件名与其主导出的类名
+  一致（大驼峰），ts 源文件同理。新增运行时入口只需在 `vite.config.ts` 的
+  `entry` 里加一行（值指向它在 `src/` 下的实际路径），不必改 `package.json`：
   - `duckfn-docs-kit`（浏览器：`index.ts` 桶文件，CE + 类型）
-  - `duckfn-docs-kit/TocToggle`（浏览器：TocToggle 类）
+  - `duckfn-docs-kit/TocToggle`（浏览器：`toc-toggle/TocToggle.ts` 的类）
   - `duckfn-docs-kit/remark`（**Node 构建期**：remark 插件）
-- CSS 子路径：`./css/*` 直接映射到 `src/css/`，只发**必须待在全局样式表里**的
-  文件：`css/tokens.css`（`--duckfn-*` 变量必须声明在文档的 `:root` /
-  `[data-theme]` 上，才能继承进 shadow tree）与 `css/toc-toggle.css`（light DOM
-  规则，必须进 `@layer docusaurus.theme-classic`），`css/kit.css` 聚合两者，
-  下游在 Docusaurus 的 CSS 管线里一行 `@import`。`home.css` **不再**作为全局
-  CSS 导出 —— 它由 `src/styles.ts` 以 `?inline` 内联进 JS bundle，注入各组件的
-  shadow root（见第 9 条）。
+- CSS 子路径：因为样式文件分散在各业务目录，`exports` 里用**显式映射**而非通配
+  —— 对消费方保持稳定别名，源文件挪动只改这一处：`css/kit.css → src/kit.css`、
+  `css/tokens.css → src/theme/tokens.css`、
+  `css/toc-toggle.css → src/toc-toggle/TocToggle.css`。下游在 Docusaurus 的 CSS
+  管线里一行 `@import 'duckfn-docs-kit/css/kit.css'`。`home.css` **不作为**全局
+  CSS 导出 —— 它由 `home/styles.ts` 内联进 JS bundle，注入各组件的 shadow root。
 
 ## 代码风格（硬性要求）
 
@@ -211,8 +238,8 @@ constructor() {
 ### 7. 尽量类化，但没有「组件基类」
 
 一个组件一个 class：web component 直接 `extends HTMLElementBase`（`src/dom.ts`），
-**`elements/` 下不存在共享的组件基类**。每个类自带字段、constructor 组装、
-connectedCallback 挂载与自己的 setter，不做 `create()` / `apply()` 之类的模板
+**`home/` 下不存在共享的组件基类**。每个类自带字段、constructor 组装并挂进自己
+的 shadow root、自己的 setter，不做 `create()` / `apply()` 之类的模板
 方法抽象 —— 那种抽象会把「状态驱动刷新」重新引进来，正是第 0、3 条要避免的。
 
 非元素的小部件（`TocToggle`、卡片类 `DfkFeatureCard` / `DfkNextStepCard`）同样

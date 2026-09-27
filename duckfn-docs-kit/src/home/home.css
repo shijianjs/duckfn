@@ -9,7 +9,7 @@
  * greppable, not because they could collide with the host page).
  *
  * Theme colours cross the shadow boundary through inheritance: the `--duckfn-*`
- * tokens from `tokens.css` and the site's `--ifm-*` variables are custom
+ * tokens from `theme/tokens.css` and the site's `--ifm-*` variables are custom
  * properties declared on `:root` / `[data-theme]`, and custom properties
  * inherit into shadow trees, so dark mode works without a single `[data-theme]`
  * selector in this file.
@@ -138,7 +138,7 @@
 }
 
 /* The only yellow on this page, and it carries no text: a short rule under the
-   name that echoes the beak. See the note on the token in tokens.css. */
+   name that echoes the beak. See the note on the token in theme/tokens.css. */
 .dfk-title::after {
   content: '';
   display: block;

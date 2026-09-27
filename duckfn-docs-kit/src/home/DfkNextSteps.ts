@@ -1,6 +1,6 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
 import {el, HTMLElementBase} from '../dom';
-import {homeStyles} from '../styles';
+import {homeStyles} from './styles';
 import type {NextStepItem} from '../types';
 
 /**

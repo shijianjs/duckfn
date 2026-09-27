@@ -5,7 +5,7 @@
  * the right-hand TOC has no such option (`themeConfig.tableOfContents` only
  * accepts `minHeadingLevel` / `maxHeadingLevel`). So the button is injected here
  * and the layout is switched by the `toc-collapsed` class on `<body>`. The
- * matching CSS lives in `css/toc-toggle.css`.
+ * matching CSS lives in `TocToggle.css`, next to this file.
  *
  * This is the class-ified form of the original `docs/src/clientModules/tocToggle.ts`:
  * the button and TOC references are held in fields instead of being looked up

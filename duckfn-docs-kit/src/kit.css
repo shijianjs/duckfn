@@ -1,0 +1,18 @@
+/**
+ * One-line entry point for the CSS that must stay global: brand tokens + TOC
+ * toggle.
+ *
+ * The home components' CSS is deliberately *not* imported here. The `dfk-*`
+ * components render into shadow roots and inject their own styles from the JS
+ * bundle (see `home/styles.ts`), so a site that consumes the components gets
+ * their styles for free. What remains here is the CSS a shadow boundary cannot
+ * host: the `--duckfn-*` tokens (they must be declared on `:root` /
+ * `[data-theme]` so they can inherit *into* the shadow trees) and the TOC
+ * toggle (light-DOM rules that must sit inside
+ * `@layer docusaurus.theme-classic`).
+ *
+ * Each stylesheet lives in the feature folder it belongs to; this file only
+ * aggregates them for the consuming site's one-line `@import`.
+ */
+@import './theme/tokens.css';
+@import './toc-toggle/TocToggle.css';

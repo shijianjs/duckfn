@@ -16,7 +16,7 @@ Static site for <https://shijianjs.github.io/duckfn/>, built with
 | `docs/build-and-release.md`, `docs/contributing.md`, `docs/faq.md` | Project-level pages, at the top level of the sidebar. |
 | `i18n/zh-Hans/` | Simplified Chinese translations of all of the above, plus the UI strings. |
 | `src/pages/index.tsx` | Home page: hero, feature cards, the Rust/SQL showcase, and the "where to go next" cards. Every string is a `<Translate>` and has an entry in `i18n/zh-Hans/code.json` under `homepage.*`. The hero, feature grid and "next steps" grid are `<dfk-*>` custom elements from `duckfn-docs-kit`, fed through callback refs. |
-| `src/css/custom.css` | Palette and theme overrides: the seven `--ifm-color-primary*` steps come from the logo blue. The `--duckfn-*` brand tokens themselves are defined once in `duckfn-docs-kit/src/css/tokens.css` and pulled in by the `@import` at the top of this file. |
+| `src/css/custom.css` | Palette and theme overrides: the seven `--ifm-color-primary*` steps come from the logo blue. The `--duckfn-*` brand tokens themselves are defined once in `duckfn-docs-kit/src/theme/tokens.css` and pulled in by the `@import` at the top of this file. |
 | `static/` | Files copied to the site root (images, `favicon.ico`, `.nojekyll`). |
 | `sidebars.ts` | Sidebar definition. Categories come from `_category_.json`; order from `sidebar_position`. |
 | `docusaurus.config.ts` | Site configuration, including the locale list and the footer links. |

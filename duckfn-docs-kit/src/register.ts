@@ -2,9 +2,9 @@
 // which the `dfk-*` components use for every glyph. It loads icon data on
 // demand from the public Iconify API, so this package ships no icon sets.
 import 'iconify-icon';
-import {DfkFeatures} from './elements/DfkFeatures';
-import {DfkHero} from './elements/DfkHero';
-import {DfkNextSteps} from './elements/DfkNextSteps';
+import {DfkFeatures} from './home/DfkFeatures';
+import {DfkHero} from './home/DfkHero';
+import {DfkNextSteps} from './home/DfkNextSteps';
 
 const TAGS = {
   hero: 'dfk-hero',
