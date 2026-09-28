@@ -4,6 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
 import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
+import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {DUCKFN_VERSION} from './duckfn-version';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
@@ -42,12 +43,8 @@ const config: Config = {
   // the client-side router behave the same, and slash-less links keep working through the redirect.
   trailingSlash: true,
 
-  // Small client-side enhancements the theme has no option for; each file under
-  // src/clientModules/ documents what it does. Paths resolve from this directory.
-  clientModules: [
-    './src/clientModules/tocToggle.ts',
-    './src/clientModules/dfkSql.ts',
-  ],
+  // Client-side enhancements live in the kit's plugins (see the `plugins`
+  // below), so this site carries no client modules of its own.
 
   // English is the source language; every page under docs/ can be translated under
   // docs/i18n/zh-Hans/. Add more locales here when needed.
@@ -99,11 +96,13 @@ const config: Config = {
     ],
   ],
 
-  // DuckDB-Wasm extensions the runnable SQL blocks preload. The plugin fetches
-  // the released wasm files into `static/` at dev/build startup — cached
-  // locally, re-downloaded only when the release asset's sha256 changes — and
-  // injects the ordered preload list into every page, where the kit's
-  // `src/sql/runtime.ts` loads them while DuckDB initialises.
+  // The docs-kit wiring: `dfkExtensions` fetches the released wasm files into
+  // `static/` at dev/build startup — cached locally, re-downloaded only when
+  // the release asset's sha256 changes — injects the ordered preload list into
+  // every page (the kit's `src/sql/runtime.ts` loads them while DuckDB
+  // initialises) and registers the `dfk-*` elements; `dfkTocToggle` adds the
+  // TOC collapse control. Together they replace the client modules this site
+  // used to keep under src/clientModules/.
   plugins: [
     dfkExtensions({
       // CI builds the release assets without DuckDB's signing keys — the same
@@ -120,6 +119,7 @@ const config: Config = {
         },
       ],
     }),
+    dfkTocToggle(),
   ],
 
   // No `themes` entry for the search UI: the classic preset already registers

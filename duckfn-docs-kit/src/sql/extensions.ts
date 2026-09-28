@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {mkdir, readFile, rename, stat, unlink, writeFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
 import path from 'node:path';
 import {
   DFK_SQL_RUNTIME_TAG_ID,
@@ -25,6 +26,11 @@ import {
  * 2. It injects the resolved preload list as one JSON `<script>` tag into
  *    every page; the browser runtime (`sql/runtime`) reads it once and loads
  *    the extensions in order while the DuckDB instance initialises.
+ *
+ * It also injects the kit's client bootstrap (`sql/client.ts`) on every page
+ * through `getClientModules()`: docs pages never import the kit's React tree,
+ * so the `dfk-*` element registration has to come from a client module — and
+ * it comes from here, not from a file the site keeps by hand.
  *
  * The site-relative `url` of an entry doubles as the fetch destination *and*
  * the runtime path, so the two can never drift: with baseUrl `/duckfn/`,
@@ -58,6 +64,7 @@ interface DfkHtmlTag {
 
 export interface DfkExtensionsPlugin {
   name: string;
+  getClientModules(): string[];
   loadContent(): Promise<void>;
   injectHtmlTags(): {headTags: DfkHtmlTag[]};
 }
@@ -140,6 +147,19 @@ export function dfkExtensions(options: DfkExtensionsOptions = {}): DfkExtensions
 
   return (context) => ({
     name: 'dfk-extensions',
+
+    /**
+     * The `dfk-*` element registration (see `sql/client.ts`), injected on
+     * every page so docs pages — whose React tree never imports the kit —
+     * still upgrade the runnable-SQL elements.
+     */
+    getClientModules() {
+      // Resolved from the consuming site, so the config bundler cannot break
+      // the lookup; the exports map (`./*` -> dist) keeps the subpath valid
+      // even if the entry moves.
+      const requireFromSite = createRequire(path.join(context.siteDir, 'package.json'));
+      return [requireFromSite.resolve('duckfn-docs-kit/sql/client')];
+    },
 
     async loadContent() {
       const config = prepare();

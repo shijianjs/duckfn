@@ -32,7 +32,7 @@
     "@codemirror/lang-sql": "^6.0.0",
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
-    "@duckdb/duckdb-wasm": "1.33.1-dev57.0",
+    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
     "@visactor/vtable": "^1.0.0",
     "codemirror": "^6.0.0",
     "iconify-icon": "^3.0.3",

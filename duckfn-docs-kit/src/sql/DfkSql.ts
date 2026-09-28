@@ -235,6 +235,7 @@ export class DfkSql extends HTMLElementBase {
       this.#seed();
       this.#seeded = true;
     }
+    this.#warmRuntime();
     void this.#mountEditor();
   }
 
@@ -390,6 +391,19 @@ export class DfkSql extends HTMLElementBase {
   }
 
   // --- Run -------------------------------------------------------------------
+
+  /**
+   * Starts the shared runtime in the background as soon as a block exists on
+   * the page, so the first Run click does not pay for the DuckDB download and
+   * the preloaded extensions. Failures are swallowed on purpose: `init()`
+   * stays retryable, and the block that eventually runs a query surfaces the
+   * error in its result area.
+   */
+  #warmRuntime(): void {
+    void DuckDBRuntime.getInstance()
+      .init({allowUnsignedExtensions: this.#config.allowUnsignedExtensions === true})
+      .catch(() => undefined);
+  }
 
   async #onRun(): Promise<void> {
     if (this.#running) {

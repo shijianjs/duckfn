@@ -98,8 +98,10 @@ The extension this site documents loads on every page, before the first query:
 `docusaurus.config.ts` gives the kit's `dfkExtensions` plugin an ordered preload
 list, and at build time the plugin fetches the **latest release's**
 `duckfn-wasm_eh.duckdb_extension.wasm` into the site's static files (cached
-locally, re-downloaded only when its sha256 changes). No block has to name it —
-this example simply calls into the `duckfn` extension:
+locally, re-downloaded only when its sha256 changes). DuckDB itself starts
+initialising in the background as soon as the page opens — nothing runs until
+you click **Run**, but the first click no longer waits for the download. No
+block has to name it — this example simply calls into the `duckfn` extension:
 
 ```sql {"type":"duckfn","show":"table"}
 SELECT double_it5(21) AS doubled;

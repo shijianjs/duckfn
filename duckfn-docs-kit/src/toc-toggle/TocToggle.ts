@@ -7,10 +7,11 @@
  * and the layout is switched by the `toc-collapsed` class on `<body>`. The
  * matching CSS lives in `TocToggle.css`, next to this file.
  *
- * This is the class-ified form of the original `docs/src/clientModules/tocToggle.ts`:
- * the button and TOC references are held in fields instead of being looked up
- * with `document.querySelector` on every update, and all module-level mutable
- * state now lives inside {@link TocToggle}.
+ * This is the class-ified form of the original TOC glue: the button and TOC
+ * references are held in fields instead of being looked up with
+ * `document.querySelector` on every update, and all module-level mutable state
+ * now lives inside {@link TocToggle}. `client.ts` next to this file is the thin
+ * Docusaurus glue that the `toc-toggle/plugin` entry injects into a site.
  */
 
 const DEFAULT_STORAGE_KEY = 'duckfn:toc-collapsed';
@@ -162,9 +163,9 @@ export class TocToggle {
 }
 
 /**
- * Builds a {@link TocToggle}. A Docusaurus client module calls `init()` once
- * (behind a `typeof window` guard) and exports `onRouteDidUpdate` bound to
- * `refresh()`.
+ * Builds a {@link TocToggle}. `client.ts` — the glue the `toc-toggle/plugin`
+ * entry injects — calls `init()` once (behind a `typeof window` guard) and
+ * exports `onRouteDidUpdate` bound to `refresh()`.
  */
 export function createTocToggle(options?: TocToggleOptions): TocToggle {
   return new TocToggle(options);

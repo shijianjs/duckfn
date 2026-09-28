@@ -35,7 +35,13 @@ release's `duckfn-wasm_eh.duckdb_extension.wasm` into
 `static/duckdb-extensions/duckfn.duckdb_extension.wasm` — the file name must keep
 `duckfn` before the first dot, because that base is the entry symbol DuckDB looks
 up. It also injects the ordered preload list into every page, and the kit's
-runtime loads it while DuckDB initialises.
+runtime loads it while DuckDB initialises — which starts in the background as
+soon as a page with a runnable block opens, so the first Run click does not wait
+for the download.
+
+The plugins also carry the client wiring: `dfkExtensions` registers the `dfk-*`
+elements and `dfkTocToggle` (`duckfn-docs-kit/toc-toggle/plugin`) adds the TOC
+collapse control, so the site keeps no `src/clientModules/` files of its own.
 
 Downloads are cached under `.cache/duckfn-docs-kit/` and only re-fetched when the
 release asset's sha256 changes; with a warm cache the build works offline. Both
@@ -43,8 +49,8 @@ release asset's sha256 changes; with a warm cache the build works offline. Both
 hand needs `git add -f`.
 
 The extension is built by CI for DuckDB v1.5.5, and the site pins
-`@duckdb/duckdb-wasm` to an exact version whose bundled engine is ABI-compatible
-(`1.33.1-dev57.0`, engine v1.5.4 — the npm `latest` at the time of writing;
+`@duckdb/duckdb-wasm` to the exact dev build whose engine matches
+(`1.33.1-dev64.0`, engine v1.5.5 — npm's `next` tag at the time of writing;
 stable `1.32.0` bundles v1.4.3 and rejects the extension with a C-API layout
 mismatch). When either side moves, re-check the runnable SQL page: both example
 blocks must run.

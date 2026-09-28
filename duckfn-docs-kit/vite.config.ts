@@ -36,8 +36,11 @@ export default defineConfig({
       entry: {
         index: src('index.ts'),
         'toc-toggle/TocToggle': src('toc-toggle/TocToggle.ts'),
+        'toc-toggle/client': src('toc-toggle/client.ts'),
+        'toc-toggle/plugin': src('toc-toggle/plugin.ts'),
         remark: src('remark.ts'),
         'sql/remark': src('sql/remark.ts'),
+        'sql/client': src('sql/client.ts'),
         'sql/extensions': src('sql/extensions.ts'),
       },
       formats: ['es'],

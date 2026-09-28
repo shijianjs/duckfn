@@ -35,12 +35,14 @@ src/
 ├── home/            # 首页三件套：DfkHero.ts / DfkFeatures.ts / DfkNextSteps.ts
 │                    #   + home.css（三组件共享的样式）+ styles.ts（?inline 注入）
 ├── toc-toggle/      # TocToggle.ts + TocToggle.css（light-DOM 例外，见第 9 条）
+│                    #   + client.ts / plugin.ts（胶水：插件把 client 注入每个页面）
 ├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow：编辑器
 │                    #   + 悬浮图标按钮）+ sql.css（light-DOM 结果区，见第 9 条）
 │                    #   + runtime.ts（DuckDB-Wasm 单例）+ editor.ts / renderers.ts
 │                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
 │                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
 │                    #     （两侧共享的注入配置契约，见「扩展预加载」）
+│                    #   + client.ts（dfk-* 元素注册，插件注入到每个页面）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
@@ -74,6 +76,9 @@ src/
   - `duckfn-docs-kit/remark`（**Node 构建期**：版本占位符 remark 插件）
   - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
   - `duckfn-docs-kit/sql/extensions`（**Node 构建期**：扩展预加载 Docusaurus 插件）
+  - `duckfn-docs-kit/toc-toggle/plugin`（**Node 构建期**：TOC 胶水插件）
+  - `duckfn-docs-kit/sql/client`、`duckfn-docs-kit/toc-toggle/client`（浏览器引导，
+    由上面两个插件注入，站点不要手写引用）
 - CSS 子路径：消费方直接按源文件路径引 —— `@import
   'duckfn-docs-kit/src/kit.css'`（聚合入口），或单独引
   `duckfn-docs-kit/src/theme/tokens.css` 等。不再维护 `css/kit.css` 这类
@@ -226,6 +231,9 @@ src/
   （`community` / `core`）裸拼，URL 加引号。
 - 按 `${repository}\0${name}`（或 `url\0<url>`）记忆化（成功与 in-flight 都记），
   失败时从表里删掉以便重试；**已加载集合全页共享**，与「每个块状态独立」不冲突。
+- **页面进入即预热**：`DfkSql.connectedCallback()` 顺手 `init()`（失败静默——
+  `init()` 可重试，最终由点 Run 的块把错误显示出来），所以第一个点 Run 的人不用等
+  DuckDB 下载与预加载；没有可运行块的页面（如首页）不会触发。
 - `allowUnsignedExtensions` **只由第一个 `init()` 决定**：配置在 `open()` 时一次性交给
   worker，之后改不了。站点级值（注入配置）与块级值在创建实例前合并，谁先到谁定调。
 - 文件名的契约：文件名**第一个 `.` 之前必须是扩展名**（wasm 用它拼 `<name>_init_c_api`
@@ -237,7 +245,12 @@ src/
 - 站点在 `docusaurus.config.ts` 用 `dfkExtensions({preload, allowUnsignedExtensions})` 配
   一条**有序**列表；插件规范化后注入每个页面的
   `<script id="dfk-sql-runtime" type="application/json">`，`runtime.ts` 首次 `init()`
-  读一次，按序加载完才置 `ready`。
+  读一次，按序加载完才置 `ready`。同一次 `getClientModules()` 还把 `sql/client`
+  （注册 `dfk-*` 元素）注入每个页面——docs 页面从不 import 本包的 React 树，元素
+  注册必须从客户端模块来，所以站点不再需要自备 clientModules 文件。TOC 折叠的胶水
+  同理，由 `dfkTocToggle()`（`toc-toggle/plugin`）注入 `toc-toggle/client`；两个插件
+  都从**站点**（`createRequire(siteDir/package.json)`）解析自己 `dist/` 下的 client
+  入口，所以站点打包 config 也不会断。
 - 三种来源：裸扩展名（官方仓库）、`{name, repository}`（`community` / `core` / URL）、
   `{url}`（同源静态文件或绝对 URL）。
 - `{url}` 带 `release` 时，插件在 dev/build 启动时从 GitHub **最新** release 拉取该资产
@@ -251,11 +264,13 @@ src/
   浏览器 bundle 都不会把对方拖进来；Docusaurus 插件 API 用**结构化类型**，本包不依赖
   `@docusaurus/types`。
 - **版本耦合（改动前先读回）**：wasm 扩展只能由「与 duckdb-wasm 内置 DuckDB 版本 ABI
-  兼容」的构建提供。实测：`1.32.0`（内置 v1.4.3）会拒绝 CI 用 v1.5.5 构建的扩展
-  （C API slot 数 459 vs 546，报 `C extension API layout mismatch`）；
-  `1.33.1-dev57.0`（内置 v1.5.4）通过。所以 kit 的 `package.json` 把
-  `@duckdb/duckdb-wasm` 固定成**精确版本**；升级它、或改扩展 CI 的 `duckdb_version`
-  时必须成对验证（跑一遍可运行 SQL 页的两个示例块即可）。
+  兼容」的构建提供，所以 kit 的 `package.json` 把 `@duckdb/duckdb-wasm` 固定成**精确
+  版本**（当前 `1.33.1-dev64.0`，内置 v1.5.5，与 CI 的 `TARGET_DUCKDB_VERSION` 一致）。
+  实测：`1.32.0`（内置 v1.4.3）拒绝 v1.5.5 构建的扩展（C API slot 数 459 vs 546，
+  报 `C extension API layout mismatch`）；`1.33.1-dev57.0`（内置 v1.5.4）反而能加载
+  ——wasm 补丁只校验 C API slot 数（1.5.4/1.5.5 的 unstable 区未变），原生则按版本
+  戳严格校验（1.5.4 的原生 duckdb 会拒绝 v1.5.5 构建的扩展）。升级 duckdb-wasm 或
+  改 CI 的 `duckdb_version` 时必须成对验证（跑一遍可运行 SQL 页的两个示例块即可）。
 
 ## 代码风格（硬性要求）
 
