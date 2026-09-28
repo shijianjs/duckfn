@@ -1,9 +1,27 @@
 {
   "name": "duckfn-docs-kit",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
   "description": "Shared Docusaurus building blocks (TOC toggle, home-page web components, brand tokens, remark version placeholder) for duckfn-family extension docs sites.",
+  "license": "MIT",
+  "keywords": [
+    "duckdb",
+    "duckdb-wasm",
+    "docusaurus",
+    "documentation",
+    "web-components",
+    "remark",
+    "sql"
+  ],
+  "homepage": "https://shijianjs.github.io/duckfn/docs/docs-kit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shijianjs/duckfn.git",
+    "directory": "duckfn-docs-kit"
+  },
+  "bugs": {
+    "url": "https://github.com/shijianjs/duckfn/issues"
+  },
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -25,7 +43,11 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@codemirror/commands": "^6.0.0",

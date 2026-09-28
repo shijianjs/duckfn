@@ -122,3 +122,37 @@ publish_dry:
 
 publish:
     cargo publish -p duckfn --registry crates-io
+
+# ==== duckfn-docs-kit（npm 包）发版流程（完整步骤见 duckfn-docs-kit/AGENTS.md） ====
+#
+# 与上面的 release_* 完全独立：那个发 crates.io 上的 crate、打 v*.*.* tag（会触发扩展构建与
+# 文档站部署），这个发 npm 包、打 docs-kit-v* tag（不触发任何 workflow）。
+
+# 发版前检查：构建 + 类型检查 + 预览 npm 包里会装进什么
+release_kit_check:
+    npm run build -w duckfn-docs-kit
+    npm run typecheck -w duckfn-docs-kit
+    npm pack -w duckfn-docs-kit --dry-run
+
+# 提升版本号（只动 duckfn-docs-kit/package.json 与根 package-lock.json）：just release_kit_bump 0.1.1
+release_kit_bump new_version:
+    bash scripts/release-docs-kit.sh bump "{{new_version}}"
+
+# 打 docs-kit-v* tag 并推送，不触发任何 CI：just release_kit_tag 0.1.1
+release_kit_tag version:
+    bash scripts/release-docs-kit.sh tag "{{version}}"
+
+# 切到下一开发版本（参数形如 X.Y.Z-dev.0）：just release_kit_dev 0.1.2-dev.0
+release_kit_dev new_version:
+    bash scripts/release-docs-kit.sh dev "{{new_version}}"
+
+# 发布到 npm（先 npm login）：just release_kit_publish
+release_kit_publish: release_kit_guard
+    npm publish -w duckfn-docs-kit
+
+# 只打包不推送，演练一遍
+release_kit_publish_dry:
+    npm publish -w duckfn-docs-kit --dry-run
+
+release_kit_guard:
+    bash scripts/release-docs-kit.sh guard

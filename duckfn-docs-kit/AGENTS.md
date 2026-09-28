@@ -567,9 +567,109 @@ React 19 的 SSR/hydration 不会把对象 prop 设到自定义元素上（对�
   比对一致。若控制台再出现 #418 指向 `dfk-*`，说明有代码把节点挂回了 light DOM，
   那是 bug，要修原因而不是用 `suppressHydrationWarning` 掩盖。
 
+## 发版流程（npm）
+
+发布的是 `duckfn-docs-kit` 这一个包，流程比 Rust 侧短：**切版本 → 提交并打 tag →
+`npm publish` → 切下一开发版本**，没有远程流水线要等（`docs-kit-v*` 不匹配任何 workflow
+的 tag 过滤器，理由见第 2 步）。
+
+命令都在根目录的 `Justfile` 里（`just --list` 可查），实现是
+`scripts/release-docs-kit.sh`。它与 `scripts/release.sh`（两个 crate 的发版）分开：两条流程
+各打各的 tag，也互不触发对方的 CI。
+
+版本号形如 `X.Y.Z`（例如 `0.1.0`），tag 形如 `docs-kit-v0.1.0`。只有**正式版本**才打 tag、
+才发 npm；`0.1.1-dev.0` 这类开发版本留在分支上。
+
+| 步骤 | 命令 |
+| --- | --- |
+| 0. 前置检查 | `just release_kit_check` |
+| 1. 提升版本号 | `just release_kit_bump 0.1.1` |
+| 2. 提交并打 tag | `git commit …` 后 `just release_kit_tag 0.1.1` |
+| 3. 发布 npm 包 | `just release_kit_publish`（先 `npm login`） |
+| 4. 切开发版本 | `just release_kit_dev 0.1.2-dev.0` |
+
+### 0. 前置检查
+
+```bash
+just release_kit_check   # 构建 + 类型检查 + npm pack --dry-run
+npm whoami               # 没登录先 npm login
+```
+
+`npm pack --dry-run` 打印 tarball 的文件清单，是发布前最值得看的一项：预期是 `dist/**` +
+`src/**` + `AGENTS.md` + `README.md` + `LICENSE` + `package.json`（当前 64 个文件）。
+多出别的东西时先查 `files` 白名单，不要靠 `.npmignore` 追着排除。
+
+### 1. 提升版本号
+
+```bash
+just release_kit_bump 0.1.1
+```
+
+脚本把版本号从工作区的开发版本（如 `0.1.1-dev.0`）切成正式版本，只改两个文件：
+`duckfn-docs-kit/package.json`，以及根 `package-lock.json` 里该 workspace 的条目；然后打印
+残留的旧版本号（应为空）与 `git diff --stat`。
+
+**不要用 `npm version` / `npm install` 改版本号**：它们会顺手 reify 整个 workspace、触发对
+registry 的 fetch（本机被 `EALLOWREMOTE` 拦下），结果是版本号改了、lockfile 没动。脚本直接
+重写这两处 JSON —— 两个文件的既有格式就是 2 空格缩进 + LF，重写是幂等的。
+
+### 2. 提交并打 tag
+
+```bash
+git add -A
+git commit -m "chore(release-kit): 发布 duckfn-docs-kit v0.1.1"
+just release_kit_tag 0.1.1     # 打 docs-kit-v0.1.1，推送 main 与 tag
+```
+
+`docs-kit-v*` **故意**不匹配两个 workflow 的 tag 过滤器（`MainDistributionPipeline.yml` 与
+`DeployDocs.yml` 都只认 `v*.*.*`）：推这个 tag 不构建扩展、也不重发文档站，所以 kit 发版不必
+等流水线；文档站仍然只由 crate 的 `v*.*.*` tag 触发。
+
+### 3. 发布到 npm
+
+```bash
+npm login                 # 只需一次；启用了 2FA 的话发布时会要 OTP
+just release_kit_publish  # 先跑 release_kit_guard，再 npm publish -w duckfn-docs-kit
+```
+
+`release_kit_guard` 在上传之前拦四种情况：版本号还是开发版本（npm 会把预发布版本也挂到
+`latest` 上）、工作区不干净、本地没有对应的 `docs-kit-v*` tag、该版本在 npm 上已存在
+（同一版本不能覆盖，只能发新版本）。只想打包不上传，用 `just release_kit_publish_dry`。
+
+发布后核对：
+
+```bash
+npm view duckfn-docs-kit version
+```
+
+### 4. 切到下一开发版本
+
+```bash
+just release_kit_dev 0.1.2-dev.0
+```
+
+只动同样的两个文件，不打 tag、不发布。开发版本不能被 `npm publish` 直接发出去 ——
+`release_kit_guard` 会拒绝，这正是它存在的意义。
+
+### 发布内容
+
+包内容 = `files` 白名单 + npm 的固定规则，所以**不需要**在包的结构之外维护清单：
+
+- `files: ["dist", "src", "AGENTS.md"]`：`dist` 是构建产物；`src` 必须带上（CSS 子路径
+  `duckfn-docs-kit/src/kit.css` 直接指向源文件）；`AGENTS.md` 随包发布，下游读者因此能看到
+  本包的全部约定。
+- `README.md`、`LICENSE`、`package.json` 由 npm 自动收录：本包目录下有自己的 `LICENSE`
+  （根目录那份不会被带进来），README 是 npm 包页的正文。
+- `dist/` 在 `.gitignore` 里，但照样进包 —— `files` 白名单优先于 gitignore。`prepack` 脚本
+  会在 `npm pack` / `npm publish` 之前重跑 `npm run build`，所以发布用的产物总是当前源码
+  构建出来的，不依赖上一次留下的 `dist/`。
+
 ## 其它约定
 
 - 文本文件一律 LF（仓库根 AGENTS.md 有替换命令）。
 - 注释解释「为什么」，与 docs/ 现有风格一致；本包面向国际下游用户，注释用英文。
-- `private: true` 只是暂不发 npm；`exports`/`files` 已按可发布形态维护，
-  解禁时去掉 `private` 补 `publishConfig` 即可，不要改结构。
+- `exports`/`files` 已按可发布形态维护，**不要改结构**：新增 / 移动模块只改
+  `vite.config.ts` 的 `entry`，通配映射自己会跟上。
+- `README.md` 与 `docs/docs/docs-kit/**` 是两份正文，面向的读者不同：前者给在 npm 上直接看
+  这个包的人（英文），后者是本仓库文档站的用户指南。改公开 API 时两边都要看。
+- 本包已发布到 npm（`duckfn-docs-kit`），`private` 与 `publishConfig` 的处理见上面的发版流程。
