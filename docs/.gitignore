@@ -8,6 +8,12 @@
 .docusaurus
 .cache-loader
 
+# DuckDB extension assets downloaded by the dfkExtensions plugin
+# (see docusaurus.config.ts) and its download cache. Files placed by hand
+# under static/duckdb-extensions/ need `git add -f`.
+/static/duckdb-extensions/
+/.cache/
+
 # Misc
 .DS_Store
 .env.local

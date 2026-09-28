@@ -26,6 +26,29 @@ This package is one workspace of the repository root: the shared building blocks
 tokens, the version-placeholder remark plugin) are a sibling npm workspace,
 consumed as `duckfn-docs-kit`. The lockfile and `node_modules` live at the root.
 
+## Preloaded DuckDB extensions
+
+The runnable SQL blocks preload the `duckfn` extension through the
+`dfkExtensions` plugin (`duckfn-docs-kit/sql/extensions`), configured in
+`docusaurus.config.ts`: on `npm start` / `npm run build` it fetches the latest
+release's `duckfn-wasm_eh.duckdb_extension.wasm` into
+`static/duckdb-extensions/duckfn.duckdb_extension.wasm` — the file name must keep
+`duckfn` before the first dot, because that base is the entry symbol DuckDB looks
+up. It also injects the ordered preload list into every page, and the kit's
+runtime loads it while DuckDB initialises.
+
+Downloads are cached under `.cache/duckfn-docs-kit/` and only re-fetched when the
+release asset's sha256 changes; with a warm cache the build works offline. Both
+`.cache/` and `static/duckdb-extensions/` are gitignored — a file placed there by
+hand needs `git add -f`.
+
+The extension is built by CI for DuckDB v1.5.5, and the site pins
+`@duckdb/duckdb-wasm` to an exact version whose bundled engine is ABI-compatible
+(`1.33.1-dev57.0`, engine v1.5.4 — the npm `latest` at the time of writing;
+stable `1.32.0` bundles v1.4.3 and rejects the extension with a C-API layout
+mismatch). When either side moves, re-check the runnable SQL page: both example
+blocks must run.
+
 ## Commands
 
 ```shell

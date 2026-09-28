@@ -39,6 +39,8 @@ src/
 │                    #   + 悬浮图标按钮）+ sql.css（light-DOM 结果区，见第 9 条）
 │                    #   + runtime.ts（DuckDB-Wasm 单例）+ editor.ts / renderers.ts
 │                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
+│                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
+│                    #     （两侧共享的注入配置契约，见「扩展预加载」）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
@@ -71,6 +73,7 @@ src/
   - `duckfn-docs-kit/toc-toggle/TocToggle`（浏览器：TOC 折叠类）
   - `duckfn-docs-kit/remark`（**Node 构建期**：版本占位符 remark 插件）
   - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
+  - `duckfn-docs-kit/sql/extensions`（**Node 构建期**：扩展预加载 Docusaurus 插件）
 - CSS 子路径：消费方直接按源文件路径引 —— `@import
   'duckfn-docs-kit/src/kit.css'`（聚合入口），或单独引
   `duckfn-docs-kit/src/theme/tokens.css` 等。不再维护 `css/kit.css` 这类
@@ -214,14 +217,45 @@ src/
 **扩展加载（`runtime.ts`）**
 
 - **wasm 上 `INSTALL` 是空操作**（没有可安装的持久存储），只有 `LOAD` 真的 fetch
-  `.duckdb_extension.wasm`、验签、加载。所以 `loadExtension()` 只发 `LOAD`。
-- 扩展名与仓库 URL 是**白名单校验**（`^[a-z][a-z0-9_]*$` / `^https://…$`）而非转义
-  —— 它们直接进 SQL 文本；仓库先 `SET custom_extension_repository`。
-- 按 `${repository}\0${name}` 记忆化（成功与 in-flight 都记），失败时从表里删掉以便
-  重试；**已加载集合全页共享**，与「每个块状态独立」不冲突。
+  `.duckdb_extension.wasm`、验签、加载；`INSTALL … FROM` 只记录「这个扩展以后从哪
+  拉」。所以按名加载 =（可选 `INSTALL <name> FROM <community|'url'>`）+ `LOAD <name>`；
+  `{url}` 条目 = 直接 `LOAD '<绝对URL>'`（worker 基于 blob URL，解析不了相对路径，
+  站内路径由主线程先拼成绝对 URL）。**不要用 `SET custom_extension_repository`**：
+  那是全局状态，会污染之后所有扩展的加载。
+- 扩展名 / 仓库 / URL 是**白名单校验**而非转义——它们直接进 SQL 文本；仓库关键字
+  （`community` / `core`）裸拼，URL 加引号。
+- 按 `${repository}\0${name}`（或 `url\0<url>`）记忆化（成功与 in-flight 都记），
+  失败时从表里删掉以便重试；**已加载集合全页共享**，与「每个块状态独立」不冲突。
 - `allowUnsignedExtensions` **只由第一个 `init()` 决定**：配置在 `open()` 时一次性交给
-  worker，之后改不了。所以每个块运行前都调
-  `init({allowUnsignedExtensions: config.allowUnsignedExtensions === true})`，谁先到谁定调。
+  worker，之后改不了。站点级值（注入配置）与块级值在创建实例前合并，谁先到谁定调。
+- 文件名的契约：文件名**第一个 `.` 之前必须是扩展名**（wasm 用它拼 `<name>_init_c_api`
+  入口符号），所以 release 资产 `duckfn-wasm_eh.duckdb_extension.wasm` 落盘时
+  必须改名为 `duckfn.duckdb_extension.wasm`；`runtimeConfig` 两侧都做校验兜底。
+
+**扩展预加载（`sql/extensions.ts` + `runtimeConfig.ts`）**
+
+- 站点在 `docusaurus.config.ts` 用 `dfkExtensions({preload, allowUnsignedExtensions})` 配
+  一条**有序**列表；插件规范化后注入每个页面的
+  `<script id="dfk-sql-runtime" type="application/json">`，`runtime.ts` 首次 `init()`
+  读一次，按序加载完才置 `ready`。
+- 三种来源：裸扩展名（官方仓库）、`{name, repository}`（`community` / `core` / URL）、
+  `{url}`（同源静态文件或绝对 URL）。
+- `{url}` 带 `release` 时，插件在 dev/build 启动时从 GitHub **最新** release 拉取该资产
+  到 `static/<url>`：本地缓存（默认 `<siteDir>/.cache/duckfn-docs-kit`）+ sha256
+  sidecar，与 release 的 `digest` 相同就跳过下载；网络失败时有缓存则降级为警告
+  （CI 每次全新环境、无缓存，会直接失败），资产名对不上时报错并列出可用名。
+- 注入路径用 `context.siteConfig.baseUrl` 拼（多语言构建时它是本地化值；Docusaurus 会把
+  `static/` 拷进每个 locale 的 outDir，天然自洽）；站内相对路径由 `runtime.ts` 在
+  浏览器里解析成绝对 URL。
+- `runtimeConfig.ts` 是两侧唯一共享契约：无任何 import 的纯类型 + 校验函数，Node 插件与
+  浏览器 bundle 都不会把对方拖进来；Docusaurus 插件 API 用**结构化类型**，本包不依赖
+  `@docusaurus/types`。
+- **版本耦合（改动前先读回）**：wasm 扩展只能由「与 duckdb-wasm 内置 DuckDB 版本 ABI
+  兼容」的构建提供。实测：`1.32.0`（内置 v1.4.3）会拒绝 CI 用 v1.5.5 构建的扩展
+  （C API slot 数 459 vs 546，报 `C extension API layout mismatch`）；
+  `1.33.1-dev57.0`（内置 v1.5.4）通过。所以 kit 的 `package.json` 把
+  `@duckdb/duckdb-wasm` 固定成**精确版本**；升级它、或改扩展 CI 的 `duckdb_version`
+  时必须成对验证（跑一遍可运行 SQL 页的两个示例块即可）。
 
 ## 代码风格（硬性要求）
 
@@ -492,7 +526,8 @@ Docusaurus 预渲染在 Node 里 import 本包。
   才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
   `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
-- `src/remark.ts` 是唯一允许在 Node 构建期跑的模块，它不得 import 任何浏览器模块。
+- Node 构建期模块只有 `src/remark.ts`、`src/sql/remark.ts` 与 `src/sql/extensions.ts`
+  （连同无依赖的共享契约 `src/sql/runtimeConfig.ts`），它们不得 import 任何浏览器模块。
 
 ### 11. React 19 自定义元素
 

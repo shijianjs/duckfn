@@ -76,10 +76,11 @@ export interface RunnableSqlConfig {
 
 export interface RunnableSqlOptions {
   /**
-   * Reserved for the future extension-loading phase (which duckfn extension a
-   * site wants preloaded). Unused in phase 1.
+   * Reserved for future remark-level options (kept so sites passing an empty
+   * options object keep typechecking). Site-wide extension preloading is
+   * configured on the `dfkExtensions` plugin (`sql/extensions`), not here.
    */
-  extensionName?: string;
+  [key: string]: unknown;
 }
 
 /** The custom element the plugin emits; must match `register.ts`. */

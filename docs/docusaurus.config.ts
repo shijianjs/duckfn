@@ -3,6 +3,7 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
+import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {DUCKFN_VERSION} from './duckfn-version';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
@@ -81,7 +82,7 @@ const config: Config = {
           // `<dfk-sql>` runnable examples (also from the kit).
           remarkPlugins: [
             [remarkVersionPlaceholder, {version: DUCKFN_VERSION}],
-            [remarkRunnableSql, {}],
+            remarkRunnableSql,
           ],
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/shijianjs/duckfn/tree/main/docs/',
@@ -96,6 +97,29 @@ const config: Config = {
         },
       } satisfies Preset.Options,
     ],
+  ],
+
+  // DuckDB-Wasm extensions the runnable SQL blocks preload. The plugin fetches
+  // the released wasm files into `static/` at dev/build startup — cached
+  // locally, re-downloaded only when the release asset's sha256 changes — and
+  // injects the ordered preload list into every page, where the kit's
+  // `src/sql/runtime.ts` loads them while DuckDB initialises.
+  plugins: [
+    dfkExtensions({
+      // CI builds the release assets without DuckDB's signing keys — the same
+      // reason local development runs `duckdb -unsigned`.
+      allowUnsignedExtensions: true,
+      preload: [
+        {
+          // Served at <baseUrl>/duckdb-extensions/duckfn.duckdb_extension.wasm.
+          // The name must keep `duckfn` before the first dot: that base is the
+          // entry symbol DuckDB looks up, hence the rename from the release
+          // asset (which carries the wasm platform suffix).
+          url: 'duckdb-extensions/duckfn.duckdb_extension.wasm',
+          release: {repository: 'shijianjs/duckfn', asset: 'duckfn-wasm_eh.duckdb_extension.wasm'},
+        },
+      ],
+    }),
   ],
 
   // No `themes` entry for the search UI: the classic preset already registers

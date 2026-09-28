@@ -92,18 +92,38 @@ SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260
 
 ## Loading extensions
 
+### Preloaded site-wide
+
+The extension this site documents loads on every page, before the first query:
+`docusaurus.config.ts` gives the kit's `dfkExtensions` plugin an ordered preload
+list, and at build time the plugin fetches the **latest release's**
+`duckfn-wasm_eh.duckdb_extension.wasm` into the site's static files (cached
+locally, re-downloaded only when its sha256 changes). No block has to name it —
+this example simply calls into the `duckfn` extension:
+
+```sql {"type":"duckfn","show":"table"}
+SELECT double_it5(21) AS doubled;
+```
+
+### Loading ad hoc
+
 On WebAssembly `INSTALL` is a no-op — there is no persistent storage to install
 *into* — so `LOAD` is the whole mechanism: it fetches the extension's
-`.duckdb_extension.wasm` from the repository and verifies the signature before
-loading it. `extensions` lists what to load before the block runs, and
-`repository` points at a different repository; both are per block, while the
+`.duckdb_extension.wasm` from its repository and verifies the signature before
+loading it. A block that needs something more can name it: `extensions` lists
+what to `LOAD` before the block runs, and `repository` points at a different
+source — `community`, `core` or a repository URL. Both are per block, while the
 loaded set is shared by every block on the page.
 
-An extension whose signature does not verify is rejected unless the block that
-**first** initialises the shared runtime sets `allowUnsignedExtensions: true`.
+An extension whose signature does not verify is rejected unless
+`allowUnsignedExtensions` is on — the preload list turns it on site-wide (the
+release assets of a third-party extension are not signed with DuckDB's keys),
+and a block can opt in for its own loads. The *first* block that initialises
+the shared runtime settles the instance either way.
 
 ```sql {"type":"duckfn","show":"table","extensions":["inet"]}
-SELECT '127.0.0.1'::INET AS ip, '10.0.0.0/8'::INET AS network;
+-- Cast to VARCHAR: the wasm bridge hands INET to the page as a struct.
+SELECT '127.0.0.1'::INET::VARCHAR AS ip, '10.0.0.0/8'::INET::VARCHAR AS network;
 ```
 
 ## Fullscreen
@@ -128,9 +148,9 @@ FROM range(40) t(i);
 | `tab_name` | Column labelling each preview tab. |
 | `option.width` · `option.height` | CSS lengths for the preview box. |
 | `option.sandbox` | Sandbox tokens for the iframe, replacing `allow-scripts`. |
-| `extensions` | Extension names to `LOAD` before running. |
-| `repository` | Repository serving those extensions. |
-| `allowUnsignedExtensions` | Accept an unverifiable signature (first block wins). |
+| `extensions` | Extension names to `LOAD` before running, on top of the site-wide preloads. |
+| `repository` | Where those extensions come from: `community`, `core` or a repository URL. |
+| `allowUnsignedExtensions` | Accept an unverifiable signature (site-wide via the preload config, or per block; the first block to initialise settles it). |
 
 ## Ordinary code blocks are untouched
 

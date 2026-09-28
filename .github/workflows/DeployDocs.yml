@@ -59,6 +59,11 @@ jobs:
         # The root script builds duckfn-docs-kit first, then the docs site.
         # A project site is served from /<repo>/, so Docusaurus is told the real url/baseUrl
         # instead of relying on the local-development fallbacks in docusaurus.config.ts.
+        #
+        # GITHUB_TOKEN lifts the anonymous release-API rate limit the dfkExtensions plugin
+        # hits when it fetches the extension wasm files from the latest release.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # `base_url` is "https://<host>/<path>" and Docusaurus rejects it: `url` must be a bare

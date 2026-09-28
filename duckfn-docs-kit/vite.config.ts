@@ -38,6 +38,7 @@ export default defineConfig({
         'toc-toggle/TocToggle': src('toc-toggle/TocToggle.ts'),
         remark: src('remark.ts'),
         'sql/remark': src('sql/remark.ts'),
+        'sql/extensions': src('sql/extensions.ts'),
       },
       formats: ['es'],
     },
@@ -52,7 +53,12 @@ export default defineConfig({
       // Vite lib mode's *default* externalisation is unreliable in this kit
       // (`iconify-icon` used to end up bundled despite it), so list them
       // explicitly.
+      // The `node:` builtins are what `sql/extensions.ts` (Node build code)
+      // imports; without this they would hit Vite's *browser* fallback and be
+      // replaced by an empty module. Rollup's external check runs before
+      // Vite's resolver, so the import survives into `dist/` untouched.
       external: [
+        /^node:/,
         '@duckdb/duckdb-wasm',
         '@visactor/vtable',
         'codemirror',
