@@ -50,6 +50,14 @@ type SqlLabels = {
   wrapOff: string;
   copy: string;
   copied: string;
+  /** Context-menu labels for the result table (see `renderers.ts`). */
+  copyAll: string;
+  wrapColumn: string;
+  unwrapColumn: string;
+  freezeColumn: string;
+  unfreezeColumns: string;
+  resetView: string;
+  noData: string;
   running: string;
   initializing: string;
   loadingExtensions: string;
@@ -73,6 +81,13 @@ const LABELS: Record<string, SqlLabels> = {
     wrapOff: 'Stop wrapping lines',
     copy: 'Copy',
     copied: 'Copied',
+    copyAll: 'Copy table',
+    wrapColumn: 'Wrap column',
+    unwrapColumn: 'Stop wrapping column',
+    freezeColumn: 'Freeze up to here',
+    unfreezeColumns: 'Unfreeze columns',
+    resetView: 'Reset view',
+    noData: 'No rows',
     running: 'Running…',
     initializing: 'Initializing DuckDB…',
     loadingExtensions: 'Loading extensions…',
@@ -94,6 +109,13 @@ const LABELS: Record<string, SqlLabels> = {
     wrapOff: '取消折行',
     copy: '复制',
     copied: '已复制',
+    copyAll: '复制整表',
+    wrapColumn: '此列折行',
+    unwrapColumn: '取消此列折行',
+    freezeColumn: '冻结到此列',
+    unfreezeColumns: '取消冻结',
+    resetView: '重置视图',
+    noData: '无数据',
     running: '执行中…',
     initializing: '正在初始化 DuckDB…',
     loadingExtensions: '正在加载扩展…',

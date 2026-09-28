@@ -1,4 +1,4 @@
-import type {ListTable} from '@visactor/vtable';
+import type {ListTable, ListTableConstructorOptions} from '@visactor/vtable';
 import type {QueryResult} from './runtime';
 import type {RunnableSqlConfig} from './remark';
 import {PreviewTabs, type PreviewTabItem, type PreviewTableHandle} from './PreviewTabs';
@@ -59,6 +59,99 @@ const DEFAULT_SANDBOX = 'allow-scripts';
 const ROW_HEIGHT = 30;
 const HEADER_HEIGHT = 32;
 
+/**
+ * Stable `menuKey`s for the context-menu items. VTable fires the click through
+ * the `dropdown_menu_click` event (see {@link ResultTable.#onMenu}) with
+ * `menuKey = menuItem.menuKey || menuItem.text`, so giving every item an
+ * explicit key keeps the dispatch independent of the (localised) label text.
+ */
+const MENU = {
+  copyCell: 'dfk-copy-cell',
+  copyAll: 'dfk-copy-all',
+  wrap: 'dfk-wrap',
+  unwrap: 'dfk-unwrap',
+  freeze: 'dfk-freeze',
+  unfreeze: 'dfk-unfreeze',
+  reset: 'dfk-reset',
+} as const;
+
+/** Theme shape VTable accepts in the constructor / `updateTheme`. */
+type TableTheme = NonNullable<ListTableConstructorOptions['theme']>;
+type TableColumns = NonNullable<ListTableConstructorOptions['columns']>;
+/**
+ * The context-menu item shape. Mirrors VTable's `MenuListItem`, which is not
+ * re-exported from the package root, so it is spelled out locally.
+ */
+type TableMenuItem =
+  | string
+  | {text?: string; type?: 'title' | 'item' | 'split'; menuKey?: string};
+
+/**
+ * A locale-aware, numeric-aware comparator shared by every sortable column.
+ * `Intl.Collator` is built lazily (it is comparatively cheap but not free, and
+ * most tables never sort).
+ */
+let collator: Intl.Collator | undefined;
+function compareText(a: string, b: string): number {
+  collator ??= new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+  return collator.compare(a, b);
+}
+
+/**
+ * Coerces a value to a number when it is genuinely numeric (so `9` sorts before
+ * `10`), otherwise `null` so the caller falls back to a text comparison.
+ * DuckDB-Wasm hands back native `number`/`bigint`/`Date`/`boolean` values.
+ */
+function numericValue(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isNaN(value) ? null : value;
+  }
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  return null;
+}
+
+/**
+ * VTable's per-column `sort` callback. When a custom comparator is supplied,
+ * VTable calls it with the current `order` and uses the result verbatim (it
+ * does NOT flip for `desc` the way its built-in comparator does), so the
+ * direction has to be applied here. NULL is pinned last in both directions (a
+ * custom comparator must handle empty values itself), numbers compare
+ * numerically and everything else textually.
+ */
+function compareValues(a: unknown, b: unknown, order: string): -1 | 0 | 1 {
+  const aEmpty = a === null || a === undefined;
+  const bEmpty = b === null || b === undefined;
+  if (aEmpty || bEmpty) {
+    if (aEmpty && bEmpty) {
+      return 0;
+    }
+    // NULL last, regardless of direction.
+    return aEmpty ? 1 : -1;
+  }
+  const numeric = numericValue(a);
+  const otherNumeric = numericValue(b);
+  let raw: number;
+  if (numeric !== null && otherNumeric !== null) {
+    raw = numeric === otherNumeric ? 0 : numeric < otherNumeric ? -1 : 1;
+  } else {
+    raw = compareText(stringify(a), stringify(b));
+  }
+  const sign: -1 | 0 | 1 = raw === 0 ? 0 : raw < 0 ? -1 : 1;
+  if (sign === 0) {
+    return 0;
+  }
+  return (String(order).toLowerCase() === 'desc' ? -sign : sign) as -1 | 0 | 1;
+}
+
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /**
@@ -88,14 +181,351 @@ function errorText(labels: Record<string, string>, detail: string): string {
 }
 
 /**
+ * A VTable result grid with the interaction layer a docs example wants:
+ * sortable columns, clipboard copy, zebra striping, resizable rows/columns,
+ * cross-highlight on hover, per-column text wrapping and column freezing —
+ * all driven through VTable's own options and events so the canvas stays the
+ * single source of truth (nothing is re-laid-out in DOM).
+ *
+ * The instance owns its box (`#record`); callers only reach it through
+ * {@link dispose}.
+ */
+class ResultTable {
+  readonly #table: ListTable;
+  readonly #record: HTMLElement;
+  readonly #result: QueryResult;
+  readonly #labels: Record<string, string>;
+  /** Fields whose column currently wraps (row height switches to `auto`). */
+  readonly #wrapped = new Set<string>();
+  #frozen = 0;
+  #frame = 0;
+  #observer?: ResizeObserver;
+  #themeObserver?: MutationObserver;
+
+  constructor(
+    ListTableCtor: typeof ListTable,
+    record: HTMLElement,
+    result: QueryResult,
+    labels: Record<string, string>,
+  ) {
+    this.#record = record;
+    this.#result = result;
+    this.#labels = labels;
+    this.#table = new ListTableCtor(this.#options());
+
+    // `resize()` re-measures and repaints inside `record`, so running it straight
+    // from the observer callback feeds the resulting box change back into the very
+    // delivery pass that is still going — the browser reports that as
+    // "ResizeObserver loop completed with undelivered notifications" (and
+    // webpack-dev-server turns it into a full-screen error overlay). Deferring to
+    // the next frame keeps the notification and the re-measure in separate passes.
+    this.#observer = new ResizeObserver(() => {
+      cancelAnimationFrame(this.#frame);
+      this.#frame = requestAnimationFrame(() => {
+        this.#frame = 0;
+        this.#table.resize();
+      });
+    });
+    this.#observer.observe(record);
+
+    // The canvas paints with concrete colours resolved from the Infima custom
+    // properties, so a light/dark switch has to be observed and pushed back in
+    // through `updateTheme` — a CSS variable change never reaches the canvas.
+    this.#themeObserver = new MutationObserver(() => {
+      this.#table.updateTheme(this.#theme());
+    });
+    this.#themeObserver.observe(record.ownerDocument.documentElement, {
+      attributeFilter: ['data-theme', 'class'],
+    });
+
+    this.#table.on('dropdown_menu_click', (args) => this.#onMenu(args));
+  }
+
+  #columns(): TableColumns {
+    return this.#result.columns.map((field) => ({
+      field,
+      title: field,
+      sort: compareValues,
+      style: {autoWrapText: this.#wrapped.has(field)},
+    }));
+  }
+
+  /**
+   * Resolves the Infima palette to concrete colours every time it is called,
+   * so it doubles as the theme-refresh path on a mode switch.
+   *
+   * VTable's `themes.of` does NOT layer a partial theme over the built-in
+   * default — every unset property falls back to hard-coded constants (16px
+   * font, 10/16 padding, a blue selection tint, black borders, no frozen-column
+   * shadow). So anything that must match the site is spelled out here.
+   */
+  #theme(): TableTheme {
+    const record = this.#record;
+    const surface = cssColor(record, '--ifm-background-surface-color', '#fff');
+    const text = cssColor(record, '--ifm-font-color-base', '#181818');
+    const border = cssColor(record, '--ifm-global-border-color', '#e0e0e0');
+    const headerBg = cssColor(record, '--ifm-color-emphasis-100', '#f5f5f5');
+    const stripe = cssColor(record, '--ifm-table-stripe-background', 'rgba(128, 128, 128, 0.06)');
+    const hoverTint = cssColor(record, '--ifm-hover-overlay', 'rgba(128, 128, 128, 0.12)');
+    const selection = cssColor(record, '--ifm-color-emphasis-200', '#e6e6e6');
+    const iconIdle = cssColor(record, '--ifm-color-emphasis-500', '#a4a6a8');
+    const iconActive = cssColor(record, '--ifm-color-primary', '#14459b');
+
+    return {
+      defaultStyle: {
+        fontSize: 13,
+        padding: [4, 8, 4, 8],
+        color: text,
+        bgColor: surface,
+        borderColor: border,
+      },
+      bodyStyle: {
+        // Zebra striping: alternate body rows, offset past the header band.
+        bgColor: ({row, table}) =>
+          (row - table.columnHeaderLevelCount) % 2 === 1 ? stripe : surface,
+        hover: {
+          cellBgColor: hoverTint,
+          inlineRowBgColor: hoverTint,
+          inlineColumnBgColor: headerBg,
+        },
+      },
+      headerStyle: {
+        bgColor: headerBg,
+        color: text,
+        fontWeight: 600,
+        hover: {
+          cellBgColor: hoverTint,
+          inlineRowBgColor: hoverTint,
+          inlineColumnBgColor: hoverTint,
+        },
+      },
+      selectionStyle: {
+        cellBgColor: selection,
+        inlineRowBgColor: selection,
+        inlineColumnBgColor: selection,
+        cellBorderColor: iconActive,
+        cellBorderLineWidth: 2,
+      },
+      // Without this the frozen column has no separator (the default shadow is
+      // dropped by `themes.of`), so a frozen pane would look identical to the
+      // scrolling ones.
+      frozenColumnLine: {
+        shadow: {
+          width: 8,
+          startColor: 'rgba(0, 0, 0, 0.14)',
+          endColor: 'rgba(0, 0, 0, 0)',
+        },
+      },
+      columnResize: {lineColor: iconActive, bgColor: iconActive},
+      scrollStyle: {
+        width: 10,
+        scrollSliderColor: cssColor(record, '--ifm-color-emphasis-300', '#c9cdd1'),
+        scrollRailColor: 'transparent',
+      },
+      tooltipStyle: {fontSize: 12, color: text, bgColor: surface},
+      // The stock sort icon is near-invisible in dark mode (#282F38), so the
+      // idle/active tints come from Infima too.
+      functionalIconsStyle: {sort_color: iconIdle, sort_color_2: iconActive},
+    };
+  }
+
+  #options(): ListTableConstructorOptions {
+    return {
+      container: this.#record,
+      records: this.#result.rows,
+      columns: this.#columns(),
+      theme: this.#theme(),
+      // `auto` row height is what actually lets a wrapped column grow its rows;
+      // a fixed height would clip the extra lines even with `autoWrapText`.
+      defaultRowHeight: this.#wrapped.size > 0 ? 'auto' : ROW_HEIGHT,
+      defaultHeaderRowHeight: HEADER_HEIGHT,
+      // Resizing is on by default, but stating it keeps the intent readable and
+      // guards a future change of default.
+      columnResizeMode: 'all',
+      rowResizeMode: 'all',
+      dragHeaderMode: 'none',
+      // Cross highlight is what the "hover lights up the whole row + column"
+      // behaviour maps to; the default is per-cell only.
+      hover: {highlightMode: 'cross'},
+      select: {highlightMode: 'cross'},
+      // There is no default keyboard config, so the copy/select flags have to be
+      // listed or Ctrl+C / Ctrl+A stay inert.
+      keyboardOptions: {
+        copySelected: true,
+        selectAllOnCtrlA: true,
+      },
+      // Overflow tooltip: shows the full text of a clipped cell on hover.
+      tooltip: {isShowOverflowTextTooltip: true},
+      menu: {
+        renderMode: 'html',
+        contextMenuItems: (field) => this.#menuItems(String(field)),
+      },
+      frozenColCount: this.#frozen,
+      emptyTip: {
+        text: this.#labels.noData ?? 'No rows',
+        textStyle: {
+          fontSize: 13,
+          color: cssColor(this.#record, '--ifm-color-emphasis-600', '#666'),
+        },
+      },
+    };
+  }
+
+  #menuItems(field: string): TableMenuItem[] {
+    const labels = this.#labels;
+    const wrapped = this.#wrapped.has(field);
+    const freezeOrUnfreeze: TableMenuItem =
+      this.#frozen > 0
+        ? {text: labels.unfreezeColumns ?? 'Unfreeze columns', menuKey: MENU.unfreeze}
+        : {text: labels.freezeColumn ?? 'Freeze up to here', menuKey: MENU.freeze};
+    return [
+      {text: field, type: 'title'},
+      {type: 'split'},
+      {text: labels.copy ?? 'Copy cell', menuKey: MENU.copyCell},
+      {text: labels.copyAll ?? 'Copy table', menuKey: MENU.copyAll},
+      {
+        text: wrapped
+          ? (labels.unwrapColumn ?? 'Stop wrapping column')
+          : (labels.wrapColumn ?? 'Wrap column'),
+        menuKey: wrapped ? MENU.unwrap : MENU.wrap,
+      },
+      freezeOrUnfreeze,
+      {type: 'split'},
+      {text: labels.resetView ?? 'Reset view', menuKey: MENU.reset},
+    ];
+  }
+
+  /**
+   * Dispatch a context-menu click.
+   *
+   * VTable fires this through `dropdown_menu_click`, NOT `context_menu_click`:
+   * in 1.26.8 the html menu's own click handler emits `dropdown_menu_click`
+   * (with `menuKey = menuItem.menuKey || menuItem.text`), and the
+   * `context_menu_click` event type is defined but never fired — listening to
+   * it silently does nothing.
+   */
+  #onMenu(args: {col?: number; row?: number; menuKey?: string}): void {
+    const col = args.col ?? -1;
+    const row = args.row ?? -1;
+    const menuKey = args.menuKey;
+    if (!menuKey) {
+      return;
+    }
+    // The owning column's field; resolves for body cells and header cells alike.
+    const info = col >= 0 && row >= 0 ? this.#table.getCellInfo(col, row) : undefined;
+    const field = info?.field === undefined ? '' : String(info.field);
+    switch (menuKey) {
+      case MENU.copyCell:
+        void this.#copy(this.#cellText(col, row));
+        break;
+      case MENU.copyAll:
+        void this.#copy(this.#allText());
+        break;
+      case MENU.wrap:
+        if (field) {
+          this.#toggleWrap(field, true);
+        }
+        break;
+      case MENU.unwrap:
+        if (field) {
+          this.#toggleWrap(field, false);
+        }
+        break;
+      case MENU.freeze:
+        this.#freeze(col);
+        break;
+      case MENU.unfreeze:
+        this.#freeze(-1);
+        break;
+      case MENU.reset:
+        this.#reset();
+        break;
+    }
+  }
+
+  #cellText(col: number, row: number): string {
+    if (col < 0 || row < 0) {
+      return '';
+    }
+    return stringify(this.#table.getCellRawValue(col, row));
+  }
+
+  #toggleWrap(field: string, on: boolean): void {
+    if (on) {
+      this.#wrapped.add(field);
+    } else {
+      this.#wrapped.delete(field);
+    }
+    this.#table.defaultRowHeight = this.#wrapped.size > 0 ? 'auto' : ROW_HEIGHT;
+    // Clear the row-height cache so rows regrow, but keep the column-width
+    // cache — widths the user dragged (and any row heights they resized) stay.
+    this.#table.updateColumns(this.#columns(), {
+      clearColWidthCache: false,
+      clearRowHeightCache: true,
+    });
+  }
+
+  #freeze(col: number): void {
+    // `setFrozenColCount` clamps to the table width and collapses to 0 once it
+    // would freeze every column, so read the effective count back instead of
+    // assuming `col + 1` stuck.
+    this.#table.setFrozenColCount(col < 0 ? 0 : col + 1);
+    this.#frozen = this.#table.frozenColCount;
+  }
+
+  #reset(): void {
+    this.#wrapped.clear();
+    this.#frozen = 0;
+    // `updateOption` (unlike `updateColumns`) also resets the sort state, and
+    // with both caches cleared it drops the dragged widths/heights too — a true
+    // "back to the initial view".
+    void this.#table.updateOption(this.#options(), {
+      clearColWidthCache: true,
+      clearRowHeightCache: true,
+    });
+  }
+
+  /** The whole visible grid as tab-separated text, in current display order. */
+  #allText(): string {
+    const table = this.#table;
+    const lines = [this.#result.columns.join('\t')];
+    for (let row = table.columnHeaderLevelCount; row < table.rowCount; row += 1) {
+      const cells: string[] = [];
+      for (let col = 0; col < table.colCount; col += 1) {
+        cells.push(stringify(table.getCellRawValue(col, row)));
+      }
+      lines.push(cells.join('\t'));
+    }
+    return lines.join('\n');
+  }
+
+  async #copy(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard access can be denied (permissions, insecure context); a
+      // silent no-op beats throwing from a click handler.
+    }
+  }
+
+  dispose(): void {
+    // The box may have shrunk a frame ago; never resize a released table.
+    cancelAnimationFrame(this.#frame);
+    this.#observer?.disconnect();
+    this.#themeObserver?.disconnect();
+    this.#table.release();
+  }
+}
+
+/**
  * Mounts a VTable list into `parent`, creating the `.dfk-sql-table` box itself.
  *
  * VTable is canvas-rendered and measures its container at construction time, so
  * the box gets an explicit height through a custom property (which the
- * fullscreen rule overrides by specificity rather than `!important`). A
- * `ResizeObserver` re-measures whenever that box changes shape — which is also
- * how the table follows the fullscreen toggle, without any resize plumbing
- * through the component.
+ * fullscreen rule overrides by specificity rather than `!important`); the
+ * `ResizeObserver` inside {@link ResultTable} re-measures whenever that box
+ * changes shape — which is also how the table follows the fullscreen toggle
+ * without any resize plumbing through the component.
  *
  * A failed `import()` (offline, CDN blocked) degrades to the error view instead
  * of rejecting the render.
@@ -110,54 +540,14 @@ async function mountTable(
   record.style.setProperty('--dfk-sql-table-height', `${Math.min(360, 36 + result.rows.length * ROW_HEIGHT)}px`);
   parent.appendChild(record);
 
-  const surface = cssColor(record, '--ifm-background-surface-color', '#fff');
-  const text = cssColor(record, '--ifm-font-color-base', '#181818');
-  const border = cssColor(record, '--ifm-global-border-color', '#e0e0e0');
-  const headerBg = cssColor(record, '--ifm-color-emphasis-100', '#f5f5f5');
-
-  let table: ListTable;
   try {
     const {ListTable: ListTableCtor} = await import('@visactor/vtable');
-    table = new ListTableCtor({
-      container: record,
-      records: result.rows,
-      columns: result.columns.map((field) => ({field, title: field})),
-      defaultRowHeight: ROW_HEIGHT,
-      defaultHeaderRowHeight: HEADER_HEIGHT,
-      // Follow the site's Infima palette, resolved to concrete colours.
-      theme: {
-        bodyStyle: {bgColor: surface, color: text, borderColor: border},
-        headerStyle: {bgColor: headerBg, color: text, borderColor: border},
-      },
-    });
+    const table = new ResultTable(ListTableCtor, record, result, labels);
+    return {dispose: () => table.dispose()};
   } catch (error) {
     record.appendChild(errorBlock(document, errorText(labels, messageOf(error))));
     return {dispose: () => {}};
   }
-
-  // `resize()` re-measures and repaints inside `record`, so running it straight
-  // from the observer callback feeds the resulting box change back into the very
-  // delivery pass that is still going — the browser reports that as
-  // "ResizeObserver loop completed with undelivered notifications" (and
-  // webpack-dev-server turns it into a full-screen error overlay). Deferring to
-  // the next frame keeps the notification and the re-measure in separate passes.
-  let frame = 0;
-  const observer = new ResizeObserver(() => {
-    cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      table.resize();
-    });
-  });
-  observer.observe(record);
-  return {
-    dispose: () => {
-      // The box may have shrunk a frame ago; never resize a released table.
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      table.release();
-    },
-  };
 }
 
 const tableRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
@@ -350,6 +740,9 @@ function previewRenderer(kind: 'iframe' | 'svg'): Renderer {
 function stringify(value: unknown): string {
   if (value === null || value === undefined) {
     return 'NULL';
+  }
+  if (value instanceof Date) {
+    return value.toLocaleString();
   }
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
