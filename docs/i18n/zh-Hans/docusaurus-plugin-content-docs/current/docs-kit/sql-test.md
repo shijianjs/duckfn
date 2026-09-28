@@ -14,8 +14,9 @@ description: 在 CI 里跑遍文档站的所有可运行 SQL 块 —— kit 自�
 duckfn-sql-verify --site .
 ```
 
-本站把它接成了自己的 `npm test`（见 `docs/package.json`），CI 与本地在 `docs/` 下跑 `npm test`
-就是它。
+本站把它接成了自己的 `npm test`（见 `docs/package.json`），在 `docs/` 下跑 `npm test` 就是全部
+流程。它**故意没有挂进本仓库的 CI**：测试跑的是 wasm 版扩展，而那个产物只有 duckfn 自己的 CI 能
+给出（官方流水线一次构建 9 个平台产物，约 20 分钟）。这个取舍记录在仓库根的 `AGENTS.md` 里。
 
 ## 它做了什么
 

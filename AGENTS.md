@@ -132,9 +132,11 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 - 平台要配对：默认 `--platform eh` 对应站点预加载的 `duckfn-wasm_eh.duckdb_extension.wasm`。
 - `docs/.cache/`（已 git 忽略、不删）存着 DuckDB-Wasm 与扩展 wasm 的本地副本，便于离线排查。
 
-它**故意不挂 CI**：这条测试跑在 `duckfn-docs-kit`（一个 npm 包）上，而 kit 的 CI 构建要 20 分钟
-左右，挂上去会让「改一行文档」也等一轮插件流水线；插件发版节奏远慢于文档，绑定的收益不抵耦合成本。
-需要在本地跑时 `npm test -w docs`，约 30 秒。
+它**故意不挂本仓库的 CI**：测试跑的是 wasm 版扩展，而那个产物只有 **duckfn 自己的 CI** 能给出
+（官方流水线一次构建 9 个平台产物，约 20 分钟；本机没有构建 wasm 扩展的现成路径，`docs/static/`
+与 `docs/.cache/` 里的都是取自 release 的副本）。挂进流水线就等于「改一行文档」也要等一轮扩展
+构建，而文档的改动频率远高于插件发版，耦合不划算。需要在本地跑时 `npm test -w docs`（约 30 秒；
+首次会从 release 取一次扩展文件）。
 
 ## 发版流程
 

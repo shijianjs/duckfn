@@ -15,8 +15,11 @@ the site uses, so a docs project can check every block in CI:
 duckfn-sql-verify --site .
 ```
 
-This site wires it up as its `npm test` (see `docs/package.json`), which is what
-CI and any local `npm test` in `docs/` runs.
+This site wires it up as its `npm test` (see `docs/package.json`), so running
+`npm test` in `docs/` is the whole flow. It is deliberately **not** part of CI in
+this repository: the test needs the wasm build of the extension, and that artefact
+only comes out of duckfn's own CI (nine platform artifacts, around 20 minutes).
+The repository's `AGENTS.md` records that trade-off.
 
 ## What it does
 
