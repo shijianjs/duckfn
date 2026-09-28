@@ -58,6 +58,11 @@ type SqlLabels = {
   unfreezeColumns: string;
   resetView: string;
   noData: string;
+  /** Width-mode submenu of the result table (see `renderers.ts`). */
+  widthMode: string;
+  widthAdaptive: string;
+  widthStandard: string;
+  widthFill: string;
   running: string;
   initializing: string;
   loadingExtensions: string;
@@ -88,6 +93,10 @@ const LABELS: Record<string, SqlLabels> = {
     unfreezeColumns: 'Unfreeze columns',
     resetView: 'Reset view',
     noData: 'No rows',
+    widthMode: 'Column width',
+    widthAdaptive: 'Fill the width',
+    widthStandard: 'Content widths, scroll sideways',
+    widthFill: 'Content first, fill when it fits',
     running: 'Running…',
     initializing: 'Initializing DuckDB…',
     loadingExtensions: 'Loading extensions…',
@@ -116,6 +125,10 @@ const LABELS: Record<string, SqlLabels> = {
     unfreezeColumns: '取消冻结',
     resetView: '重置视图',
     noData: '无数据',
+    widthMode: '列宽模式',
+    widthAdaptive: '铺满宽度',
+    widthStandard: '按内容列宽（可横向滚动）',
+    widthFill: '内容优先，装得下就铺满',
     running: '执行中…',
     initializing: '正在初始化 DuckDB…',
     loadingExtensions: '正在加载扩展…',

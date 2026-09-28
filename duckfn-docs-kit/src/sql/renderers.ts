@@ -73,7 +73,54 @@ const MENU = {
   freeze: 'dfk-freeze',
   unfreeze: 'dfk-unfreeze',
   reset: 'dfk-reset',
+  widthAdaptive: 'dfk-width-adaptive',
+  widthStandard: 'dfk-width-standard',
+  widthFill: 'dfk-width-fill',
 } as const;
+
+/**
+ * The column-width view modes the context menu switches between. Each is a
+ * plain pair of official VTable options:
+ *
+ * - `adaptive` (the default) hands the container width to the columns: every
+ *   column keeps its measured content as its share, so the table always fills
+ *   the box.
+ * - `standard` keeps each column at its measured content width and scrolls
+ *   sideways when the total overflows.
+ * - `standard` + `autoFillWidth` keeps content widths but stretches them to
+ *   fill when the content happens to be narrower than the box.
+ *
+ * `label`/`fallback` are the labels key and its English default, so a consumer
+ * that only provides a few strings still gets text for every item.
+ */
+const WIDTH_MODES = [
+  {
+    menuKey: MENU.widthAdaptive,
+    label: 'widthAdaptive',
+    widthMode: 'adaptive',
+    autoFillWidth: false,
+    fallback: 'Fill the width',
+  },
+  {
+    menuKey: MENU.widthStandard,
+    label: 'widthStandard',
+    widthMode: 'standard',
+    autoFillWidth: false,
+    fallback: 'Content widths, scroll sideways',
+  },
+  {
+    menuKey: MENU.widthFill,
+    label: 'widthFill',
+    widthMode: 'standard',
+    autoFillWidth: true,
+    fallback: 'Content first, fill when it fits',
+  },
+] as const;
+
+/** The width-mode table row for a `MENU.*` key (the default when unknown). */
+function widthModeOption(menuKey: string): (typeof WIDTH_MODES)[number] {
+  return WIDTH_MODES.find((mode) => mode.menuKey === menuKey) ?? WIDTH_MODES[0];
+}
 
 /** Theme shape VTable accepts in the constructor / `updateTheme`. */
 type TableTheme = NonNullable<ListTableConstructorOptions['theme']>;
@@ -88,7 +135,12 @@ type TableColumns = NonNullable<ListTableConstructorOptions['columns']>;
  */
 type TableMenuItem =
   | string
-  | {text?: string; type?: 'title' | 'item' | 'split'; menuKey?: string};
+  | {
+      text?: string;
+      type?: 'title' | 'item' | 'split';
+      menuKey?: string;
+      children?: TableMenuItem[];
+    };
 
 /**
  * A locale-aware, numeric-aware comparator shared by every sortable column.
@@ -203,6 +255,8 @@ class ResultTable {
   #frame = 0;
   /** The official theme currently applied, so a repaint happens only on change. */
   #appliedTheme?: VTableThemeName;
+  /** The active width mode, one of `WIDTH_MODES`' keys (default: adaptive). */
+  #widthMode: string = MENU.widthAdaptive;
   #observer?: ResizeObserver;
   #themeObserver?: MutationObserver;
 
@@ -322,21 +376,22 @@ class ResultTable {
   }
 
   #options(): ListTableConstructorOptions {
+    const width = widthModeOption(this.#widthMode);
     return {
       container: this.#record,
       records: this.#result.rows,
       columns: this.#columns(this.#result.columns),
       theme: this.#theme(),
-      // The container width is handed to the columns: each keeps its measured
-      // content as its share (the header measurement already includes the sort
-      // icon), so the initial view fills the box instead of starting from a
-      // default too narrow for its titles. Content-heavy columns get more room
-      // than a flat "equal share" would give them; a very long unaliased header
-      // is capped by `limitMaxAutoWidth` (450) before the share is computed.
-      // It re-fills on container resizes (the fullscreen toggle included), and a
-      // column the user resized by hand is excluded while the rest re-fill
-      // around it.
-      widthMode: 'adaptive',
+      // How the container width is shared out; see `WIDTH_MODES`. `adaptive`
+      // (the default) hands it to the columns — each keeps its measured content
+      // (the header measurement already includes the sort icon) as its share, so
+      // the initial view fills the box instead of starting from a default too
+      // narrow for its titles, and a very long unaliased header is capped by
+      // `limitMaxAutoWidth` (450) before the share is computed. It re-fills on
+      // container resizes (the fullscreen toggle included), and a column the
+      // user resized by hand is excluded while the rest re-fill around it.
+      widthMode: width.widthMode,
+      autoFillWidth: width.autoFillWidth,
       // `auto` row height is what actually lets a wrapped column grow its rows;
       // a fixed height would clip the extra lines even with `autoWrapText`.
       defaultRowHeight: this.#wrapped.size > 0 ? 'auto' : ROW_HEIGHT,
@@ -396,8 +451,24 @@ class ResultTable {
       },
       freezeOrUnfreeze,
       {type: 'split'},
+      // The width modes sit right above "reset": both are view switches.
+      {text: labels.widthMode ?? 'Column width', children: this.#widthModeItems()},
       {text: labels.resetView ?? 'Reset view', menuKey: MENU.reset},
     ];
+  }
+
+  /**
+   * The width-mode submenu. The vendor html menu has no check state of its own
+   * (its `--select` highlight is driven by `menu.dropDownMenuHighlight`, which
+   * only resolves against the cell being clicked), so the active mode carries a
+   * leading tick — item text goes through `innerHTML`, but a plain character is
+   * safe.
+   */
+  #widthModeItems(): TableMenuItem[] {
+    return WIDTH_MODES.map((mode) => ({
+      text: `${mode.menuKey === this.#widthMode ? '✓ ' : ''}${this.#labels[mode.label] ?? mode.fallback}`,
+      menuKey: mode.menuKey,
+    }));
   }
 
   /**
@@ -442,6 +513,11 @@ class ResultTable {
       case MENU.unfreeze:
         this.#freeze(-1);
         break;
+      case MENU.widthAdaptive:
+      case MENU.widthStandard:
+      case MENU.widthFill:
+        this.#setWidthMode(widthModeOption(menuKey));
+        break;
       case MENU.reset:
         this.#reset();
         break;
@@ -480,9 +556,34 @@ class ResultTable {
     this.#frozen = this.#table.frozenColCount;
   }
 
+  /**
+   * Switches how the container width is shared out (see `WIDTH_MODES`).
+   *
+   * The two option setters only store the values, so the re-layout is driven
+   * through `updateColumns`: rebuilding the scene graph re-measures the columns
+   * under the new mode, and unlike `updateOption` it leaves the sort state
+   * alone. The columns go in as the *display* order (a header drag survives),
+   * and clearing only the column-width cache drops the manual widths — a mode
+   * change starts from a clean slate — while the user's row heights survive.
+   */
+  #setWidthMode(mode: (typeof WIDTH_MODES)[number]): void {
+    if (mode.menuKey === this.#widthMode) {
+      return;
+    }
+    this.#widthMode = mode.menuKey;
+    this.#table.widthMode = mode.widthMode;
+    this.#table.autoFillWidth = mode.autoFillWidth;
+    this.#table.updateColumns(this.#columns(this.#displayOrder()), {
+      clearColWidthCache: true,
+      clearRowHeightCache: false,
+    });
+  }
+
   #reset(): void {
     this.#wrapped.clear();
     this.#frozen = 0;
+    // The width mode is a view switch too, so "reset" returns it to the default.
+    this.#widthMode = MENU.widthAdaptive;
     // `updateOption` (unlike `updateColumns`) also resets the sort state, and
     // with both caches cleared it drops the dragged widths/heights too — a true
     // "back to the initial view". `#options()` carries the query's column order,

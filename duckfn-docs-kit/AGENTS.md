@@ -139,11 +139,19 @@ src/
 
 - 行高紧凑靠**构造函数选参** `defaultRowHeight` / `defaultHeaderRowHeight`（不是主题
   对象，写在 `theme` 里无效），容器高度公式随之用同一个常量。
-- **列宽用 `widthMode: 'adaptive'`**（官方「自适应容器宽度」）：先按内容量出每列宽度
+- **列宽默认 `widthMode: 'adaptive'`**（官方「自适应容器宽度」）：先按内容量出每列宽度
   （表头已含排序图标宽度），再按比例缩放到刚好铺满容器 —— 初始视图就填满、不靠默认列宽，
   内容多的列自然多分（比「各列平分」更合理），超长未起别名的表头有 `limitMaxAutoWidth`
   （默认 450）兜底。代价：总内容宽超过容器时是**缩放**而不是横向滚动条；容器尺寸变化
   （含全屏）会重算；手动拖过的列被排除在再分配之外，其余列围着它重新铺满。
+- 列宽模式在右键菜单里可切（`WIDTH_MODES`：铺满 / 按内容列宽 / 内容优先）。切换时
+  **`table.widthMode` 与 `table.autoFillWidth` 的 setter 只存值、不重排**，重排由
+  `updateColumns(cols, {clearColWidthCache:true, clearRowHeightCache:false})` 触发
+  （`createSceneGraph` → `computeColsWidth` 按新模式重测）；特意**不用 `updateOption`**，
+  因为它会把 sortState 一并清掉。列宽模式也属于「重置视图」的回退范围。
+- 右键子菜单：父项 `children` 即子菜单（html 模式原生支持，箭头用 `.vtable__menu-element__arrow`）。
+  子菜单的当前项用文本前缀 `✓ ` 标记 —— vendor 的 `--select` 高亮只认
+  `menu.dropDownMenuHighlight`，且要按当前单元格解析，不适合表达全局状态。
 - **结果区/表格/面板都要 `overscroll-behavior: contain`**：它不是继承属性，必须打到
   每个真正滚动的盒子上（含 `.dfk-sql-table *`，VTable 的内部滚动容器藏在里面）。
   否则滚轮滑到表格底部会继续链式滚动整页 —— 表现是「页面刷一下飞上去、表格消失」。
