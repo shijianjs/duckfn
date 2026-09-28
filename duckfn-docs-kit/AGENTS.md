@@ -151,17 +151,22 @@ src/
   `aria-selected` / `tabIndex` / `hidden`；`Table` 面板懒挂载（首次切入才 `mountTable`，
   因为 VTable 构造时要量容器，而 `hidden` 的盒子量出来是 0），若挂载还在飞行中就被
   `dispose()`，落地后立刻释放。
-- 交互能力（排序、复制、斑马底色、行高列宽可调、hover 十字高亮、右键菜单折行/冻结/重置）
-  集中在 `renderers.ts` 的 `class ResultTable`，全部走 VTable 自己的 option/event，
-  `mountTable` 只是「建盒子 + 动态 import + `new ResultTable(...)`」的薄工厂。
-- **`themes.of(partial)` 不以 DEFAULT 为父主题**（`new TableTheme(p, p)`）：传进去的
-  部分主题不会与内置默认逐层合并，未写的属性退回 `tools/global.js` 的硬编码常量
-  （fontSize 16、padding [10,16,10,16]、蓝色选中 tint、黑边框、**冻结列没有分隔阴影**、
-  排序图标近黑）。所以 `#theme()` 里 `defaultStyle` 的字号/内边距、`frozenColumnLine.shadow`、
-  `functionalIconsStyle.sort_color` 都必须显式给，否则暗色下几乎看不见。
-- 主题跟随 `data-theme`：canvas 用解析出的具体色绘制，CSS 变量改了不会进 canvas，故
-  `ResultTable` 挂一个 `MutationObserver`（监听 root 的 `data-theme`/`class`）→
-  `table.updateTheme(this.#theme())` 重解析 Infima 并重绘。
+- 交互能力（排序、复制、行高列宽可调、hover 十字高亮、右键菜单折行/冻结/重置）集中在
+  `renderers.ts` 的 `class ResultTable`，全部走 VTable 自己的 option/event，`mountTable`
+  只是「建盒子 + 动态 import + `new ResultTable(...)`」的薄工厂。
+- **样式一律用官方主题**：`#theme()` 直接返回 `themes.DEFAULT` / `themes.DARK`（按
+  `data-theme` 二选一），斑马底色、hover/选中配色、冻结列阴影、排序图标色都随主题而来，
+  不要再按属性手写配色。两个坑：
+  - `themes.of(partial)` 不以 DEFAULT 为父主题（`new TableTheme(p, p)`）：手写的部分主题
+    不会与内置默认逐层合并，没写的属性会悄悄退回 `tools/global.js` 的硬编码常量
+    （fontSize 16、padding [10,16,10,16]、黑边框、冻结列无阴影、排序图标近黑）。要叠加
+    小改动就用官方的 `themes.DEFAULT.extends({...})`（`TableTheme.extends`）。
+  - `selectionStyle.selectionFillMode` 默认 `'overlay'`，选中色是**盖在文字之上**画的 ——
+    给成不透明色（如 `--ifm-color-emphasis-200`）会让选中格文字整块消失，表现为「一选中
+    就变灰、内容不见」。官方主题给的是 `rgba(0,0,255,0.1)` 这类半透明色，用官方主题即可。
+- 主题跟随 `data-theme`：canvas 用具体色绘制，CSS 变量改了不会进 canvas，故 `ResultTable`
+  挂一个 `MutationObserver`（监听 root 的 `data-theme`/`class`）→ 变了才
+  `table.updateTheme(...)`（`updateTheme` 会整表重绘，不要无条件调）。
 - 排序只在**表头 sort 图标**上触发（循环 asc→desc→normal）。自定义比较器经
   `columns[].sort` 传入，VTable 会带着当前 `order` 调用它并**原样采用返回值**（不再像
   内置比较器那样自行按 order 翻转），所以方向要在比较器里处理；空**记录**由引擎兜底排后，
@@ -177,12 +182,14 @@ src/
 - 右键菜单点击监听的是 **`dropdown_menu_click`，不是 `context_menu_click`**：1.26.8 里
   `context_menu_click` 只有常量、从不触发，html 菜单项的 click 处理器发的是
   `dropdown_menu_click`（`menuKey = menuItem.menuKey || menuItem.text`，故每项都显式给
-  `MENU.*` key 以与本地化文案解耦）。`getHeaderField`/`getCellInfo(col,row).field` 对表体
-  单元格也返回所属列 field，故菜单项对表头/表体都能定位到列。
+  `MENU.*` key 以与本地化文案解耦）。`getCellInfo(col,row).field` 对表体单元格也返回所属
+  列 field，故菜单项对表头/表体都能定位到列。
 - `menu`/`tooltip` 的 `parentElement` 默认是 `table.getElement()`（在 `.dfk-sql-table` 内），
-  故不与全屏 overlay 抢 z-index，也便于 CSS 作用域限定。它们的 `renderMode` 默认 `html`，
-  vendor 会注入一份**写死浅色（#fff/#000、Roboto）**的文档级样式表，`sql.css` 里以
-  `.dfk-sql-table .vtable__menu-element…`（特异性 0,2,0 > vendor 的 0,1,0）只改配色不改布局。
+  故不与全屏 overlay 抢 z-index。它们的 `renderMode` 默认 `html`，vendor 自己会注入一份
+  **写死浅色（#fff/#000、Roboto）**的文档级样式表，所以暗色模式下菜单/提示仍是浅色 ——
+  这是 vendor 现状，**不要用 `sql.css` 去改它的配色**；真要隔离就改走 Shadow DOM，但要
+  注意 VTable 的样式表注入在 `document.head`，跨不过 shadow 边界（需把那段 CSS 复制进
+  shadow root 才能生效）。
 
 **扩展加载（`runtime.ts`）**
 

@@ -77,6 +77,10 @@ const MENU = {
 
 /** Theme shape VTable accepts in the constructor / `updateTheme`. */
 type TableTheme = NonNullable<ListTableConstructorOptions['theme']>;
+/** The VTable module namespace from the dynamic `import()` (type-only here). */
+type VTableModule = typeof import('@visactor/vtable');
+/** The two official themes the table switches between. */
+type VTableThemeName = 'DEFAULT' | 'DARK';
 type TableColumns = NonNullable<ListTableConstructorOptions['columns']>;
 /**
  * The context-menu item shape. Mirrors VTable's `MenuListItem`, which is not
@@ -154,16 +158,6 @@ function compareValues(a: unknown, b: unknown, order: string): -1 | 0 | 1 {
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
-/**
- * Resolves a CSS custom property (with fallback) against an element. VTable
- * paints to a canvas, where `fillStyle: 'var(--ifm-…)'` would not resolve —
- * the theme colours have to become concrete strings before they go in.
- */
-function cssColor(element: HTMLElement, property: string, fallback: string): string {
-  const value = getComputedStyle(element).getPropertyValue(property).trim();
-  return value || fallback;
-}
-
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -182,10 +176,16 @@ function errorText(labels: Record<string, string>, detail: string): string {
 
 /**
  * A VTable result grid with the interaction layer a docs example wants:
- * sortable columns, clipboard copy, zebra striping, resizable rows/columns,
- * cross-highlight on hover, per-column text wrapping and column freezing —
- * all driven through VTable's own options and events so the canvas stays the
- * single source of truth (nothing is re-laid-out in DOM).
+ * sortable columns, clipboard copy, resizable rows/columns, cross-highlight on
+ * hover, per-column text wrapping and column freezing — all driven through
+ * VTable's own options and events so the canvas stays the single source of
+ * truth (nothing is re-laid-out in DOM).
+ *
+ * All styling comes from VTable's own themes (`themes.DEFAULT` / `themes.DARK`,
+ * picked below by the document's colour scheme). The table deliberately does
+ * not hand-pick colours property by property: vendor themes are complete, and
+ * repainting them by hand is how a theme change or a select/hover state ends up
+ * losing its text.
  *
  * The instance owns its box (`#record`); callers only reach it through
  * {@link dispose}.
@@ -195,15 +195,19 @@ class ResultTable {
   readonly #record: HTMLElement;
   readonly #result: QueryResult;
   readonly #labels: Record<string, string>;
+  /** VTable's theme namespace, taken from the dynamic `import()`. */
+  readonly #themes: VTableModule['themes'];
   /** Fields whose column currently wraps (row height switches to `auto`). */
   readonly #wrapped = new Set<string>();
   #frozen = 0;
   #frame = 0;
+  /** The official theme currently applied, so a repaint happens only on change. */
+  #appliedTheme?: VTableThemeName;
   #observer?: ResizeObserver;
   #themeObserver?: MutationObserver;
 
   constructor(
-    ListTableCtor: typeof ListTable,
+    vtable: VTableModule,
     record: HTMLElement,
     result: QueryResult,
     labels: Record<string, string>,
@@ -211,7 +215,9 @@ class ResultTable {
     this.#record = record;
     this.#result = result;
     this.#labels = labels;
-    this.#table = new ListTableCtor(this.#options());
+    this.#themes = vtable.themes;
+    this.#table = new vtable.ListTable(this.#options());
+    this.#appliedTheme = this.#themeName();
 
     // `resize()` re-measures and repaints inside `record`, so running it straight
     // from the observer callback feeds the resulting box change back into the very
@@ -228,11 +234,11 @@ class ResultTable {
     });
     this.#observer.observe(record);
 
-    // The canvas paints with concrete colours resolved from the Infima custom
-    // properties, so a light/dark switch has to be observed and pushed back in
-    // through `updateTheme` — a CSS variable change never reaches the canvas.
+    // The canvas paints with concrete colours, so a light/dark flip has to be
+    // observed and the theme re-applied — a `data-theme` attribute change never
+    // reaches the canvas by itself.
     this.#themeObserver = new MutationObserver(() => {
-      this.#table.updateTheme(this.#theme());
+      this.#applyTheme();
     });
     this.#themeObserver.observe(record.ownerDocument.documentElement, {
       attributeFilter: ['data-theme', 'class'],
@@ -251,82 +257,50 @@ class ResultTable {
   }
 
   /**
-   * Resolves the Infima palette to concrete colours every time it is called,
-   * so it doubles as the theme-refresh path on a mode switch.
+   * The official theme for the current colour mode: `themes.DEFAULT` in light,
+   * `themes.DARK` in dark. Both are complete palettes (text, zebra rows, hover
+   * tints, a *translucent* selection fill, the frozen-column shadow, sort
+   * icons), so nothing has to be overridden by hand.
    *
-   * VTable's `themes.of` does NOT layer a partial theme over the built-in
-   * default — every unset property falls back to hard-coded constants (16px
-   * font, 10/16 padding, a blue selection tint, black borders, no frozen-column
-   * shadow). So anything that must match the site is spelled out here.
+   * `themes.of()` passes a `TableTheme` instance through unchanged, and
+   * `TableTheme.extends()` is the official way to layer a small delta on top,
+   * should one ever be needed.
    */
   #theme(): TableTheme {
-    const record = this.#record;
-    const surface = cssColor(record, '--ifm-background-surface-color', '#fff');
-    const text = cssColor(record, '--ifm-font-color-base', '#181818');
-    const border = cssColor(record, '--ifm-global-border-color', '#e0e0e0');
-    const headerBg = cssColor(record, '--ifm-color-emphasis-100', '#f5f5f5');
-    const stripe = cssColor(record, '--ifm-table-stripe-background', 'rgba(128, 128, 128, 0.06)');
-    const hoverTint = cssColor(record, '--ifm-hover-overlay', 'rgba(128, 128, 128, 0.12)');
-    const selection = cssColor(record, '--ifm-color-emphasis-200', '#e6e6e6');
-    const iconIdle = cssColor(record, '--ifm-color-emphasis-500', '#a4a6a8');
-    const iconActive = cssColor(record, '--ifm-color-primary', '#14459b');
+    return this.#themes[this.#themeName()];
+  }
 
-    return {
-      defaultStyle: {
-        fontSize: 13,
-        padding: [4, 8, 4, 8],
-        color: text,
-        bgColor: surface,
-        borderColor: border,
-      },
-      bodyStyle: {
-        // Zebra striping: alternate body rows, offset past the header band.
-        bgColor: ({row, table}) =>
-          (row - table.columnHeaderLevelCount) % 2 === 1 ? stripe : surface,
-        hover: {
-          cellBgColor: hoverTint,
-          inlineRowBgColor: hoverTint,
-          inlineColumnBgColor: headerBg,
-        },
-      },
-      headerStyle: {
-        bgColor: headerBg,
-        color: text,
-        fontWeight: 600,
-        hover: {
-          cellBgColor: hoverTint,
-          inlineRowBgColor: hoverTint,
-          inlineColumnBgColor: hoverTint,
-        },
-      },
-      selectionStyle: {
-        cellBgColor: selection,
-        inlineRowBgColor: selection,
-        inlineColumnBgColor: selection,
-        cellBorderColor: iconActive,
-        cellBorderLineWidth: 2,
-      },
-      // Without this the frozen column has no separator (the default shadow is
-      // dropped by `themes.of`), so a frozen pane would look identical to the
-      // scrolling ones.
-      frozenColumnLine: {
-        shadow: {
-          width: 8,
-          startColor: 'rgba(0, 0, 0, 0.14)',
-          endColor: 'rgba(0, 0, 0, 0)',
-        },
-      },
-      columnResize: {lineColor: iconActive, bgColor: iconActive},
-      scrollStyle: {
-        width: 10,
-        scrollSliderColor: cssColor(record, '--ifm-color-emphasis-300', '#c9cdd1'),
-        scrollRailColor: 'transparent',
-      },
-      tooltipStyle: {fontSize: 12, color: text, bgColor: surface},
-      // The stock sort icon is near-invisible in dark mode (#282F38), so the
-      // idle/active tints come from Infima too.
-      functionalIconsStyle: {sort_color: iconIdle, sort_color_2: iconActive},
-    };
+  /** Which official theme the document's `data-theme` asks for. */
+  #themeName(): VTableThemeName {
+    const mode = this.#record.ownerDocument.documentElement.getAttribute('data-theme');
+    return mode === 'dark' ? 'DARK' : 'DEFAULT';
+  }
+
+  /**
+   * Re-applies the theme for the current colour mode. `updateTheme` repaints
+   * the whole table (and rebuilds its components), so it is skipped unless the
+   * mode actually changed.
+   */
+  #applyTheme(): void {
+    const name = this.#themeName();
+    if (name !== this.#appliedTheme) {
+      this.#appliedTheme = name;
+      this.#table.updateTheme(this.#theme());
+    }
+  }
+
+  /** The official theme's own body text colour (the tip follows the theme). */
+  #themeText(): string {
+    const theme = this.#theme();
+    const value = theme.bodyStyle?.color ?? theme.defaultStyle?.color;
+    return typeof value === 'string' ? value : '#000';
+  }
+
+  /** The official theme's own body font size. */
+  #themeFontSize(): number {
+    const theme = this.#theme();
+    const value = theme.bodyStyle?.fontSize ?? theme.defaultStyle?.fontSize;
+    return typeof value === 'number' ? value : 12;
   }
 
   #options(): ListTableConstructorOptions {
@@ -345,9 +319,9 @@ class ResultTable {
       rowResizeMode: 'all',
       dragHeaderMode: 'none',
       // Cross highlight is what the "hover lights up the whole row + column"
-      // behaviour maps to; the default is per-cell only.
+      // behaviour maps to; the default is per-cell only. The tints themselves
+      // come from the official theme's `hover` styles.
       hover: {highlightMode: 'cross'},
-      select: {highlightMode: 'cross'},
       // There is no default keyboard config, so the copy/select flags have to be
       // listed or Ctrl+C / Ctrl+A stay inert.
       keyboardOptions: {
@@ -363,10 +337,9 @@ class ResultTable {
       frozenColCount: this.#frozen,
       emptyTip: {
         text: this.#labels.noData ?? 'No rows',
-        textStyle: {
-          fontSize: 13,
-          color: cssColor(this.#record, '--ifm-color-emphasis-600', '#666'),
-        },
+        // The stock empty tip paints `#000` whatever the theme; take both
+        // values from the official theme instead of inventing colours.
+        textStyle: {fontSize: this.#themeFontSize(), color: this.#themeText()},
       },
     };
   }
@@ -541,8 +514,8 @@ async function mountTable(
   parent.appendChild(record);
 
   try {
-    const {ListTable: ListTableCtor} = await import('@visactor/vtable');
-    const table = new ResultTable(ListTableCtor, record, result, labels);
+    const vtable = await import('@visactor/vtable');
+    const table = new ResultTable(vtable, record, result, labels);
     return {dispose: () => table.dispose()};
   } catch (error) {
     record.appendChild(errorBlock(document, errorText(labels, messageOf(error))));
