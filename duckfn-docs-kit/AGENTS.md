@@ -118,6 +118,16 @@ src/
   在 `connectedCallback()` 里挂载（`#mounting` 守卫 + await 后 `isConnected` 守卫，
   断开即 `destroy()`）。`remark.ts` 保留下来的 `code` 子节点只是预渲染文本，
   元素没有默认 slot、`sql.css` 里 `dfk-sql > :not([slot]) { display: none }` 把它压掉。
+- **加载占位（三处，尺寸要一起改）**：编辑器和表格各是一个懒 `import()`，慢网下这两段窗口
+  肉眼可见，所以各有一个骨架。编辑器那一行在 shadow 里，由 `#setEditorPending()` 开关，
+  高度用 `calc(4px + 0.425em)` 按 CodeMirror 的 `padding: 4px 0` + `line-height: 1.6` 反推
+  ——与真编辑器等高，所以换成编辑器时块不跳；`import()` 自己失败时也要撤掉（状态行才是那条
+  消息）。表格那两行由 `mountTable` 在解析前塞进 `.dfk-sql-table`，画布落地（或错误视图接手）
+  即移除，行高由 `ROW_HEIGHT` 经自定义属性传下去。第三个在 **upgrade 之前**：
+  `dfk-sql:not(:defined)`（`sql.css`）——元素还没定义时既没有 shadow 树、预渲染的代码节点又被
+  上面那条隐藏，不画点什么就是一个会突然弹出来把页面顶下去的空洞；它是唯一能覆盖「kit 的 JS
+  还没到」那段窗口的手段，尺寸故意与 shadow 里那一行完全一致。跨 shadow 边界拿不到对方的
+  `@keyframes`，所以这行 ghost 在 `sql.css` 与 `DfkSql.css` 里各有一份，改动画/高度要一起改。
 - **不要覆盖 `.cm-content` 的垂直 padding，也不要给 `.cm-gutters` 加**：CodeMirror 的
   `ViewState.measure()` 用 `parseInt` 读 `.cm-content` 的 computed `padding-top` 算出
   `paddingTop`，再把同一数值作为第一个 gutter 元素的 `marginTop` 施加下去（经 gutter 的

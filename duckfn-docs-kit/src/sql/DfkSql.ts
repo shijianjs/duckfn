@@ -161,6 +161,13 @@ function loadFormatter(): Promise<typeof import('sql-formatter')> {
 export class DfkSql extends HTMLElementBase {
   /** The CodeMirror host; it lives in the shadow tree, so `DfkSql.css` styles it. */
   readonly #editorHost = el('div', {class: 'dfk-sql-editor'});
+  /**
+   * One code-line ghost shown in place of the editor until its CodeMirror
+   * modules have landed (they are a lazy `import()`, and on a slow link that
+   * window is long enough to see). The box keeps its border and background
+   * either way, so the editor fills it rather than replacing it.
+   */
+  readonly #editorSkeleton = el('div', {class: 'dfk-sql-editor-skeleton'});
   /** Wraps the editor and anchors the floating action cluster. */
   readonly #code = el('div', {class: 'dfk-sql-code'});
   readonly #actions = el('div', {class: 'dfk-sql-actions'});
@@ -219,6 +226,7 @@ export class DfkSql extends HTMLElementBase {
       this.#wrapBtn.root,
       this.#copyBtn.root,
     );
+    this.#setEditorPending(true);
     this.#code.append(this.#editorHost, this.#actions);
 
     const shadow = this.attachShadow({mode: 'open'});
@@ -283,11 +291,26 @@ export class DfkSql extends HTMLElementBase {
 
   // --- Editor ----------------------------------------------------------------
 
+  /**
+   * Shows or drops the one-line editor ghost. It goes away once the editor is in
+   * place, and also when the `import()` itself failed — the status line carries
+   * that message, so a bar that keeps pulsing would be a lie. A later remount
+   * (the element was disconnected and reconnected) puts it back.
+   */
+  #setEditorPending(pending: boolean): void {
+    if (pending) {
+      this.#editorHost.appendChild(this.#editorSkeleton);
+    } else {
+      this.#editorSkeleton.remove();
+    }
+  }
+
   async #mountEditor(): Promise<void> {
     if (this.#editor || this.#mounting) {
       return;
     }
     this.#mounting = true;
+    this.#setEditorPending(true);
     try {
       const editor = await mountSqlEditor(this.#editorHost, this.#currentSql, (value) => {
         this.#currentSql = value;
@@ -300,7 +323,9 @@ export class DfkSql extends HTMLElementBase {
       }
       editor.setWrap(this.#wrapped);
       this.#editor = editor;
+      this.#setEditorPending(false);
     } catch (error) {
+      this.#setEditorPending(false);
       this.#setStatus(messageOf(error));
     } finally {
       this.#mounting = false;

@@ -1,7 +1,10 @@
-/* Shadow-root styles for `<dfk-sql>`: the box wrapping the slotted editor and
-   the action cluster floating in its top-right corner. The editor and the
-   result are slotted light-DOM nodes (`sql.css` styles them) because CodeMirror
-   and VTable inject global stylesheets a shadow boundary could not host.
+/* Shadow-root styles for `<dfk-sql>`: the code box — the CodeMirror editor and
+   the action cluster floating in its top-right corner. The editor is in *this*
+   tree on purpose: style-mod mounts CodeMirror's base theme into the root it
+   resolves from the container (`editor.ts`), which is this shadow root, so the
+   `.cm-*` rules land where they are used. Only the result container is a slotted
+   light-DOM node, because VTable injects a *document-level* stylesheet that a
+   shadow boundary could not host (`sql.css` styles that one).
 
    Theme colours arrive through the inherited `--ifm-*` custom properties;
    box-sizing must be re-declared here because the host page's universal reset
@@ -37,6 +40,56 @@
 
 .dfk-sql-editor .cm-editor {
   outline: none;
+}
+
+/* --- Loading placeholder -------------------------------------------------- */
+
+/* The editor is a lazy `import()`; until the CodeMirror modules arrive (a few
+   hundred KB on a slow link) the box would be an empty outline. One code-line
+   ghost keeps the block looking like what it is about to become; `#mountEditor`
+   drops it (see `#setEditorPending`).
+
+   The metrics mirror a CodeMirror line: `line-height: 1.6` on `.cm-scroller`,
+   `padding: 4px 0` on `.cm-content`, so `0.75em` of bar plus `0.425em` of
+   half-leading on either side is exactly the 1.6em line box, with the 4px content
+   inset on top of it — the box does not resize when the editor takes over.
+
+   The same ghost is drawn before this component exists at all, by
+   `dfk-sql:not(:defined)::before` in `sql.css`; that rule and this one are the
+   two copies of one bar (a shadow tree cannot see the other's keyframes), so
+   keep the bar, the animation and the keyframes in sync. */
+.dfk-sql-editor-skeleton {
+  height: 0.75em;
+  margin: calc(4px + 0.425em) 0.75rem;
+  border-radius: 0.25em;
+  background-color: var(--ifm-color-emphasis-200, #e6e6e6);
+  /* Base colour + a lighter band travelling through it; `background-size: 200%`
+     is what gives `background-position` room to move (at 100% it cannot). */
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ifm-color-emphasis-100, #f5f5f5) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: dfk-sql-shimmer 1.6s linear infinite;
+}
+
+@keyframes dfk-sql-shimmer {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
+/* A bar that sweeps forever is decoration; readers who asked for less motion get
+   the static grey. Mirrored in `sql.css`. */
+@media (prefers-reduced-motion: reduce) {
+  .dfk-sql-editor-skeleton {
+    animation: none;
+  }
 }
 
 .dfk-sql-editor .cm-scroller {

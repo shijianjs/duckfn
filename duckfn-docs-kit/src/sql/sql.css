@@ -20,6 +20,113 @@ dfk-sql > :not([slot]) {
   display: none;
 }
 
+/* --- Loading placeholders ------------------------------------------------- */
+
+/* Two heavy libraries arrive through lazy `import()`s — CodeMirror for the
+   editor, VTable for a table result — and on a slow link both windows are long
+   enough to see. Each therefore gets a placeholder: a one-line code ghost where
+   the editor goes, two rows where the table goes.
+
+   The ghost is drawn twice: here, for the window *before* the kit's JS has
+   defined `<dfk-sql>` at all, and by `#setEditorPending` in the shadow tree once
+   it has. This file carries the first copy, `DfkSql.css` the second (a shadow
+   tree cannot see the document's animation names) — keep the bar, the timing and
+   the keyframes of the two in sync. */
+@keyframes dfk-sql-shimmer {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
+/* Before the element upgrades it has no shadow tree, and the prerendered code
+   node is hidden by the rule above, so the block would be an invisible hole that
+   pops in and pushes the rest of the page down. `:not(:defined)` paints the same
+   one-line ghost the shadow tree starts with, at the same size, so the first
+   paint already looks like a block that is loading. It also stays a placeholder
+   when JS never runs, which is the honest thing to show for a block that needs
+   it. */
+dfk-sql:not(:defined) {
+  display: block;
+  margin: 1rem 0;
+  /* CodeMirror's own inset and line box (`padding: 4px 0` on `.cm-content`,
+     `line-height: 1.6` on `.cm-scroller`), so the upgrade does not resize the
+     box. */
+  padding: 4px 0.75rem;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  background: var(--ifm-background-surface-color, #fff);
+  font-size: var(--ifm-code-font-size, 95%);
+}
+
+dfk-sql:not(:defined)::before {
+  content: '';
+  display: block;
+  height: 0.75em;
+  margin: 0.425em 0;
+  border-radius: 0.25em;
+  background-color: var(--ifm-color-emphasis-200, #e6e6e6);
+  /* Base colour plus a lighter band travelling through it; `background-size:
+     200%` is what gives `background-position` room to move (at 100% it cannot). */
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ifm-color-emphasis-100, #f5f5f5) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: dfk-sql-shimmer 1.6s linear infinite;
+}
+
+/* `.dfk-sql-table` holds these while VTable's bundle is in flight; `mountTable`
+   drops them as soon as the canvas is in place — or hands the box to the error
+   view if the import failed. The box already has its final height (the renderer
+   derives `--dfk-sql-table-height` from the row count), so the rows only have to
+   read as "a table is coming"; the row rhythm comes from the renderer's
+   `ROW_HEIGHT`. Every row is built the same way, so the columns line up. */
+.dfk-sql-table-skeleton {
+  display: flex;
+  flex-direction: column;
+  /* Clipped to the box: a one-row result is shorter than two skeleton rows. */
+  height: 100%;
+  overflow: hidden;
+}
+
+.dfk-sql-table-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  height: var(--dfk-sql-skeleton-row-height, 30px);
+  padding: 0 0.75rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-100, #f5f5f5);
+}
+
+.dfk-sql-table-skeleton-cell {
+  flex: 1;
+  height: 0.7em;
+  border-radius: 0.25em;
+  background-color: var(--ifm-color-emphasis-200, #e6e6e6);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ifm-color-emphasis-100, #f5f5f5) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: dfk-sql-shimmer 1.6s linear infinite;
+}
+
+/* A bar that sweeps forever is decoration; readers who asked for less motion get
+   the static grey. Mirrored in `DfkSql.css`. */
+@media (prefers-reduced-motion: reduce) {
+  dfk-sql:not(:defined)::before,
+  .dfk-sql-table-skeleton-cell {
+    animation: none;
+  }
+}
+
 .dfk-sql-result {
   border: 1px solid var(--ifm-global-border-color, #e0e0e0);
   border-top: none;

@@ -626,6 +626,36 @@ class ResultTable {
   }
 }
 
+/** How many skeleton rows and columns the table placeholder draws. */
+const SKELETON_ROWS = 2;
+const SKELETON_COLUMNS = 4;
+
+/**
+ * The two-row ghost of a table, shown inside `.dfk-sql-table` while VTable's
+ * bundle is in flight — it is the largest of the lazy `import()`s in a runnable
+ * block, and the box would otherwise be a blank rectangle. Two rows is the
+ * smallest shape that still reads as "a table is coming"; the columns line up
+ * between them because every row is built the same way.
+ *
+ * The row rhythm comes from `ROW_HEIGHT`, handed over as a custom property so the
+ * one number stays in this file. `sql.css` clips the ghost to the box: a result
+ * with a single row is shorter than two skeleton rows.
+ */
+function tableSkeleton(): HTMLElement {
+  const box = el('div', {class: 'dfk-sql-table-skeleton'});
+  box.style.setProperty('--dfk-sql-skeleton-row-height', `${ROW_HEIGHT}px`);
+  for (let row = 0; row < SKELETON_ROWS; row += 1) {
+    box.appendChild(
+      el('div', {class: 'dfk-sql-table-skeleton-row'}, (line) => {
+        for (let column = 0; column < SKELETON_COLUMNS; column += 1) {
+          line.appendChild(el('span', {class: 'dfk-sql-table-skeleton-cell'}));
+        }
+      }),
+    );
+  }
+  return box;
+}
+
 /**
  * Mounts a VTable list into `parent`, creating the `.dfk-sql-table` box itself.
  *
@@ -647,13 +677,20 @@ async function mountTable(
   const document = parent.ownerDocument;
   const record = el('div', {class: 'dfk-sql-table'});
   record.style.setProperty('--dfk-sql-table-height', `${Math.min(360, 36 + result.rows.length * ROW_HEIGHT)}px`);
+  const skeleton = tableSkeleton();
+  record.appendChild(skeleton);
   parent.appendChild(record);
 
   try {
     const vtable = await import('@visactor/vtable');
     const table = new ResultTable(vtable, record, result, labels);
+    // VTable draws into the same box; the ghost is one sibling too many. It is
+    // dropped after construction (not by VTable) so a failed import can still
+    // hand the box over to the error view.
+    skeleton.remove();
     return {dispose: () => table.dispose()};
   } catch (error) {
+    skeleton.remove();
     record.appendChild(errorBlock(document, errorText(labels, messageOf(error))));
     return {dispose: () => {}};
   }
