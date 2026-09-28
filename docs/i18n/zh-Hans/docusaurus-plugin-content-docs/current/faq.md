@@ -1,6 +1,6 @@
 ---
 title: 常见问题
-sidebar_position: 8
+sidebar_position: 9
 description: 为什么不需要编译 DuckDB、与 duckdb-rs 的区别，以及最常见报错的排查方法。
 ---
 

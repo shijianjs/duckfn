@@ -1,6 +1,6 @@
 ---
 title: 贡献指南
-sidebar_position: 7
+sidebar_position: 8
 description: 环境准备、日常命令、测试组织方式，以及需要遵守的约定。
 ---
 

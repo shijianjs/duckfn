@@ -1,6 +1,6 @@
 ---
 title: Contributing
-sidebar_position: 7
+sidebar_position: 8
 description: Setting up the repository, the day-to-day commands, how the tests are organised, and the conventions to follow.
 ---
 

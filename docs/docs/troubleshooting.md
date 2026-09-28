@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-sidebar_position: 9
+sidebar_position: 10
 description: The Rust 1.86 pin in the official CI's WebAssembly job, and an upstream bug that corrupts all-NULL list literals.
 ---
 

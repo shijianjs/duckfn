@@ -1,6 +1,6 @@
 ---
 title: 社区扩展文档页
-sidebar_position: 10
+sidebar_position: 11
 description: 为什么 duckfn 扩展需要 function_descriptions.csv、四列各是什么含义、怎么生成与提交。
 ---
 

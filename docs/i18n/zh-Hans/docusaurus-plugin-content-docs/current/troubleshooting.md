@@ -1,6 +1,6 @@
 ---
 title: 问题排查
-sidebar_position: 9
+sidebar_position: 10
 description: 官方 CI 的 WebAssembly 作业锁定的 Rust 1.86，以及会把全 NULL 列表字面量读坏的上游 bug。
 ---
 

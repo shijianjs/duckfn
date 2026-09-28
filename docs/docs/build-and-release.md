@@ -1,6 +1,6 @@
 ---
 title: Build and release
-sidebar_position: 6
+sidebar_position: 7
 description: Local build and test commands, the WebAssembly target, and how DuckDB's official pipeline turns a version tag into published binaries.
 ---
 

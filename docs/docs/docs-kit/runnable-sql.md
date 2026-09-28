@@ -1,10 +1,10 @@
 ---
-title: Runnable SQL examples
-sidebar_position: 3
-description: SQL blocks that run in your browser — the duckfn-docs-kit runnable example format, powered by DuckDB-Wasm.
+title: Runnable SQL blocks
+sidebar_position: 2
+description: SQL blocks that run in your browser — the dfk-sql block format, powered by DuckDB-Wasm.
 ---
 
-# Runnable SQL examples
+# Runnable SQL blocks
 
 A fenced SQL block whose info string carries a JSON config turns the code block
 into a runnable example: the block itself is a CodeMirror editor, and nothing
@@ -14,6 +14,9 @@ into it; **Format** re-lays-out the SQL in place — whitespace only, your keywo
 casing is kept. The query runs in your browser against a single shared
 DuckDB-Wasm instance, and the result renders below the block.
 
+DuckDB itself starts initialising in the background as soon as a page with a
+block opens, so the first **Run** click does not wait for the download.
+
 The config is JSON (not `key=value`), so it can grow nested fields later:
 
 ````md
@@ -21,6 +24,18 @@ The config is JSON (not `key=value`), so it can grow nested fields later:
 SELECT * FROM range(10);
 ```
 ````
+
+## Works in `.md`, not just `.mdx`
+
+A runnable block needs no MDX feature: the JSON metastring is read by the
+`remarkRunnableSql` remark plugin during the build, which rewrites the block
+into the `<dfk-sql>` custom element *before* either format is compiled — so a
+plain `.md` page behaves exactly like an `.mdx` one, and this page itself is
+`.md`:
+
+```sql {"type":"duckfn"}
+SELECT 40 + 2 AS answer;
+```
 
 ## The smallest example
 
@@ -92,41 +107,22 @@ SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260
 
 ## Loading extensions
 
-### Preloaded site-wide
-
-The extension this site documents loads on every page, before the first query:
-`docusaurus.config.ts` gives the kit's `dfkExtensions` plugin an ordered preload
-list, and at build time the plugin fetches the **latest release's**
-`duckfn-wasm_eh.duckdb_extension.wasm` into the site's static files (cached
-locally, re-downloaded only when its sha256 changes). DuckDB itself starts
-initialising in the background as soon as the page opens — nothing runs until
-you click **Run**, but the first click no longer waits for the download. No
-block has to name it — this example simply calls into the `duckfn` extension:
-
-```sql {"type":"duckfn","show":"table"}
-SELECT double_it5(21) AS doubled;
-```
-
-### Loading ad hoc
-
-On WebAssembly `INSTALL` is a no-op — there is no persistent storage to install
-*into* — so `LOAD` is the whole mechanism: it fetches the extension's
-`.duckdb_extension.wasm` from its repository and verifies the signature before
-loading it. A block that needs something more can name it: `extensions` lists
-what to `LOAD` before the block runs, and `repository` points at a different
-source — `community`, `core` or a repository URL. Both are per block, while the
-loaded set is shared by every block on the page.
-
-An extension whose signature does not verify is rejected unless
-`allowUnsignedExtensions` is on — the preload list turns it on site-wide (the
-release assets of a third-party extension are not signed with DuckDB's keys),
-and a block can opt in for its own loads. The *first* block that initialises
-the shared runtime settles the instance either way.
+The extension this site documents is preloaded on every page, so the examples
+here just call into it — see [Preloaded extensions](./preloaded-extensions.md)
+for the ordered preload list. A block that needs something more can still name
+it: `extensions` lists what to `LOAD` before the block runs, and `repository`
+points at a different source — `community`, `core` or a repository URL. Both
+are per block, while the loaded set is shared by every block on the page.
 
 ```sql {"type":"duckfn","show":"table","extensions":["inet"]}
 -- Cast to VARCHAR: the wasm bridge hands INET to the page as a struct.
 SELECT '127.0.0.1'::INET::VARCHAR AS ip, '10.0.0.0/8'::INET::VARCHAR AS network;
 ```
+
+An extension whose signature does not verify is rejected unless
+`allowUnsignedExtensions` is on — a third-party release asset is not signed
+with DuckDB's keys — and the *first* block that initialises the shared runtime
+settles the instance either way.
 
 ## Fullscreen
 

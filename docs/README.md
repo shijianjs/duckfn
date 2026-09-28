@@ -8,10 +8,11 @@ Static site for <https://shijianjs.github.io/duckfn/>, built with
 
 | Path | Description |
 | --- | --- |
-| `docs/intro.md` | Introduction. The only page with a `slug`, so `/docs/intro` stays stable. |
+| `docs/intro.md` | Introduction; its `slug` keeps `/docs/intro` stable. |
 | `docs/getting-started/` | Creating a project, installation and quick start. |
 | `docs/guide/` | The feature guide: attributes, each registration kind, type mapping, custom types, errors. |
 | `docs/examples/duckfn.md` | The example extension shipped with the crate, feature by feature. |
+| `docs/docs-kit/` | Documentation tooling: the `duckfn-docs-kit` features that build this site — an overview page plus one page per feature (runnable SQL blocks, preloaded extensions, TOC toggle, home components, version placeholder). Its overview `slug` keeps `/docs/docs-kit` stable. |
 | `docs/internals/architecture.md` | How duckfn works internally. |
 | `docs/build-and-release.md`, `docs/contributing.md`, `docs/faq.md` | Project-level pages, at the top level of the sidebar. |
 | `i18n/zh-Hans/` | Simplified Chinese translations of all of the above, plus the UI strings. |
@@ -22,9 +23,11 @@ Static site for <https://shijianjs.github.io/duckfn/>, built with
 | `docusaurus.config.ts` | Site configuration, including the locale list and the footer links. |
 
 This package is one workspace of the repository root: the shared building blocks
-(`duckfn-docs-kit/` — the `<dfk-*>` home-page elements, the TOC toggle, the brand
-tokens, the version-placeholder remark plugin) are a sibling npm workspace,
-consumed as `duckfn-docs-kit`. The lockfile and `node_modules` live at the root.
+(`duckfn-docs-kit/` — the runnable SQL blocks, the extension preloading, the TOC
+toggle, the `<dfk-*>` home-page elements, the brand tokens and the two remark
+plugins) are a sibling npm workspace, consumed as `duckfn-docs-kit`. They are
+documented under [`docs/docs-kit/`](docs/docs-kit/) (English and Chinese). The
+lockfile and `node_modules` live at the root.
 
 ## Preloaded DuckDB extensions
 
@@ -52,8 +55,8 @@ The extension is built by CI for DuckDB v1.5.5, and the site pins
 `@duckdb/duckdb-wasm` to the exact dev build whose engine matches
 (`1.33.1-dev64.0`, engine v1.5.5 — npm's `next` tag at the time of writing;
 stable `1.32.0` bundles v1.4.3 and rejects the extension with a C-API layout
-mismatch). When either side moves, re-check the runnable SQL page: both example
-blocks must run.
+mismatch). When either side moves, re-check the Docs kit pages: the live blocks
+there must run.
 
 ## Commands
 
@@ -92,6 +95,11 @@ Nesting works by using more colons for each level: `:::::info[Parent]` → `::::
 Two more things worth knowing: `onBrokenLinks` is `throw`, so every internal link and anchor has to
 resolve (in both locales), and code fences should use one of the languages enabled for Prism in
 `docusaurus.config.ts` — `bash`, `rust`, `sql` or `toml`.
+
+**Prefer `.md`.** In Docusaurus 3 both formats go through the same MDX pipeline,
+and the kit's runnable blocks need no MDX feature — so the tree sticks to `.md`
+and there is no `.mdx` file today. If a page ever genuinely needs JSX, `.mdx`
+would behave identically.
 
 ## Translations
 

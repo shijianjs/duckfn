@@ -1,6 +1,6 @@
 ---
 title: FAQ
-sidebar_position: 8
+sidebar_position: 9
 description: Why no DuckDB build is needed, how this differs from duckdb-rs, and how to debug the errors people hit most often.
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Community extension docs
-sidebar_position: 10
+sidebar_position: 11
 description: Why a duckfn extension needs function_descriptions.csv, what the four columns mean, and how to generate and submit it.
 ---
 

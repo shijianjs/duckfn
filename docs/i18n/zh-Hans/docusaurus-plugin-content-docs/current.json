@@ -34,5 +34,9 @@
   "sidebar.docsSidebar.category.Internals.link.generated-index.description": {
     "message": "duckfn 的内部实现：宏展开、注册机制、适配器与值类型。",
     "description": "The generated-index page description for category 'Internals' in sidebar 'docsSidebar'"
+  },
+  "sidebar.docsSidebar.category.Docs kit": {
+    "message": "文档工具",
+    "description": "The label for category 'Docs kit' in sidebar 'docsSidebar'"
   }
 }
