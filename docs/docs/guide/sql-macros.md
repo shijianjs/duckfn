@@ -44,8 +44,17 @@ CREATE OR REPLACE MACRO dfn_macro_files_negate(x) AS (-x);
 
 ```sql {"type":"duckfn"}
 SELECT dfn_macro_files_add(2, 3);      -- 5
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_macro_files_mul(4, 5);      -- 20
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_macro_files_gen(3);  -- 0, 1, 2
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_macro_files_negate(7);      -- -7
 ```
 
@@ -79,7 +88,13 @@ CREATE OR REPLACE MACRO dfn_macro_inc_gen(n) AS TABLE SELECT * FROM range(n);
 
 ```sql {"type":"duckfn"}
 SELECT dfn_macro_inc_add(2, 3);      -- 5
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_macro_inc_triple(4);      -- 12
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_macro_inc_gen(3);  -- 0, 1, 2
 ```
 
@@ -97,7 +112,13 @@ pub fn dfn_macro_clamp() -> SqlMacro {
 
 ```sql {"type":"duckfn"}
 SELECT dfn_macro_clamp(12, 0, 10);         -- 10
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_macro_clamp(-5, 0, 10);         -- 0
+```
+
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_macro_clamp(5, 0, 10));  -- INTEGER
 ```
 
@@ -112,6 +133,9 @@ pub fn dfn_macro_gen() -> DuckResult<SqlMacro> {
 
 ```sql {"type":"duckfn"}
 SELECT * FROM dfn_macro_gen(3);      -- 0, 1, 2
+```
+
+```sql {"type":"duckfn"}
 SELECT range FROM DFN_MACRO_GEN(2);  -- 0, 1   (macro names are case-insensitive)
 ```
 
@@ -120,8 +144,17 @@ A body is not limited to a scalar expression — `dfn_macro_pair` returns a `STR
 
 ```sql {"type":"duckfn"}
 SELECT CAST(dfn_macro_pair(5) AS VARCHAR);   -- {'a': 5, 'b': 10}
+```
+
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_macro_pair(5));            -- STRUCT(a INTEGER, b INTEGER)
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_macro_pair(5).a;                  -- 5
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_macro_mklist(5) AS VARCHAR); -- [5, 10]
 ```
 

@@ -74,6 +74,9 @@ fn dfn_echo_celsius(t: Celsius) -> Celsius {
 
 ```sql {"type":"duckfn"}
 SELECT dfn_echo_celsius(21.5::DOUBLE);         -- 21.5
+```
+
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_echo_celsius(21.5::DOUBLE)); -- DOUBLE
 ```
 
@@ -90,6 +93,9 @@ pub struct TemperatureReading {
 
 ```sql {"type":"duckfn"}
 SELECT (dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).place;  -- oslo
+```
+
+```sql {"type":"duckfn"}
 SELECT typeof((dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).celsius);
 -- DOUBLE
 ```

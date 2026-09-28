@@ -67,8 +67,11 @@ fn dfn_table_full(n: i64) -> DuckFullIteratorResult<RangeRow> {
 }
 ```
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_full(2);   -- 0 0  then  NULL NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_full(5);   -- error: dfn_table_full: bad row 2
 ```
 
@@ -103,9 +106,15 @@ fn dfn_table_countdown(step: i64, start: i64, count: i64) -> impl Iterator<Item 
 }
 ```
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_countdown(2, start=10, count=3);        -- 10, 8, 6
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_countdown(step=2, start=10, count=3);   -- error: No function matches
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_countdown(2, start=10, count=3, foo=1); -- error: Invalid named parameter "foo"
 ```
 
@@ -137,7 +146,13 @@ fn dfn_table_opt(start: i64, step: Option<i64>, count: Option<i64>) -> impl Iter
 
 ```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_opt(start=1);                        -- 1, 2, 3
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_opt(start=1, step=10, count=2);      -- 1, 11
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);  -- 1, 2, 3
 ```
 
@@ -145,7 +160,13 @@ A plain `T` parameter is required. Omitting it, or passing `NULL`, fails at bind
 
 ```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_req();           -- error: Parameter start cannot be null
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_req(start=NULL); -- error: Parameter start cannot be null
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_req(start=5);    -- 5, 25
 ```
 
@@ -201,7 +222,13 @@ A table function may take no argument at all, and it may take complex ones: a `L
 
 ```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_zero_args();                   -- 0 0 / 1 1 / 2 4
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_from_list([3, 1, 2]);          -- 3 9 / 1 1 / 2 4
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
 ```
 

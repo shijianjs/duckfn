@@ -22,11 +22,23 @@ fn dfn_cast_str_to_int(s: String) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT CAST('42' AS INTEGER);       -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(' 7 ' AS INTEGER);      -- 7（已 trim）
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST('' AS INTEGER);         -- NULL（覆盖了内置报错行为）
+```
+
+```sql {"type":"duckfn"}
 SELECT TRY_CAST('abc' AS INTEGER);  -- NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST('abc' AS INTEGER);      -- 报错：dfn_cast_str_to_int: not an integer: "abc"
 ```
 
@@ -53,6 +65,9 @@ fn dfn_cast_bigint_to_double(v: Option<i64>) -> Option<f64> {
 
 ```sql {"type":"duckfn"}
 SELECT CAST(3::BIGINT AS DOUBLE);     -- 1.5
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 ```
 
@@ -60,9 +75,15 @@ SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 
 [类型映射](./types.md)里的任意类型都可以用在两侧，容器也一样：
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT CAST(CAST(['1', '2'] AS INTEGER[]) AS VARCHAR);  -- [1, 2]
+```
+
+```sql {"type":"duckfn"}
 SELECT TRY_CAST(['1', 'x'] AS INTEGER[]);               -- NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST(['1', 'x'] AS INTEGER[]);                   -- 报错：not an integer: "x"
 ```
 
@@ -81,6 +102,9 @@ fn dfn_cast_str_to_hugeint(s: String) -> i128 { /* … */ }
 
 ```sql {"type":"duckfn"}
 SELECT CAST('41' AS HUGEINT);              -- 41
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST('41' AS VARCHAR) + 1::HUGEINT; -- 42
 ```
 

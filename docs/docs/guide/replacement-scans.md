@@ -42,9 +42,15 @@ fn dfn_scan_read_points(path: String) -> DuckResult<impl Iterator<Item = ScanPoi
 }
 ```
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT * FROM '3.points';                        -- x 0 y 0 / 1 1 / 2 4
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_scan_read_points('2.points');  -- the same function, called directly
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM 'nope.txt';                        -- error: Table with name nope.txt does not exist
 ```
 

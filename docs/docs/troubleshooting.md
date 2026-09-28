@@ -52,7 +52,9 @@ do not ship them.
 ```sql {"type":"duckfn"}
 SELECT dfn_echo_list_integer_n([NULL, NULL, NULL, NULL]);
 -- [NULL, 0, 0, 0]                    expected [NULL, NULL, NULL, NULL]
+```
 
+```sql {"type":"duckfn"}
 SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 -- {a=NULL, b=0}                     expected {a=NULL, b=NULL}
 ```

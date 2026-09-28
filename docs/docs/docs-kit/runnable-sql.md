@@ -65,7 +65,8 @@ WHERE range > 5;
 
 When the block holds several statements, the **last one's** result is shown —
 handy for a `SET` / `CREATE` preamble before the query you actually want to
-see.
+see. Use it for a preamble, not for a stack of independent examples: everything
+but the last answer stays invisible, so each example gets a block of its own.
 
 ```sql {"type":"duckfn","show":"table"}
 CREATE TABLE t AS SELECT * FROM range(5) r(i);

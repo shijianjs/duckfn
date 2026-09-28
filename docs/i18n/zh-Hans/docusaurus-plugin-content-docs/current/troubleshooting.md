@@ -50,7 +50,9 @@ error[E0658]: `let` expressions in this position are unstable
 ```sql {"type":"duckfn"}
 SELECT dfn_echo_list_integer_n([NULL, NULL, NULL, NULL]);
 -- [NULL, 0, 0, 0]                    期望 [NULL, NULL, NULL, NULL]
+```
 
+```sql {"type":"duckfn"}
 SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 -- {a=NULL, b=0}                     期望 {a=NULL, b=NULL}
 ```

@@ -55,7 +55,8 @@ WHERE range > 5;
 ## 多条语句
 
 块里有多条语句时，显示的是**最后一条**的结果——适合先来一段 `SET` / `CREATE` 铺垫，
-再跟真正想看的查询。
+再跟真正想看的查询。但这是给前置语句用的，不要把多个独立示例堆在一个块里：除最后一条之外的结果
+都看不到，一个示例一个块。
 
 ```sql {"type":"duckfn","show":"table"}
 CREATE TABLE t AS SELECT * FROM range(5) r(i);

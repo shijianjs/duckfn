@@ -70,6 +70,9 @@ fn rusty_quack(name: String) -> impl Iterator<Item = RustyQuackResult> {
 
 ```sql {"type":"duckfn"}
 SELECT rusty_echo('Hello');        -- 🐤 Hello 🦀 Hello
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
 ```
 
@@ -79,12 +82,33 @@ demo 模块覆盖了函数可以取的形态，包括嵌套的输入与输出：
 
 ```sql {"type":"duckfn"}
 SELECT double_it5(21);                               -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT first_word_tuple('hello world');              -- hello
+```
+
+```sql {"type":"duckfn"}
 SELECT sum_list_w([1, 2, 3, 4]);                      -- 10
+```
+
+```sql {"type":"duckfn"}
 SELECT sum_list_nest([[1, 2], [3, null, 4], null]);   -- 10
+```
+
+```sql {"type":"duckfn"}
 SELECT struct_scalar_w({hello_count: 15});            -- 25
+```
+
+```sql {"type":"duckfn"}
 SELECT struct_nest_scalar_w({structf: {hello_count: 15}, list: [1, null, 2]});  -- 18
+```
+
+```sql {"type":"duckfn"}
 SELECT input_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});       -- 35
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(input_array_demo(a) AS VARCHAR) FROM (VALUES (ARRAY[1, 2]), (ARRAY[4, null])) t(a);
 -- [1, 2]
 -- [4, NULL]
@@ -97,10 +121,19 @@ SELECT CAST(input_array_demo(a) AS VARCHAR) FROM (VALUES (ARRAY[1, 2]), (ARRAY[4
 
 `error_scalar_demo` 对同一个入参可以返回值、`NULL` 或错误：
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT error_scalar_demo(3);   -- 6
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(10);  -- 报错：input is 10
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(20);  -- 报错：panic: input is 20
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(30);  -- 报错：explicit panic
 ```
 
@@ -110,7 +143,9 @@ SELECT error_scalar_demo(30);  -- 报错：explicit panic
 SELECT word_count_m(sentence)
 FROM (VALUES ('hello world'), ('  padded  '), (''), (NULL)) t(sentence);
 -- 3
+```
 
+```sql {"type":"duckfn"}
 SELECT range % 3 AS g, agg_list_w(range)
 FROM range(9)
 GROUP BY g;
@@ -126,7 +161,9 @@ GROUP BY g;
 
 ```sql {"type":"duckfn"}
 SELECT * FROM count_down_m_simple(start=12);   -- 11, 10, 9, … 0
+```
 
+```sql {"type":"duckfn"}
 SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 -- 10
 -- 25
@@ -135,12 +172,23 @@ SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 
 ## 类型转换与替换扫描
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT CAST('42' AS INTEGER);        -- 42
-SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
-SELECT CAST('abc' AS INTEGER);       -- 报错：not an integer: "abc"
+```
 
+```sql {"type":"duckfn"}
+SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
+SELECT CAST('abc' AS INTEGER);       -- 报错：not an integer: "abc"
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM '3.points';            -- x 0 y 0 / 1 1 / 2 4
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM 'hi.echo';             -- hi.echo  7
 ```
 
@@ -149,7 +197,9 @@ SELECT * FROM 'hi.echo';             -- hi.echo  7
 ```sql {"type":"duckfn"}
 SELECT clamp(range, 4, 7) FROM range(9);
 -- 4, 4, 4, 4, 4, 5, 6, 7, 7
+```
 
+```sql {"type":"duckfn"}
 SELECT add_two_v1(1), add_two_v2(2), add_two_v3(3), add_two_v4(4);
 -- 3, 4, 5, 6
 ```
@@ -163,8 +213,17 @@ SELECT add_two_v1(1), add_two_v2(2), add_two_v3(3), add_two_v4(4);
 
 ```sql {"type":"duckfn"}
 SELECT dfn_echo_integer(42);             -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_date(DATE '2024-01-02'); -- 2024-01-02
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR);  -- [1, NULL, 3]
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_bool(true, count => 3);
 -- true
 -- NULL

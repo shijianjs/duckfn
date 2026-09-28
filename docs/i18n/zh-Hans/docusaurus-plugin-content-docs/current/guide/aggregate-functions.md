@@ -37,6 +37,9 @@ impl DuckAggregateState for SumState {
 
 ```sql {"type":"duckfn"}
 SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x);   -- 6
+```
+
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_agg_sum(x)) FROM (VALUES (1)) t(x);     -- BIGINT
 ```
 
@@ -115,7 +118,13 @@ impl DuckAggregateState for AvgState {
 
 ```sql {"type":"duckfn"}
 SELECT dfn_agg_avg(x) FROM (VALUES (1), (2), (3)) t(x);   -- 2.0
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_agg_avg(x) FROM (SELECT NULL::BIGINT AS x) t;  -- NULL
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x) WHERE x > 10;  -- 0
 ```
 
@@ -146,7 +155,13 @@ impl DuckAggregateState for ListState {
 
 ```sql {"type":"duckfn"}
 SELECT dfn_agg_list(x) FROM (VALUES (1), (2), (3)) t(x);          -- [1, 2, 3]
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_agg_list(x) FROM (VALUES (1), (NULL), (3)) t(x);       -- [1, NULL, 3]
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_agg_concat(x) FROM (VALUES ('a'), ('b'), ('c')) t(x);  -- a,b,c
 ```
 

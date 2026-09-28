@@ -73,6 +73,9 @@ fn rusty_quack(name: String) -> impl Iterator<Item = RustyQuackResult> {
 
 ```sql {"type":"duckfn"}
 SELECT rusty_echo('Hello');     -- 🐤 Hello 🦀 Hello
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
 ```
 
@@ -82,12 +85,33 @@ The demo module covers the shapes a function can take, including nested input an
 
 ```sql {"type":"duckfn"}
 SELECT double_it5(21);                            -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT first_word_tuple('hello world');           -- hello
+```
+
+```sql {"type":"duckfn"}
 SELECT sum_list_w([1, 2, 3, 4]);                  -- 10
+```
+
+```sql {"type":"duckfn"}
 SELECT sum_list_nest([[1, 2], [3, null, 4], null]);  -- 10
+```
+
+```sql {"type":"duckfn"}
 SELECT struct_scalar_w({hello_count: 15});        -- 25
+```
+
+```sql {"type":"duckfn"}
 SELECT struct_nest_scalar_w({structf: {hello_count: 15}, list: [1, null, 2]});  -- 18
+```
+
+```sql {"type":"duckfn"}
 SELECT input_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});       -- 35
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(input_array_demo(a) AS VARCHAR) FROM (VALUES (ARRAY[1, 2]), (ARRAY[4, null])) t(a);
 -- [1, 2]
 -- [4, NULL]
@@ -101,10 +125,19 @@ Returning structured data works the same way: `make_list_scalar_w(range)` return
 
 `error_scalar_demo` takes one input and answers with a value, a `NULL`, or an error:
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT error_scalar_demo(3);   -- 6
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(10);  -- error: input is 10
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(20);  -- error: panic: input is 20
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(30);  -- error: explicit panic
 ```
 
@@ -114,7 +147,9 @@ SELECT error_scalar_demo(30);  -- error: explicit panic
 SELECT word_count_m(sentence)
 FROM (VALUES ('hello world'), ('  padded  '), (''), (NULL)) t(sentence);
 -- 3
+```
 
+```sql {"type":"duckfn"}
 SELECT range % 3 AS g, agg_list_w(range)
 FROM range(9)
 GROUP BY g;
@@ -131,7 +166,9 @@ sees the value `12`.
 
 ```sql {"type":"duckfn"}
 SELECT * FROM count_down_m_simple(start=12);   -- 11, 10, 9, … 0
+```
 
+```sql {"type":"duckfn"}
 SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 -- 10
 -- 25
@@ -140,12 +177,23 @@ SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 
 ## Casts and replacement scans
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT CAST('42' AS INTEGER);        -- 42
-SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
-SELECT CAST('abc' AS INTEGER);       -- error: not an integer: "abc"
+```
 
+```sql {"type":"duckfn"}
+SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
+SELECT CAST('abc' AS INTEGER);       -- error: not an integer: "abc"
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM '3.points';            -- x 0 y 0 / 1 1 / 2 4
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM 'hi.echo';             -- hi.echo  7
 ```
 
@@ -154,7 +202,9 @@ SELECT * FROM 'hi.echo';             -- hi.echo  7
 ```sql {"type":"duckfn"}
 SELECT clamp(range, 4, 7) FROM range(9);
 -- 4, 4, 4, 4, 4, 5, 6, 7, 7
+```
 
+```sql {"type":"duckfn"}
 SELECT add_two_v1(1), add_two_v2(2), add_two_v3(3), add_two_v4(4);
 -- 3, 4, 5, 6
 ```
@@ -169,8 +219,17 @@ Every supported type has an identity function in both scalar and table form:
 
 ```sql {"type":"duckfn"}
 SELECT dfn_echo_integer(42);          -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_date(DATE '2024-01-02');  -- 2024-01-02
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR);  -- [1, NULL, 3]
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_bool(true, count => 3);
 -- true
 -- NULL

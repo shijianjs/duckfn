@@ -23,11 +23,23 @@ fn dfn_cast_str_to_int(s: String) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT CAST('42' AS INTEGER);       -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(' 7 ' AS INTEGER);      -- 7     (trimmed)
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST('' AS INTEGER);         -- NULL  (the built-in error is overridden)
+```
+
+```sql {"type":"duckfn"}
 SELECT TRY_CAST('abc' AS INTEGER);  -- NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST('abc' AS INTEGER);      -- error: dfn_cast_str_to_int: not an integer: "abc"
 ```
 
@@ -55,6 +67,9 @@ fn dfn_cast_bigint_to_double(v: Option<i64>) -> Option<f64> {
 
 ```sql {"type":"duckfn"}
 SELECT CAST(3::BIGINT AS DOUBLE);     -- 1.5
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 ```
 
@@ -62,9 +77,15 @@ SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 
 Anything in the [type mapping](./types.md) can be used on either side, containers included:
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT CAST(CAST(['1', '2'] AS INTEGER[]) AS VARCHAR);  -- [1, 2]
+```
+
+```sql {"type":"duckfn"}
 SELECT TRY_CAST(['1', 'x'] AS INTEGER[]);               -- NULL
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST(['1', 'x'] AS INTEGER[]);                   -- error: not an integer: "x"
 ```
 
@@ -83,6 +104,9 @@ fn dfn_cast_str_to_hugeint(s: String) -> i128 { /* … */ }
 
 ```sql {"type":"duckfn"}
 SELECT CAST('41' AS HUGEINT);              -- 41
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST('41' AS VARCHAR) + 1::HUGEINT; -- 42
 ```
 

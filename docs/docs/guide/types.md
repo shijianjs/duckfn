@@ -33,9 +33,21 @@ type (what it wraps may already be an `Option`) and would otherwise need a branc
 
 ```sql {"type":"duckfn"}
 SELECT dfn_echo_integer(42);                             -- 42
+```
+
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_echo_integer(42));                     -- INTEGER
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_uinteger(4294967295::UINTEGER);          -- 4294967295
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_hugeint(9223372036854775808::HUGEINT);   -- 9223372036854775808
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_varchar('你好 🦆');                       -- 你好 🦆
 ```
 
@@ -198,7 +210,13 @@ fn dfn_echo_list_integer_n(i: Vec<Option<i32>>) -> Vec<Option<i32>> {
 
 ```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_list_integer([1, 2, 3]) AS VARCHAR);     -- [1, 2, 3]
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_list_integer([1, NULL, 3]);                   -- NULL
+```
+
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR);-- [1, NULL, 3]
 ```
 
@@ -221,6 +239,9 @@ function:
 
 ```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_map_varchar_integer(MAP {'a': 1, 'b': 2}) AS VARCHAR);  -- {a=1, b=2}
+```
+
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2});                      -- a 1 / b 2
 ```
 
@@ -240,9 +261,15 @@ fn dfn_echo_array_integer(i: DuckArray<i32, 3>) -> DuckArray<i32, 3> {
 }
 ```
 
-```sql {"type":"duckfn","expect":"error"}
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_echo_array_integer([1, 2, 3]));  -- INTEGER[3]
+```
+
+```sql {"type":"duckfn"}
 SELECT dfn_echo_array_integer([1, 2, 3]);          -- [1, 2, 3]
+```
+
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_echo_array_integer([1, 2]);             -- error: Cannot cast list with length 2 to array with length 3
 ```
 
@@ -274,6 +301,9 @@ pub struct DuckStructNested {
 
 ```sql {"type":"duckfn"}
 SELECT (dfn_echo_struct_simple({'id': 1, 'name': 'a'})).id;                                 -- 1
+```
+
+```sql {"type":"duckfn"}
 SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}, 'maybe': NULL})).inner.value;  -- 2
 ```
 
