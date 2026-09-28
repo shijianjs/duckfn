@@ -101,7 +101,7 @@ Returning structured data works the same way: `make_list_scalar_w(range)` return
 
 `error_scalar_demo` takes one input and answers with a value, a `NULL`, or an error:
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(3);   -- 6
 SELECT error_scalar_demo(10);  -- error: input is 10
 SELECT error_scalar_demo(20);  -- error: panic: input is 20
@@ -140,7 +140,7 @@ SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 
 ## Casts and replacement scans
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST('42' AS INTEGER);        -- 42
 SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
 SELECT CAST('abc' AS INTEGER);       -- error: not an integer: "abc"

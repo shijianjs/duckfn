@@ -29,7 +29,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 | `Ok(None)` | `NULL` |
 | `Err(e)` | 查询失败，错误信息为 `e` 的内容。 |
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_scalar_ret_checked(4);    -- 25
 SELECT dfn_scalar_ret_checked(-1);   -- NULL
 SELECT dfn_scalar_ret_checked(0);    -- 报错：dfn_scalar_ret_checked: division by zero
@@ -61,10 +61,18 @@ fn dfn_scalar_ret_panic(i: i32) -> i32 {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_scalar_ret_panic(1);    -- 1
 SELECT dfn_scalar_ret_panic(13);   -- 报错：unlucky input: 13
 ```
+
+:::note[在 DuckDB-Wasm 下消息不同]
+
+上面这个块跑在 DuckDB-Wasm 里，同样的输入报的是 `Maximum call stack size exceeded`，而不是
+`unlucky input: 13`：被捕获的 panic 在 wasm 构建里丢掉了消息。原生构建（本地用
+`duckdb -unsigned`）与 sqllogictest 用例报的是注释里引用的那条。
+
+:::
 
 各类注册方式都一样：
 

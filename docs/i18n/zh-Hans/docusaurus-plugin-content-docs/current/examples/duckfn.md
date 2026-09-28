@@ -97,7 +97,7 @@ SELECT CAST(input_array_demo(a) AS VARCHAR) FROM (VALUES (ARRAY[1, 2]), (ARRAY[4
 
 `error_scalar_demo` 对同一个入参可以返回值、`NULL` 或错误：
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT error_scalar_demo(3);   -- 6
 SELECT error_scalar_demo(10);  -- 报错：input is 10
 SELECT error_scalar_demo(20);  -- 报错：panic: input is 20
@@ -135,7 +135,7 @@ SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 
 ## 类型转换与替换扫描
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST('42' AS INTEGER);        -- 42
 SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
 SELECT CAST('abc' AS INTEGER);       -- 报错：not an integer: "abc"

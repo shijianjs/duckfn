@@ -66,8 +66,8 @@ SELECT i * 10 AS ten FROM t ORDER BY i DESC;
 
 执行失败的语句会把错误渲染在结果区；编辑器里写的内容保持不动，什么都不会重置。
 
-```sql {"type":"duckfn","show":"table"}
--- 故意报错 —— SQL 测试套件读这条注释，据此预期失败
+```sql {"type":"duckfn","show":"table","expect":"error"}
+-- 故意报错：这个块声明了 "expect": "error"
 SELECT this_function_does_not_exist(1);
 ```
 
@@ -129,6 +129,7 @@ FROM range(40) t(i);
 | --- | --- |
 | `type` | `"duckfn"`——标记该块可运行。必填。 |
 | `show` | `table`（默认）、`text`、`html`、`iframe`、`svg`。 |
+| `expect` | `ok`（默认）或 `error`——文档站的 [SQL 测试](./sql-test.md) 对本块的要求；`error` 表示这是一个演示失败的块。 |
 | `field` | 放着标记的列，用于 `html` / `iframe` / `svg`。 |
 | `tab_name` | 标注每个预览页签的列。 |
 | `option.width` · `option.height` | 预览框的 CSS 长度。 |

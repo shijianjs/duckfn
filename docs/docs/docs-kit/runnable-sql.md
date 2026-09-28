@@ -77,8 +77,8 @@ SELECT i * 10 AS ten FROM t ORDER BY i DESC;
 Run a failing statement and the error appears in the result area; whatever you
 typed in the editor is kept, nothing resets.
 
-```sql {"type":"duckfn","show":"table"}
--- error on purpose — the SQL test suite reads this note and expects the failure
+```sql {"type":"duckfn","show":"table","expect":"error"}
+-- error on purpose: this block declares "expect": "error"
 SELECT this_function_does_not_exist(1);
 ```
 
@@ -150,6 +150,7 @@ FROM range(40) t(i);
 | --- | --- |
 | `type` | `"duckfn"` — marks the block as runnable. Required. |
 | `show` | `table` (default), `text`, `html`, `iframe`, `svg`. |
+| `expect` | `ok` (default) or `error` — what the docs' [SQL test](./sql-test.md) requires of this block; `error` marks one that demonstrates a failure. |
 | `field` | Column holding the markup, for `html` / `iframe` / `svg`. |
 | `tab_name` | Column labelling each preview tab. |
 | `option.width` · `option.height` | CSS lengths for the preview box. |

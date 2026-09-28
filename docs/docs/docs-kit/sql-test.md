@@ -34,18 +34,17 @@ CI and any local `npm test` in `docs/` runs.
 
 ## Blocks that fail on purpose
 
-Half the guide ends on a statement that demonstrates an error, and the metadata
-of a runnable block cannot say "this one is meant to fail". The convention is a
-comment on that statement:
+Half the guide ends on a statement that demonstrates an error, and such a block
+has to declare it — the suite checks both directions, so a block that stops
+failing is reported just like one that starts failing:
 
-```sql
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST('abc' AS INTEGER);  -- error: not an integer: "abc"
 ```
 
-A block whose SQL carries `-- error:` or `-- 报错：` anywhere is *expected* to
-fail; it is listed separately and does not fail the command. Only unexpected
-failures do — which is why the docs pages that demonstrate a failure should say
-so in a comment, not only in the prose around the block.
+`"expect"` defaults to `"ok"`; `"error"` means *this block must fail*. It is the
+only thing the suite reads: the prose around a block, and a `-- error: …` comment
+inside it, are there for readers and are not machine-checked.
 
 ## Options
 
@@ -57,6 +56,7 @@ so in a comment, not only in the prose around the block.
 | `--platform <eh\|mvp>` | DuckDB-Wasm bundle, which has to match the extension build (default: `eh`, the one `selectBundle()` picks in a current browser). |
 | `--engine <path>` | Engine wasm override, for pinning a specific DuckDB-Wasm build. |
 | `--timeout <ms>` | Per-block timeout (default: 30000) — a hang is reported as a failure instead of blocking CI. |
+| `--working-dir <dir>` | Directory the blocks run in. Defaults to a fresh temporary directory, removed afterwards: a block may `COPY … TO 'a.csv'`, and on Node that would land in the working directory. |
 | `--report <file>` | Write the full per-block result list as JSON. |
 | `--quiet` | Only report unexpected failures. |
 

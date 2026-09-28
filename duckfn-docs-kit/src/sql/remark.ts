@@ -39,6 +39,17 @@ export interface RunnableSqlConfig {
    */
   show?: 'table' | 'html' | 'iframe' | 'svg' | 'text';
   /**
+   * What this block is expected to do when the docs' own SQL test suite runs it
+   * (`duckfn-docs-kit/sql/verify`). Defaults to `'ok'`; `'error'` marks a block
+   * that demonstrates a failure — the suite then *requires* it to fail, and
+   * reports it when it unexpectedly succeeds instead.
+   *
+   * This is the only source of truth for the expectation: the prose around a
+   * block, and a `-- error: …` comment inside it, are there for readers, and
+   * neither is machine-checked.
+   */
+  expect?: 'ok' | 'error';
+  /**
    * The column holding the markup, for the preview renderers. A single-column
    * result is unambiguous and is used as-is.
    */

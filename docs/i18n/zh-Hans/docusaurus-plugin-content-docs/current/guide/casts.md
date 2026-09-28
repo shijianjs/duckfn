@@ -22,7 +22,7 @@ fn dfn_cast_str_to_int(s: String) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST('42' AS INTEGER);       -- 42
 SELECT CAST(' 7 ' AS INTEGER);      -- 7（已 trim）
 SELECT CAST('' AS INTEGER);         -- NULL（覆盖了内置报错行为）
@@ -60,7 +60,7 @@ SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 
 [类型映射](./types.md)里的任意类型都可以用在两侧，容器也一样：
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT CAST(CAST(['1', '2'] AS INTEGER[]) AS VARCHAR);  -- [1, 2]
 SELECT TRY_CAST(['1', 'x'] AS INTEGER[]);               -- NULL
 SELECT CAST(['1', 'x'] AS INTEGER[]);                   -- 报错：not an integer: "x"

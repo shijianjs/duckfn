@@ -66,7 +66,7 @@ fn dfn_table_full(n: i64) -> DuckFullIteratorResult<RangeRow> {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_full(2);   -- 先 0 0，再 NULL NULL
 SELECT * FROM dfn_table_full(5);   -- 报错：dfn_table_full: bad row 2
 ```
@@ -83,7 +83,7 @@ fn dfn_table_checked(n: i64) -> DuckResult<impl Iterator<Item = RangeRow>> {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_checked(-1);  -- 报错：dfn_table_checked: n must be >= 0
 ```
 
@@ -101,11 +101,20 @@ fn dfn_table_countdown(step: i64, start: i64, count: i64) -> impl Iterator<Item 
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_countdown(2, start=10, count=3);        -- 10, 8, 6
 SELECT * FROM dfn_table_countdown(step=2, start=10, count=3);   -- 报错：No function matches
 SELECT * FROM dfn_table_countdown(2, start=10, count=3, foo=1); -- 报错：Invalid named parameter "foo"
 ```
+
+:::note[在 DuckDB-Wasm 下错误文本不同]
+
+文档站把上面这个块跑在 DuckDB-Wasm 里，其中「不认识的名字」那条报的是
+`Binder Error: No function matches the given name and argument types 'dfn_table_countdown()'` ——
+binder 直接放弃了整个调用，而不是点名那个参数。原生构建（本地用 `duckdb -unsigned`）与
+sqllogictest 用例报的是注释里的 `Invalid named parameter "foo"`。
+
+:::
 
 标记之前的参数不能用名字传递；不认识的名字会被拒绝而不是忽略。
 
@@ -130,7 +139,7 @@ SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);   -- 1, 2, 3
 
 写成普通 `T` 的参数则是必填的。不传或传 `NULL` 会在 bind 阶段失败：
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_req();           -- 报错：Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=NULL); -- 报错：Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=5);    -- 5, 25

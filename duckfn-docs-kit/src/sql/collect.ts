@@ -127,17 +127,10 @@ function blocksOf(text: string): RawBlock[] {
 }
 
 /**
- * Whether a block documents itself as failing: the metadata of a runnable
- * block cannot express "this one errors on purpose", so the convention is a
- * comment on the failing statement (`-- error: …`). Blocks that match are
- * *expected* to fail, and are reported separately from real breakage.
- *
- * Matching is deliberately loose — any comment line mentioning "error" or
- * "报错" counts — because the alternative is a parser for prose.
+ * Whether a block is expected to fail — the block's own `"expect": "error"`
+ * metadata, never its prose or its comments: an expectation that the SQL test
+ * suite acts on has to be data, not a string match on a comment.
  */
-export function expectsError(sql: string): boolean {
-  // The note sits at the end of the statement it describes — `SELECT …;  --
-  // error: …` — so this matches a line comment anywhere on a line, not just a
-  // comment-only line.
-  return /--[^\n]*(error|报错)/i.test(sql);
+export function expectsError(config: RunnableSqlConfig): boolean {
+  return config.expect === 'error';
 }

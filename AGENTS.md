@@ -114,9 +114,10 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 
 它收集 `docs/docs/**` 与每个 `i18n/<locale>/…/current/**` 里的可运行块，用站点预加载的扩展
 （`docs/static/duckdb-extensions/duckfn.duckdb_extension.wasm`）执行，**每页一个新实例、页内共用
-连接**（页内可以依赖前一个块建的宏/表，页与页隔离）。「故意报错」的块靠 SQL 注释判定：块里出现
-`-- error:` / `-- 报错：` 即为预期失败，只有非预期失败才让命令非零退出 —— 所以在页面里演示报错的
-示例，要在那条语句上写注释，而不是只写在正文说明里。
+连接**（页内可以依赖前一个块建的宏/表，页与页隔离）。「故意报错」的块靠自己的 meta 声明
+（`{"type":"duckfn","expect":"error"}`，默认 `ok`）：期望是数据，不能靠对 SQL 注释做字符串匹配，
+而且校验是双向的 —— 声明会失败却跑成功同样会被报出来。块周围的正文与 `-- error:` 注释只写给读者看，
+不参与判定。
 
 跑不通或结果不对时，先看这几条（完整版见 `duckfn-docs-kit/AGENTS.md`，面向读者的说明见
 `docs/docs/docs-kit/sql-test.md`）：
@@ -130,6 +131,10 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
   80 端口**，让 URL 不含端口 —— 冒号在 Windows 路径里非法。POSIX 用任意空闲端口即可。
 - 平台要配对：默认 `--platform eh` 对应站点预加载的 `duckfn-wasm_eh.duckdb_extension.wasm`。
 - `docs/.cache/`（已 git 忽略、不删）存着 DuckDB-Wasm 与扩展 wasm 的本地副本，便于离线排查。
+
+它**故意不挂 CI**：这条测试跑在 `duckfn-docs-kit`（一个 npm 包）上，而 kit 的 CI 构建要 20 分钟
+左右，挂上去会让「改一行文档」也等一轮插件流水线；插件发版节奏远慢于文档，绑定的收益不抵耦合成本。
+需要在本地跑时 `npm test -w docs`，约 30 秒。
 
 ## 发版流程
 

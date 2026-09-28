@@ -30,7 +30,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 | `Ok(None)` | `NULL` |
 | `Err(e)` | The query fails with the message of `e`. |
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_scalar_ret_checked(4);    -- 25
 SELECT dfn_scalar_ret_checked(-1);   -- NULL
 SELECT dfn_scalar_ret_checked(0);    -- error: dfn_scalar_ret_checked: division by zero
@@ -64,10 +64,19 @@ fn dfn_scalar_ret_panic(i: i32) -> i32 {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_scalar_ret_panic(1);    -- 1
 SELECT dfn_scalar_ret_panic(13);   -- error: unlucky input: 13
 ```
+
+:::note[The message differs under DuckDB-Wasm]
+
+The block above runs in DuckDB-Wasm, where the same input reports
+`Maximum call stack size exceeded` instead of `unlucky input: 13`: a caught panic surfaces without
+its message in the wasm build. The native build — and the sqllogictest suite — report the message
+quoted above, which is what `duckdb -unsigned` shows locally.
+
+:::
 
 The same holds for every registration kind:
 

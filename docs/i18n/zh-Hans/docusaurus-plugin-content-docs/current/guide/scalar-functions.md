@@ -46,7 +46,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_scalar_ret_plain(21);              -- 42
 SELECT typeof(dfn_scalar_ret_plain(21));      -- INTEGER
 SELECT dfn_scalar_ret_plain(NULL::INTEGER);   -- NULL
@@ -72,7 +72,7 @@ fn dfn_scalar_arity_zero() -> i32 {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT dfn_scalar_arity_zero();            -- 42
 SELECT dfn_scalar_arity_zero(1);           -- 报错：No function matches
 ```

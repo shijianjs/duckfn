@@ -9,10 +9,11 @@
  * not the blocking one).
  *
  * A block may fail *on purpose* — half the guide ends on a statement that
- * demonstrates an error. The metadata cannot say so, so the convention is a
- * comment on that statement (`-- error: …`, `-- 报错：…`); `expectsError()`
- * recognises it and those blocks are reported separately. Only unexpected
- * failures make the command fail.
+ * demonstrates an error. Such a block says so in its own metadata
+ * (`{"type":"duckfn","expect":"error"}`) and is then **required** to fail: one
+ * that starts succeeding is reported too, because an expectation the suite acts
+ * on has to be data rather than a string match on a comment. Only blocks that
+ * did not behave as declared make the command exit non-zero.
  */
 import {mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -47,20 +48,29 @@ export interface VerifyOptions {
   reportFile?: string;
 }
 
+/** What happened to a block, judged against what it declared. */
+export type BlockOutcome =
+  /** Ran, and was expected to run. */
+  | 'ok'
+  /** Failed, and declared `"expect": "error"`. */
+  | 'error-as-expected'
+  /** Failed, but was expected to run. */
+  | 'unexpected-error'
+  /** Ran, but declared `"expect": "error"`. */
+  | 'unexpected-success';
+
 export interface BlockResult {
   file: string;
   line: number;
-  ok: boolean;
-  /** The block failed, but documents itself as failing. */
-  expected: boolean;
+  outcome: BlockOutcome;
   detail: string;
 }
 
 export interface VerifyReport {
   blocks: BlockResult[];
-  /** Every block that failed, expected or not. */
-  failures: BlockResult[];
-  /** Failures that are not documented as such — the ones that should fail CI. */
+  /** Blocks that behaved as declared: they ran, or they failed as declared. */
+  asDeclared: BlockResult[];
+  /** Blocks that did not behave as declared — the ones that should fail CI. */
   unexpected: BlockResult[];
 }
 
@@ -105,11 +115,12 @@ export async function verifySqlDocs(options: VerifyOptions = {}): Promise<Verify
     }
   }
 
-  const failures = results.filter((result) => !result.ok);
   const report: VerifyReport = {
     blocks: results,
-    failures,
-    unexpected: failures.filter((result) => !result.expected),
+    asDeclared: results.filter((result) => result.outcome === 'ok' || result.outcome === 'error-as-expected'),
+    unexpected: results.filter(
+      (result) => result.outcome === 'unexpected-error' || result.outcome === 'unexpected-success',
+    ),
   };
   if (options.reportFile) {
     writeFileSync(options.reportFile, `${JSON.stringify(report, null, 2)}\n`);
@@ -145,27 +156,30 @@ async function runPages(
   return results;
 }
 
+/** Runs one block and judges the result against the block's own declaration. */
 async function runBlock(
   runner: WasmSqlRunner,
   block: RunnableSqlBlock,
   timeoutMs: number,
 ): Promise<BlockResult> {
+  const declaredError = expectsError(block.config);
   try {
     const result = await withTimeout(runner.run(block.sql), timeoutMs);
     return {
       file: block.file,
       line: block.line,
-      ok: true,
-      expected: false,
-      detail: `ok (${result.rows}×${result.columns})`,
+      outcome: declaredError ? 'unexpected-success' : 'ok',
+      detail: declaredError
+        ? `declared "expect": "error" but succeeded (${result.rows}×${result.columns})`
+        : `ok (${result.rows}×${result.columns})`,
     };
   } catch (error) {
+    const message = String((error as Error)?.message ?? error).split('\n')[0] ?? '';
     return {
       file: block.file,
       line: block.line,
-      ok: false,
-      expected: expectsError(block.sql),
-      detail: String((error as Error)?.message ?? error).split('\n')[0] ?? '',
+      outcome: declaredError ? 'error-as-expected' : 'unexpected-error',
+      detail: message,
     };
   }
 }
@@ -221,11 +235,7 @@ function defaultExtension(siteDir: string): string {
 }
 
 function isDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
+  return statSync(path, {throwIfNoEntry: false})?.isDirectory() ?? false;
 }
 
 export interface CliOptions extends VerifyOptions {
@@ -235,8 +245,8 @@ export interface CliOptions extends VerifyOptions {
 /**
  * `duckfn-sql-verify` — the command line around {@link verifySqlDocs}.
  *
- * Exit code 1 when a block that was not documented as failing fails, so a docs
- * site can wire it straight into `npm test`.
+ * Exit code 1 when a block did not behave as it declared, so a docs site can
+ * wire it straight into `npm test`.
  */
 export async function cliMain(argv: readonly string[]): Promise<void> {
   const options = parseArgs(argv);
@@ -247,32 +257,30 @@ export async function cliMain(argv: readonly string[]): Promise<void> {
   const started = Date.now();
   const report = await verifySqlDocs(options);
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
+  const declaredFailures = report.blocks.filter(
+    (result) => result.outcome === 'error-as-expected',
+  ).length;
   if (!options.quiet) {
     process.stdout.write(`\n${report.blocks.length} block(s) in ${seconds}s\n`);
     process.stdout.write(
-      `  ${report.failures.length} failing: ` +
-        `${report.failures.length - report.unexpected.length} documented, ` +
+      `  ${report.asDeclared.length} as declared (${declaredFailures} erroring on purpose), ` +
         `${report.unexpected.length} unexpected\n`,
     );
   }
   if (report.unexpected.length > 0) {
-    process.stdout.write('unexpected failures:\n');
-    for (const failure of report.unexpected) {
-      process.stdout.write(`- ${failure.file}:${failure.line} :: ${failure.detail}\n`);
+    process.stdout.write('unexpected behaviour:\n');
+    for (const block of report.unexpected) {
+      process.stdout.write(`- ${block.file}:${block.line} [${block.outcome}] :: ${block.detail}\n`);
     }
     process.exitCode = 1;
-  }
-  if (report.failures.length > report.unexpected.length && !options.quiet) {
-    process.stdout.write('documented failures:\n');
-    for (const failure of report.failures.filter((result) => result.expected)) {
-      process.stdout.write(`- ${failure.file}:${failure.line} :: ${failure.detail}\n`);
-    }
   }
 }
 
 const USAGE = `Usage: duckfn-sql-verify [options]
 
-Runs every runnable SQL block of a duckfn docs site in DuckDB-Wasm.
+Runs every runnable SQL block of a duckfn docs site in DuckDB-Wasm, and checks
+that each one behaves as its own metadata declares ("expect": "error" for a
+block that demonstrates a failure).
 
   --site <dir>          Docs site root (default: the working directory)
   --content <dir>       Content directory, relative to the site root (repeatable;
@@ -284,8 +292,9 @@ Runs every runnable SQL block of a duckfn docs site in DuckDB-Wasm.
                         (default: eh)
   --engine <path>       Engine wasm override
   --timeout <ms>        Per-block timeout (default: 30000)
+  --working-dir <dir>   Directory the blocks run in (default: a temporary one)
   --report <file>       Write the full result list as JSON
-  --quiet               Only report unexpected failures
+  --quiet               Only report unexpected behaviour
   --help                Show this help
 `;
 
@@ -323,6 +332,9 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
         break;
       case '--timeout':
         options.timeoutMs = Number(next());
+        break;
+      case '--working-dir':
+        options.workingDir = next();
         break;
       case '--report':
         options.reportFile = next();

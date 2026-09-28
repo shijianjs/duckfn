@@ -67,7 +67,7 @@ fn dfn_table_full(n: i64) -> DuckFullIteratorResult<RangeRow> {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_full(2);   -- 0 0  then  NULL NULL
 SELECT * FROM dfn_table_full(5);   -- error: dfn_table_full: bad row 2
 ```
@@ -84,7 +84,7 @@ fn dfn_table_checked(n: i64) -> DuckResult<impl Iterator<Item = RangeRow>> {
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_checked(-1);  -- error: dfn_table_checked: n must be >= 0
 ```
 
@@ -103,11 +103,21 @@ fn dfn_table_countdown(step: i64, start: i64, count: i64) -> impl Iterator<Item 
 }
 ```
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_countdown(2, start=10, count=3);        -- 10, 8, 6
 SELECT * FROM dfn_table_countdown(step=2, start=10, count=3);   -- error: No function matches
 SELECT * FROM dfn_table_countdown(2, start=10, count=3, foo=1); -- error: Invalid named parameter "foo"
 ```
+
+:::note[The error text differs under DuckDB-Wasm]
+
+The docs site runs the block above in DuckDB-Wasm, where the unknown-name call reports
+`Binder Error: No function matches the given name and argument types 'dfn_table_countdown()'` — the
+binder gives up on the whole call instead of naming the parameter. The native build
+(`duckdb -unsigned`), and the sqllogictest suite, report `Invalid named parameter "foo"`, as the
+comment says.
+
+:::
 
 Parameters *before* the marker cannot be passed by name, and an unknown name is rejected rather than
 ignored.
@@ -133,7 +143,7 @@ SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);  -- 1, 2, 3
 
 A plain `T` parameter is required. Omitting it, or passing `NULL`, fails at bind time:
 
-```sql {"type":"duckfn"}
+```sql {"type":"duckfn","expect":"error"}
 SELECT * FROM dfn_table_req();           -- error: Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=NULL); -- error: Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=5);    -- 5, 25
