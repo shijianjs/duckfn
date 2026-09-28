@@ -176,10 +176,10 @@ function errorText(labels: Record<string, string>, detail: string): string {
 
 /**
  * A VTable result grid with the interaction layer a docs example wants:
- * sortable columns, clipboard copy, resizable rows/columns, cross-highlight on
- * hover, per-column text wrapping and column freezing — all driven through
- * VTable's own options and events so the canvas stays the single source of
- * truth (nothing is re-laid-out in DOM).
+ * sortable columns, clipboard copy, resizable rows/columns, draggable headers,
+ * cross-highlight on hover, per-column text wrapping and column freezing — all
+ * driven through VTable's own options and events so the canvas stays the single
+ * source of truth (nothing is re-laid-out in DOM).
  *
  * All styling comes from VTable's own themes (`themes.DEFAULT` / `themes.DARK`,
  * picked below by the document's colour scheme). The table deliberately does
@@ -247,13 +247,31 @@ class ResultTable {
     this.#table.on('dropdown_menu_click', (args) => this.#onMenu(args));
   }
 
-  #columns(): TableColumns {
-    return this.#result.columns.map((field) => ({
+  #columns(order: readonly string[]): TableColumns {
+    return order.map((field) => ({
       field,
       title: field,
       sort: compareValues,
       style: {autoWrapText: this.#wrapped.has(field)},
     }));
+  }
+
+  /**
+   * The fields in their current display order. A header drag reorders the
+   * layout (and `options.columns` with it), so the order is read back from the
+   * table rather than assumed to still match the query result.
+   */
+  #displayOrder(): string[] {
+    const order: string[] = [];
+    for (let col = 0; col < this.#table.colCount; col += 1) {
+      const field: unknown = this.#table.getHeaderField(col, 0);
+      if (typeof field !== 'string' && typeof field !== 'number') {
+        // Unexpected shape (or a layout mid-rebuild): keep the query order.
+        return [...this.#result.columns];
+      }
+      order.push(String(field));
+    }
+    return order.length === this.#result.columns.length ? order : [...this.#result.columns];
   }
 
   /**
@@ -307,8 +325,18 @@ class ResultTable {
     return {
       container: this.#record,
       records: this.#result.rows,
-      columns: this.#columns(),
+      columns: this.#columns(this.#result.columns),
       theme: this.#theme(),
+      // The container width is handed to the columns: each keeps its measured
+      // content as its share (the header measurement already includes the sort
+      // icon), so the initial view fills the box instead of starting from a
+      // default too narrow for its titles. Content-heavy columns get more room
+      // than a flat "equal share" would give them; a very long unaliased header
+      // is capped by `limitMaxAutoWidth` (450) before the share is computed.
+      // It re-fills on container resizes (the fullscreen toggle included), and a
+      // column the user resized by hand is excluded while the rest re-fill
+      // around it.
+      widthMode: 'adaptive',
       // `auto` row height is what actually lets a wrapped column grow its rows;
       // a fixed height would clip the extra lines even with `autoWrapText`.
       defaultRowHeight: this.#wrapped.size > 0 ? 'auto' : ROW_HEIGHT,
@@ -317,7 +345,11 @@ class ResultTable {
       // guards a future change of default.
       columnResizeMode: 'all',
       rowResizeMode: 'all',
-      dragHeaderMode: 'none',
+      // Header drag-to-reorder is off by default; enable columns only (there is
+      // no row header to drag). VTable requires the header cell to be selected
+      // before it can be dragged, and its `fixedFrozenCount` default keeps the
+      // frozen *count* stable while the frozen membership follows the new order.
+      dragHeaderMode: 'column',
       // Cross highlight is what the "hover lights up the whole row + column"
       // behaviour maps to; the default is per-cell only. The tints themselves
       // come from the official theme's `hover` styles.
@@ -432,7 +464,9 @@ class ResultTable {
     this.#table.defaultRowHeight = this.#wrapped.size > 0 ? 'auto' : ROW_HEIGHT;
     // Clear the row-height cache so rows regrow, but keep the column-width
     // cache — widths the user dragged (and any row heights they resized) stay.
-    this.#table.updateColumns(this.#columns(), {
+    // Rebuild from the *display* order: `updateColumns` applies the array it is
+    // given verbatim, so the query order would undo any header drag.
+    this.#table.updateColumns(this.#columns(this.#displayOrder()), {
       clearColWidthCache: false,
       clearRowHeightCache: true,
     });
@@ -451,7 +485,8 @@ class ResultTable {
     this.#frozen = 0;
     // `updateOption` (unlike `updateColumns`) also resets the sort state, and
     // with both caches cleared it drops the dragged widths/heights too — a true
-    // "back to the initial view".
+    // "back to the initial view". `#options()` carries the query's column order,
+    // so a header drag is undone as well.
     void this.#table.updateOption(this.#options(), {
       clearColWidthCache: true,
       clearRowHeightCache: true,

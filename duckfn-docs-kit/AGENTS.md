@@ -139,6 +139,11 @@ src/
 
 - 行高紧凑靠**构造函数选参** `defaultRowHeight` / `defaultHeaderRowHeight`（不是主题
   对象，写在 `theme` 里无效），容器高度公式随之用同一个常量。
+- **列宽用 `widthMode: 'adaptive'`**（官方「自适应容器宽度」）：先按内容量出每列宽度
+  （表头已含排序图标宽度），再按比例缩放到刚好铺满容器 —— 初始视图就填满、不靠默认列宽，
+  内容多的列自然多分（比「各列平分」更合理），超长未起别名的表头有 `limitMaxAutoWidth`
+  （默认 450）兜底。代价：总内容宽超过容器时是**缩放**而不是横向滚动条；容器尺寸变化
+  （含全屏）会重算；手动拖过的列被排除在再分配之外，其余列围着它重新铺满。
 - **结果区/表格/面板都要 `overscroll-behavior: contain`**：它不是继承属性，必须打到
   每个真正滚动的盒子上（含 `.dfk-sql-table *`，VTable 的内部滚动容器藏在里面）。
   否则滚轮滑到表格底部会继续链式滚动整页 —— 表现是「页面刷一下飞上去、表格消失」。
@@ -151,9 +156,16 @@ src/
   `aria-selected` / `tabIndex` / `hidden`；`Table` 面板懒挂载（首次切入才 `mountTable`，
   因为 VTable 构造时要量容器，而 `hidden` 的盒子量出来是 0），若挂载还在飞行中就被
   `dispose()`，落地后立刻释放。
-- 交互能力（排序、复制、行高列宽可调、hover 十字高亮、右键菜单折行/冻结/重置）集中在
-  `renderers.ts` 的 `class ResultTable`，全部走 VTable 自己的 option/event，`mountTable`
-  只是「建盒子 + 动态 import + `new ResultTable(...)`」的薄工厂。
+- 交互能力（排序、复制、行高列宽可调、表头拖拽换位、hover 十字高亮、右键菜单折行/
+  冻结/重置）集中在 `renderers.ts` 的 `class ResultTable`，全部走 VTable 自己的
+  option/event，`mountTable` 只是「建盒子 + 动态 import + `new ResultTable(...)`」的薄工厂。
+- 表头拖拽换位：`dragHeaderMode: 'column'`（默认 `'none'`，=只开列表头）。VTable 要求
+  **先选中表头单元格**才能拖动（`_canDragHeaderPosition` 里的 `isSelected` 判断）；冻结列
+  相关行为 `frozenColDragHeaderMode` **保持默认**（即 `fixedFrozenCount`：冻结**数量**不变，
+  冻的是哪几列随新顺序变），这样 `#frozen` 缓存不会失真。换位会重排布局与
+  `options.columns`，所以**任何重建列数组的地方都必须按显示顺序重建**：`#toggleWrap` 用
+  `#displayOrder()`（逐列读 `getHeaderField(col, 0)`）而不是查询结果的列序；
+  `updateColumns` 会原样采用传入的数组，照查询序传就会把用户的换位撤销。
 - **样式一律用官方主题**：`#theme()` 直接返回 `themes.DEFAULT` / `themes.DARK`（按
   `data-theme` 二选一），斑马底色、hover/选中配色、冻结列阴影、排序图标色都随主题而来，
   不要再按属性手写配色。两个坑：
