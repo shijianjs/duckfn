@@ -30,7 +30,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 | `Ok(None)` | `NULL` |
 | `Err(e)` | The query fails with the message of `e`. |
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ret_checked(4);    -- 25
 SELECT dfn_scalar_ret_checked(-1);   -- NULL
 SELECT dfn_scalar_ret_checked(0);    -- error: dfn_scalar_ret_checked: division by zero
@@ -64,7 +64,7 @@ fn dfn_scalar_ret_panic(i: i32) -> i32 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ret_panic(1);    -- 1
 SELECT dfn_scalar_ret_panic(13);   -- error: unlucky input: 13
 ```

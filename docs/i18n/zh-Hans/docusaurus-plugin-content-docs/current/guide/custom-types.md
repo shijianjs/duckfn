@@ -72,7 +72,7 @@ fn dfn_echo_celsius(t: Celsius) -> Celsius {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_echo_celsius(21.5::DOUBLE);         -- 21.5
 SELECT typeof(dfn_echo_celsius(21.5::DOUBLE)); -- DOUBLE
 ```
@@ -88,7 +88,7 @@ pub struct TemperatureReading {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT (dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).place;  -- oslo
 SELECT typeof((dfn_echo_temperature_reading({'place': 'oslo', 'celsius': -3.5::DOUBLE})).celsius);
 -- DOUBLE
@@ -111,7 +111,7 @@ fn dfn_table_echo_celsius(
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_celsius(1.5::DOUBLE, count => 3);
 -- 1.5
 -- NULL

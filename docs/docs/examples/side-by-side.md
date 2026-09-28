@@ -21,7 +21,7 @@ are the same for every function; the body is what differs, and that is what is w
 
 Signature: `rusty_echo(varchar) -> varchar`
 
-```sql
+```sql {"type":"duckfn"}
 SELECT rusty_echo('Hello');  -- 🐤 Hello 🦀 Hello
 ```
 
@@ -89,7 +89,7 @@ fn rusty_echo(s: String) -> String {
 
 Signature: `rusty_quack(varchar) -> table(column0 varchar)`
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
 ```
 
@@ -179,6 +179,8 @@ fn rusty_quack(name: String) -> impl Iterator<Item = RustyQuackResult> {
 ## Aggregate function, against quack-rs
 
 Signature: `word_count(varchar) -> bigint`
+
+Not runnable: this page's `word_count` lives in the Rust snippets below, not in the example extension.
 
 ```sql
 SELECT word_count(s)
@@ -322,6 +324,8 @@ impl DuckAggregateState for WordCountState {
 ## Scalar function, against quack-rs
 
 Signature: `first_word(varchar) -> varchar`
+
+Not runnable: this page's `first_word` lives in the Rust snippets below, not in the example extension.
 
 ```sql
 SELECT first_word(s)

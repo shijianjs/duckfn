@@ -31,7 +31,7 @@ type (what it wraps may already be an `Option`) and would otherwise need a branc
 | `VARCHAR` | `String` |
 | `NULL` | `Option<T>` |
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_echo_integer(42);                             -- 42
 SELECT typeof(dfn_echo_integer(42));                     -- INTEGER
 SELECT dfn_echo_uinteger(4294967295::UINTEGER);          -- 4294967295
@@ -66,7 +66,7 @@ fn dfn_echo_decimal(i: DuckDecimal<18, 3>) -> DuckDecimal<18, 3> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SET TimeZone = 'UTC';  -- keep TIMESTAMPTZ output stable
 SELECT dfn_echo_date(DATE '2024-01-02');                        -- 2024-01-02
 SELECT typeof(dfn_echo_decimal(1.234::DECIMAL(18,3)));          -- DECIMAL(18,3)
@@ -196,7 +196,7 @@ fn dfn_echo_list_integer_n(i: Vec<Option<i32>>) -> Vec<Option<i32>> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_list_integer([1, 2, 3]) AS VARCHAR);     -- [1, 2, 3]
 SELECT dfn_echo_list_integer([1, NULL, 3]);                   -- NULL
 SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR);-- [1, NULL, 3]
@@ -219,7 +219,7 @@ is carried by the value type, so nullable values are written `IndexMap<K, Option
 Keys may never be `NULL`, and a `MAP` argument is the way to pass key/value data into a table
 function:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_echo_map_varchar_integer(MAP {'a': 1, 'b': 2}) AS VARCHAR);  -- {a=1, b=2}
 SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2});                      -- a 1 / b 2
 ```
@@ -240,7 +240,7 @@ fn dfn_echo_array_integer(i: DuckArray<i32, 3>) -> DuckArray<i32, 3> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT typeof(dfn_echo_array_integer([1, 2, 3]));  -- INTEGER[3]
 SELECT dfn_echo_array_integer([1, 2, 3]);          -- [1, 2, 3]
 SELECT dfn_echo_array_integer([1, 2]);             -- error: No function matches
@@ -272,7 +272,7 @@ pub struct DuckStructNested {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT (dfn_echo_struct_simple({'id': 1, 'name': 'a'})).id;                                 -- 1
 SELECT (dfn_echo_struct_nested({'id': 1, 'inner': {'key': 'k', 'value': 2}, 'maybe': NULL})).inner.value;  -- 2
 ```
@@ -312,7 +312,7 @@ pub struct Ticket {
 //   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'), "labels" VARCHAR[]);
 ```
 
-```sql
+```sql {"type":"duckfn"}
 CREATE TABLE tickets (v ticket);
 INSERT INTO tickets VALUES ({'id': 1, 'priority': 'low', 'labels': ['a']});
 SELECT dfn_echo_struct_ticket(v) FROM tickets;   -- 函数用的是等价的结构化类型

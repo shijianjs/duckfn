@@ -24,7 +24,7 @@ pub struct RangeRow {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_range(3);
 ```
 
@@ -67,7 +67,7 @@ fn dfn_table_full(n: i64) -> DuckFullIteratorResult<RangeRow> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_full(2);   -- 0 0  then  NULL NULL
 SELECT * FROM dfn_table_full(5);   -- error: dfn_table_full: bad row 2
 ```
@@ -84,7 +84,7 @@ fn dfn_table_checked(n: i64) -> DuckResult<impl Iterator<Item = RangeRow>> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_checked(-1);  -- error: dfn_table_checked: n must be >= 0
 ```
 
@@ -103,7 +103,7 @@ fn dfn_table_countdown(step: i64, start: i64, count: i64) -> impl Iterator<Item 
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_countdown(2, start=10, count=3);        -- 10, 8, 6
 SELECT * FROM dfn_table_countdown(step=2, start=10, count=3);   -- error: No function matches
 SELECT * FROM dfn_table_countdown(2, start=10, count=3, foo=1); -- error: Invalid named parameter "foo"
@@ -125,7 +125,7 @@ fn dfn_table_opt(start: i64, step: Option<i64>, count: Option<i64>) -> impl Iter
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_opt(start=1);                        -- 1, 2, 3
 SELECT * FROM dfn_table_opt(start=1, step=10, count=2);      -- 1, 11
 SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);  -- 1, 2, 3
@@ -133,7 +133,7 @@ SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);  -- 1, 2, 3
 
 A plain `T` parameter is required. Omitting it, or passing `NULL`, fails at bind time:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_req();           -- error: Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=NULL); -- error: Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=5);    -- 5, 25
@@ -154,7 +154,7 @@ pub struct TypedRow {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 DESCRIBE SELECT * FROM dfn_table_typed(3);
 -- id     BIGINT
 -- name   VARCHAR
@@ -178,7 +178,7 @@ pub struct ShapeRow {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT name, from_point.x, to_point.y FROM dfn_table_nested(2);
 -- s0 0 0
 -- s1 1 3
@@ -189,7 +189,7 @@ SELECT name, from_point.x, to_point.y FROM dfn_table_nested(2);
 A table function may take no argument at all, and it may take complex ones: a `LIST` argument
 (`Vec<i64>`) or a `MAP` argument (`IndexMap<String, i64>`):
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_zero_args();                   -- 0 0 / 1 1 / 2 4
 SELECT * FROM dfn_table_from_list([3, 1, 2]);          -- 3 9 / 1 1 / 2 4
 SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
@@ -255,7 +255,7 @@ still writes one DuckDB vector at a time.
 - `DuckDynamicRow::write_batch` validates each value against the column description before writing,
   so a type mismatch is a readable error instead of a corrupted vector.
 
-```sql
+```sql {"type":"duckfn"}
 DESCRIBE SELECT * FROM dfn_table_dynamic('sales', 1);
 -- id      BIGINT
 -- region  VARCHAR

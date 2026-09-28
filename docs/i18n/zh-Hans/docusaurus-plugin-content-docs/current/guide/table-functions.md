@@ -24,7 +24,7 @@ pub struct RangeRow {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_range(3);
 ```
 
@@ -66,7 +66,7 @@ fn dfn_table_full(n: i64) -> DuckFullIteratorResult<RangeRow> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_full(2);   -- 先 0 0，再 NULL NULL
 SELECT * FROM dfn_table_full(5);   -- 报错：dfn_table_full: bad row 2
 ```
@@ -83,7 +83,7 @@ fn dfn_table_checked(n: i64) -> DuckResult<impl Iterator<Item = RangeRow>> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_checked(-1);  -- 报错：dfn_table_checked: n must be >= 0
 ```
 
@@ -101,7 +101,7 @@ fn dfn_table_countdown(step: i64, start: i64, count: i64) -> impl Iterator<Item 
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_countdown(2, start=10, count=3);        -- 10, 8, 6
 SELECT * FROM dfn_table_countdown(step=2, start=10, count=3);   -- 报错：No function matches
 SELECT * FROM dfn_table_countdown(2, start=10, count=3, foo=1); -- 报错：Invalid named parameter "foo"
@@ -122,7 +122,7 @@ fn dfn_table_opt(start: i64, step: Option<i64>, count: Option<i64>) -> impl Iter
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_opt(start=1);                         -- 1, 2, 3
 SELECT * FROM dfn_table_opt(start=1, step=10, count=2);        -- 1, 11
 SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);   -- 1, 2, 3
@@ -130,7 +130,7 @@ SELECT * FROM dfn_table_opt(start=1, step=NULL, count=NULL);   -- 1, 2, 3
 
 写成普通 `T` 的参数则是必填的。不传或传 `NULL` 会在 bind 阶段失败：
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_req();           -- 报错：Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=NULL); -- 报错：Parameter start cannot be null
 SELECT * FROM dfn_table_req(start=5);    -- 5, 25
@@ -150,7 +150,7 @@ pub struct TypedRow {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 DESCRIBE SELECT * FROM dfn_table_typed(3);
 -- id     BIGINT
 -- name   VARCHAR
@@ -174,7 +174,7 @@ pub struct ShapeRow {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT name, from_point.x, to_point.y FROM dfn_table_nested(2);
 -- s0 0 0
 -- s1 1 3
@@ -185,7 +185,7 @@ SELECT name, from_point.x, to_point.y FROM dfn_table_nested(2);
 表函数可以完全不接收参数，也可以接收复杂类型：`LIST` 参数（`Vec<i64>`）或 `MAP` 参数
 （`IndexMap<String, i64>`）：
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_table_zero_args();                    -- 0 0 / 1 1 / 2 4
 SELECT * FROM dfn_table_from_list([3, 1, 2]);           -- 3 9 / 1 1 / 2 4
 SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2}); -- a 1 / b 2
@@ -247,7 +247,7 @@ fn dfn_table_dynamic(source: String, n: i64) -> DuckResult<DuckDynamicTable> {
 - `DuckDynamicRow::write_batch` 在写向量前会按列描述校验每个值，因此类型错配是可读的错误，
   而不是写坏向量。
 
-```sql
+```sql {"type":"duckfn"}
 DESCRIBE SELECT * FROM dfn_table_dynamic('sales', 1);
 -- id      BIGINT
 -- region  VARCHAR

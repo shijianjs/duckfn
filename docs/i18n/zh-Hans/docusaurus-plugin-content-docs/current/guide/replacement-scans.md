@@ -41,7 +41,7 @@ fn dfn_scan_read_points(path: String) -> DuckResult<impl Iterator<Item = ScanPoi
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM '3.points';                        -- x 0 y 0 / 1 1 / 2 4
 SELECT * FROM dfn_scan_read_points('2.points');  -- 同一个表函数，直接调用
 SELECT * FROM 'nope.txt';                        -- 报错：Table with name nope.txt does not exist

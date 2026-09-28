@@ -71,7 +71,7 @@ fn rusty_quack(name: String) -> impl Iterator<Item = RustyQuackResult> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT rusty_echo('Hello');     -- 🐤 Hello 🦀 Hello
 SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
 ```
@@ -80,7 +80,7 @@ SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
 
 The demo module covers the shapes a function can take, including nested input and output:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT double_it5(21);                            -- 42
 SELECT first_word_tuple('hello world');           -- hello
 SELECT sum_list_w([1, 2, 3, 4]);                  -- 10
@@ -101,7 +101,7 @@ Returning structured data works the same way: `make_list_scalar_w(range)` return
 
 `error_scalar_demo` takes one input and answers with a value, a `NULL`, or an error:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT error_scalar_demo(3);   -- 6
 SELECT error_scalar_demo(10);  -- error: input is 10
 SELECT error_scalar_demo(20);  -- error: panic: input is 20
@@ -110,7 +110,7 @@ SELECT error_scalar_demo(30);  -- error: explicit panic
 
 ## Aggregates
 
-```sql
+```sql {"type":"duckfn"}
 SELECT word_count_m(sentence)
 FROM (VALUES ('hello world'), ('  padded  '), (''), (NULL)) t(sentence);
 -- 3
@@ -129,7 +129,7 @@ sees the value `12`.
 
 ## Table functions and named parameters
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM count_down_m_simple(start=12);   -- 11, 10, 9, … 0
 
 SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
@@ -140,7 +140,7 @@ SELECT * FROM bind_map_demo(MAP {'key1': [10], 'key2': [20, 5], 'key3': null});
 
 ## Casts and replacement scans
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST('42' AS INTEGER);        -- 42
 SELECT TRY_CAST('abc' AS INTEGER);   -- NULL
 SELECT CAST('abc' AS INTEGER);       -- error: not an integer: "abc"
@@ -151,7 +151,7 @@ SELECT * FROM 'hi.echo';             -- hi.echo  7
 
 ## SQL macros
 
-```sql
+```sql {"type":"duckfn"}
 SELECT clamp(range, 4, 7) FROM range(9);
 -- 4, 4, 4, 4, 4, 5, 6, 7, 7
 
@@ -167,7 +167,7 @@ The four `add_two_*` names are four different ways of returning the same macro: 
 
 Every supported type has an identity function in both scalar and table form:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_echo_integer(42);          -- 42
 SELECT dfn_echo_date(DATE '2024-01-02');  -- 2024-01-02
 SELECT CAST(dfn_echo_list_integer_n([1, NULL, 3]) AS VARCHAR);  -- [1, NULL, 3]

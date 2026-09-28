@@ -47,7 +47,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ret_plain(21);              -- 42
 SELECT typeof(dfn_scalar_ret_plain(21));      -- INTEGER
 SELECT dfn_scalar_ret_plain(NULL::INTEGER);   -- NULL
@@ -74,7 +74,7 @@ fn dfn_scalar_arity_zero() -> i32 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_arity_zero();            -- 42
 SELECT dfn_scalar_arity_zero(1);           -- error: No function matches
 ```
@@ -100,7 +100,7 @@ fn dfn_scalar_null_arg_option(a: Option<i32>) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_null_arg_plain(1, 2);       -- 3
 SELECT dfn_scalar_null_arg_plain(NULL, 2);    -- NULL, body not called
 SELECT dfn_scalar_null_arg_plain(1, NULL);    -- NULL, body not called
@@ -125,7 +125,7 @@ fn dfn_scalar_null_handling_special(a: Option<i32>) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_null_handling_default(NULL::INTEGER);   -- NULL  (folded)
 SELECT dfn_scalar_null_handling_special(NULL::INTEGER);   -- -1    (not folded)
 SELECT dfn_scalar_null_handling_special(NULL::INTEGER + 0); -- -1
@@ -154,7 +154,7 @@ fn dfn_scalar_volatile_special(a: Option<i32>) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_volatile_random(1);               -- 2654435762
 SELECT typeof(dfn_scalar_volatile_random(1));       -- BIGINT
 SELECT dfn_scalar_volatile_random(1) FROM range(3); -- re-evaluated for every row
@@ -190,7 +190,7 @@ fn dfn_scalar_varargs_merge(lists: Vec<Vec<i64>>) -> Vec<i64> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_varargs_sum(1, 2, 3);            -- 6
 SELECT dfn_scalar_varargs_sum();                  -- 0  (zero variadic arguments)
 SELECT dfn_scalar_varargs_join('-', 'a', 'b');    -- a-b
@@ -264,7 +264,7 @@ Four return shapes mirror the per-row ones:
 | `DuckOptionResult<Vec<T>>` | `Ok(None)` makes the **whole batch** `NULL`; `Err(e)` fails the query. |
 | `DuckOptionResult<Vec<Option<T>>>` | The nullable flavour of the previous shape. |
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_batch_join(id, tag) FROM (VALUES (1, 'a'), (NULL, 'b'), (2, 'c')) t(id, tag);
 -- 1:a|2:c, NULL, 1:a|2:c   (the NULL row was filtered out, then filled back in)
 
@@ -313,7 +313,7 @@ fn dfn_scalar_ovl_int_int(a: i32, b: i32) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ovl_set(1);         -- int:1
 SELECT typeof(dfn_scalar_ovl_set(1)); -- VARCHAR
 SELECT dfn_scalar_ovl_set('abcd');    -- 4
@@ -330,7 +330,7 @@ does not exist. To pick the overloads yourself — and to choose the registratio
 DuckDB accepts `name := value` syntax for scalar arguments, but duckfn registers scalar functions by
 position, so the names are ignored and values bind in the order written:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_reg_named_param(1, 2);          -- 12
 SELECT dfn_scalar_reg_named_param(a := 1, b := 2); -- 12
 SELECT dfn_scalar_reg_named_param(b := 2, a := 1); -- 21  (a gets 2, b gets 1)

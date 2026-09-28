@@ -93,7 +93,10 @@ fn file_error(error: ErrorData) -> quack_rs::error::ExtensionError {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
+-- The block writes the two files it measures, so it can be run repeatedly.
+COPY (SELECT 1 AS i) TO 'a.csv' (FORMAT csv);
+COPY (SELECT 1 AS i) TO 'b.csv' (FORMAT csv);
 SELECT dfn_agg_file_size(path) FROM (VALUES ('a.csv'), ('b.csv')) t(path);
 ```
 

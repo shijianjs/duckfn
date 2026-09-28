@@ -19,7 +19,7 @@ description: rusty_echo、rusty_quack、word_count、first_word 分别用原始 
 
 函数签名：`rusty_echo(varchar) -> varchar`
 
-```sql
+```sql {"type":"duckfn"}
 SELECT rusty_echo('Hello');  -- 🐤 Hello 🦀 Hello
 ```
 
@@ -87,7 +87,7 @@ fn rusty_echo(s: String) -> String {
 
 函数签名：`rusty_quack(varchar) -> table(column0 varchar)`
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM rusty_quack('Sam');  -- Rusty Quack Sam 🐥
 ```
 
@@ -177,6 +177,8 @@ fn rusty_quack(name: String) -> impl Iterator<Item = RustyQuackResult> {
 ## 对比 quack-rs 聚合函数
 
 函数签名：`word_count(varchar) -> bigint`
+
+不可运行：这里的 `word_count` 只存在于下面的 Rust 代码片段里，示例扩展并没有注册它。
 
 ```sql
 SELECT word_count(s)
@@ -320,6 +322,8 @@ impl DuckAggregateState for WordCountState {
 ## 对比 quack-rs 标量函数
 
 函数签名：`first_word(varchar) -> varchar`
+
+不可运行：这里的 `first_word` 只存在于下面的 Rust 代码片段里，示例扩展并没有注册它。
 
 ```sql
 SELECT first_word(s)

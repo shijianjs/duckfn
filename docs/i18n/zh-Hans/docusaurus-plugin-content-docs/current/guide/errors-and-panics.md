@@ -29,7 +29,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 | `Ok(None)` | `NULL` |
 | `Err(e)` | 查询失败，错误信息为 `e` 的内容。 |
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ret_checked(4);    -- 25
 SELECT dfn_scalar_ret_checked(-1);   -- NULL
 SELECT dfn_scalar_ret_checked(0);    -- 报错：dfn_scalar_ret_checked: division by zero
@@ -61,7 +61,7 @@ fn dfn_scalar_ret_panic(i: i32) -> i32 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ret_panic(1);    -- 1
 SELECT dfn_scalar_ret_panic(13);   -- 报错：unlucky input: 13
 ```

@@ -49,7 +49,7 @@ do not ship them.
 
 **What you see.**
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_echo_list_integer_n([NULL, NULL, NULL, NULL]);
 -- [NULL, 0, 0, 0]                    expected [NULL, NULL, NULL, NULL]
 

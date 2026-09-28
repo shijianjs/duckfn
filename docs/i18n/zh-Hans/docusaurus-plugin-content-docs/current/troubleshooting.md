@@ -47,7 +47,7 @@ error[E0658]: `let` expressions in this position are unstable
 
 **现象。**
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_echo_list_integer_n([NULL, NULL, NULL, NULL]);
 -- [NULL, 0, 0, 0]                    期望 [NULL, NULL, NULL, NULL]
 

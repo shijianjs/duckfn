@@ -23,7 +23,7 @@ fn dfn_cast_str_to_int(s: String) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST('42' AS INTEGER);       -- 42
 SELECT CAST(' 7 ' AS INTEGER);      -- 7     (trimmed)
 SELECT CAST('' AS INTEGER);         -- NULL  (the built-in error is overridden)
@@ -53,7 +53,7 @@ fn dfn_cast_bigint_to_double(v: Option<i64>) -> Option<f64> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST(3::BIGINT AS DOUBLE);     -- 1.5
 SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 ```
@@ -62,7 +62,7 @@ SELECT CAST(NULL::BIGINT AS DOUBLE);  -- -1.0
 
 Anything in the [type mapping](./types.md) can be used on either side, containers included:
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST(CAST(['1', '2'] AS INTEGER[]) AS VARCHAR);  -- [1, 2]
 SELECT TRY_CAST(['1', 'x'] AS INTEGER[]);               -- NULL
 SELECT CAST(['1', 'x'] AS INTEGER[]);                   -- error: not an integer: "x"
@@ -81,7 +81,7 @@ Set `implicit_cost` to let DuckDB use the cast for implicit conversions, with th
 fn dfn_cast_str_to_hugeint(s: String) -> i128 { /* … */ }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST('41' AS HUGEINT);              -- 41
 SELECT CAST('41' AS VARCHAR) + 1::HUGEINT; -- 42
 ```

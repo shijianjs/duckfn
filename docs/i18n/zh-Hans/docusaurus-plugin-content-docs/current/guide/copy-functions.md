@@ -8,9 +8,13 @@ description: 为 COPY ... TO 与 COPY ... FROM 提供自定义文件格式，建
 
 COPY 函数让你用自己的文件格式完成 `COPY` —— 而且是双向的：
 
-```sql
+```sql {"type":"duckfn"}
+-- 块自带数据表并在每次运行时重置，可反复执行
+CREATE OR REPLACE TABLE orders AS SELECT 1 AS id, 'a' AS name;
 COPY (SELECT * FROM orders) TO 'orders.tsv' (FORMAT dfn_copy_tsv);
+DELETE FROM orders;  -- COPY ... FROM 会追加，先清空表
 COPY orders FROM 'orders.tsv' (FORMAT dfn_copy_tsv_from);
+SELECT * FROM orders;
 ```
 
 两者都建立在**[运行时动态列](./table-functions.md#动态列)**之上：列不是编译期固定的。
@@ -77,7 +81,7 @@ fn open(path: &str, schema: &DuckResultSchema, options: &DuckCopyOptions) -> Duc
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 COPY (SELECT 1 AS i) TO 'out.tsv' (FORMAT dfn_copy_tsv, HEADER true);
 ```
 

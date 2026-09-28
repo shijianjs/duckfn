@@ -21,21 +21,27 @@ duck_sql_macro_files!(
 );
 ```
 
-```sql title="sql/macro_files_a.sql"
+`sql/macro_files_a.sql`:
+
+```sql {"type":"duckfn"}
 CREATE OR REPLACE MACRO dfn_macro_files_add(a, b) AS (a + b);
 
 CREATE OR REPLACE MACRO dfn_macro_files_mul(a, b) AS (a * b);
 ```
 
-```sql title="sql/macro_files_b.sql"
+`sql/macro_files_b.sql`:
+
+```sql {"type":"duckfn"}
 CREATE OR REPLACE MACRO dfn_macro_files_gen(n) AS TABLE SELECT * FROM range(n);
 ```
 
-```sql title="sql/macro_files_c.sql"
+`sql/macro_files_c.sql`:
+
+```sql {"type":"duckfn"}
 CREATE OR REPLACE MACRO dfn_macro_files_negate(x) AS (-x);
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_macro_files_add(2, 3);      -- 5
 SELECT dfn_macro_files_mul(4, 5);      -- 20
 SELECT * FROM dfn_macro_files_gen(3);  -- 0, 1, 2
@@ -59,7 +65,9 @@ pub fn dfn_macro_inc_script() -> &'static str {
 }
 ```
 
-```sql title="sql/macro_inc.sql"
+`sql/macro_inc.sql`:
+
+```sql {"type":"duckfn"}
 CREATE OR REPLACE MACRO dfn_macro_inc_add(a, b) AS (a + b);
 
 CREATE OR REPLACE MACRO dfn_macro_inc_triple(x) AS (x * 3);
@@ -67,7 +75,7 @@ CREATE OR REPLACE MACRO dfn_macro_inc_triple(x) AS (x * 3);
 CREATE OR REPLACE MACRO dfn_macro_inc_gen(n) AS TABLE SELECT * FROM range(n);
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_macro_inc_add(2, 3);      -- 5
 SELECT dfn_macro_inc_triple(4);      -- 12
 SELECT * FROM dfn_macro_inc_gen(3);  -- 0, 1, 2
@@ -84,7 +92,7 @@ pub fn dfn_macro_clamp() -> SqlMacro {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_macro_clamp(12, 0, 10);         -- 10
 SELECT dfn_macro_clamp(-5, 0, 10);         -- 0
 SELECT typeof(dfn_macro_clamp(5, 0, 10));  -- INTEGER
@@ -99,14 +107,14 @@ pub fn dfn_macro_gen() -> DuckResult<SqlMacro> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT * FROM dfn_macro_gen(3);      -- 0, 1, 2
 SELECT range FROM DFN_MACRO_GEN(2);  -- 0, 1（宏名大小写不敏感）
 ```
 
 宏体也不限于标量表达式 —— `dfn_macro_pair` 返回 `STRUCT`，`dfn_macro_mklist` 返回 `LIST`：
 
-```sql
+```sql {"type":"duckfn"}
 SELECT CAST(dfn_macro_pair(5) AS VARCHAR);   -- {'a': 5, 'b': 10}
 SELECT typeof(dfn_macro_pair(5));            -- STRUCT(a INTEGER, b INTEGER)
 SELECT dfn_macro_pair(5).a;                  -- 5
@@ -124,7 +132,7 @@ pub fn dfn_macro_double() -> String {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_macro_double(21);  -- 42
 ```
 
@@ -140,7 +148,7 @@ pub fn dfn_macro_quad() -> DuckResult<String> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_macro_quad(3);  -- 12
 ```
 

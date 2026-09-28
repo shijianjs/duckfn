@@ -86,7 +86,10 @@ fn file_error(error: ErrorData) -> quack_rs::error::ExtensionError {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
+-- 块自己写出待统计的两个文件，可反复执行
+COPY (SELECT 1 AS i) TO 'a.csv' (FORMAT csv);
+COPY (SELECT 1 AS i) TO 'b.csv' (FORMAT csv);
 SELECT dfn_agg_file_size(path) FROM (VALUES ('a.csv'), ('b.csv')) t(path);
 ```
 

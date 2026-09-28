@@ -35,7 +35,7 @@ impl DuckAggregateState for SumState {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x);   -- 6
 SELECT typeof(dfn_agg_sum(x)) FROM (VALUES (1)) t(x);     -- BIGINT
 ```
@@ -113,7 +113,7 @@ impl DuckAggregateState for AvgState {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_agg_avg(x) FROM (VALUES (1), (2), (3)) t(x);   -- 2.0
 SELECT dfn_agg_avg(x) FROM (SELECT NULL::BIGINT AS x) t;  -- NULL
 SELECT dfn_agg_sum(x) FROM (VALUES (1), (2), (3)) t(x) WHERE x > 10;  -- 0
@@ -144,7 +144,7 @@ impl DuckAggregateState for ListState {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_agg_list(x) FROM (VALUES (1), (2), (3)) t(x);          -- [1, 2, 3]
 SELECT dfn_agg_list(x) FROM (VALUES (1), (NULL), (3)) t(x);       -- [1, NULL, 3]
 SELECT dfn_agg_concat(x) FROM (VALUES ('a'), ('b'), ('c')) t(x);  -- a,b,c
@@ -165,7 +165,7 @@ fn dfn_agg_mixed(a: i64, b: Option<i64>, state: &mut MixedState) {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_agg_mixed(a, b)
 FROM (VALUES (1, 2), (NULL, 5), (3, NULL), (4, 6)) t(a, b);
 -- sum:16|nulls:1（a 为 NULL 的那一行被整体跳过）

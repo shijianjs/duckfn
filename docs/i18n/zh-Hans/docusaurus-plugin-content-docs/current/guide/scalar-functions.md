@@ -46,7 +46,7 @@ fn dfn_scalar_ret_checked(i: i32) -> DuckOptionResult<i32> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ret_plain(21);              -- 42
 SELECT typeof(dfn_scalar_ret_plain(21));      -- INTEGER
 SELECT dfn_scalar_ret_plain(NULL::INTEGER);   -- NULL
@@ -72,7 +72,7 @@ fn dfn_scalar_arity_zero() -> i32 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_arity_zero();            -- 42
 SELECT dfn_scalar_arity_zero(1);           -- 报错：No function matches
 ```
@@ -98,7 +98,7 @@ fn dfn_scalar_null_arg_option(a: Option<i32>) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_null_arg_plain(1, 2);       -- 3
 SELECT dfn_scalar_null_arg_plain(NULL, 2);    -- NULL，函数体未执行
 SELECT dfn_scalar_null_arg_plain(1, NULL);    -- NULL，函数体未执行
@@ -122,7 +122,7 @@ fn dfn_scalar_null_handling_special(a: Option<i32>) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_null_handling_default(NULL::INTEGER);     -- NULL（被折叠）
 SELECT dfn_scalar_null_handling_special(NULL::INTEGER);     -- -1（未折叠）
 SELECT dfn_scalar_null_handling_special(NULL::INTEGER + 0); -- -1
@@ -148,7 +148,7 @@ fn dfn_scalar_volatile_special(a: Option<i32>) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_volatile_random(1);               -- 2654435762
 SELECT typeof(dfn_scalar_volatile_random(1));       -- BIGINT
 SELECT dfn_scalar_volatile_random(1) FROM range(3); -- 每一行都重新求值
@@ -182,7 +182,7 @@ fn dfn_scalar_varargs_merge(lists: Vec<Vec<i64>>) -> Vec<i64> {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_varargs_sum(1, 2, 3);            -- 6
 SELECT dfn_scalar_varargs_sum();                  -- 0（零个可变参数）
 SELECT dfn_scalar_varargs_join('-', 'a', 'b');    -- a-b
@@ -253,7 +253,7 @@ fn dfn_batch_tag_len(rows: Vec<Option<DfnBatchRow>>) -> DuckOptionResult<Vec<Opt
 | `DuckOptionResult<Vec<T>>` | `Ok(None)` 让**整批**变成 `NULL`，`Err(e)` 让整条查询失败。 |
 | `DuckOptionResult<Vec<Option<T>>>` | 上一种的可空版本。 |
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_batch_join(id, tag) FROM (VALUES (1, 'a'), (NULL, 'b'), (2, 'c')) t(id, tag);
 -- 1:a|2:c, NULL, 1:a|2:c   （空行被剔掉，再按原位回填）
 
@@ -298,7 +298,7 @@ fn dfn_scalar_ovl_int_int(a: i32, b: i32) -> i64 {
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_ovl_set(1);         -- int:1
 SELECT typeof(dfn_scalar_ovl_set(1)); -- VARCHAR
 SELECT dfn_scalar_ovl_set('abcd');    -- 4
@@ -314,7 +314,7 @@ SELECT dfn_scalar_ovl_set(3, 4);      -- 12
 DuckDB 支持对标量参数使用 `名字 := 值` 的写法，但 duckfn 注册标量函数时用的是位置参数列表，因此这些名字会被忽略，
 值按书写顺序绑定：
 
-```sql
+```sql {"type":"duckfn"}
 SELECT dfn_scalar_reg_named_param(1, 2);           -- 12
 SELECT dfn_scalar_reg_named_param(a := 1, b := 2); -- 12
 SELECT dfn_scalar_reg_named_param(b := 2, a := 1); -- 21（a 拿到 2，b 拿到 1）

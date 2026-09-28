@@ -8,9 +8,13 @@ description: Provide custom file formats for COPY ... TO and COPY ... FROM, driv
 
 A copy function gives `COPY` a file format of your own — in both directions:
 
-```sql
+```sql {"type":"duckfn"}
+-- The block brings its own table and resets it, so it can be run repeatedly.
+CREATE OR REPLACE TABLE orders AS SELECT 1 AS id, 'a' AS name;
 COPY (SELECT * FROM orders) TO 'orders.tsv' (FORMAT dfn_copy_tsv);
+DELETE FROM orders;  -- COPY ... FROM appends, so clear the table first
 COPY orders FROM 'orders.tsv' (FORMAT dfn_copy_tsv_from);
+SELECT * FROM orders;
 ```
 
 Both are built on **[runtime dynamic columns](./table-functions.md#dynamic-columns)**: the columns are
@@ -80,7 +84,7 @@ fn open(path: &str, schema: &DuckResultSchema, options: &DuckCopyOptions) -> Duc
 }
 ```
 
-```sql
+```sql {"type":"duckfn"}
 COPY (SELECT 1 AS i) TO 'out.tsv' (FORMAT dfn_copy_tsv, HEADER true);
 ```
 
