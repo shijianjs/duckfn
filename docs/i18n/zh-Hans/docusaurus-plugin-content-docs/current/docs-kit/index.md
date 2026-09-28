@@ -12,8 +12,9 @@ description: duckfn-docs-kit 是什么、包含哪些能力，以及文档站怎
 都在这里，各自作为独立入口，由站点接进自己的 Docusaurus 配置。
 
 本包用 TypeScript 直接封装浏览器原生 DOM（自身不依赖 React，也不引入任何 UI 框架），
-面向其它扩展文档站的复用而维护。它已按可发布形态准备、稍后发布到 npm；在此之前，
-本仓库以 workspace 依赖的方式消费它，所以下面这些页面的内容与你可以直接读到的源码一致。
+面向其它扩展文档站的复用而维护，已发布到 npm
+（[`duckfn-docs-kit`](https://www.npmjs.com/package/duckfn-docs-kit)）；本仓库以 workspace
+依赖的方式消费同一份源码，所以下面这些页面的内容与你可以直接读到的源码一致。
 
 ## 包里有什么
 

@@ -15,9 +15,10 @@ self-contained entry point that a site wires into its own Docusaurus config.
 
 The package is plain TypeScript over the native DOM (no React and no UI
 framework of its own) and is maintained for reuse by other extension docs
-sites. It is prepared for an npm release; until then this repository consumes
-it as a workspace dependency, so everything on these pages matches the code
-you are reading.
+sites. It is published on npm as
+[`duckfn-docs-kit`](https://www.npmjs.com/package/duckfn-docs-kit); this
+repository consumes the same source as a workspace dependency, so everything on
+these pages matches the code you are reading.
 
 ## What's in the kit
 
