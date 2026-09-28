@@ -1,6 +1,12 @@
 // This file is not used by "docusaurus start/build" commands.
 // It is here to improve your IDE experience (type-checking, autocompletion...),
 // and can also run the package.json "typecheck" script manually.
+//
+// `typescript` is deliberately held at 6.x here: TypeScript 7 removed `baseUrl`,
+// and `@docusaurus/tsconfig` (3.10.2, the latest release) still declares it. A
+// child config cannot un-inherit an option, so extending the preset under TS 7
+// always fails with TS5102. Drop this pin (and `ignoreDeprecations`) once the
+// preset stops using `baseUrl`.
 {
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
