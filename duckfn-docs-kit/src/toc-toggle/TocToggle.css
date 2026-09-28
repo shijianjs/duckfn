@@ -54,6 +54,28 @@ body.toc-collapsed .toc-toggle::after {
    order wins over specificity — an unlayered `!important` loses to a layered
    one, so the `max-width` below would silently do nothing outside this layer. */
 @layer docusaurus.theme-classic {
+  /* The button sits in the column above the TOC, while only the TOC is sticky
+     (`DocItem/TOC` styles make it so). On any page taller than the viewport the
+     button therefore scrolls away and the TOC cannot be collapsed back — so it
+     is pinned here, and the TOC's own `top`/`max-height` are pushed down by the
+     button's height plus its margin, which is what keeps the two from
+     overlapping. The `top` values follow the theme's
+     `calc(var(--ifm-navbar-height) + 1rem)`.
+
+     Written with the `.toc-column` prefix for specificity: the TOC's rule comes
+     from a CSS module's hashed class at the same layer, so an equal-specificity
+     rule here would depend on stylesheet order. */
+  .toc-column .toc-toggle {
+    position: sticky;
+    top: calc(var(--ifm-navbar-height) + 0.5rem);
+    z-index: 1;
+  }
+
+  .toc-column .theme-doc-toc-desktop {
+    top: calc(var(--ifm-navbar-height) + 3rem);
+    max-height: calc(100vh - (var(--ifm-navbar-height) + 4rem));
+  }
+
   body.toc-collapsed .toc-column {
     --ifm-col-width: 2.5rem;
     padding: 0;
@@ -61,6 +83,12 @@ body.toc-collapsed .toc-toggle::after {
 
   body.toc-collapsed .toc-column .theme-doc-toc-desktop {
     display: none;
+  }
+
+  /* Collapsed, the strip is 2.5rem wide and only the button is left in it: it
+     centres instead of hugging the right edge of a column it no longer fills. */
+  body.toc-collapsed .toc-toggle {
+    margin-inline: auto;
   }
 
   body.toc-collapsed [class*='docItemCol'] {

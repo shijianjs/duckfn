@@ -89,6 +89,20 @@ src/
   与源路径脱钩的别名。`home.css` **不作为**全局 CSS 导出 —— 它由
   `home/styles.ts` 内联进 JS bundle，注入各组件的 shadow root。
 
+### TOC 折叠控件（`toc-toggle/`）
+
+- Docusaurus 的桌面目录元素是 `.theme-doc-toc-desktop`，它自带
+  `position: sticky; top: calc(var(--ifm-navbar-height) + 1rem)`（见主题里的
+  `theme/TOC/styles.module.css`）；而按钮由本模块插在它**前面**、同一个
+  `.toc-column` 里。
+- 所以按钮必须自己 `position: sticky`：否则文章一长，TOC 留在视口里悬浮，按钮却随页面滚上去，
+  读者把目录折叠后再往下滚就找不回来。TOC 的 `top` / `max-height` 要相应下移一个按钮高度
+  （按钮 2rem + 上下留白），两者才不会重叠 —— 三条规则都在 `TocToggle.css` 的
+  `@layer docusaurus.theme-classic` 段里，且带 `.toc-column` 前缀：TOC 那条来自 CSS module 的
+  哈希类名，同层同特异性时胜负取决于样式表顺序，前缀是唯一稳妥的写法。
+- 折叠态隐藏的是整个 `.theme-doc-toc-desktop`（按钮在它外面，因此仍在），列收成 2.5rem 宽，
+  按钮此时居中而不是靠右。
+
 ### 可运行 SQL：渲染契约与 DuckDB-Wasm 事实
 
 `sql/` 是一条单向链：`remark.ts`（构建期）→ `DfkSql.ts`（元素）→ `runtime.ts`
