@@ -45,22 +45,35 @@
 /* --- Loading placeholder -------------------------------------------------- */
 
 /* The editor is a lazy `import()`; until the CodeMirror modules arrive (a few
-   hundred KB on a slow link) the box would be an empty outline. One code-line
-   ghost keeps the block looking like what it is about to become; `#mountEditor`
-   drops it (see `#setEditorPending`).
+   hundred KB on a slow link) the box would be an empty outline. The ghost is one
+   bar per line of SQL, which is what the editor itself is — one
+   `line-height: 1.6` box per line — so the block does not resize when CodeMirror
+   takes over. `#setEditorPending` builds it and drops it again.
 
-   The metrics mirror a CodeMirror line: `line-height: 1.6` on `.cm-scroller`,
-   `padding: 4px 0` on `.cm-content`, so `0.75em` of bar plus `0.425em` of
-   half-leading on either side is exactly the 1.6em line box, with the 4px content
-   inset on top of it — the box does not resize when the editor takes over.
-
-   The same ghost is drawn before this component exists at all, by
-   `dfk-sql:not(:defined)::before` in `sql.css`; that rule and this one are the
-   two copies of one bar (a shadow tree cannot see the other's keyframes), so
-   keep the bar, the animation and the keyframes in sync. */
+   `sql/remark.ts` prerenders the very same bars for the longer window *before*
+   this component exists, and `sql.css` carries their copy of these two rules (a
+   shadow tree sees neither the document's rules nor its `@keyframes`): keep the
+   two in sync. */
 .dfk-sql-editor-skeleton {
+  /* CodeMirror's own content inset — `.cm-content` carries `padding: 4px 0` and
+     this box has none — on the container so it is paid once, not per line. */
+  padding: 4px 0.75rem;
+}
+
+.dfk-sql-editor-skeleton-line {
+  display: flex;
+  align-items: center;
+  /* One code line box, exactly: `.cm-scroller`'s `line-height: 1.6`. The half
+     leading that centres a line's text is the flex centring here — margins would
+     collapse between neighbouring lines and stack the bars closer than the code
+     they stand in for. */
+  height: 1.6em;
+}
+
+.dfk-sql-editor-skeleton-line::before {
+  content: '';
+  flex: 1;
   height: 0.75em;
-  margin: calc(4px + 0.425em) 0.75rem;
   border-radius: 0.25em;
   background-color: var(--ifm-color-emphasis-200, #e6e6e6);
   /* Base colour + a lighter band travelling through it; `background-size: 200%`
@@ -87,7 +100,7 @@
 /* A bar that sweeps forever is decoration; readers who asked for less motion get
    the static grey. Mirrored in `sql.css`. */
 @media (prefers-reduced-motion: reduce) {
-  .dfk-sql-editor-skeleton {
+  .dfk-sql-editor-skeleton-line {
     animation: none;
   }
 }

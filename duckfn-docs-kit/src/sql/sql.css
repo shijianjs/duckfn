@@ -11,12 +11,15 @@
  * Imported through `kit.css`; the consuming site gets it with the one-line
  * `@import 'duckfn-docs-kit/src/kit.css'` it already has. */
 
-/* The remark plugin keeps the original code node as a child of `<dfk-sql>`, and
-   the class dates from when it was slotted as a read-only preview. The code view
-   is the CodeMirror editor now, so the leftover copy must never show — hiding it
-   here rather than deleting it in JS also removes the flash between parsing the
-   prerendered HTML and the element upgrading. */
-dfk-sql > :not([slot]) {
+/* The remark plugin prerenders two children: the loading ghost, and the original
+   code node (the class dates from when it was slotted as a read-only preview).
+   The code view is the CodeMirror editor now, so that copy must never show —
+   hiding it here rather than deleting it in JS also removes the flash between
+   parsing the prerendered HTML and the element upgrading.
+   The ghost is the one child that *does* show, and only while the element is
+   un-upgraded: once it upgrades it is unslotted like the rest and renders
+   nowhere, so no JS ever has to remove it. */
+dfk-sql > :not([slot]):not(.dfk-sql-editor-skeleton) {
   display: none;
 }
 
@@ -24,14 +27,21 @@ dfk-sql > :not([slot]) {
 
 /* Two heavy libraries arrive through lazy `import()`s — CodeMirror for the
    editor, VTable for a table result — and on a slow link both windows are long
-   enough to see. Each therefore gets a placeholder: a one-line code ghost where
-   the editor goes, two rows where the table goes.
+   enough to see. Each therefore gets a placeholder: one bar per line of SQL where
+   the editor goes, two rows where the table goes. Both are as tall as what
+   replaces them, so neither swap moves the page.
 
-   The ghost is drawn twice: here, for the window *before* the kit's JS has
-   defined `<dfk-sql>` at all, and by `#setEditorPending` in the shadow tree once
-   it has. This file carries the first copy, `DfkSql.css` the second (a shadow
-   tree cannot see the document's animation names) — keep the bar, the timing and
-   the keyframes of the two in sync. */
+   The editor ghost is drawn twice: here, for the window *before* the kit's JS has
+   defined `<dfk-sql>` at all (the bars are prerendered by `sql/remark.ts`), and
+   by `#setEditorPending` inside the shadow tree once it has. This file carries the
+   first copy and `DfkSql.css` the second — a shadow tree sees neither the
+   document's rules nor its `@keyframes` — so keep the bar and the timing of the
+   two in sync.
+
+   The line count is the SQL's *source* line count, which is a deliberate
+   approximation: a line long enough to wrap makes the editor taller than its
+   ghost, and knowing the wrapped height would mean laying the text out first —
+   measuring the site's fonts and column width — for a placeholder. */
 @keyframes dfk-sql-shimmer {
   from {
     background-position: 0% 0;
@@ -41,31 +51,48 @@ dfk-sql > :not([slot]) {
   }
 }
 
-/* Before the element upgrades it has no shadow tree, and the prerendered code
-   node is hidden by the rule above, so the block would be an invisible hole that
-   pops in and pushes the rest of the page down. `:not(:defined)` paints the same
-   one-line ghost the shadow tree starts with, at the same size, so the first
-   paint already looks like a block that is loading. It also stays a placeholder
-   when JS never runs, which is the honest thing to show for a block that needs
-   it. */
+/* Before the element upgrades it has no shadow tree, and its prerendered text is
+   hidden by the rule above, so without this the block would be an invisible hole
+   that pops in and pushes the rest of the page down. `:not(:defined)` paints the
+   box the editor will live in; the bars inside come from the plugin. It also
+   keeps standing in when no JS ever runs, which is the honest thing to show for a
+   block that needs it. */
 dfk-sql:not(:defined) {
   display: block;
   margin: 1rem 0;
-  /* CodeMirror's own inset and line box (`padding: 4px 0` on `.cm-content`,
-     `line-height: 1.6` on `.cm-scroller`), so the upgrade does not resize the
-     box. */
-  padding: 4px 0.75rem;
   border: 1px solid var(--ifm-global-border-color, #e0e0e0);
   border-radius: var(--ifm-global-radius, 0.4rem);
   background: var(--ifm-background-surface-color, #fff);
+  /* The editor's own code font size, so a bar is as tall as a line of code. */
   font-size: var(--ifm-code-font-size, 95%);
+  /* Floor of one line for a hand-written block, which carries no prerendered
+     ghost to be sized by. `border-box` (the sites' reset) counts the border. */
+  min-height: calc(1.6em + 10px);
 }
 
-dfk-sql:not(:defined)::before {
+/* The bars themselves: `sql/remark.ts` emits this markup for the pre-upgrade
+   window, `#setEditorPending` builds the same nodes inside the shadow tree, and
+   `DfkSql.css` carries that second copy of these two rules. */
+.dfk-sql-editor-skeleton {
+  /* CodeMirror's own content inset — `.cm-content` carries `padding: 4px 0` and
+     this box has none — on the container, so it is paid once, not per line. */
+  padding: 4px 0.75rem;
+}
+
+.dfk-sql-editor-skeleton-line {
+  display: flex;
+  align-items: center;
+  /* One code line box, exactly: `.cm-scroller`'s `line-height: 1.6`. The half
+     leading that centres a line's text is the flex centring here — margins would
+     collapse between neighbouring lines and stack the bars closer than the code
+     they stand in for. */
+  height: 1.6em;
+}
+
+.dfk-sql-editor-skeleton-line::before {
   content: '';
-  display: block;
+  flex: 1;
   height: 0.75em;
-  margin: 0.425em 0;
   border-radius: 0.25em;
   background-color: var(--ifm-color-emphasis-200, #e6e6e6);
   /* Base colour plus a lighter band travelling through it; `background-size:
@@ -121,7 +148,7 @@ dfk-sql:not(:defined)::before {
 /* A bar that sweeps forever is decoration; readers who asked for less motion get
    the static grey. Mirrored in `DfkSql.css`. */
 @media (prefers-reduced-motion: reduce) {
-  dfk-sql:not(:defined)::before,
+  .dfk-sql-editor-skeleton-line,
   .dfk-sql-table-skeleton-cell {
     animation: none;
   }

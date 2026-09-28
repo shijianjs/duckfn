@@ -18,11 +18,11 @@ DuckDB itself starts initialising in the background as soon as a page with a
 block opens, so the first **Run** click does not wait for the download.
 
 The editor and the result table are the two heavy parts of a block, and each
-arrives as its own chunk. Until CodeMirror is there the code area carries a
-one-line placeholder, and while VTable loads a table result carries two
+arrives as its own chunk. Until CodeMirror is there, the code area carries one
+placeholder bar per line of SQL; while VTable loads, a table result carries two
 placeholder rows. Both are the size of the thing they stand in for, so the swap
-itself adds no height — a block with more than one line of SQL still grows to fit
-its editor.
+itself adds no height — the one exception is a line of SQL long enough to wrap in
+the editor, which a placeholder cannot predict.
 
 The config is JSON (not `key=value`), so it can grow nested fields later:
 

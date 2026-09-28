@@ -119,15 +119,18 @@ src/
   断开即 `destroy()`）。`remark.ts` 保留下来的 `code` 子节点只是预渲染文本，
   元素没有默认 slot、`sql.css` 里 `dfk-sql > :not([slot]) { display: none }` 把它压掉。
 - **加载占位（三处，尺寸要一起改）**：编辑器和表格各是一个懒 `import()`，慢网下这两段窗口
-  肉眼可见，所以各有一个骨架。编辑器那一行在 shadow 里，由 `#setEditorPending()` 开关，
-  高度用 `calc(4px + 0.425em)` 按 CodeMirror 的 `padding: 4px 0` + `line-height: 1.6` 反推
-  ——与真编辑器等高，所以换成编辑器时块不跳；`import()` 自己失败时也要撤掉（状态行才是那条
-  消息）。表格那两行由 `mountTable` 在解析前塞进 `.dfk-sql-table`，画布落地（或错误视图接手）
-  即移除，行高由 `ROW_HEIGHT` 经自定义属性传下去。第三个在 **upgrade 之前**：
-  `dfk-sql:not(:defined)`（`sql.css`）——元素还没定义时既没有 shadow 树、预渲染的代码节点又被
-  上面那条隐藏，不画点什么就是一个会突然弹出来把页面顶下去的空洞；它是唯一能覆盖「kit 的 JS
-  还没到」那段窗口的手段，尺寸故意与 shadow 里那一行完全一致。跨 shadow 边界拿不到对方的
-  `@keyframes`，所以这行 ghost 在 `sql.css` 与 `DfkSql.css` 里各有一份，改动画/高度要一起改。
+  肉眼可见，所以各有一个骨架。编辑器是**每条 SQL 一行**的条：`#setEditorPending()` 按
+  `#currentSql` 的行数增删条数，每条占一个 `1.6em` 的盒子（= `.cm-scroller` 的 `line-height`），
+  半行距靠 flex 居中、**不能用 margin** —— 相邻 margin 会折叠，条与条会比真实代码行更密
+  （实测 3 行时矮 13px）。所以换成编辑器时块的高度不变；`import()` 自己失败时也要撤掉（状态行
+  才是那条消息）。行数按**源码行**算，这是刻意的近似：编辑器里折行的长行会让真块更高，要精确
+  就得先把文字排出来（还得猜站点字体与列宽），对占位来说不值当。表格那两行由 `mountTable` 在
+  解析前塞进 `.dfk-sql-table`，画布落地（或错误视图接手）即移除，行高由 `ROW_HEIGHT` 经自定义
+  属性传下去。第三处在 **upgrade 之前**：`dfk-sql:not(:defined)`（`sql.css`）——元素还没定义时
+  既没有 shadow 树、预渲染的代码节点又被上面那条隐藏，不画点什么就是一个会突然弹出来把页面顶
+  下去的空洞。这一份是 `sql/remark.ts` 在构建期就写进 HTML 的真实子节点（`skeleton()`），所以
+  它也按行数走、与 shadow 里那份逐像素一致；升级后它不在 slot 里，自然不渲染，不需要 JS 删。
+  两侧各有一份 bar 规则与 `@keyframes`（跨 shadow 边界拿不到对方的），改尺寸/动画要一起改。
 - **不要覆盖 `.cm-content` 的垂直 padding，也不要给 `.cm-gutters` 加**：CodeMirror 的
   `ViewState.measure()` 用 `parseInt` 读 `.cm-content` 的 computed `padding-top` 算出
   `paddingTop`，再把同一数值作为第一个 gutter 元素的 `marginTop` 施加下去（经 gutter 的
@@ -430,7 +433,8 @@ features.setFeatures(items);
 - 改 setter 签名属于公开 API 变更，需同步 `docs/src/pages/index.tsx` 的
   `mount*()` 助手、`src/index.ts` 的类型导出，以及下游消费方。
 - **例外（attribute 种子）**：`<dfk-sql>` 由 `sql/remark` 插件从 Markdown 自动
-  生成为 `<dfk-sql config="…" sql="…">`，没有 `mount*()` 助手、也挂不上 ref
+  生成为 `<dfk-sql config="…" sql="…">`（外加一份预渲染的加载占位，见「加载占位」），
+  没有 `mount*()` 助手、也挂不上 ref
   去调 setter —— 内容只能来自 `config` / `sql` 两个字符串属性。因此它在
   `connectedCallback()` 里 `getAttribute` **各读一次**作初始种子。这与「不做
   attribute reflection」不冲突：读一次用于初始化，不是 attribute 变化再驱动

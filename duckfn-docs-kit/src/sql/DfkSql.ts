@@ -162,12 +162,14 @@ export class DfkSql extends HTMLElementBase {
   /** The CodeMirror host; it lives in the shadow tree, so `DfkSql.css` styles it. */
   readonly #editorHost = el('div', {class: 'dfk-sql-editor'});
   /**
-   * One code-line ghost shown in place of the editor until its CodeMirror
+   * The editor ghost: one bar per line of SQL, shown until the CodeMirror
    * modules have landed (they are a lazy `import()`, and on a slow link that
    * window is long enough to see). The box keeps its border and background
    * either way, so the editor fills it rather than replacing it.
    */
   readonly #editorSkeleton = el('div', {class: 'dfk-sql-editor-skeleton'});
+  /** The bars currently in `#editorSkeleton`, kept in step with the SQL's lines. */
+  readonly #skeletonLines: HTMLElement[] = [];
   /** Wraps the editor and anchors the floating action cluster. */
   readonly #code = el('div', {class: 'dfk-sql-code'});
   readonly #actions = el('div', {class: 'dfk-sql-actions'});
@@ -292,16 +294,39 @@ export class DfkSql extends HTMLElementBase {
   // --- Editor ----------------------------------------------------------------
 
   /**
-   * Shows or drops the one-line editor ghost. It goes away once the editor is in
-   * place, and also when the `import()` itself failed — the status line carries
-   * that message, so a bar that keeps pulsing would be a lie. A later remount
-   * (the element was disconnected and reconnected) puts it back.
+   * Shows or drops the editor ghost, sized to the SQL it stands in for. A ghost
+   * is one `line-height: 1.6` box per line, exactly like the editor, so the block
+   * is the same height before and after CodeMirror takes over.
+   *
+   * It goes away once the editor is in place, and also when the `import()` itself
+   * failed — the status line carries that message, so bars that keep pulsing would
+   * be a lie. A later remount (the element was disconnected and reconnected) puts
+   * it back.
    */
   #setEditorPending(pending: boolean): void {
-    if (pending) {
-      this.#editorHost.appendChild(this.#editorSkeleton);
-    } else {
+    if (!pending) {
       this.#editorSkeleton.remove();
+      return;
+    }
+    this.#sizeEditorSkeleton();
+    this.#editorHost.appendChild(this.#editorSkeleton);
+  }
+
+  /**
+   * Grows or shrinks the ghost to the SQL's line count. `sql/remark.ts`
+   * prerenders the very same bars for the pre-upgrade window; it is Node build
+   * code that must stay out of the browser bundle, so both sides write this
+   * count out instead of sharing it.
+   */
+  #sizeEditorSkeleton(): void {
+    const lines = Math.max(1, this.#currentSql.split('\n').length);
+    while (this.#skeletonLines.length > lines) {
+      this.#skeletonLines.pop()?.remove();
+    }
+    while (this.#skeletonLines.length < lines) {
+      const bar = el('span', {class: 'dfk-sql-editor-skeleton-line'});
+      this.#skeletonLines.push(bar);
+      this.#editorSkeleton.appendChild(bar);
     }
   }
 

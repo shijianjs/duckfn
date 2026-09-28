@@ -14,6 +14,10 @@ import type {Plugin} from 'unified';
  * `config`) — React 19 reconciles string props onto custom elements as
  * attributes, so they survive prerendering and hydration.
  *
+ * The element also gets a prerendered *placeholder* (see {@link skeleton}): one
+ * bar per line of the SQL, which is what the reader sees before this package's
+ * JS arrives and `<dfk-sql>` upgrades.
+ *
  * Unlike Docusaurus' own `key=value` metastring format, the config here is
  * JSON, which allows nested fields (`option: {…}`) for future renderers.
  *
@@ -119,17 +123,62 @@ function parseConfig(meta: string | null | undefined): RunnableSqlConfig | null 
   return null;
 }
 
+/**
+ * How many bars the placeholder draws: the SQL's own line count, floored at one
+ * (an empty fence still needs a row).
+ *
+ * One line is exactly one CodeMirror line box, so a placeholder of this shape
+ * leaves the block as tall as the editor that eventually replaces it. The
+ * component counts the same way before it builds its own (shadow-tree) copy of
+ * the placeholder — the duplication is deliberate: this is Node build code and
+ * must not be imported by anything the browser bundles.
+ */
+function sqlLineCount(sql: string): number {
+  return Math.max(1, sql.split('\n').length);
+}
+
+/**
+ * The placeholder shown before the element upgrades: one bar per SQL line.
+ *
+ * Until this package's JS runs there is no shadow tree, and `sql.css` hides
+ * every unslotted child of a `<dfk-sql>` — the code node kept below included —
+ * so without this the block would be an invisible hole that pops in and pushes
+ * the rest of the page down. The bars are real children, which also means no JS
+ * has to remove them: once the element upgrades they are simply not slotted.
+ *
+ * `className` rather than `class`: MDX compiles this to a React element, and
+ * React wants the DOM prop spelling on built-in tags.
+ */
+function skeleton(sql: string): Record<string, unknown> {
+  return {
+    type: 'mdxJsxFlowElement',
+    name: 'div',
+    attributes: [{type: 'mdxJsxAttribute', name: 'className', value: 'dfk-sql-editor-skeleton'}],
+    children: Array.from({length: sqlLineCount(sql)}, () => ({
+      type: 'mdxJsxFlowElement',
+      name: 'span',
+      attributes: [
+        {type: 'mdxJsxAttribute', name: 'className', value: 'dfk-sql-editor-skeleton-line'},
+      ],
+      children: [],
+    })),
+  };
+}
+
 function wrapRunnableSql(code: CodeNode, config: RunnableSqlConfig): Record<string, unknown> {
+  const sql = String(code.value ?? '');
   return {
     type: 'mdxJsxFlowElement',
     name: DFK_SQL_TAG,
     attributes: [
       {type: 'mdxJsxAttribute', name: 'config', value: JSON.stringify(config)},
-      {type: 'mdxJsxAttribute', name: 'sql', value: String(code.value ?? '')},
+      {type: 'mdxJsxAttribute', name: 'sql', value: sql},
     ],
-    // Kept as a child for the prerendered text; `<dfk-sql>` never slots it
-    // (the code view is CodeMirror) and hides it through CSS.
-    children: [code],
+    // The placeholder first, then the code node. Both are unslotted, so once the
+    // element upgrades neither renders: the placeholder has done its job by then
+    // (`sql.css` draws it before the upgrade, and hides every *other* unslotted
+    // child) and the code node is the prerendered text the editor replaces.
+    children: [skeleton(sql), code],
   };
 }
 
