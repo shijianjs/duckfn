@@ -26,11 +26,12 @@ to `std::fs`, which only ever sees local disk.
 
 :::note[DuckDB 1.5.0+]
 
-File-system access comes from DuckDB's C API as of 1.5.0, so it needs `duckfn`'s `duckdb-1-5`
-feature:
+File-system access comes from DuckDB's C API as of 1.5.0, so it needs DuckDB 1.5 headers — and
+`duckfn`'s `owned-connection` feature, the one that captures the connection described below.
+`duckdb-1-5` on its own brings only 1.5's type surface; `owned-connection` implies it:
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
 ```
 :::
 
@@ -48,6 +49,24 @@ function: a macro-written aggregate and a hand-written adapter use exactly the s
 
 Capture is best-effort: if opening the connection fails, registration still succeeds and later
 take-ups report the recorded reason.
+
+## What it costs
+
+Keeping that connection is not free, and the costs are worth weighing before turning the feature on:
+
+- **It lives for the life of the process.** The static holds a `shared_ptr` to the database
+  instance, so the extension's connection stays accounted for as long as the process runs.
+- **Take-ups serialize.** The guard holds a mutex on that one connection: nesting it on a single
+  thread deadlocks, and concurrent take-ups queue. Read several files inside a single
+  `with_file_system` closure, or take the value once and cache it in your own state.
+- **One process-level entry, the first instance to finish registering wins** — with several database
+  instances in one process (or several `LOAD`s) the VFS of that first instance is the one used.
+- **It cannot be used where DuckDB runs synchronously on a single thread.** Opening the connection
+  during registration re-enters the engine on the current thread, and a runtime with no other thread
+  to make progress on deadlocks: the extension `LOAD` hangs without any error. The one known case is
+  DuckDB-Wasm's Node **blocking** bindings (`duckdb-node-blocking.cjs`); Node's worker mode
+  (`duckdb-node.cjs`, which the docs site's own SQL blocks run on), the browser and the native
+  command line are all fine.
 
 ## Reading a file
 
@@ -189,8 +208,8 @@ handler returning `Err` fails the query (the adapter reports it through
   involved.
 - **The owned connection's `FileOpener` is not the query connection's.** Instance-level
   configuration and secrets apply, but connection-level `SET`s are not guaranteed to be equivalent.
-- **DuckDB 1.5.0+ and the `duckdb-1-5` feature**, as noted above; without them these functions do not
-  exist.
+- **DuckDB 1.5.0+ and the `owned-connection` feature** (which implies `duckdb-1-5`), as noted above;
+  without them these functions do not exist.
 
 The example extension uses this from an aggregate (`dfn_agg_file_size` in
 `test/extension/functions/file_system.rs`), and `test/sql/functions/file_system.test` checks the

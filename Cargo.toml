@@ -140,15 +140,46 @@ default = []
 cli = ["dep:clap", "dep:csv"]
 
 # DuckDB 1.5 新增能力的支持：开启 quack-rs 的 duckdb-1-5，从而拿到 1.5 的新逻辑类型
-# （TypeId::TimeNs / Value::as_time_ns）、COPY 函数相关的 *Info 类型，以及客户端上下文 /
-# 宿主文件系统（duckfn::duck_vfs::with_file_system 等，见 src/duck_vfs/）。
+# （TypeId::TimeNs / Value::as_time_ns）与 COPY 函数相关的 *Info 类型。
+# 宿主文件系统（duckfn::duck_vfs）**不在**这一档里，它由下面的 `owned-connection` 控制 ——
+# 因为那一档真正要的东西是注册期的一条常驻连接，而它带着副作用。
 # 要求 libduckdb-sys 使用 >= 1.5 的头文件。
 #
 # Support for what DuckDB 1.5 added: forwards to quack-rs' `duckdb-1-5` feature, which exposes the
-# new logical types (`TypeId::TimeNs` / `Value::as_time_ns`), the copy-function `*Info` types, and
-# the client context / host file system (`duckfn::duck_vfs::with_file_system` and friends, see
-# src/duck_vfs/). Requires libduckdb-sys with >= 1.5 headers.
+# new logical types (`TypeId::TimeNs` / `Value::as_time_ns`) and the copy-function `*Info` types.
+# The host file system (`duckfn::duck_vfs`) is **not** here: it needs a connection captured at
+# registration time, which is what `owned-connection` below is about — that one carries side effects.
+# Requires libduckdb-sys with >= 1.5 headers.
 duckdb-1-5 = ["quack-rs/duckdb-1-5"]
+
+# 注册期捕获的「自有长连接」（src/duck_vfs/capture.rs）：扩展加载时打开一条进程级常驻连接，
+# 让拿不到客户端上下文的回调（首推聚合函数）也能访问宿主文件系统 ——
+# `duckfn::duck_vfs::with_file_system` / `file_system` / `client_context` 与基于它的便捷读写。
+#
+# 为什么单开一档：`duckdb-1-5` 的其余能力（新逻辑类型、COPY 函数）都是纯粹的 API 面，
+# 这一档却会**在进程里留一条永不释放的连接**，并且
+#   1. 每次取用都要拿它上面的互斥锁，取用之间串行化（同一线程嵌套取用会死锁）；
+#   2. 在「同一个线程里同步执行 DuckDB」的运行时里，注册期打开连接并重入会**直接死锁**，
+#      表现为扩展 LOAD / 注册卡住不动 —— 已知一处就是 DuckDB-Wasm 的 Node blocking 绑定
+#      （Node 的 worker 模式与浏览器正常，原生 CLI 也正常）。
+# 所以只开 `duckdb-1-5` 的用户不该被动带上它；用得上文件系统时再显式打开。
+#
+# The owned long-lived connection captured at registration time (src/duck_vfs/capture.rs): a
+# process-level, long-lived connection opened while the extension loads, so callbacks that get no
+# client context — aggregates above all — can still reach the host file system:
+# `duckfn::duck_vfs::with_file_system` / `file_system` / `client_context` and the convenience
+# read/write helpers built on them.
+#
+# Why it is its own feature: the rest of `duckdb-1-5` (new logical types, copy functions) is pure API
+# surface, while this one **keeps a connection alive for the life of the process** and
+#   1. serializes every take-up on that connection's mutex (nesting it on one thread deadlocks);
+#   2. **deadlocks outright** in a runtime that executes DuckDB synchronously on a single thread:
+#      opening a connection during registration and then re-entering the engine hangs the extension
+#      LOAD. The one known case is DuckDB-Wasm's Node blocking bindings (Node's worker mode and the
+#      browser are fine, and so is the native CLI).
+# A user who only wants `duckdb-1-5` should not inherit that; enable this when the file system is
+# actually needed.
+owned-connection = ["duckdb-1-5"]
 
 # 与 chrono 的互操作：给 DuckDate / DuckTimestamp* / DuckTime 等时间包装类型加上
 # `to_naive_date` / `from_naive_date` 这类双向转换方法（见 src/value_types/chrono_bridge.rs）。
@@ -203,7 +234,7 @@ quack = ["all"]
 # usually the end of the dependency tree — an extension depends on it directly and it rarely shows
 # up transitively — which makes "everything on" the convenient spelling; pick the individual
 # features listed above when you want a leaner dependency tree.
-all = ["cli", "duckdb-1-5", "chrono", "uuid", "rust_decimal"]
+all = ["cli", "duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"]
 
 [dependencies]
 quack-rs = "0.16.0"

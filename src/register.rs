@@ -34,15 +34,16 @@ inventory::collect!(DuckFunctionItem);
 
 /// 注册本扩展收集到的全部 DuckDB 函数（扩展初始化入口）。
 ///
-/// 开跑之前先 best-effort 捕获宿主文件系统入口（`duckdb-1-5` feature 下会打开一条自有长连接
+/// 开跑之前先 best-effort 捕获宿主文件系统入口（`owned-connection` feature 下会打开一条自有长连接
 /// 存进进程级静态，供 `duckfn::duck_vfs::with_file_system` / `duckfn::duck_vfs::file_system` 使用）：聚合函数这类
 /// 回调在调用期拿不到客户端上下文，注册期是唯一窗口；捕获失败只记原因，不影响注册成败。
 ///
 /// Before anything else it captures the host file-system entry point, best-effort (under the
-/// `duckdb-1-5` feature it opens an owned long-lived connection and stores it in a process-level
-/// static, backing `duckfn::duck_vfs::with_file_system` / `duckfn::duck_vfs::file_system`): callbacks such as aggregates
-/// cannot obtain a client context at call time, so registration is the only window. A failed
-/// capture is only recorded — it never decides whether registration succeeds.
+/// `owned-connection` feature it opens an owned long-lived connection and stores it in a
+/// process-level static, backing `duckfn::duck_vfs::with_file_system` /
+/// `duckfn::duck_vfs::file_system`): callbacks such as aggregates cannot obtain a client context at
+/// call time, so registration is the only window. A failed capture is only recorded — it never
+/// decides whether registration succeeds.
 ///
 /// 顺序为：先按提交顺序执行所有 `DuckFunctionItem`（标量函数、表函数、cast、SQL 宏、
 /// replacement scan、自定义注册等），再分组注册聚合函数集重载，最后分组注册标量函数集
@@ -70,7 +71,7 @@ pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
     // Registration time is the only window onto DuckDB's database handle: keep an owned,
     // long-lived connection here so callbacks such as aggregates can use the host file system
     // through `duckfn::duck_vfs::with_file_system` / `duckfn::duck_vfs::file_system`.
-    #[cfg(feature = "duckdb-1-5")]
+    #[cfg(feature = "owned-connection")]
     crate::duck_vfs::capture(connection);
     // 导出文档前先留一份 catalog 快照：注册完成后用它差出「本扩展新增的函数」，
     // 这样 `function` 列一定和 community-extensions 做 JOIN 的 `function_name` 对齐。

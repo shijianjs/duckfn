@@ -67,6 +67,7 @@ SELECT i * 10 AS ten FROM t ORDER BY i DESC;
 执行失败的语句会把错误渲染在结果区；编辑器里写的内容保持不动，什么都不会重置。
 
 ```sql {"type":"duckfn","show":"table"}
+-- 故意报错 —— SQL 测试套件读这条注释，据此预期失败
 SELECT this_function_does_not_exist(1);
 ```
 

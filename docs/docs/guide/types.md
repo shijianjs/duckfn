@@ -243,7 +243,7 @@ fn dfn_echo_array_integer(i: DuckArray<i32, 3>) -> DuckArray<i32, 3> {
 ```sql {"type":"duckfn"}
 SELECT typeof(dfn_echo_array_integer([1, 2, 3]));  -- INTEGER[3]
 SELECT dfn_echo_array_integer([1, 2, 3]);          -- [1, 2, 3]
-SELECT dfn_echo_array_integer([1, 2]);             -- error: No function matches
+SELECT dfn_echo_array_integer([1, 2]);             -- error: Cannot cast list with length 2 to array with length 3
 ```
 
 :::warning[Arrays are not bind parameters]

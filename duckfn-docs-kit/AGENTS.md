@@ -42,6 +42,8 @@ src/
 │                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
 │                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
 │                    #     （两侧共享的注入配置契约，见「扩展预加载」）
+│                    #   + collect.ts / nodeRunner.ts / verify.ts（Node：文档站自己的
+│                    #     SQL 测试与 `duckfn-sql-verify` 命令，见「文档站 SQL 测试」）
 │                    #   + client.ts（dfk-* 元素注册，插件注入到每个页面）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
@@ -76,6 +78,8 @@ src/
   - `duckfn-docs-kit/remark`（**Node 构建期**：版本占位符 remark 插件）
   - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
   - `duckfn-docs-kit/sql/extensions`（**Node 构建期**：扩展预加载 Docusaurus 插件）
+  - `duckfn-docs-kit/sql/verify`（**Node 运行期**：文档站 SQL 测试的入口与 CLI；
+    `sql/collect`、`sql/nodeRunner` 是它的两半，也可单独用）
   - `duckfn-docs-kit/toc-toggle/plugin`（**Node 构建期**：TOC 胶水插件）
   - `duckfn-docs-kit/sql/client`、`duckfn-docs-kit/toc-toggle/client`（浏览器引导，
     由上面两个插件注入，站点不要手写引用）
@@ -284,6 +288,28 @@ src/
   ——wasm 补丁只校验 C API slot 数（1.5.4/1.5.5 的 unstable 区未变），原生则按版本
   戳严格校验（1.5.4 的原生 duckdb 会拒绝 v1.5.5 构建的扩展）。升级 duckdb-wasm 或
   改 CI 的 `duckdb_version` 时必须成对验证（跑一遍可运行 SQL 页的两个示例块即可）。
+
+**文档站 SQL 测试（`sql/verify` + `sql/collect` / `sql/nodeRunner`）**
+
+- 入口是 `bin/sql-verify.mjs`（bin 名 `duckfn-sql-verify`），它 import `dist/sql/verify.js`。
+  bin **手写**、不进构建：Vite lib 产物是 ESM、不保留 shebang，而 npm 只需要一个带 shebang
+  且有执行位的文件。站点侧接成 `npm test` 即可（本仓库见 `docs/package.json`）。
+- 收集与渲染共用一份 meta 解析（`sql/remark.ts` 导出的 `parseRunnableSqlMeta`）：站点上不是
+  可运行块的，测试也不会跑。
+- 围栏按 CommonMark 收口：闭合围栏同字符、不短于开启围栏、且无 info string —— 这样
+  ````md 包着的 ```sql 示例（`runnable-sql.md` 就这么展示 meta）不会被当成块。
+- 执行用 **Node worker target**（`duckdb-node.cjs`），不用 blocking target：注册期会自行打开
+  连接的扩展（能用文件系统的那些）在 blocking 目标上**死锁**，表现为 `LOAD` 永久卡住（心跳静默，
+  进程内超时也打不断）。浏览器没这问题，因为那边的扩展在 worker 线程里加载。
+- 扩展只能经 **http URL** 加载（裸文件名 / 本地 VFS 路径在 wasm 上直接挂死，`registerFileBuffer`
+  也救不了），所以运行器起一个 loopback 服务。三个随之而来的约束：DuckDB 把拉下来的扩展暂存到
+  `~/.duckdb/extensions/<host>/<URL 一级路径段>/`，故 (1) URL 必须带一层路径段，(2) 该目录要
+  **预先建好**（加载器自己的 `mkdir` 非递归），(3) **Windows 上必须用 80 端口**让 URL 不含端口
+  —— 冒号在 Windows 路径里非法；其它平台用任意空闲端口。缓存目录每次运行前清空，免得测的是上一
+  次的旧扩展。
+- 形态与页面一致：**每页新实例 + 页内共用连接**（页内可以依赖前一个块建的宏/表，页与页隔离）。
+- 故意失败的块用 SQL 注释声明（`-- error:` / `-- 报错：`）：meta 表达不了这个语义，
+  `expectsError()` 认它，只有非预期失败才让命令以非零码退出。
 
 ## 代码风格（硬性要求）
 
@@ -555,8 +581,9 @@ Docusaurus 预渲染在 Node 里 import 本包。
   才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
   `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
-- Node 构建期模块只有 `src/remark.ts`、`src/sql/remark.ts` 与 `src/sql/extensions.ts`
-  （连同无依赖的共享契约 `src/sql/runtimeConfig.ts`），它们不得 import 任何浏览器模块。
+- Node 侧模块只有 `src/remark.ts`、`src/sql/remark.ts`、`src/sql/extensions.ts`（构建期）
+  与 `src/sql/collect.ts`、`src/sql/nodeRunner.ts`、`src/sql/verify.ts`（测试期），
+  连同无依赖的共享契约 `src/sql/runtimeConfig.ts`；它们都不得 import 任何浏览器模块。
 
 ### 11. React 19 自定义元素
 
@@ -610,7 +637,7 @@ npm whoami               # 没登录先 npm login
 ```
 
 `npm pack --dry-run` 打印 tarball 的文件清单，是发布前最值得看的一项：预期是 `dist/**` +
-`src/**` + `AGENTS.md` + `README.md` + `LICENSE` + `package.json`（当前 64 个文件）。
+`src/**` + `bin/**` + `AGENTS.md` + `README.md` + `LICENSE` + `package.json`（当前 75 个文件）。
 多出别的东西时先查 `files` 白名单，不要靠 `.npmignore` 追着排除。
 
 ### 1. 提升版本号
@@ -669,9 +696,9 @@ just release_kit_dev 0.1.2-dev.0
 
 包内容 = `files` 白名单 + npm 的固定规则，所以**不需要**在包的结构之外维护清单：
 
-- `files: ["dist", "src", "AGENTS.md"]`：`dist` 是构建产物；`src` 必须带上（CSS 子路径
-  `duckfn-docs-kit/src/kit.css` 直接指向源文件）；`AGENTS.md` 随包发布，下游读者因此能看到
-  本包的全部约定。
+- `files: ["dist", "src", "bin", "AGENTS.md"]`：`dist` 是构建产物；`src` 必须带上（CSS 子路径
+  `duckfn-docs-kit/src/kit.css` 直接指向源文件）；`bin` 是 `duckfn-sql-verify` 的入口（它 import
+  `dist/`，所以两者都要在包里）；`AGENTS.md` 随包发布，下游读者因此能看到本包的全部约定。
 - `README.md`、`LICENSE`、`package.json` 由 npm 自动收录：本包目录下有自己的 `LICENSE`
   （根目录那份不会被带进来），README 是 npm 包页的正文。
 - `dist/` 在 `.gitignore` 里，但照样进包 —— `files` 白名单优先于 gitignore。`prepack` 脚本

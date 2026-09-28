@@ -176,7 +176,14 @@ cd docs
 npm start                # http://localhost:3000
 npm start -- --locale zh-Hans
 npm run build            # must pass for both locales; broken links fail the build
+npm test                 # run every runnable SQL block in DuckDB-Wasm
 ```
+
+`npm test` is the docs' own test suite: it collects each runnable block and runs
+it with the site's extension preloaded, so a renamed function or a changed default
+shows up here instead of in a reader's browser. Blocks that demonstrate a failure
+have to say so in a comment (`-- error: …`), otherwise they count as breakage —
+see [Testing the examples](./docs-kit/sql-test.md).
 
 ## Conventions
 

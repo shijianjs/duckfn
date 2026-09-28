@@ -42,6 +42,12 @@ export default defineConfig({
         'sql/remark': src('sql/remark.ts'),
         'sql/client': src('sql/client.ts'),
         'sql/extensions': src('sql/extensions.ts'),
+        // The Node-side test of a docs site's own examples: `collect` finds the
+        // runnable blocks, `nodeRunner` runs them in DuckDB-Wasm, `verify` is
+        // the entry (and the `duckfn-sql-verify` bin).
+        'sql/collect': src('sql/collect.ts'),
+        'sql/nodeRunner': src('sql/nodeRunner.ts'),
+        'sql/verify': src('sql/verify.ts'),
       },
       formats: ['es'],
     },
@@ -62,7 +68,11 @@ export default defineConfig({
       // Vite's resolver, so the import survives into `dist/` untouched.
       external: [
         /^node:/,
-        '@duckdb/duckdb-wasm',
+        // A pattern, not the bare name: `sql/nodeRunner.ts` imports the Node
+        // target through the package's `dist/duckdb-node.cjs` subpath, which a
+        // plain-name entry would not match — bundling that file instead would
+        // pull the worker bootstrap into the library.
+        /^@duckdb\/duckdb-wasm/,
         '@visactor/vtable',
         'codemirror',
         '@codemirror/lang-sql',

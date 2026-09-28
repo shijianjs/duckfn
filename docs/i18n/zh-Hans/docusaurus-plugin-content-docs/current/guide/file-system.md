@@ -23,10 +23,12 @@ DuckDB 的 C API 只在部分回调里交出**客户端上下文**：标量函�
 
 :::note[DuckDB 1.5.0+]
 
-文件系统访问来自 DuckDB 1.5.0 的 C API，因此需要 `duckfn` 的 `duckdb-1-5` feature：
+文件系统访问来自 DuckDB 1.5.0 的 C API，所以需要 DuckDB 1.5 的头文件 —— 以及 `duckfn` 的
+`owned-connection` feature（下面那条连接的捕获就在它里面）。`duckdb-1-5` 只带来 1.5 的类型面，
+`owned-connection` 依赖它：
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
 ```
 :::
 
@@ -41,6 +43,21 @@ database 句柄，并由它打开一条 `OwnedConnection`，把结果存进进�
 没有句柄逸出，也不需要为每个函数单独注册：宏写的聚合与手写适配器用的是同一个调用。
 
 捕获是 best-effort 的：打开连接失败时注册照样成功，只是之后取用会报出记录下来的原因。
+
+## 代价
+
+留着这条连接不是没有代价，开启这个 feature 前值得先看一眼：
+
+- **它跟着进程活着。** 静态变量持有数据库实例的 `shared_ptr`，只要进程在跑，这条扩展连接就一直
+  占着实例上的一个连接位。
+- **取用会串行。** guard 持有那条连接上的互斥锁：同一线程里嵌套取用会死锁，并发取用要排队。
+  要读多个文件就把读取放进同一次 `with_file_system`，或者取一次值缓存进自己的状态。
+- **进程级只有一份，首个完成注册的实例胜出** —— 同一进程里有多个数据库实例（或多次 `LOAD`）时，
+  用的是先注册完那个实例的 VFS。
+- **不能用「同一个线程里同步执行 DuckDB」的运行时。** 注册期打开连接会在当前线程上重入引擎，
+  而没有别的线程能推进的运行时就此死锁：扩展 `LOAD` 卡住且不报任何错误。已知的唯一一处是
+  DuckDB-Wasm 的 Node **blocking** 绑定（`duckdb-node-blocking.cjs`）；Node 的 worker 模式
+  （`duckdb-node.cjs`，文档站自己的可运行块就跑在它上面）、浏览器与原生命令行都正常。
 
 ## 读一个文件
 
@@ -174,7 +191,7 @@ guard 持有那条自有连接上的互斥锁：
   （`duckfn::DuckExtraInfo` + `quack_rs::query::OwnedConnection`），框架不必参与。
 - **自有连接的 `FileOpener` 与查询连接不是同一个。** 实例级配置与 secrets 生效，但连接级 `SET`
   不保证等价。
-- **需要 DuckDB 1.5.0+ 与 `duckdb-1-5` feature**，否则这些函数不存在。
+- **需要 DuckDB 1.5.0+ 与 `owned-connection` feature**（它依赖 `duckdb-1-5`），否则这些函数不存在。
 
 示例扩展在聚合函数里用了它（`test/extension/functions/file_system.rs` 的 `dfn_agg_file_size`），
 `test/sql/functions/file_system.test` 用 DuckDB 自己的 `read_blob` 对照校验结果；`duckfn::duck_vfs`

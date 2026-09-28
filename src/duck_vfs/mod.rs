@@ -58,17 +58,25 @@
 //!
 //! # 前置条件与限制 / Prerequisites and limits
 //!
-//! - 需要 DuckDB 1.5.0+ 与本 crate 的 `duckdb-1-5` feature。
+//! - 需要 DuckDB 1.5.0+ 与本 crate 的 `owned-connection` feature（它自己依赖 `duckdb-1-5`）。
 //! - 进程级只有一份入口，以**首个完成注册的实例**为准；需要按实例隔离时，手写适配器并自持连接。
 //! - **没有删除**：C API 既没有 remove 也没有 move，DuckDB 也没有 `remove_file` 函数。
 //! - 每次取用都会拿那条自有连接上的互斥锁：**同一线程别嵌套取用**（会死锁），并发取用之间串行。
+//! - **不能用在「同一个线程里同步执行 DuckDB」的运行时里**：注册期就在当前线程上打开连接并重入
+//!   引擎，那类运行时（单线程 wasm、DuckDB-Wasm 的 Node blocking 绑定）会直接死锁，扩展 LOAD /
+//!   注册卡住不动。Node 的 worker 模式、浏览器与原生 CLI 都不受影响。
 //!
-//! - Requires DuckDB 1.5.0+ and this crate's `duckdb-1-5` feature.
+//! - Requires DuckDB 1.5.0+ and this crate's `owned-connection` feature (which itself needs
+//!   `duckdb-1-5`).
 //! - One process-level entry, first instance to finish registering wins; for per-instance isolation,
 //!   hand-write an adapter and keep your own connection.
 //! - **No delete**: the C API offers neither remove nor move, and DuckDB has no `remove_file`.
 //! - Every take-up locks the mutex on that owned connection: **never nest it on one thread** (that
 //!   deadlocks), and concurrent take-ups serialize.
+//! - **Must not be used in a runtime that executes DuckDB synchronously on one thread**: the
+//!   connection is opened, and the engine re-entered, on the current thread during registration, so
+//!   such a runtime (single-threaded wasm, DuckDB-Wasm's Node blocking bindings) deadlocks and the
+//!   extension LOAD just hangs. Node's worker mode, the browser and the native CLI are unaffected.
 
 mod capture;
 mod file;

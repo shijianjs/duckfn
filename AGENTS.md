@@ -103,6 +103,34 @@ sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
 写任何「通用」逻辑之前先问一句：这件事是不是已经有 crate（或 std API）在做
 
 
+## 文档站可运行 SQL 的测试
+
+文档里的可运行块（````sql {"type":"duckfn"}````）由 `duckfn-docs-kit` 的 `duckfn-sql-verify`
+在 DuckDB-Wasm 里真跑一遍，本站已接成 `npm test`：
+
+```bash
+npm test -w docs        # 等价于在 docs/ 下 npm test
+```
+
+它收集 `docs/docs/**` 与每个 `i18n/<locale>/…/current/**` 里的可运行块，用站点预加载的扩展
+（`docs/static/duckdb-extensions/duckfn.duckdb_extension.wasm`）执行，**每页一个新实例、页内共用
+连接**（页内可以依赖前一个块建的宏/表，页与页隔离）。「故意报错」的块靠 SQL 注释判定：块里出现
+`-- error:` / `-- 报错：` 即为预期失败，只有非预期失败才让命令非零退出 —— 所以在页面里演示报错的
+示例，要在那条语句上写注释，而不是只写在正文说明里。
+
+跑不通或结果不对时，先看这几条（完整版见 `duckfn-docs-kit/AGENTS.md`，面向读者的说明见
+`docs/docs/docs-kit/sql-test.md`）：
+
+- **必须用 Node 的 worker target**（`duckdb-node.cjs`）。`duckdb-node-blocking.cjs` 在 `LOAD`
+  一个「注册期会自行打开连接的扩展」时**死锁**（duckfn 正是如此），表现是进程挂住、心跳停摆，
+  进程内的超时也打不断；浏览器与原生 CLI 不受影响。
+- **扩展只能经 http URL 加载**：裸文件名或本地 VFS 路径在 wasm 上会挂死（`registerFileBuffer`
+  也不行）。DuckDB 把拉下来的扩展暂存到 `~/.duckdb/extensions/<host>/<URL 一级路径段>/`，因此
+  URL 要带一层路径段、该目录要**预先建好**（加载器的 `mkdir` 非递归）；**Windows 上本地服务必须用
+  80 端口**，让 URL 不含端口 —— 冒号在 Windows 路径里非法。POSIX 用任意空闲端口即可。
+- 平台要配对：默认 `--platform eh` 对应站点预加载的 `duckfn-wasm_eh.duckdb_extension.wasm`。
+- `docs/.cache/`（已 git 忽略、不删）存着 DuckDB-Wasm 与扩展 wasm 的本地副本，便于离线排查。
+
 ## 发版流程
 
 发版命令都在 `Justfile` 里（`just --list` 可查），实际逻辑在 `scripts/release.sh`。
@@ -226,3 +254,6 @@ just release_dev 0.0.6-dev.0
   所有需要一致的名字。原先放在本仓库 `templates/` 下的那套模板已由该仓库取代。
 - [`docs/docs/build-and-release.md`](docs/docs/build-and-release.md)：面向读者的构建与发布说明。
 - [`docs/docs/contributing.md`](docs/docs/contributing.md)：本地开发流程与约定。
+- [`docs/docs/docs-kit/sql-test.md`](docs/docs/docs-kit/sql-test.md) 与
+  [`duckfn-docs-kit/AGENTS.md`](duckfn-docs-kit/AGENTS.md)：文档站可运行 SQL 的测试 —— 用法与
+  平台约束（Node worker target、http 加载、Windows 端口）。

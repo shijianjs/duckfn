@@ -102,8 +102,15 @@ interface ParentNode {
   children?: unknown[];
 }
 
-/** Parse the metastring; `null` means "not a runnable block, leave it alone". */
-function parseConfig(meta: string | null | undefined): RunnableSqlConfig | null {
+/**
+ * Parse the metastring; `null` means "not a runnable block, leave it alone".
+ *
+ * Exported because the block contract has two consumers: this plugin, which
+ * turns a block into `<dfk-sql>` at build time, and `sql/verify` (via
+ * `sql/collect`), which runs those same blocks in CI. Both have to agree on
+ * what counts as runnable, so there is one parser.
+ */
+export function parseRunnableSqlMeta(meta: string | null | undefined): RunnableSqlConfig | null {
   if (!meta) {
     return null;
   }
@@ -199,7 +206,7 @@ export const remarkRunnableSql: Plugin<[RunnableSqlOptions?]> =
         }
         const candidate = child as CodeNode;
         if (candidate.type === 'code' && candidate.lang === 'sql') {
-          const config = parseConfig(candidate.meta);
+          const config = parseRunnableSqlMeta(candidate.meta);
           if (config) {
             return wrapRunnableSql(candidate, config);
           }

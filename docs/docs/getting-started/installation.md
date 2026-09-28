@@ -29,7 +29,8 @@ macros without the runtime.
 
 | Feature | Enables | Requires |
 | --- | --- | --- |
-| `duckdb-1-5` | Logical types added in DuckDB 1.5 — today `TIME_NS` (`DuckTimeNs`). | `libduckdb-sys` headers from DuckDB 1.5 or newer. |
+| `duckdb-1-5` | Logical types added in DuckDB 1.5 — today `TIME_NS` (`DuckTimeNs`) — plus the copy-function types behind `COPY ... TO`. | `libduckdb-sys` headers from DuckDB 1.5 or newer. |
+| `owned-connection` | The host file system (`duckfn::duck_vfs`): one long-lived connection captured at registration, so callbacks without a client context — aggregates above all — can read and write through DuckDB's VFS. Implies `duckdb-1-5`. Has side effects: the connection lives as long as the process, take-ups serialize, and it deadlocks a runtime that executes DuckDB synchronously on one thread (DuckDB-Wasm's Node *blocking* bindings) — see [File system access](../guide/file-system.md#what-it-costs). | Otherwise the same headers as `duckdb-1-5`. |
 | `chrono` | Conversions between the time wrapper types and [`chrono`](https://crates.io/crates/chrono) (`DuckDate::to_naive_date` and friends), so the epoch arithmetic lives in duckfn. | An optional `chrono` dependency, pulled in by this feature. |
 | `uuid` | Conversions between `DuckUuid` and [`uuid`](https://crates.io/crates/uuid) (`to_uuid` / `from_uuid`). | An optional `uuid` dependency. |
 | `rust_decimal` | Conversions between `DuckDecimal<W, S>` and [`rust_decimal`](https://crates.io/crates/rust_decimal); out-of-range and digit-losing values are errors. | An optional `rust_decimal` dependency. |

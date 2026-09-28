@@ -31,11 +31,12 @@
 //   macro-written aggregates and hand-written adapters. The capability is independent of the
 //   function kind, and function-level extra data (extra_info) plays no part.
 //
-// 前置条件：DuckDB 1.5.0+ 且 duckfn 打开 `duckdb-1-5` feature（本示例 crate 已在 Cargo.toml
-// 里打开），否则 `with_file_system` 一类入口不存在。
+// 前置条件：DuckDB 1.5.0+ 且 duckfn 打开 `owned-connection` feature（它自己依赖 `duckdb-1-5`；
+// 本示例 crate 通过 `quack` → `all` 打开），否则 `with_file_system` 一类入口不存在。
 //
-// Requires DuckDB 1.5.0+ and duckfn's `duckdb-1-5` feature (this example crate enables it in
-// Cargo.toml); otherwise the entry points such as `with_file_system` do not exist.
+// Requires DuckDB 1.5.0+ and duckfn's `owned-connection` feature (which itself needs
+// `duckdb-1-5`; this example crate gets it through `quack` → `all`); otherwise the entry points such
+// as `with_file_system` do not exist.
 // ============================================================================
 
 use std::ffi::CString;

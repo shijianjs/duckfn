@@ -78,6 +78,7 @@ Run a failing statement and the error appears in the result area; whatever you
 typed in the editor is kept, nothing resets.
 
 ```sql {"type":"duckfn","show":"table"}
+-- error on purpose — the SQL test suite reads this note and expects the failure
 SELECT this_function_does_not_exist(1);
 ```
 

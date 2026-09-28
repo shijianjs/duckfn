@@ -24,6 +24,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "duckfn-sql-verify": "./bin/sql-verify.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -38,6 +41,7 @@
   "files": [
     "dist",
     "src",
+    "bin",
     "AGENTS.md"
   ],
   "scripts": {

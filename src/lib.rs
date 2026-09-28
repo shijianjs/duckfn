@@ -82,13 +82,16 @@ pub(crate) mod functions;
 pub(crate) mod utils;
 // 宿主文件系统（DuckDB 的 VFS）访问与便捷文件读写：模块文档见 `src/duck_vfs/mod.rs`。
 // 这里用普通注释而不是 `///`，避免外层文档与模块内文档合并后，内层的 intra-doc 链接在
-// crate 根作用域里解析失败。需要 DuckDB 1.5.0+ 与 `duckdb-1-5` feature。
+// crate 根作用域里解析失败。需要 DuckDB 1.5.0+ 与 `owned-connection` feature —— 模块的
+// 前提是注册期捕获的那条自有长连接，不只是 `duckdb-1-5` 的那层 API 面（见 Cargo.toml）。
 //
 // Host file system (DuckDB's VFS) access plus convenience file reads and writes: the module docs
 // live in `src/duck_vfs/mod.rs`. A plain comment instead of `///` keeps the outer doc from
 // merging with the inner one, which would make the inner intra-doc links resolve in the crate root
-// scope and fail. Requires DuckDB 1.5.0+ and the `duckdb-1-5` feature.
-#[cfg(feature = "duckdb-1-5")]
+// scope and fail. Requires DuckDB 1.5.0+ and the `owned-connection` feature: the module rests on the
+// connection captured at registration time, not merely on the `duckdb-1-5` API surface (see
+// Cargo.toml).
+#[cfg(feature = "owned-connection")]
 pub mod duck_vfs;
 
 // 过程宏（属性宏、derive、函数式宏）的再导出；由 `duckfn-macro` crate 提供。

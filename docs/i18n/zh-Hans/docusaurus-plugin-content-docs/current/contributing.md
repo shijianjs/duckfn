@@ -159,7 +159,12 @@ cd docs
 npm start                # http://localhost:3000
 npm start -- --locale zh-Hans
 npm run build            # 两种语言都必须通过；断链会直接让构建失败
+npm test                 # 在 DuckDB-Wasm 里跑遍每个可运行 SQL 块
 ```
+
+`npm test` 是文档站自己的测试：它收集每个可运行块，用站点预加载的扩展真跑一遍 —— 函数改名或默认
+值变了的后果会在这里暴露，而不是在读者的浏览器里。演示报错的块必须在注释里写明（`-- 报错：…`），
+否则会被当成真的坏了 —— 见[测试示例](./docs-kit/sql-test.md)。
 
 ## 约定
 
