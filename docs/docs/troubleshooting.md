@@ -1,13 +1,13 @@
 ---
 title: Troubleshooting
 sidebar_position: 10
-description: The Rust 1.86 pin in the official CI's WebAssembly job, and an upstream bug that corrupts all-NULL list literals.
+description: Rust 1.86 pinning in the official CI's WebAssembly build, the upstream bug that corrupts all-NULL list literals, and why a `panic!` is unusable on WebAssembly.
 ---
 
 # Troubleshooting
 
-Two things that are none of duckfn's doing, but that you will run into. Each one says what you see,
-why it happens, and what to do about it.
+Three things that are largely none of duckfn's doing, but that you will run into. Each one says what
+you see, why it happens, and what to do about it.
 
 Problems with the *layout* — the crate roots, `error[E0583]`, and the IDE flagging a separate wasm
 root — live in [Project structure](./getting-started/project-structure.md) instead,
@@ -83,6 +83,33 @@ buffer after the first element.
 **Workaround.** Type at least one *element* — `[NULL, NULL::INTEGER, NULL, NULL]` — rather than the
 list, or hand the function a value that comes from a query instead of a literal. Reported against
 DuckDB v1.5.4 and v1.5.5, still open upstream.
+
+## A `panic!` inside a function is unusable on WebAssembly
+
+**What you see.** On the native CLI (and in `just test`) a function that panics reports a readable
+message. The *same* call in the browser (DuckDB-Wasm) fails with:
+
+```
+RangeError: Maximum call stack size exceeded
+```
+
+— with no trace of your panic message at all. (The extension survives: a later call on the same
+connection still works; it is only that one call that comes back as a stack overflow.)
+
+**Why.** duckfn and quack-rs *do* guard against this: every callback body runs inside
+`std::panic::catch_unwind`, and the crate is built with `panic = "unwind"`. That is exactly why a
+`panic!` reports a readable message on native — `catch_unwind` catches the unwind and the adapter turns
+it into a DuckDB error. The problem is the target, not the code: `wasm32-unknown-emscripten` cannot
+unwind across the wasm↔JS boundary (that needs `-C panic=unwinding` plus wasm exception handling /
+emscripten `-fexceptions`, which duckdb-wasm's side-module toolchain does not enable). So on wasm the
+`catch_unwind` landing pad never sees the panic — it escapes into the JS shim and exhausts the JavaScript
+stack. The recoverable path is unaffected: returning `Err(duck_error("..."))` (a `DuckOptionResult`)
+does not unwind at all, so it surfaces as a clean, readable `Invalid Input Error` on both native and wasm.
+
+**What to do — never `panic!` to signal an error.** Return `Err(duck_error("..."))` /
+`DuckOptionResult` for anything a caller can react to. Keep `panic!` only for "this is an internal bug
+that must abort", and know that on WebAssembly it will look like a stack overflow to a reader, not a
+message. Measured against a locally built `wasm_eh` extension on emscripten 3.1.71.
 
 ## See also
 

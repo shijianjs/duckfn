@@ -45,7 +45,7 @@ fn dfn_copy_tsv(writer: &mut TsvWriter, rows: &[DuckDynamicRow]) -> DuckResult<(
 | --- | --- |
 | `&mut MyWriter` | 格式的 writer 状态，实现 [`DuckCopyToWriter`](#duckcopytowriter)。 |
 | `&[DuckDynamicRow]` | 本批的行：至多 `2048` 行，每行与 schema 的列一一对应，`None` 表示 SQL NULL。 |
-| `-> DuckResult<()>` | `Err` 让整条 `COPY` 失败；panic 也会被转成查询错误。 |
+| `-> DuckResult<()>` | `Err` 让整条 `COPY` 失败；panic 也会被转成查询错误（仅原生；wasm 上会变成栈溢出）。 |
 
 两个参数顺序可以互换。
 
@@ -100,7 +100,9 @@ DuckDB 通过四个回调驱动一次 `COPY TO`。`#[duck_copy_function]` 把四
 | finalize | 一次 | 调用 `DuckCopyToWriter::finish()`。 | `finish` |
 
 每个阶段都跑在 `catch_unwind` 里，`Err` 与 panic 都会报给 DuckDB，因此失败会中止 `COPY`，而不是跨
-FFI 边界展开。
+FFI 边界展开。但这个兜底**仅原生生效**：在浏览器 (`wasm32-unknown-emscripten`) 上 `panic!` 无法跨 JS
+边界展开，会变成 `Maximum call stack size exceeded`，所以请用 `Err(duck_error(…))` —— 参见
+[错误与 panic](./errors-and-panics.md)。
 
 ## `COPY ... FROM`
 

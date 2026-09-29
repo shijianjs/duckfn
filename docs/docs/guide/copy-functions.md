@@ -46,7 +46,7 @@ fn dfn_copy_tsv(writer: &mut TsvWriter, rows: &[DuckDynamicRow]) -> DuckResult<(
 | --- | --- |
 | `&mut MyWriter` | The format's writer state, implementing [`DuckCopyToWriter`](#duckcopytowriter). |
 | `&[DuckDynamicRow]` | This chunk's rows: at most `2048`, one cell per schema column, `None` for SQL NULL. |
-| `-> DuckResult<()>` | `Err` fails the whole `COPY`; panics become query errors too. |
+| `-> DuckResult<()>` | `Err` fails the whole `COPY`; panics become query errors too (native only — on wasm a panic surfaces as a stack overflow). |
 
 The two parameters may be written in either order.
 
@@ -105,7 +105,10 @@ write the row loop:
 | finalize | once | Calls `DuckCopyToWriter::finish()`. | `finish` |
 
 Every phase runs inside `catch_unwind`, and both an `Err` and a panic are reported to DuckDB, so a
-failure aborts the `COPY` instead of unwinding across the FFI boundary.
+failure aborts the `COPY` instead of unwinding across the FFI boundary. That catching is **native
+only**: on the browser (`wasm32-unknown-emscripten`) a `panic!` cannot unwind across the JS boundary
+and surfaces as `Maximum call stack size exceeded`, so prefer `Err(duck_error(…))` — see
+[Errors and panics](./errors-and-panics.md).
 
 ## `COPY ... FROM`
 

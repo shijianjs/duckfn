@@ -1,12 +1,12 @@
 ---
 title: 问题排查
 sidebar_position: 10
-description: 官方 CI 的 WebAssembly 作业锁定的 Rust 1.86，以及会把全 NULL 列表字面量读坏的上游 bug。
+description: 官方 CI 的 WebAssembly 作业锁定的 Rust 1.86、会把全 NULL 列表字面量读坏的上游 bug，以及为什么 `panic!` 在 WebAssembly 上不可用。
 ---
 
 # 问题排查
 
-下面两件事都不是 duckfn 造成的，但你迟早会碰到。每一条都说清现象、原因和处理办法。
+下面几件事基本都不是 duckfn 造成的，但你迟早会碰到。每一条都说清现象、原因和处理办法。
 
 与**目录结构**有关的那些 —— 几个 crate root、`error[E0583]`、IDE 对独立 wasm root 标红 ——
 搬到了[项目结构约定](./getting-started/project-structure.md)，因为那是「项目怎么搭起来」的问题，
@@ -79,6 +79,31 @@ SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 
 **规避办法。** 给至少一个**元素**标类型（`[NULL, NULL::INTEGER, NULL, NULL]`），而不是给列表标类型；
 或者不要直接传字面量，让值由查询产生。已确认影响 DuckDB v1.5.4 与 v1.5.5，上游仍未修复。
+
+## 函数里的 `panic!` 在 WebAssembly 上不可用
+
+**现象。** 原生 CLI（以及 `just test`）里，一个 `panic!` 的函数会报出可读的 panic 消息；
+而**同一个调用**在浏览器（DuckDB-Wasm）里会失败成：
+
+```
+RangeError: Maximum call stack size exceeded
+```
+
+—— 完全看不到你写的 panic 消息。（扩展本身没被搞挂：同一连接上后面的调用仍正常；只有那一次调用
+会变成栈溢出的假错。）
+
+**原因。** duckfn 与 quack-rs *确实*做了防护：每个回调体都跑在 `std::panic::catch_unwind` 里，
+且 crate 以 `panic = "unwind"` 构建。这正是为什么 `panic!` 在原生上能报出可读消息 —— `catch_unwind`
+接住了展开，适配层再把它转成 DuckDB 错误。问题出在目标平台而非代码：`wasm32-unknown-emscripten`
+无法在 wasm↔JS 边界上展开（那需要 `-C panic=unwinding` 加上 wasm 异常处理 / emscripten `-fexceptions`，
+而 duckdb-wasm 的 side module 工具链并未启用）。于是在 wasm 上 `catch_unwind` 的 landing pad 根本接不到
+这个 panic —— 它逃进 JS 胶水层，把 JavaScript 栈耗尽。可恢复那条路径不受影响：返回
+`Err(duck_error("..."))`（`DuckOptionResult`）根本不展开，所以在原生与 wasm 上都是干净可读的
+`Invalid Input Error`。
+
+**处理办法 —— 不要用 `panic!` 来报错。** 凡是调用方能响应的情形，都返回 `Err(duck_error("..."))` /
+`DuckOptionResult`。`panic!` 只留给“这是必须中断的内部 bug”，并知道它在 WebAssembly 上对读者
+只会呈现为一个栈溢出，而不是一条消息。以上基于本地自建的 `wasm_eh` 扩展（emscripten 3.1.71）实测。
 
 ## 相关页面
 

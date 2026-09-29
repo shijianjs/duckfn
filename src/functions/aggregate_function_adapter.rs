@@ -1,6 +1,13 @@
 //! 聚合函数适配层：把有状态的 Rust 结构体注册成 DuckDB 聚合函数。
 //!
 //! Aggregate-function adapter: registers a stateful Rust struct as a DuckDB aggregate function.
+//!
+//! `catch_unwind` 的 panic 兜底**仅原生成立**；在 wasm/浏览器 (`wasm32-unknown-emscripten`) 上
+//! 接不住 —— panic 无法跨 JS 边界展开，会变成 `Maximum call stack size exceeded` 栈溢出。
+//! 报错请用 `Err(duck_error(..))` 而非 `panic!`（详见 `crate::utils::helpers` 模块文档）。
+//!
+//! The `catch_unwind` panic guard is native-only: on wasm a `panic!` cannot unwind across the JS
+//! boundary and surfaces as a stack overflow. Report errors with `Err(duck_error(..))`, not `panic!`.
 
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;

@@ -2,6 +2,15 @@
 //!
 //! Scalar-function adapter: splits quack-rs' vector-level C callback into batch-read, row-wise
 //! evaluation and batch-write Rust code.
+//!
+//! panic 兜底仅在原生成立：本文件提到的 `catch_unwind` 把 panic 转成查询错误，在 wasm / 浏览器
+//! (`wasm32-unknown-emscripten`) 上兜不住 —— panic 无法跨 JS 边界展开，会变成 `Maximum call stack
+//! size exceeded` 栈溢出。报错请用 `Err(duck_error(..))`，不要用 `panic!`。详见 `crate::utils::helpers`
+//! 模块文档与文档站 Troubleshooting。
+//!
+//! The `catch_unwind`-catches-panics guarantee below is native-only: on wasm the panic cannot
+//! unwind across the JS boundary and surfaces as a stack overflow. Report errors via
+//! `Err(duck_error(..))`, not `panic!`.
 
 use crate::duck_columns::DuckColumns;
 use crate::utils::builder_with_params::BuilderWithParams;

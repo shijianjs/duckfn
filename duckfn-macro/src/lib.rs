@@ -188,7 +188,7 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// - 返回类型可以是 `T`、`Option<T>`（`None` -> SQL NULL）或 `DuckOptionResult<T>`
 ///   （可失败、可为 NULL）；`T` 与 `Option<T>` 都直接作为该列的值类型，只有
 ///   `DuckOptionResult` 额外表示「可能失败」；
-/// - 函数体里的 panic 会被捕获并转成查询错误；
+/// - 函数体里的 panic 会被捕获并转成查询错误（仅原生；wasm/浏览器上 panic 接不住，会变成栈溢出）；
 /// - `volatile = true` 把函数标记为 volatile：注册时调用
 ///   `duckdb_scalar_function_set_volatile`，DuckDB 不缓存也不复用相同参数的调用结果，每一行
 ///   都重新求值（`random()` 这类函数需要它）。需要 duckfn 打开 `duckdb-1-5` feature
@@ -218,7 +218,8 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// `None` and decides the semantics itself. The return type may be `T`, `Option<T>` (`None` maps
 /// to SQL NULL) or `DuckOptionResult<T>` (fallible and nullable): `T` and `Option<T>` are both
 /// used as the column's value type directly, and only `DuckOptionResult` adds a failure channel.
-/// Panics in the body are caught and turned into query errors. `volatile = true` marks the
+/// Panics in the body are caught and turned into query errors (native only — on wasm a panic cannot
+/// unwind across the JS boundary and surfaces as a stack overflow). `volatile = true` marks the
 /// function volatile: registration then calls `duckdb_scalar_function_set_volatile`, so DuckDB
 /// neither caches nor reuses the result of a call with the same arguments and every row is
 /// re-evaluated (which is what functions like `random()` need). `varargs = true` enables variadic
@@ -350,7 +351,7 @@ pub fn duck_table_function(attr: TokenStream, item: TokenStream) -> TokenStream 
 ///   阶段拿到路径、动态 schema 与 COPY 选项，`finish` 在 finalize 阶段收尾）；
 /// - `&[DuckDynamicRow]`：本批要写出的动态行（至多 `vector_size()` 行）；行的列与 `open` 收到的
 ///   schema 逐列对应，`None` 单元格就是 SQL NULL；
-/// - 返回 `DuckResult<()>`，入参或写出失败会让整条 `COPY` 失败，panic 也会被转成查询错误。
+/// - 返回 `DuckResult<()>`，入参或写出失败会让整条 `COPY` 失败，panic 也会被转成查询错误（仅原生；wasm 上会变成栈溢出）。
 ///
 /// 四个生命周期阶段的回调由适配层生成：bind 把输出列反推成动态 schema 并读出 COPY 选项，global init
 /// 调用 `DuckCopyToWriter::open`，sink 把数据块读成动态行后调用被标注的函数，finalize 调用
@@ -368,7 +369,8 @@ pub fn duck_table_function(attr: TokenStream, item: TokenStream) -> TokenStream 
 /// `open` receives the path, the dynamic schema and the COPY options during global init; its
 /// `finish` wraps up during finalize), and `&[DuckDynamicRow]` is the batch to write, one column per
 /// schema column with `None` cells as SQL NULL. It returns `DuckResult<()>`: a failure fails the whole
-/// `COPY`, and a panic is turned into a query error as well. A module named after the function is
+/// `COPY`, and a panic is turned into a query error as well (native only; on wasm it becomes a stack
+/// overflow). A module named after the function is
 /// generated, exporting `copy_function_builder()` and `copy_function_register(connection)`; with
 /// `auto_register = false` they are generated but nothing is registered.
 #[proc_macro_attribute]
@@ -540,7 +542,7 @@ pub fn duck_sql_macro(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// - `Ok(Some(table_function))`：接管，并把路径作为第一个 VARCHAR 参数传给该表函数；
 /// - `Ok(None)`：不接管，DuckDB 继续尝试其他 replacement scan；
-/// - `Err(..)` / panic：整条查询以该错误结束。
+/// - `Err(..)` / panic：整条查询以该错误结束（仅原生；wasm 上 panic 会变成栈溢出、不是该错误）。
 ///
 /// 返回值可以是 `Option<String>` / `Option<&'static str>` /
 /// `DuckOptionResult<String>` / `DuckOptionResult<&'static str>`。
@@ -549,7 +551,8 @@ pub fn duck_sql_macro(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// table function. The signature takes exactly one table-name (path) argument and returns the
 /// name of the target table function: `Ok(Some(table_function))` takes over and passes the path
 /// as the first VARCHAR argument; `Ok(None)` declines so DuckDB tries the next replacement scan;
-/// `Err(..)` or a panic fails the whole query. The return type may be `Option<String>` /
+/// `Err(..)` or a panic fails the whole query (on wasm a panic surfaces as a stack overflow, not the
+/// message). The return type may be `Option<String>` /
 /// `Option<&'static str>` / `DuckOptionResult<String>` / `DuckOptionResult<&'static str>`.
 #[proc_macro_attribute]
 pub fn duck_replacement_scan(attr: TokenStream, item: TokenStream) -> TokenStream {

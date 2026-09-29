@@ -141,6 +141,14 @@ SELECT error_scalar_demo(20);  -- error: panic: input is 20
 SELECT error_scalar_demo(30);  -- error: explicit panic
 ```
 
+:::caution
+The two `panic!` cases above (`20`, `30`) print a readable message on the native CLI, but **in the
+browser they come back as `Maximum call stack size exceeded`** — a Rust `panic!` does not cross the
+wasm→JS boundary as a message. Only `error_scalar_demo(10)`, which returns `Err(duck_error(...))`,
+reports cleanly on both. Prefer `Err(duck_error(...))` over `panic!` to signal an error; see
+[Troubleshooting](../troubleshooting.md).
+:::
+
 ## Aggregates
 
 ```sql {"type":"duckfn"}

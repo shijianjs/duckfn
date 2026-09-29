@@ -3,6 +3,13 @@
 //! Copy-`TO` adapter: registers a Rust function that writes rows batch by batch as a DuckDB copy
 //! function (a custom file format).
 //!
+//! `catch_unwind` 的 panic 兜底**仅原生成立**；在 wasm/浏览器 (`wasm32-unknown-emscripten`) 上
+//! 接不住 —— panic 无法跨 JS 边界展开，会变成 `Maximum call stack size exceeded` 栈溢出。
+//! 报错请用 `Err(duck_error(..))` 而非 `panic!`（详见 `crate::utils::helpers` 模块文档）。
+//!
+//! The `catch_unwind` panic guard is native-only: on wasm a `panic!` cannot unwind across the JS
+//! boundary and surfaces as a stack overflow. Report errors with `Err(duck_error(..))`, not `panic!`.
+//!
 //! 与静态列版本的关键区别：**输出 schema 是运行时的**。适配层在 bind 阶段把查询结果各列的
 //! `LogicalType` 反推成 [`DuckTypeDesc`]，组成 [`DuckResultSchema`]；sink 阶段再把每个数据块按这份
 //! schema 读成 [`DuckDynamicRow`]，因此 `LIST` / `STRUCT` / `MAP` 等嵌套列同样可以写出，而不是只有

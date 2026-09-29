@@ -27,7 +27,8 @@
 //!   把凭证存进聚合状态、跨 chunk 或跨线程再 `get()` 都是错的；
 //! - 这类误用**不会变成未定义行为**：凭证里带着源 reader 的存活令牌（[`ChunkToken`]）与线程 id，
 //!   `get()` / `try_get()` 会先校验再解引用 —— 失效时返回错误，`get()` 则 panic，
-//!   而 panic 会被适配层的 unwind 包装成**查询报错**；
+//!   而 panic 会被适配层的 unwind 包装成**查询报错**（仅原生；wasm/浏览器上 unwind 接不住，
+//!   panic 会变成 `Maximum call stack size exceeded` 栈溢出，详见 `crate::utils::helpers` 模块文档）；
 //! - **只读**：写路径（返回值 / 输出字段）一律 panic，因为输出阶段输入 chunk 可能已经失效；
 //! - **bind 参数（`Value` 路径）不支持**：表函数的 bind 值只在 bind 回调里有效，函数体在
 //!   bind 返回之后才执行，因此该路径直接报错并给出明确信息。
@@ -39,7 +40,8 @@
 //! [`DuckLazySlot<T>`](crate::DuckLazySlot) state field: it parses once, carries the result across
 //! `combine` and reads it back in `result`. The token inside the value keeps a
 //! `Weak` to the source reader's liveness token plus the creating thread id, so consuming a stale
-//! value reports an error (and `get()` panics, which the adapters turn into a query error) instead
+//! value reports an error (and `get()` panics, which the adapters turn into a query error — native
+//! only; on wasm the panic cannot unwind and surfaces as a stack overflow) instead
 //! of dereferencing a stale vector. Writing is not supported, and the bind/`Value` path is
 //! rejected explicitly.
 
@@ -106,12 +108,13 @@ impl<T: DuckValueType> DuckLazy<T> {
     /// 解析出 `T`：先校验凭证仍有效，再用记录的向量与行号重建 reader 并读值。
     ///
     /// 凭证已失效（跨回调 / 跨 chunk / 跨线程）或读不出值时 panic —— 适配层的 unwind 包装会把
-    /// 它变成一条查询报错。需要优雅处理请用 [`Self::try_get`]。
+    /// 它变成一条查询报错（仅原生；wasm/浏览器上会变成栈溢出）。需要优雅处理请用 [`Self::try_get`]。
     ///
     /// Parses `T`: the value first re-checks that it is still valid, then rebuilds a reader from
     /// the recorded vector and row. A stale value (past its callback, past the chunk, or from
     /// another thread) or a value `T` cannot represent panics — the adapter's unwind wrapper turns
-    /// that into a query error. Use [`Self::try_get`] to handle it gracefully instead.
+    /// that into a query error (native only; on wasm it becomes a stack overflow). Use
+    /// [`Self::try_get`] to handle it gracefully instead.
     pub fn get(&self) -> T {
         match self.try_get() {
             Ok(value) => value,
