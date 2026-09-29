@@ -4,4 +4,4 @@
 // {{DUCKFN_VERSION}}，由 duckfn-docs-kit 的 remark 插件在构建时替换
 // （注册处见 docusaurus.config.ts 的 remarkPlugins）。
 // 发版时运行 `just release_bump X.Y.Z` 会自动更新这里的值。
-export const DUCKFN_VERSION = '0.0.14';
+export const DUCKFN_VERSION = '0.0.15';
