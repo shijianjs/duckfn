@@ -1,47 +1,34 @@
 ---
 title: 问题排查
 sidebar_position: 10
-description: 官方 CI 的 WebAssembly 作业锁定的 Rust 1.86、会把全 NULL 列表字面量读坏的上游 bug，以及为什么 `panic!` 在 WebAssembly 上不可用。
+description: 官方 CI 的 WebAssembly 构建对 Rust 1.86 的锁定（已解决）、会把全 NULL 列表字面量读坏的上游 bug，以及为什么 `panic!` 在 WebAssembly 上不可用。
 ---
 
 # 问题排查
 
-下面几件事基本都不是 duckfn 造成的，但你迟早会碰到。每一条都说清现象、原因和处理办法。
+下面几件事基本都不是 duckfn 造成的，但做 WebAssembly 构建时轻易会碰到。第一条上游已修复，保留作为
+背景。每一条都说清现象、原因和处理办法。
 
 与**目录结构**有关的那些 —— 几个 crate root、`error[E0583]`、IDE 对独立 wasm root 标红 ——
 搬到了[项目结构约定](./getting-started/project-structure.md)，因为那是「项目怎么搭起来」的问题，
 不是「哪里出了故障」。
 
-## 官方 CI 的 WASM 构建锁定在 Rust 1.86
+## 官方 CI 的 WASM 构建不再锁定 Rust 1.86（已解决）
 
-**现象。** 打版本 tag 时，分发流水线把各原生平台都构建出来了，但 WebAssembly 那个作业失败 —— 有时甚至
-在你自己的 crate 开始编译之前就失败：
+**曾经。** 可复用分发工作流把 WebAssembly 作业写死在 Rust 1.86（`dtolnay/rust-toolchain@1.86.0`），
+而所有原生作业用 stable；这个固定又在可复用工作流**内部**，扩展仓库不 fork 就无法提高。依赖图里
+任何需要 1.86 之后语言特性的 crate —— 本次报告的是 `ar_archive_writer 0.5.x` 里的 let-chain ——
+都只在 `wasm_*` 作业失败，而 `linux_amd64`、`osx_*`、`windows_*` 全部通过。
 
-```
-error[E0658]: `let` expressions in this position are unstable
-  --> ar_archive_writer-0.5.0/src/archive_writer.rs:591:20
-```
+**现在。** 上游已修复：wasm 作业的 Rust 工具链已升到 **1.97.1**
+（[`duckdb/extension-ci-tools#394`](https://github.com/duckdb/extension-ci-tools/pull/394)，关闭了
+[`#385`](https://github.com/duckdb/extension-ci-tools/issues/385)）。你**不需要**再把依赖图保持成
+1.86 可编译，也不必为了避开它而 `exclude_archs` 掉 wasm 变体。
 
-**原因。** 本仓库调用的可复用工作流
-（`duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata`，接在
-`.github/workflows/MainDistributionPipeline.yml` 里）把 WebAssembly 工具链写死了：
-
-```yaml
-- name: Setup Rust for cross compilation
-  uses: dtolnay/rust-toolchain@1.86.0
-  with:
-    targets: wasm32-unknown-emscripten
-```
-
-只有 wasm 作业被固定版本，而且固定在这个可复用工作流内部，扩展仓库不 fork 就无法提高版本。依赖图里任何需要
-1.86 之后语言特性的 crate —— 本次报告的是 `ar_archive_writer 0.5.x` 里的 let-chain —— 都会在那里失败，
-而 `linux_amd64`、`osx_*`、`windows_*` 全部通过。
-
-**现状。** 上游 issue：
-[`duckdb/extension-ci-tools#385`](https://github.com/duckdb/extension-ci-tools/issues/385)，
-截至 2026-09-15 仍未关闭，提出的两种修法（提高版本锁定，或把工具链版本暴露成工作流输入）都还没合并。
-在此之前，要么让依赖图保持能被 1.86 编译，要么在不发布 wasm 时用 `exclude_archs`（`wasm_eh` 等 wasm
-变体）跳过这些目标。
+**仍需检查的一点。** 这次提升在含 #394 的 `extension-ci-tools` 版本里，所以仓库引用的 ref 要足够新：
+相应调高 `.github/workflows/MainDistributionPipeline.yml` 里的 `ci_tools_version`（以及 vendored 的
+`extension-ci-tools` 子模块）。早于修复的 ref 会保持旧行为 —— 比如本仓库当前钉的 `@v1.5-variegata`，
+其 vendored 工作流里 wasm 作业仍是 `dtolnay/rust-toolchain@1.86.0`，直到该 ref 往前推。
 
 ## 全 NULL 的列表字面量传入后是脏数据
 
@@ -92,14 +79,26 @@ RangeError: Maximum call stack size exceeded
 —— 完全看不到你写的 panic 消息。（扩展本身没被搞挂：同一连接上后面的调用仍正常；只有那一次调用
 会变成栈溢出的假错。）
 
-**原因。** duckfn 与 quack-rs *确实*做了防护：每个回调体都跑在 `std::panic::catch_unwind` 里，
-且 crate 以 `panic = "unwind"` 构建。这正是为什么 `panic!` 在原生上能报出可读消息 —— `catch_unwind`
-接住了展开，适配层再把它转成 DuckDB 错误。问题出在目标平台而非代码：`wasm32-unknown-emscripten`
-无法在 wasm↔JS 边界上展开（那需要 `-C panic=unwinding` 加上 wasm 异常处理 / emscripten `-fexceptions`，
-而 duckdb-wasm 的 side module 工具链并未启用）。于是在 wasm 上 `catch_unwind` 的 landing pad 根本接不到
-这个 panic —— 它逃进 JS 胶水层，把 JavaScript 栈耗尽。可恢复那条路径不受影响：返回
-`Err(duck_error("..."))`（`DuckOptionResult`）根本不展开，所以在原生与 wasm 上都是干净可读的
-`Invalid Input Error`。
+**原因 —— 卡在 Rust 的构建，不是 Emscripten。** 有两层必须对齐，而 duckfn 只能控其中一层：
+
+- **DuckDB-Wasm 的 `eh` bundle** 确实启用了 Wasm 层的异常处理（exception handling），所以
+  DuckDB/C++ 抛出的异常能被捕获。这一层没问题。
+- **Rust 那一层**需要的是 *Rust 自己的* 展开（unwinding），而该目标并没有把它编出来。rustup
+  为 `wasm32-unknown-emscripten` 提供的预编译 `std` 是以 `panic = "abort"` 构建的 —— 里面没有
+  `libpanic_unwind`。所以尽管 duckfn 与 quack-rs 把每个回调都包在 `std::panic::catch_unwind` 里、
+  并以 `panic = "unwind"` 构建，却没有可用的展开运行时：`panic!` 直接 abort，在 wasm 运行时里
+  就表现成 `RangeError: Maximum call stack size exceeded`，而不是你的消息。原生上展开是真实存在
+  的 —— 这正是为什么 `catch_unwind` 在 native 能把 panic 转成可读的 DuckDB 错误。
+
+要让 `catch_unwind` 在 wasm 上真正生效，得带展开地重编 `std`，而目前这一步需要 nightly：
+`RUSTFLAGS="-Cpanic=unwind" cargo +nightly build -Zbuild-std=std,panic_unwind …`（`-Zbuild-std`
+仍仅限 nightly）。而官方 `wasm_eh` 的 CI **并没有**这么做 —— 它用 stable
+`cargo build --target wasm32-unknown-emscripten` 编出 staticlib、最后才跑 `emcc`，而
+`emcc -fwasm-exceptions` 救不回一个已被 Rust 编成 `abort` 的 `panic!`。这就是“安全网在 native
+真、在 wasm 形同虚设”的全部原因。
+
+可恢复那条路径不受影响：返回 `Err(duck_error("..."))`（`DuckOptionResult`）根本不展开，所以在
+原生与 wasm 上都是干净可读的 `Invalid Input Error`。
 
 **处理办法 —— 不要用 `panic!` 来报错。** 凡是调用方能响应的情形，都返回 `Err(duck_error("..."))` /
 `DuckOptionResult`。`panic!` 只留给“这是必须中断的内部 bug”，并知道它在 WebAssembly 上对读者

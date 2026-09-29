@@ -7,19 +7,24 @@
 //!
 //! 这里的 `*_unwind` 包装（以及各适配层复用的它们）用 `std::panic::catch_unwind` 把用户函数体
 //! 里的 `panic!` 兜住、转成查询错误 —— 这只在原生平台成立（crate 以 `panic = "unwind"` 构建）。
-//! **在 wasm / 浏览器（`wasm32-unknown-emscripten`）上失效**：该目标无法在 wasm↔JS 边界展开，
-//! `catch_unwind` 的 landing pad 接不到 panic，它会逃进 JS 胶水层、表现为
-//! `RangeError: Maximum call stack size exceeded`（栈溢出），而不是一条可读的查询错误。
-//! 因此**绝不要用 `panic!` 报错**：可恢复错误一律返回 `Err(duck_error(..))` / [`DuckOptionResult`]。
-//! 详见文档站的 Troubleshooting。
+//! **在 wasm / 浏览器（`wasm32-unknown-emscripten`）上失效**：卡点在 Rust 构建而非 Emscripten ——
+//! rustup 为该目标提供的预编 `std` 是以 `panic = "abort"` 构建的（不含 `libpanic_unwind`），
+//! 根本没有可用的展开运行时，所以 `catch_unwind` 接不到 panic；`panic!` 直接 abort，在 wasm 里
+//! 表现为 `RangeError: Maximum call stack size exceeded`（栈溢出），而不是一条可读的查询错误。要让它
+//! 真正生效需 nightly 重编 std：`RUSTFLAGS="-Cpanic=unwind" cargo +nightly build -Zbuild-std=std,panic_unwind`（
+//! 而官方 wasm_eh CI 并未这么做）。因此**绝不要用 `panic!` 报错**：可恢复错误一律返回
+//! `Err(duck_error(..))` / [`DuckOptionResult`]。详见文档站 Troubleshooting。
 //!
 //! These `*_unwind` wrappers catch a user `panic!` via `std::panic::catch_unwind` and turn it into
 //! a query error — but only on native (the crate builds with `panic = "unwind"`). **On wasm /
-//! the browser (`wasm32-unknown-emscripten`) they are ineffective**: that target cannot unwind
-//! across the wasm↔JS boundary, so the `catch_unwind` landing pad never sees the panic; it escapes
-//! into the JS shim and surfaces as `RangeError: Maximum call stack size exceeded`, not a readable
-//! query error. So **never use `panic!` to signal an error** — return `Err(duck_error(..))` /
-//! [`DuckOptionResult`] instead. See the Troubleshooting page on the docs site.
+//! the browser (`wasm32-unknown-emscripten`) they are ineffective** — the blocker is Rust's build,
+//! not Emscripten: rustup ships a precompiled `std` for this target built with `panic = "abort"`
+//! (no `libpanic_unwind`), so there is no unwinder for `catch_unwind` to use; the `panic!` aborts and
+//! surfaces as `RangeError: Maximum call stack size exceeded`, not a readable query error. Making it
+//! work needs a nightly rebuild of `std` (`RUSTFLAGS="-Cpanic=unwind" cargo +nightly build
+//! -Zbuild-std=std,panic_unwind`), which the official `wasm_eh` CI does not do. So **never use
+//! `panic!` to signal an error** — return `Err(duck_error(..))` / [`DuckOptionResult`] instead. See
+//! the Troubleshooting page on the docs site.
 
 use quack_rs::error::ExtensionError;
 use quack_rs::prelude::ScalarFunctionInfo;
