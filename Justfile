@@ -51,6 +51,15 @@ test: ci-build
 build_wasm:
     cargo build --release --target wasm32-unknown-emscripten --features quack
 
+# 用 emsdk 把扩展打成可加载的 wasm_eh 产物（逻辑在 scripts/build-wasm-eh.sh）：
+# cargo 出 libduckfn.a → emcc 出 side module → append_extension_metadata 出 .duckdb_extension.wasm。
+# 前提：emsdk/emscripten 版本须与 CI 一致（3.1.71，见 _extension_distribution.yml），否则产物加载不了。
+# 脚本会先 source emsdk_env.sh；recipe 已在 Git Bash 下执行，故 make/emcc 可用。
+# 透传参数：`just build_wasm_eh --install-docs`（装进 docs/static 供 npm test -w docs 验证）、
+# `--emsdk <路径>`（默认 /s/workspace/github/emscripten-core/emsdk，也可用环境变量 EMSDK）、`--debug`。
+build_wasm_eh *args:
+    bash scripts/build-wasm-eh.sh {{args}}
+
 # 工具链（首次）：固定 Rust 版本 + 装 wasm target
 config_env:
     rustup override set 1.86.0
