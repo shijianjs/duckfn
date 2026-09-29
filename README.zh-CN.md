@@ -25,8 +25,8 @@
 - 无需手写 `unsafe`：不需要 `unsafe fn`，函数体里也碰不到裸指针
 - 无需编译 DuckDB，无需 C/C++ 代码
 - 属性驱动、基于 `inventory` 的自动注册
-- panic 安全：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开
-- 宿主文件系统访问：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::duck_vfs::read_string` / `write_string` / `append_string` 这类一行式接口，由 `duckdb-1-5` feature 提供
+- panic 安全（**仅原生**）：Rust panic 会转成 DuckDB 错误，不会跨 FFI 边界展开。（浏览器里这个兜底用不了 —— `panic!` 无法跨 JS 边界展开，会变成栈溢出，所以请用 `Err(duck_error(..))` 报错，不要用 `panic!`。）
+- 宿主文件系统访问（native）：任何回调（包括聚合函数）都能通过 DuckDB 的虚拟文件系统读写文件（`s3://`、`http(s)://`（需 httpfs）、内存文件），并提供 `duckfn::duck_vfs::read_string` / `write_string` / `append_string` 这类一行式接口（由 `owned-connection` feature 提供；在 DuckDB-Wasm 上不可靠，故不在 `all` 里，详见下方 feature 说明）
 - 与其它 crate 互转：时间包装类型（`DuckDate`、`DuckTimestamp` / `_S` / `_Ms` / `_Ns`、`DuckTimestampTz`、`DuckTime`）与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid)，`DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal)（`chrono` / `uuid` / `rust_decimal` feature）—— 越界、DuckDB 的 `infinity` 与会丢位的转换都以错误返回，不会 panic，也不会静默截断
 - 函数文档：在任何 `#[duck_*]` 属性上写 `description` / `comment` / `example`，由 `cli` feature 提供的命令行工具导出成 DuckDB 社区扩展文档页读取的 `function_descriptions.csv`
 - 可直接复用 DuckDB 官方多平台扩展 CI
@@ -70,21 +70,25 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 `duckfn` 有七个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
 扩展文档页使用，本仓库里的命令是 `cargo run --features quack --bin duckfn-cli -- function_descriptions`），
 只有扩展项目的 `src/bin/duckfn.rs` 需要它。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5
-新增的逻辑类型（目前是 `TIME_NS`）、COPY 函数，以及宿主文件系统访问。另外三个是互转，彼此独立：
+新增的逻辑类型（目前是 `TIME_NS`）与 COPY 函数。`owned-connection` 在其之上加上**宿主文件系统访问**
+（`duckfn::duck_vfs`）：从任意回调（含聚合）通过 DuckDB 的 VFS 读写。另外三个是互转，彼此独立：
 `chrono` 让时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`uuid` 让 `DuckUuid` 与
 [`uuid`](https://crates.io/crates/uuid) 双向转换，`rust_decimal` 让 `DuckDecimal<W, S>` 与
 [`rust_decimal`](https://crates.io/crates/rust_decimal) 双向转换 —— 纪元 / 128 位 / 定标整数的换算都收进
 duckfn，而不是留给每个扩展各写一遍：
 
 ```toml
-duckfn = { version = "0.0.14", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.0.14", features = ["duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"] }
 ```
 
-`all` 是聚合开关，一次把上面这五个都打开。duckfn 通常就在依赖树的末端，所以直接写
-`features = ["all"]` 最省事；想精简依赖树时再按上面的单项挑着开。
+`all` 是聚合开关 —— 除 `owned-connection` 之外的所有可选 feature。duckfn 通常就在依赖树的末端，所以直接写
+`features = ["all"]` 最省事。宿主文件系统被故意排除在 `all` 之外：它在浏览器 / DuckDB-Wasm 上不可靠
+（见 Troubleshooting / 文件系统文档），而 native 上又能用 DuckDB 自身读写 / 系统库替代，所以只能按需
+显式开 `owned-connection`，不强加给所有人。想精简依赖树时再按上面的单项挑着开。
 
-`quack` 是唯一一个不面向下游的 feature：它编译本包自己的示例扩展（`test/extension/`）。它依赖 `all`，
-而不是反过来，所以下游写 `features = ["all"]` 不会被带进示例和那些测试函数。
+`quack` 是唯一一个不面向下游的 feature：它编译本包自己的示例扩展（`test/extension/`），依赖 `all` 外加
+`owned-connection`（示例把每项能力都演示了一遍，包括 duck_vfs）。反过来 `all` 不依赖 `quack`，所以下游
+写 `features = ["all"]` 不会被带进示例和那些测试函数。
 
 ## 快速开始
 

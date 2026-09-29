@@ -31,7 +31,12 @@ extension;`），`[[bin]] duckfn-cli` 也写了 `required-features = ["quack"]`�
   `TARGET_INFO += --features quack`）、`cargo build --features quack`、`just build`、
   `just build_wasm`。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口符号的 cdylib），
   `LOAD` 时才报错，很难查。
-- `quack = ["all"]`，而 `all` **不**依赖 `quack`：`all` 是给下游用户用的，用户不需要示例与那些测试函数。
+- `quack = ["all", "owned-connection"]`：示例把每一档可选能力都演示了一遍，包括 `duckfn::duck_vfs`，
+  所以除了 `all` 还要显式带上 `owned-connection`（见下）。
+- `all` 是给下游用户用的「全开」档，**不含 `owned-connection`（即 `duck_vfs`）**：宿主文件系统在
+  浏览器 / DuckDB-Wasm 上不可靠（存在性判定恒真、裸写偏移错），且 native 上能用 DuckDB 自身读写 /
+  系统库替代，所以不放进「全开」；需要时下游在 native 场景下单独开 `owned-connection`。`all` 也
+  **不**依赖 `quack`（用户不需要示例与那些测试函数）。
 
 ### 发布包内容
 

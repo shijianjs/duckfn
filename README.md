@@ -26,8 +26,8 @@ cast, or a nested type — no C/C++ glue code, and no local DuckDB build require
 - No `unsafe` to write: no `unsafe fn`, no raw pointers in your function bodies
 - No DuckDB build required, no C/C++ code
 - Attribute-driven registration through `inventory`
-- Panic-safe: Rust panics become DuckDB errors instead of unwinding across the FFI boundary
-- Host file system access: read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included — plus one-line helpers such as `duckfn::duck_vfs::read_string` / `write_string` / `append_string` (`duckdb-1-5` feature)
+- Panic-safe **on native**: Rust panics become DuckDB errors instead of unwinding across the FFI boundary. (On the browser this guard cannot work — a `panic!` cannot unwind across the JS boundary and surfaces as a stack overflow — so report errors with `Err(duck_error(..))`, not `panic!`.)
+- Host file system access (native): read and write through DuckDB's virtual file system (`s3://`, `http(s)://` with `httpfs`, in-memory) from any callback — aggregate functions included — plus one-line helpers such as `duckfn::duck_vfs::read_string` / `write_string` / `append_string` (the `owned-connection` feature; unreliable under DuckDB-Wasm, so it is not in `all` — see the feature notes below)
 - Interop with other crates: the time wrapper types (`DuckDate`, `DuckTimestamp` / `_S` / `_Ms` / `_Ns`, `DuckTimestampTz`, `DuckTime`) convert to and from [`chrono`](https://crates.io/crates/chrono), `DuckUuid` ↔ [`uuid`](https://crates.io/crates/uuid), and `DuckDecimal<W, S>` ↔ [`rust_decimal`](https://crates.io/crates/rust_decimal) (`chrono` / `uuid` / `rust_decimal` features) — out-of-range values, DuckDB's `infinity` and digit-losing conversions come back as errors, never as a panic or a silent truncation
 - Function documentation: `description` / `comment` / `example` on any `#[duck_*]` attribute, exported to the `function_descriptions.csv` that DuckDB's community-extension pages read (`cli` feature)
 - Works with DuckDB's official multi-platform extension CI
@@ -76,24 +76,28 @@ re-exported by `duckfn` and no extra dependency is needed.
 `function_descriptions.csv` for DuckDB's community-extension pages
 (`cargo run --features quack --bin duckfn-cli -- function_descriptions` in this repository); only an
 extension project's `src/bin/duckfn.rs` needs it. `duckdb-1-5` enables what DuckDB's 1.5 C API
-added: the logical types from DuckDB 1.5 (currently `TIME_NS`), copy functions, and host
-file-system access. The other three are interop and independent of each other: `chrono` converts
-the time wrapper types to and from [`chrono`](https://crates.io/crates/chrono), `uuid` converts
-`DuckUuid` to and from [`uuid`](https://crates.io/crates/uuid), and `rust_decimal` converts
-`DuckDecimal<W, S>` to and from [`rust_decimal`](https://crates.io/crates/rust_decimal) — so the
-epoch / 128-bit / scaled-integer arithmetic lives in duckfn rather than in every extension:
+added: the logical types from DuckDB 1.5 (currently `TIME_NS`) and copy functions. `owned-connection`
+builds on it to add **host file-system access** (`duckfn::duck_vfs`): read/write through DuckDB's VFS
+from any callback, aggregates included. The other three are interop and independent of each other:
+`chrono` converts the time wrapper types to and from [`chrono`](https://crates.io/crates/chrono),
+`uuid` converts `DuckUuid` to and from [`uuid`](https://crates.io/crates/uuid), and `rust_decimal`
+converts `DuckDecimal<W, S>` to and from [`rust_decimal`](https://crates.io/crates/rust_decimal) — so
+the epoch / 128-bit / scaled-integer arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.0.14", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.0.14", features = ["duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"] }
 ```
 
-`all` is the aggregate switch: it turns all five of the real features on at once. duckfn normally
-sits at the end of the dependency tree, so `features = ["all"]` is the convenient spelling; pick the
-individual features above when you want a leaner tree.
+`all` is the aggregate switch — every optional feature **except `owned-connection`**. duckfn normally
+sits at the end of the dependency tree, so `features = ["all"]` is the convenient spelling. The host
+file system is left out of `all` on purpose: it is unreliable under the browser / DuckDB-Wasm build
+(see the Troubleshooting / file-system docs), and on native DuckDB's own readers or the standard
+library cover it, so it is opt-in via `owned-connection` rather than charged to everyone. Pick
+individual features when you want a leaner tree.
 
 `quack` is the one feature that is not meant for dependents: it compiles this package's own example
-extension (`test/extension/`). It depends on `all`, never the other way round, so asking for `all` does
-not drag the example and its test functions into your build.
+extension (`test/extension/`), and depends on `all` plus `owned-connection` (the example demonstrates
+every capability). Asking for `all` never drags the example or its test functions into your build.
 
 ## Quick start
 

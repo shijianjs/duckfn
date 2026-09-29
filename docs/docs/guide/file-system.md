@@ -67,12 +67,17 @@ Keeping that connection is not free, and the costs are worth weighing before tur
   DuckDB-Wasm's Node **blocking** bindings (`duckdb-node-blocking.cjs`). The browser, the native
   command line, and Node's worker mode (`duckdb-node.cjs`) all load without hanging.
 - **The file system is only faithful where it is a real one.** On a native disk the reads and writes
-  below behave like POSIX. Under the browser / DuckDB-Wasm build the raw file system is not: opening a
-  file that was never written "succeeds" and reads back zero-filled bytes, so `exists` is always true
-  and write/append byte order is wrong — and DuckDB's C API exposes no existence primitive an
-  extension could use to correct it. That is a platform limit, not a bug, which is why the docs site
-  keeps file-system examples as plain (non-runnable) blocks; the SQL examples this site runs in CI are
-  executed in a real browser (`duckfn-sql-verify`).
+  below behave like POSIX. Under the browser / DuckDB-Wasm build it does not (measured against a
+  locally built `wasm_eh` extension): **any** non-existent path returns a phantom one-byte `\0` —
+  even DuckDB's own `glob` / `read_text` / `file_size` report it present — so `exists` is always true
+  and no FS primitive can tell "absent" apart, and duckfn's raw write offset is off (the file gains /
+  misorders a byte). This is a platform limit, not a duckfn bug, which is why the docs site keeps
+  file-system examples as plain (non-runnable) blocks. DuckDB's `COPY … TO` only exports query
+  results in a format (CSV / JSON / parquet) — it round-trips, but it **cannot dump an arbitrary
+  string (e.g. an HTML report) as raw bytes** (CSV adds quoting/newlines), so there is no general
+  file-write on the browser at all. `duck_vfs` is consequently **no longer part of the `all`
+  feature** — enable `owned-connection` explicitly when you run natively. The SQL examples this site
+  runs in CI are executed in a real browser (`duckfn-sql-verify`).
 
 ## Reading a file
 

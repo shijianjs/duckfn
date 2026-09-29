@@ -59,10 +59,14 @@ database 句柄，并由它打开一条 `OwnedConnection`，把结果存进进�
   DuckDB-Wasm 的 Node **blocking** 绑定（`duckdb-node-blocking.cjs`）。浏览器、原生命令行与 Node 的
   worker 模式（`duckdb-node.cjs`）加载都不会卡住。
 - **文件系统只在“真的是文件系统”的地方才忠实。** 原生磁盘上，下面的读写与 POSIX 一致。浏览器 /
-  DuckDB-Wasm 构建下那套裸文件系统不然：打开一个从未写过的文件也“成功”、读回零填充的字节，
-  所以 `exists` 恒真、写 / 追加的字节序也不对 —— 而 DuckDB 的 C API 没有可供扩展纠正这一点的存在性
-  接口。这是平台限制而非 bug，所以文档站把文件系统相关的示例保持为普通（非可运行）块；本站在 CI
-  里跑的可运行 SQL 是在**真实浏览器**里执行的（`duckfn-sql-verify`）。
+  DuckDB-Wasm 构建下不然（用本地自建的 `wasm_eh` 扩展实测）：**任意**不存在的路径都会返回一个 1 字节
+  `\0` 的幻影条目 —— 连 DuckDB 自带的 `glob` / `read_text` / `file_size` 都把它报成存在，所以 `exists`
+  恒真、没有任何 FS 原语能区分“不存在”；duckfn 的裸写偏移也错（文件多一字节 / 错位）。这是平台
+  限制而非 duckfn 的 bug，所以文档站把文件系统相关的示例保持为普通（非可运行）块。DuckDB 的
+  `COPY … TO` 只能把查询结果按格式（CSV / JSON / parquet）导出 —— 能往返，但**存不了一个任意长
+  字符串（如 HTML 报告）的原样字节**（CSV 会加引号/换行），所以浏览器上根本没有通用的文件写出
+  路子。因此 **`duck_vfs` 已从 `all` feature 移除** —— native 下确需时再显式开 `owned-connection`。本站在
+  CI 里跑的可运行 SQL 是在**真实浏览器**里执行的（`duckfn-sql-verify`）。
 
 ## 读一个文件
 

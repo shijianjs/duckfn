@@ -65,10 +65,14 @@
 //! - **不能用在「同一个线程里同步执行 DuckDB」的运行时里**：注册期就在当前线程上打开连接并重入
 //!   引擎，那类运行时（单线程 wasm、DuckDB-Wasm 的 Node blocking 绑定）会直接死锁，扩展 LOAD /
 //!   注册卡住不动。Node 的 worker 模式、浏览器与原生 CLI 都不受影响。
-//! - **浏览器 / DuckDB-Wasm 上文件系统语义不可靠**：那套裸文件系统不像 POSIX —— 打开不存在的文件
-//!   也「成功」、读回零填充的垃圾，`exists()`（以「能否只读打开」判定）因此在 wasm 上恒真，写 /
-//!   追加的字节序也不对。DuckDB 的 C API 又没有真正的存在性接口可供纠正，所以这不是能在扩展侧
-//!   闭合的 bug，而是平台限制。原生 CLI 与真实磁盘上语义正确（见 `test/sql/functions/duck_vfs.test`）。
+//! - **浏览器 / DuckDB-Wasm 上文件系统不可靠**（实测）：对任意**不存在**的路径，DuckDB-Wasm 的 FS
+//!   都返回一条 1 字节 `\0` 的幻影条目 —— 连 DuckDB 自带的 `glob` / `read_text` / `file_size` 都
+//!   谎报其存在，故 `exists()`（以「能否只读打开」判定）在 wasm 上恒真，且没有任何 FS 原语能区分
+//!   「不存在」（不是 duckfn 能修的 bug）。duckfn 裸 `FileHandle` 的 create/write 偏移也坏（写出的文件
+//!   多一字节 / 错位）。DuckDB 的 `COPY … TO` 只能把查询结果按格式（CSV/JSON/parquet）导出 —— 它能
+//!   往返，但**存不了一个任意长字符串（如 HTML）的原样字节**（CSV 会加引号/换行），所以 wasm 上本就
+//!   没有通用的“把内容写进文件”路子。因此 duck_vfs 已从 `all` 移除，**只在 native 需要时开 `owned-connection`**。
+//!   native CLI 与真实磁盘上语义全部正确（见 `test/sql/functions/duck_vfs.test`）。
 //!
 //! - Requires DuckDB 1.5.0+ and this crate's `owned-connection` feature (which itself needs
 //!   `duckdb-1-5`).
@@ -81,12 +85,17 @@
 //!   connection is opened, and the engine re-entered, on the current thread during registration, so
 //!   such a runtime (single-threaded wasm, DuckDB-Wasm's Node blocking bindings) deadlocks and the
 //!   extension LOAD just hangs. Node's worker mode, the browser and the native CLI are unaffected.
-//! - **The file system is not faithful under the browser / DuckDB-Wasm build**: that raw file system
-//!   is not POSIX — opening a missing file "succeeds" and reads back zero-filled garbage, so
-//!   [`exists`] (which decides by "can it be opened read-only") is always true there, and write /
-//!   append byte order is wrong too. DuckDB's C API exposes no real existence primitive to correct
-//!   it, so this is a platform limit rather than a bug fixable from the extension. On the native CLI
-//!   and a real disk the semantics are correct (see `test/sql/functions/duck_vfs.test`).
+//! - **The file system is unreliable under the browser / DuckDB-Wasm build** (measured): for ANY
+//!   non-existent path DuckDB-Wasm's FS returns a phantom one-byte `\0` entry — even DuckDB's own
+//!   `glob` / `read_text` / `file_size` report it as present — so [`exists`] (which decides by
+//!   "can it be opened read-only") is always true there and no FS primitive can tell "absent"
+//!   apart (a platform limit, not something the extension can fix). duckfn's raw `FileHandle`
+//!   create/write offset is also broken on wasm (the written file gains / misorders a byte). DuckDB's
+//!   `COPY … TO` only exports query results in a format (CSV/JSON/parquet) — it round-trips, but it
+//!   **cannot store an arbitrary string (e.g. HTML) as its raw bytes** (CSV adds quoting/newlines),
+//!   so there is no general "write this content to this file" path on wasm at all. Hence duck_vfs is
+//!   no longer in `all` — enable `owned-connection` on native when you actually need it. On the
+//!   native CLI and a real disk everything is correct (see `test/sql/functions/duck_vfs.test`).
 
 mod capture;
 mod file;
