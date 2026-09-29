@@ -51,14 +51,25 @@ test: ci-build
 build_wasm:
     cargo build --release --target wasm32-unknown-emscripten --features quack
 
-# 用 emsdk 把扩展打成可加载的 wasm_eh 产物（逻辑在 scripts/build-wasm-eh.sh）：
+# 打出可加载的 wasm_eh 扩展 -> build/wasm_eh/extension/duckfn/duckfn.duckdb_extension.wasm
+#
+# 直接调官方 makefile 的 wasm_eh 目标（configure → release → move_wasm_extension）：
 # cargo 出 libduckfn.a → emcc 出 side module → append_extension_metadata 出 .duckdb_extension.wasm。
-# 前提：emsdk/emscripten 版本须与 CI 一致（3.1.71，见 _extension_distribution.yml），否则产物加载不了。
-# 脚本会先 source emsdk_env.sh；recipe 已在 Git Bash 下执行，故 make/emcc 可用。
-# 透传参数：`just build_wasm_eh --install-docs`（装进 docs/static 供 npm test -w docs 验证）、
-# `--emsdk <路径>`（默认 /s/workspace/github/emscripten-core/emsdk，也可用环境变量 EMSDK）、`--debug`。
-build_wasm_eh *args:
-    bash scripts/build-wasm-eh.sh {{args}}
+#
+# 前提：系统装好 emsdk 3.1.71 并把它的目录配进 PATH（`emcc` / `emcc.bat` 能直接执行）。版本必须与
+# CI 一致（见 _extension_distribution.yml），否则产物能构建出来、LOAD 时报 Could not load dynamic lib。
+# 不需要 source emsdk_env.sh —— emcc 已在 PATH 上就行。
+#
+# RUST_LIBNAME 覆盖是必须的：上游 rust.Makefile 按宿主 OS 取产物名，Windows 上会去找 duckfn.dll，
+# 而 wasm 产物是 libduckfn.a。少了它 make 会在拷贝那步报文件不存在。
+#
+# 注意：跑完 configure/platform.txt 会停在 wasm_eh；之后要跑本地原生的 make test 之前先 `make configure`。
+#
+# Loadable wasm_eh build via the upstream makefile target; the emsdk/emscripten on PATH must match CI
+# (3.1.71). `RUST_LIBNAME` is the override that makes it work on Windows, where the makefile expects
+# the native `duckfn.dll` instead of the wasm target's `libduckfn.a`.
+build_wasm_eh:
+    make wasm_eh RUST_LIBNAME=lib{{extension_name}}.a
 
 # 工具链（首次）：固定 Rust 版本 + 装 wasm target
 config_env:
