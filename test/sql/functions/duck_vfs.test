@@ -1,0 +1,133 @@
+# name: test/sql/functions/duck_vfs.test
+# description: duckfn::duck_vfs 便捷读写在真实（本地）文件系统上的行为：存在性、覆盖、追加、FailIfExists、字节数、缺失文件报错
+# group: [functions]
+
+require duckfn
+
+# ============================================================================
+# 这些是「原生」用例：duck_vfs 走 DuckDB 的 VFS，在真实磁盘（__TEST_DIR__）上语义
+# 与 POSIX 一致 —— 缺失文件 open 失败，故 dfn_file_exists 为 false；覆盖会把更长的
+# 旧文件截短；追加接到末尾。
+#
+# 浏览器 / DuckDB-Wasm 上这一层**不可靠**：那套裸文件系统对不存在的文件 open 也「成功」
+# 并返回零填充的垃圾，且写 / 追加的字节序不按 POSIX 走，而 DuckDB 的 C API 没有真正的
+# 存在性接口可供扩展侧纠正。所以文件系统相关的示例在文档站保持普通代码块，wasm 端不
+# 纳入本用例（sqllogictest 只在原生 DuckDB 上跑）。
+#
+# These are the *native* cases. On a real (local) file system duck_vfs behaves
+# like POSIX. On the browser / DuckDB-Wasm build the raw file system is not
+# faithful (a missing file opens "successfully" and reads back zero-filled
+# bytes; write/append order is wrong) and DuckDB's C API exposes no real
+# existence primitive to correct it — hence file-system examples stay plain
+# code blocks on the docs site, and this suite only runs on native DuckDB.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# 存在性：从未写过的文件不存在
+# ---------------------------------------------------------------------------
+
+query T
+SELECT dfn_file_exists('__TEST_DIR__/dfn_vfs_missing.txt');
+----
+false
+
+# ---------------------------------------------------------------------------
+# 写文本 → 字节数、存在、大小、内容
+# ---------------------------------------------------------------------------
+
+query I
+SELECT dfn_file_write_text('__TEST_DIR__/dfn_vfs_a.txt', 'hello');
+----
+5
+
+query T
+SELECT dfn_file_exists('__TEST_DIR__/dfn_vfs_a.txt');
+----
+true
+
+query T
+SELECT dfn_file_exists('__TEST_DIR__/dfn_vfs_missing.txt');
+----
+false
+
+query I
+SELECT dfn_file_size('__TEST_DIR__/dfn_vfs_a.txt');
+----
+5
+
+query T
+SELECT dfn_file_read_text('__TEST_DIR__/dfn_vfs_a.txt');
+----
+hello
+
+# ---------------------------------------------------------------------------
+# 追加：接到末尾，长度随之增长
+# ---------------------------------------------------------------------------
+
+query I
+SELECT dfn_file_append_text('__TEST_DIR__/dfn_vfs_a.txt', '!!');
+----
+2
+
+query I
+SELECT dfn_file_size('__TEST_DIR__/dfn_vfs_a.txt');
+----
+7
+
+query T
+SELECT dfn_file_read_text('__TEST_DIR__/dfn_vfs_a.txt');
+----
+hello!!
+
+# ---------------------------------------------------------------------------
+# 覆盖（Replace）：把更长的旧文件写成更短的新内容，不留残渣
+# ---------------------------------------------------------------------------
+
+query I
+SELECT dfn_file_write_text('__TEST_DIR__/dfn_vfs_a.txt', 'hi');
+----
+2
+
+query T
+SELECT dfn_file_read_text('__TEST_DIR__/dfn_vfs_a.txt');
+----
+hi
+
+query I
+SELECT dfn_file_size('__TEST_DIR__/dfn_vfs_a.txt');
+----
+2
+
+# ---------------------------------------------------------------------------
+# FailIfExists：文件已存在则报错，且不改动原内容
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT dfn_file_write_text_new('__TEST_DIR__/dfn_vfs_a.txt', 'nope');
+----
+already exists
+
+query T
+SELECT dfn_file_read_text('__TEST_DIR__/dfn_vfs_a.txt');
+----
+hi
+
+# FailIfExists：文件不存在则正常写入
+query I
+SELECT dfn_file_write_text_new('__TEST_DIR__/dfn_vfs_new.txt', 'first');
+----
+5
+
+# ---------------------------------------------------------------------------
+# 错误路径：缺失文件读 / 取字节数都报错（带 duckfn 前缀，不依赖各平台系统措辞）
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT dfn_file_read_text('__TEST_DIR__/dfn_vfs_missing.txt');
+----
+duckfn::duck_vfs::read
+
+statement error
+SELECT dfn_file_size('__TEST_DIR__/dfn_vfs_missing.txt');
+----
+duckfn::duck_vfs::size

@@ -42,11 +42,13 @@ export default defineConfig({
         'sql/remark': src('sql/remark.ts'),
         'sql/client': src('sql/client.ts'),
         'sql/extensions': src('sql/extensions.ts'),
-        // The Node-side test of a docs site's own examples: `collect` finds the
-        // runnable blocks, `nodeRunner` runs them in DuckDB-Wasm, `verify` is
-        // the entry (and the `duckfn-sql-verify` bin).
+        // The browser-side test of a docs site's own examples: `collect` finds
+        // the runnable blocks, `browserRunner` runs them in DuckDB-Wasm driven
+        // through a headless browser, `verify` is the entry (and the
+        // `duckfn-sql-verify` bin). `harness` is the page the runner loads; it
+        // is emitted by the separate `vite.harness.config.ts` build, not here.
         'sql/collect': src('sql/collect.ts'),
-        'sql/nodeRunner': src('sql/nodeRunner.ts'),
+        'sql/browserRunner': src('sql/browserRunner.ts'),
         'sql/verify': src('sql/verify.ts'),
       },
       formats: ['es'],
@@ -68,10 +70,12 @@ export default defineConfig({
       // Vite's resolver, so the import survives into `dist/` untouched.
       external: [
         /^node:/,
-        // A pattern, not the bare name: `sql/nodeRunner.ts` imports the Node
-        // target through the package's `dist/duckdb-node.cjs` subpath, which a
-        // plain-name entry would not match — bundling that file instead would
-        // pull the worker bootstrap into the library.
+        // `sql/browserRunner.ts` drives a browser through Playwright's Node API;
+        // it stays external so the runner requires it from node_modules at run
+        // time (and `playwright-core` never bundles into the browser harness).
+        'playwright-core',
+        // The browser entry of DuckDB-Wasm, kept external so the harness — not
+        // the library build — owns how the engine is loaded.
         /^@duckdb\/duckdb-wasm/,
         '@visactor/vtable',
         'codemirror',

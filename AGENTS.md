@@ -106,7 +106,8 @@ sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
 ## 文档站可运行 SQL 的测试
 
 文档里的可运行块（````sql {"type":"duckfn"}````）由 `duckfn-docs-kit` 的 `duckfn-sql-verify`
-在 DuckDB-Wasm 里真跑一遍，本站已接成 `npm test`：
+在 **真实浏览器里的 DuckDB-Wasm** 中真跑一遍（用 `playwright-core` 直驱系统 Chrome/Edge，不下载浏览器），
+本站已接成 `npm test`：
 
 ```bash
 npm test -w docs        # 等价于在 docs/ 下 npm test
@@ -122,15 +123,22 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 跑不通或结果不对时，先看这几条（完整版见 `duckfn-docs-kit/CONVENTIONS.md`，下游向的用法说明见
 `duckfn-docs-kit/AGENTS.md`，面向读者的说明见 `docs/docs/docs-kit/sql-test.md`）：
 
-- **必须用 Node 的 worker target**（`duckdb-node.cjs`）。`duckdb-node-blocking.cjs` 在 `LOAD`
-  一个「注册期会自行打开连接的扩展」时**死锁**（duckfn 正是如此），表现是进程挂住、心跳停摆，
-  进程内的超时也打不断；浏览器与原生 CLI 不受影响。
-- **扩展只能经 http URL 加载**：裸文件名或本地 VFS 路径在 wasm 上会挂死（`registerFileBuffer`
-  也不行）。DuckDB 把拉下来的扩展暂存到 `~/.duckdb/extensions/<host>/<URL 一级路径段>/`，因此
-  URL 要带一层路径段、该目录要**预先建好**（加载器的 `mkdir` 非递归）；**Windows 上本地服务必须用
-  80 端口**，让 URL 不含端口 —— 冒号在 Windows 路径里非法。POSIX 用任意空闲端口即可。
+- **执行环境是真实浏览器**（DuckDB-Wasm，由 `playwright-core` 驱动），不再是 Node worker。这样才与读者点「Run」时
+  的环境一致：浏览器能读远程 `http(s)` 数据（Node worker 读不了、一律 `IO Error: No files found`），
+  扩展也按同源 http URL 正常 `LOAD`，没有旧方案的 80 端口 / `~/.duckdb` 暂存目录那套约束。
+- **全离线**：引擎（`duckdb-*.wasm` 与 worker 脚本）从 `node_modules/@duckdb/duckdb-wasm/dist` 本地
+  serve，扩展用 `docs/static/duckdb-extensions/` 里的副本；浏览器用 `playwright-core` 的 `executablePath`
+  拉系统已装的 Chrome/Edge（所以**不下载浏览器**）。找不到时用 `--browser <path>` 或环境变量 `DFK_BROWSER` 指定。
+  用 `playwright-core` 而非 `playwright`：前者不会自动下浏览器，恰好适配离线。
+- **harness 复用站点运行时**：`sql/harness.ts` 直接调用 `sql/runtime.ts` 的 `DuckDBRuntime`，只是把
+  引擎来源从 jsDelivr CDN 换成本地 serve（`init({bundle})`），所以校验走的代码路径与页面渲染一致。
 - 平台要配对：默认 `--platform eh` 对应站点预加载的 `duckfn-wasm_eh.duckdb_extension.wasm`。
 - `docs/.cache/`（已 git 忽略、不删）存着 DuckDB-Wasm 与扩展 wasm 的本地副本，便于离线排查。
+
+关于**文件系统类示例**：浏览器里 DuckDB-Wasm 的裸文件系统不忠实 —— 打开不存在的文件也「成功」、
+读回零填充垃圾，`dfn_file_exists` 等在 wasm 上恒真，写 / 追加字节序也不对（这是平台限制，duckfn
+侧无 C API 存在性接口可修，详见 `src/duck_vfs` 模块文档与 `test/sql/functions/duck_vfs.test`）。
+所以**落盘 / `output_dir` 相关示例保持普通代码块**（非可运行），页面上注明原因。
 
 它**故意不挂本仓库的 CI**：测试跑的是 wasm 版扩展，而那个产物只有 **duckfn 自己的 CI** 能给出
 （官方流水线一次构建 9 个平台产物，约 20 分钟；本机没有构建 wasm 扩展的现成路径，`docs/static/`
@@ -264,4 +272,4 @@ just release_dev 0.0.6-dev.0
 - [`docs/docs/docs-kit/sql-test.md`](docs/docs/docs-kit/sql-test.md)、
   [`duckfn-docs-kit/AGENTS.md`](duckfn-docs-kit/AGENTS.md)（随包发布的下游向用法说明）与
   [`duckfn-docs-kit/CONVENTIONS.md`](duckfn-docs-kit/CONVENTIONS.md)（本包开发约定）：文档站可运行
-  SQL 的测试 —— 用法与平台约束（Node worker target、http 加载、Windows 端口）。
+  SQL 的测试 —— 用法与平台约束（真实浏览器 / `playwright-core`、本地 serve 离线、系统 Chrome/Edge、文件系统类示例的限制）。

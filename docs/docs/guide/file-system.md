@@ -64,9 +64,15 @@ Keeping that connection is not free, and the costs are worth weighing before tur
 - **It cannot be used where DuckDB runs synchronously on a single thread.** Opening the connection
   during registration re-enters the engine on the current thread, and a runtime with no other thread
   to make progress on deadlocks: the extension `LOAD` hangs without any error. The one known case is
-  DuckDB-Wasm's Node **blocking** bindings (`duckdb-node-blocking.cjs`); Node's worker mode
-  (`duckdb-node.cjs`, which the docs site's own SQL blocks run on), the browser and the native
-  command line are all fine.
+  DuckDB-Wasm's Node **blocking** bindings (`duckdb-node-blocking.cjs`). The browser, the native
+  command line, and Node's worker mode (`duckdb-node.cjs`) all load without hanging.
+- **The file system is only faithful where it is a real one.** On a native disk the reads and writes
+  below behave like POSIX. Under the browser / DuckDB-Wasm build the raw file system is not: opening a
+  file that was never written "succeeds" and reads back zero-filled bytes, so `exists` is always true
+  and write/append byte order is wrong — and DuckDB's C API exposes no existence primitive an
+  extension could use to correct it. That is a platform limit, not a bug, which is why the docs site
+  keeps file-system examples as plain (non-runnable) blocks; the SQL examples this site runs in CI are
+  executed in a real browser (`duckfn-sql-verify`).
 
 ## Reading a file
 

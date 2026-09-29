@@ -28,10 +28,12 @@ The repository's `AGENTS.md` records that trade-off.
    the one `sql/remark` implements for the build, so the list is exactly what
    the site publishes — a block that is not runnable there is not collected
    here.
-2. **Run** — execute each block in DuckDB-Wasm with the site's extension
-   preloaded (`sql/nodeRunner`), on the architecture the page uses: one instance
-   per page, and the blocks of a page sharing one connection, so a `CREATE` in
-   one block is visible to the next — and pages stay isolated from each other.
+2. **Run** — execute each block in DuckDB-Wasm **in a headless browser**, with
+   the site's extension preloaded (`sql/browserRunner` drives the browser, and
+   the page it loads — `sql/harness` — reuses the very `sql/runtime` the site
+   runs). Same architecture as the page: one instance per page, the blocks of a
+   page sharing one connection, so a `CREATE` in one block is visible to the
+   next — and pages stay isolated from each other.
 3. **Report** — print what failed and exit non-zero if anything did
    (`sql/verify`).
 
@@ -58,25 +60,41 @@ inside it, are there for readers and are not machine-checked.
 | `--extension <path\|url>` | The extension to preload: a `.duckdb_extension.wasm` path, or an absolute `http(s)` URL. Defaults to the single file under `static/duckdb-extensions/`. |
 | `--platform <eh\|mvp>` | DuckDB-Wasm bundle, which has to match the extension build (default: `eh`, the one `selectBundle()` picks in a current browser). |
 | `--engine <path>` | Engine wasm override, for pinning a specific DuckDB-Wasm build. |
+| `--browser <path>` | The Chrome/Edge executable to drive. Defaults to a detected system Chrome/Edge, or the `DFK_BROWSER` environment variable. `playwright-core` launches it directly — no browser download. |
 | `--timeout <ms>` | Per-block timeout (default: 30000) — a hang is reported as a failure instead of blocking CI. |
-| `--working-dir <dir>` | Directory the blocks run in. Defaults to a fresh temporary directory, removed afterwards: a block may `COPY … TO 'a.csv'`, and on Node that would land in the working directory. |
 | `--report <file>` | Write the full per-block result list as JSON. |
 | `--quiet` | Only report unexpected failures. |
 
 ## Why it runs the way it does
 
-A block is executed in the **Node worker target** of DuckDB-Wasm
-(`duckdb-node.cjs`), not the blocking one: an extension that opens its own
-connection while registering — which is exactly what a file-system-capable
-extension does — deadlocks a runtime that executes DuckDB synchronously on one
-thread. The browser never sees this because an extension loads inside a worker
-there.
+A block is executed in **DuckDB-Wasm inside a real browser** — the environment a
+reader gets — not in Node. This is deliberate: the old Node-worker target could
+not read remote `http(s)` data (every remote-data example failed with an
+`IO Error`), so blocks that read real files could only ever be checked by hand
+in a browser. Running the suite in a browser makes that the normal case.
 
-The extension reaches the runner the same way it reaches a page: over an
-**http URL**, with the signature check relaxed. Two consequences follow from how
-DuckDB stages a fetched extension (`~/.duckdb/extensions/<host>/<first path
-segment>/`): the served URL keeps a path segment, and the runner pre-creates
-that directory (the loader's own `mkdir` is not recursive). On Windows the local
-server takes port 80 so the URL carries no port — a colon is not a legal
-character in a Windows path, and the staging directory is named after the URL.
-On other platforms any free port is used.
+The browser is driven with **Playwright** (`playwright-core`), which owns the protocol, navigation,
+auto-waiting, timeouts and crash handling rather than a bespoke driver. It uses the
+`playwright-core` package specifically because that one never downloads a browser — it launches your
+system Chrome/Edge directly via `executablePath`. Everything else is served locally, so it runs
+offline: the engine (`duckdb-*.wasm` and its worker script) from `node_modules`, the extension from
+`static/duckdb-extensions/`, over a loopback http server the harness page fetches them from. Loading
+the extension over http works exactly like it does on the site, with none of the port/staging-directory
+constraints the Node worker imposed.
+
+```sql
+-- A remote read like this is what the Node worker could never do; a browser can.
+-- (Not a runnable block here: fetching it needs the network, and the suite runs offline.)
+SELECT count(*) AS n FROM read_csv_auto('https://example.com/data/smallest.csv');
+```
+
+### File-system examples are the exception
+
+The browser's raw file system is not a faithful POSIX layer: DuckDB-Wasm opens a
+file that was never written and hands back zero-filled bytes, so `dfn_file_exists`
+reports `true` for things that are absent, and `COPY … TO` / `append` do not land
+the bytes you would expect. DuckDB's C API exposes no existence primitive an
+extension could use to correct this, so it is a platform limit rather than a
+bug — and examples that depend on the file system stay **plain (non-runnable)
+code blocks**, with the reason noted on the page. The native build (and the
+native test suite `test/sql/functions/duck_vfs.test`) does behave correctly.

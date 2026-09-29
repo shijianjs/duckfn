@@ -167,22 +167,32 @@ Constraints that bite:
 
 ## Testing the blocks (`duckfn-sql-verify`)
 
-The kit ships the same runner the browser uses, so a site can execute every block it publishes:
+The kit runs every block in a **real browser**, on the same runtime the page uses, so what CI
+checks is what a reader gets:
 
 ```bash
 duckfn-sql-verify --site .            # or: npx duckfn-sql-verify --site .
 ```
 
 It collects every runnable block (`docs/` plus each `i18n/<locale>/…/current/` by default), runs it
-in DuckDB-Wasm with the site's extension loaded, and fails the process when a block does not behave
-as it declares. Wire it into `package.json` as `"test": "duckfn-sql-verify --site ."`.
+in DuckDB-Wasm **in a headless browser** (driven with `playwright-core`, launching your system
+Chrome/Edge via `executablePath` — so no browser download) with the site's extension loaded, and
+fails the process when a block does not behave as it declares. It is fully offline: the engine and
+the extension are served from local files. Wire it into `package.json` as
+`"test": "duckfn-sql-verify --site ."`.
 
 - **A block that demonstrates a failure must say so**: `{"type":"duckfn","expect":"error"}`. The
   check is two-way — a block that declares `error` and starts succeeding is reported too — and a
   `-- error:` comment in the SQL is *not* read; only the metadata counts.
 - Useful options: `--extension <path|url>`, `--platform eh|mvp`, `--content <dir>` (repeatable),
-  `--timeout <ms>`, `--report <file>`, `--working-dir <dir>`, `--quiet`.
+  `--browser <path>` (the Chrome/Edge executable; otherwise a detected one or `DFK_BROWSER`),
+  `--timeout <ms>`, `--report <file>`, `--quiet`. It needs `playwright-core`, which the kit lists
+  as a dependency; unlike `playwright` it never downloads a browser.
 - The default extension is the single file under `static/duckdb-extensions/`.
+- **File-system examples stay plain code blocks.** Under DuckDB-Wasm the raw file system is not
+  POSIX-faithful: `dfn_file_exists` reads a missing file as "opened" (always `true`), writes/append
+  byte order is wrong, and there is no existence primitive in DuckDB's C API to correct it. So keep
+  any `COPY … TO` / `output_dir` / file-write demo as a non-runnable block and note the reason.
 
 ## TOC collapse control (`dfkTocToggle()`)
 

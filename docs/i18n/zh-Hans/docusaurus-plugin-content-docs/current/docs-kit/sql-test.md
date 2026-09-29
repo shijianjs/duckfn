@@ -23,7 +23,8 @@ duckfn-sql-verify --site .
 1. **收集** —— 遍历内容目录，取出 info string 是可运行配置的所有围栏块（`sql/collect`）。meta 契约
    与构建期的 `sql/remark` 是同一份，因此这里拿到的正是站点发布出去的那些块：站点上不是可运行块
    的，这里也不会收。
-2. **执行** —— 在 DuckDB-Wasm 里跑每个块，并预加载站点的扩展（`sql/nodeRunner`），架构与页面一致：
+2. **执行** —— 在**无头浏览器**里的 DuckDB-Wasm 中跑每个块，并预加载站点的扩展（`sql/browserRunner`
+   驱动浏览器，它加载的页面 `sql/harness` 直接复用站点跑的 `sql/runtime`），架构与页面一致：
    每页一个实例、页内各块共用一条连接（所以一个块里的 `CREATE` 下一个块看得见），而页与页之间互相
    隔离。
 3. **报告** —— 打印失败项，有失败就返回非零退出码（`sql/verify`）。
@@ -49,18 +50,34 @@ SELECT CAST('abc' AS INTEGER);  -- 报错：not an integer: "abc"
 | `--extension <路径\|URL>` | 要预加载的扩展：`.duckdb_extension.wasm` 路径，或绝对 `http(s)` URL。默认取 `static/duckdb-extensions/` 下的那一个文件。 |
 | `--platform <eh\|mvp>` | DuckDB-Wasm bundle，必须与扩展的构建平台一致（默认 `eh`，也就是当前浏览器里 `selectBundle()` 会选的那个）。 |
 | `--engine <路径>` | 覆盖引擎 wasm，用来钉住某个 duckdb-wasm 构建。 |
+| `--browser <路径>` | 要驱动的 Chrome/Edge 可执行文件。默认探测系统里的 Chrome/Edge，或读环境变量 `DFK_BROWSER`。`playwright-core` 直接拉起它，不下载浏览器。 |
 | `--timeout <毫秒>` | 单块超时（默认 30000）—— 卡住的块会作为失败上报，而不是把 CI 挂住。 |
-| `--working-dir <目录>` | 块运行时的工作目录。默认用一个临时目录、跑完即删：块可能 `COPY … TO 'a.csv'`，而 Node 上那会落到工作目录里。 |
 | `--report <文件>` | 把逐块结果写成 JSON。 |
 | `--quiet` | 只报告非预期失败。 |
 
 ## 为什么是这样跑的
 
-块跑在 DuckDB-Wasm 的 **Node worker target**（`duckdb-node.cjs`）上，而不是 blocking 那个：注册期
-会自行打开连接的扩展（正好就是能用文件系统的那些）会让「同一个线程里同步执行 DuckDB」的运行时死锁。
-浏览器里看不到这个问题，因为那边的扩展加载发生在 worker 线程内。
+块跑在**真实浏览器里的 DuckDB-Wasm** 中——也就是读者拿到的环境——而不是 Node。这是有意为之：
+旧的 Node worker 读不了远程 `http(s)` 数据（每个远程数据示例都报 `IO Error`），所以依赖真实
+远程文件的块以前只能靠人工在浏览器里验证。把套件搬到浏览器里跑，就把这件事变成了常规。
 
-扩展进入运行器的方式与进入页面完全相同：走 **http URL**，并放宽签名校验。由此带来两个约束，都源自
-DuckDB 存放已拉取扩展的路径（`~/.duckdb/extensions/<host>/<URL 一级路径段>/`）：URL 必须带一层路径
-段，且运行器要预先建好该目录（加载器自己的 `mkdir` 不是递归的）。Windows 上本地服务用 80 端口，好让
-URL 里没有端口 —— 冒号在 Windows 路径里非法，而这个暂存目录是按 URL 命名的；其它平台用任意空闲端口。
+浏览器是用 **Playwright**（`playwright-core`）驱动的，协议、导航、自动等待、超时与崩溃处理都交给这个成熟
+库，而不是自己写一个驱动。特意用 `playwright-core` 这个包，因为**它不会自动下浏览器**——直接用
+`executablePath` 拉起系统里的 Chrome/Edge。其余东西全部本地供出，所以能离线跑：引擎（`duckdb-*.wasm` 及其
+ worker 脚本）来自 `node_modules`，扩展来自 `static/duckdb-extensions/`，harness 页面从一个
+ loopback http 服务把它们取过来。经 http 加载扩展与站点上的做法一模一样，没有任何端口 / 暂存目录
+约束（那是 Node worker 才有的东西）。
+
+```sql
+-- 像这样的远程读取，是 Node worker 从来做不到、浏览器却能做成的。
+-- （这里不是可运行块：拉取它需要网络，而套件是离线跑的。）
+SELECT count(*) AS n FROM read_csv_auto('https://example.com/data/smallest.csv');
+```
+
+### 文件系统类示例是例外
+
+浏览器的裸文件系统不是忠实的 POSIX 层：DuckDB-Wasm 会把一个从未写过的文件当“能打开”、返回零
+填充的字节，所以 `dfn_file_exists` 对不存在的东西也报 `true`，`COPY … TO` / `append` 也不会按你预期的
+方式落字节。DuckDB 的 C API 没有可供扩展纠正这一点的存在性接口，所以这是平台限制而非 bug——
+依赖文件系统的示例保持**普通（非可运行）代码块**，并在页面上注明原因。原生构建（以及原生用例
+`test/sql/functions/duck_vfs.test`）则行为正确。

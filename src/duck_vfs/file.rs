@@ -61,12 +61,17 @@
 //!   所以这个模块不提供 `delete`（想「清空」可以覆盖成空内容）。
 //! - 只写文件内容，不建目录：父目录不存在时由文件系统报错。
 //! - 需要 DuckDB 1.5.0+ 与本 crate 的 `duckdb-1-5` feature。
+//! - 浏览器 / DuckDB-Wasm 上这一层语义不可靠（见 [`crate::duck_vfs`] 模块文档）：存在性判定恒真、
+//!   写 / 追加字节序不对，因为那套裸文件系统不合 POSIX，且 C API 无真正存在性接口。原生磁盘正确。
 //!
 //! - **No delete**: the C API offers neither remove nor move, and DuckDB has no `remove_file` SQL
 //!   function, so there is no `delete` here (overwrite with empty contents to "clear" a file).
 //! - It writes file contents only — it does not create directories; a missing parent directory is
 //!   reported by the file system.
 //! - Requires DuckDB 1.5.0+ and this crate's `duckdb-1-5` feature.
+//! - The layer is unreliable under the browser / DuckDB-Wasm build (see the [`crate::duck_vfs`]
+//!   module docs): existence is always true and write/append byte order is wrong, because that raw
+//!   file system is not POSIX and the C API has no real existence primitive. A native disk is fine.
 
 use std::ffi::CString;
 use std::str::Utf8Error;
@@ -346,9 +351,16 @@ pub fn size(path: &str) -> DuckResult<u64> {
 /// 打不开就当作不存在 —— 包括路径含 NUL 字节、权限不足、远端不可达，以及扩展还没完成注册
 /// （那时文件系统本来就取不到）。需要区分具体原因时请改用 [`size`] 或 [`read`]。
 ///
+/// 在浏览器 / DuckDB-Wasm 上这一判定**不可靠**：那套裸文件系统对不存在的文件 open 也返回成功，
+/// 于是 `exists` 恒真。这是平台限制（详见 [`crate::duck_vfs`] 模块文档），不是能在扩展侧修的 bug。
+///
 /// Anything that cannot be opened counts as absent — a path with a NUL byte, insufficient
 /// permissions, an unreachable remote, or the extension not having finished registering (there is
 /// no file system yet). Use [`size`] or [`read`] when the reason matters.
+///
+/// Under the browser / DuckDB-Wasm build this judgement is **not reliable**: that raw file system
+/// reports a missing file as openable, so `exists` is always true there. It is a platform limit
+/// (see the [`crate::duck_vfs`] module docs), not a bug fixable from the extension.
 #[must_use]
 pub fn exists(path: &str) -> bool {
     let Ok(c_path) = path_c_string("exists", path) else {

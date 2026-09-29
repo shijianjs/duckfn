@@ -3,10 +3,10 @@
  * publishes, so a broken example is caught by CI instead of by a reader
  * clicking **Run**.
  *
- * It is the same environment the site gives a block: DuckDB-Wasm in a worker,
+ * It is the same environment the site gives a block: DuckDB-Wasm in a browser,
  * the site's extension preloaded, one instance per page and the page's blocks
- * sharing a connection (see `sql/nodeRunner.ts` for why it is this target and
- * not the blocking one).
+ * sharing a connection (see `sql/browserRunner.ts` for why this is a real
+ * browser and not the Node worker the kit used to run).
  *
  * A block may fail *on purpose* — half the guide ends on a statement that
  * demonstrates an error. Such a block says so in its own metadata
@@ -15,12 +15,11 @@
  * on has to be data rather than a string match on a comment. Only blocks that
  * did not behave as declared make the command exit non-zero.
  */
-import {mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync} from 'node:fs';
-import {tmpdir} from 'node:os';
+import {readdirSync, statSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 
 import {collectRunnableSql, expectsError, type RunnableSqlBlock} from './collect';
-import {WasmSqlRunner, type WasmPlatform} from './nodeRunner';
+import {BrowserSqlRunner, type WasmPlatform} from './browserRunner';
 
 export interface VerifyOptions {
   /** Docs site root; defaults to the working directory. */
@@ -39,11 +38,10 @@ export interface VerifyOptions {
   /** Per-block timeout in milliseconds; a hang is reported instead of blocking CI. */
   timeoutMs?: number;
   /**
-   * Directory the blocks run in. Defaults to a fresh temporary directory that
-   * is removed afterwards: a block may `COPY … TO 'a.csv'`, and on Node
-   * DuckDB's file system is the real one, relative to the working directory.
+   * The browser executable that runs the blocks. Defaults to a detected
+   * Chrome/Edge; the `DFK_BROWSER` environment variable is the same override.
    */
-  workingDir?: string;
+  browser?: string;
   /** Write the full result list here as JSON. */
   reportFile?: string;
 }
@@ -79,8 +77,6 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Runs every runnable block of the site and returns the outcome of each. */
 export async function verifySqlDocs(options: VerifyOptions = {}): Promise<VerifyReport> {
-  // Everything is resolved to absolute paths first: the run changes the working
-  // directory (see below).
   const siteDir = resolve(options.siteDir ?? process.cwd());
   const blocks = collectRunnableSql({
     siteDir,
@@ -94,26 +90,10 @@ export async function verifySqlDocs(options: VerifyOptions = {}): Promise<Verify
     : defaultExtension(siteDir);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  // A block may write files — `COPY (SELECT 1) TO 'a.csv'` — and on Node the
-  // file system behind DuckDB is the real one, resolved against the working
-  // directory. Giving the run a scratch directory of its own keeps the docs tree
-  // clean instead of dropping test residue into it.
-  const scratch = options.workingDir
-    ? resolve(options.workingDir)
-    : mkdtempSync(join(tmpdir(), 'duckfn-sql-verify-'));
-  mkdirSync(scratch, {recursive: true});
-  const previousCwd = process.cwd();
-  process.chdir(scratch);
-
-  let results: BlockResult[];
-  try {
-    results = await runPages(blocks, extension, options, timeoutMs);
-  } finally {
-    process.chdir(previousCwd);
-    if (!options.workingDir) {
-      rmSync(scratch, {recursive: true, force: true});
-    }
-  }
+  // No working directory: in a browser DuckDB's file system is the instance's
+  // own memory, so `COPY … TO` / `dfn_file_write_*` never touch the docs tree —
+  // they land in the page and vanish on the next `newPage()`.
+  const results = await runPages(blocks, extension, options, timeoutMs);
 
   const report: VerifyReport = {
     blocks: results,
@@ -135,10 +115,11 @@ async function runPages(
   options: VerifyOptions,
   timeoutMs: number,
 ): Promise<BlockResult[]> {
-  const runner = await WasmSqlRunner.create({
+  const runner = await BrowserSqlRunner.create({
     extension,
     platform: options.platform,
     engine: options.engine,
+    browser: options.browser,
   });
   const results: BlockResult[] = [];
   try {
@@ -158,7 +139,7 @@ async function runPages(
 
 /** Runs one block and judges the result against the block's own declaration. */
 async function runBlock(
-  runner: WasmSqlRunner,
+  runner: BrowserSqlRunner,
   block: RunnableSqlBlock,
   timeoutMs: number,
 ): Promise<BlockResult> {
@@ -278,9 +259,9 @@ export async function cliMain(argv: readonly string[]): Promise<void> {
 
 const USAGE = `Usage: duckfn-sql-verify [options]
 
-Runs every runnable SQL block of a duckfn docs site in DuckDB-Wasm, and checks
-that each one behaves as its own metadata declares ("expect": "error" for a
-block that demonstrates a failure).
+Runs every runnable SQL block of a duckfn docs site in a headless browser
+(DuckDB-Wasm), and checks that each one behaves as its own metadata declares
+("expect": "error" for a block that demonstrates a failure).
 
   --site <dir>          Docs site root (default: the working directory)
   --content <dir>       Content directory, relative to the site root (repeatable;
@@ -291,8 +272,9 @@ block that demonstrates a failure).
   --platform <eh|mvp>   DuckDB-Wasm bundle, which must match the extension build
                         (default: eh)
   --engine <path>       Engine wasm override
+  --browser <path>      Browser executable (default: a detected Chrome/Edge,
+                        or the DFK_BROWSER environment variable)
   --timeout <ms>        Per-block timeout (default: 30000)
-  --working-dir <dir>   Directory the blocks run in (default: a temporary one)
   --report <file>       Write the full result list as JSON
   --quiet               Only report unexpected behaviour
   --help                Show this help
@@ -330,11 +312,11 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       case '--engine':
         options.engine = next();
         break;
+      case '--browser':
+        options.browser = next();
+        break;
       case '--timeout':
         options.timeoutMs = Number(next());
-        break;
-      case '--working-dir':
-        options.workingDir = next();
         break;
       case '--report':
         options.reportFile = next();

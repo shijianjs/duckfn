@@ -46,8 +46,9 @@ src/
 │                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
 │                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
 │                    #     （两侧共享的注入配置契约，见「扩展预加载」）
-│                    #   + collect.ts / nodeRunner.ts / verify.ts（Node：文档站自己的
-│                    #     SQL 测试与 `duckfn-sql-verify` 命令，见「文档站 SQL 测试」）
+│                    #   + collect.ts / verify.ts（Node：文档站自己的 SQL 测试与
+│                    #     `duckfn-sql-verify` 命令）+ browserRunner.ts / harness.ts
+│                    #     （浏览器：Playwright/playwright-core 驱系统浏览器跑块；harness 是给它的页面）
 │                    #   + client.ts（dfk-* 元素注册，插件注入到每个页面）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
@@ -83,7 +84,8 @@ src/
   - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
   - `duckfn-docs-kit/sql/extensions`（**Node 构建期**：扩展预加载 Docusaurus 插件）
   - `duckfn-docs-kit/sql/verify`（**Node 运行期**：文档站 SQL 测试的入口与 CLI；
-    `sql/collect`、`sql/nodeRunner` 是它的两半，也可单独用）
+    `sql/collect`（收集）与 `sql/browserRunner`（用 playwright-core 驱浏览器跑块）是它的两半；
+    `sql/harness` 是给浏览器加载的页面产物，由 `browserRunner` serve，站点/下游不手写引用）
   - `duckfn-docs-kit/toc-toggle/plugin`（**Node 构建期**：TOC 胶水插件）
   - `duckfn-docs-kit/sql/client`、`duckfn-docs-kit/toc-toggle/client`（浏览器引导，
     由上面两个插件注入，站点不要手写引用）
@@ -307,7 +309,7 @@ src/
   戳严格校验（1.5.4 的原生 duckdb 会拒绝 v1.5.5 构建的扩展）。升级 duckdb-wasm 或
   改 CI 的 `duckdb_version` 时必须成对验证（跑一遍可运行 SQL 页的两个示例块即可）。
 
-**文档站 SQL 测试（`sql/verify` + `sql/collect` / `sql/nodeRunner`）**
+**文档站 SQL 测试（`sql/verify` + `sql/collect` / `sql/browserRunner` / `sql/harness`）**
 
 - 入口是 `bin/sql-verify.mjs`（bin 名 `duckfn-sql-verify`），它 import `dist/sql/verify.js`。
   bin **手写**、不进构建：Vite lib 产物是 ESM、不保留 shebang，而 npm 只需要一个带 shebang
@@ -316,16 +318,23 @@ src/
   可运行块的，测试也不会跑。
 - 围栏按 CommonMark 收口：闭合围栏同字符、不短于开启围栏、且无 info string —— 这样
   ````md 包着的 ```sql 示例（`runnable-sql.md` 就这么展示 meta）不会被当成块。
-- 执行用 **Node worker target**（`duckdb-node.cjs`），不用 blocking target：注册期会自行打开
-  连接的扩展（能用文件系统的那些）在 blocking 目标上**死锁**，表现为 `LOAD` 永久卡住（心跳静默，
-  进程内超时也打不断）。浏览器没这问题，因为那边的扩展在 worker 线程里加载。
-- 扩展只能经 **http URL** 加载（裸文件名 / 本地 VFS 路径在 wasm 上直接挂死，`registerFileBuffer`
-  也救不了），所以运行器起一个 loopback 服务。三个随之而来的约束：DuckDB 把拉下来的扩展暂存到
-  `~/.duckdb/extensions/<host>/<URL 一级路径段>/`，故 (1) URL 必须带一层路径段，(2) 该目录要
-  **预先建好**（加载器自己的 `mkdir` 非递归），(3) **Windows 上必须用 80 端口**让 URL 不含端口
-  —— 冒号在 Windows 路径里非法；其它平台用任意空闲端口。缓存目录每次运行前清空，免得测的是上一
-  次的旧扩展。
-- 形态与页面一致：**每页新实例 + 页内共用连接**（页内可以依赖前一个块建的宏/表，页与页隔离）。
+- 执行环境是 **真实浏览器里的 DuckDB-Wasm**（不再是旧的 Node worker）。`sql/browserRunner.ts` 用
+  **`playwright-core`** 驱动浏览器 —— 协议、连接/导航/evaluate、自动等待、超时与崩溃处理都交给成熟的
+  Playwright，而不是自己手写一个半吊子驱动。选 `playwright-core` 而非 `playwright`：前者**不会自动下浏览器**，
+  配 `chromium.launch({executablePath})` 拉系统 Chrome/Edge，止住离线。找浏览器：`--browser <path>` /
+  环境变量 `DFK_BROWSER` 覆盖，否则按已知路径探测。`playwright-core` 在 `vite.config.ts` 里列为 external。
+- **全离线**：`browserRunner` 起一个 loopback 静态服务，把 `node_modules/@duckdb/duckdb-wasm/dist`
+  里的引擎（`duckdb-*.wasm` + `duckdb-browser-*.worker.js`）、构建产物 `dist/sql/harness.js`、以及
+  `--extension` 指定的扩展文件按同源 URL 供出去。浏览器里 `LOAD` 同源 http URL 正常，不再有旧方案的
+  80 端口 / `~/.duckdb` 暂存目录约束（那是 Node worker 才有的、把端口嵌进 Windows 暂存路径的问题）。
+- **harness 复用站点运行时**：`sql/harness.ts` 是一个极简单页，直接 import `sql/runtime.ts` 的
+  `DuckDBRuntime`，只是经 `init({bundle})` 把引擎来源从 jsDelivr CDN 换成本地 serve（`runtime.ts`
+  为此新增了 `bundle` 选项：给定时跳过 `selectBundle`、同源直接 `new Worker`）。它把 `window.__dfkReady`
+  /`__dfkRun`（行数/列数，给校验器）与 `__dfkQuery`（真实行，给 vfs 探针）暴露给 Playwright 的 `page.evaluate`。harness 由独立的
+  `vite.harness.config.ts` 打成自包含单文件 `dist/sql/harness.js`（这份构建里 duckdb-wasm **不打** external，
+  因为它是给浏览器直接加载、下游无 bundler 的产物）；`build` 脚本在主 lib 构建后串跑它。
+- 形态与页面一致：**每页新实例 + 页内共用连接**（`newPage()` 重新导航 harness → 新文档 = 新
+  `AsyncDuckDB`；页内块共用其连接，所以能依赖前一个块建的宏/表，页与页隔离）。
 - 故意失败的块在 meta 里声明 `"expect": "error"`（`expectsError(config)` 读它，默认 `ok`）：
   期望是数据，不能靠对注释做字符串匹配；校验**双向** —— 声明会失败却跑成功同样要报出来。
 
@@ -600,7 +609,7 @@ Docusaurus 预渲染在 Node 里 import 本包。
   `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
 - Node 侧模块只有 `src/remark.ts`、`src/sql/remark.ts`、`src/sql/extensions.ts`（构建期）
-  与 `src/sql/collect.ts`、`src/sql/nodeRunner.ts`、`src/sql/verify.ts`（测试期），
+  与 `src/sql/collect.ts`、`src/sql/browserRunner.ts`、`src/sql/verify.ts`（测试期），
   连同无依赖的共享契约 `src/sql/runtimeConfig.ts`；它们都不得 import 任何浏览器模块。
 
 ### 11. React 19 自定义元素

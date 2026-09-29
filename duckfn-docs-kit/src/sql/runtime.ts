@@ -65,6 +65,27 @@ export type RuntimeState = 'idle' | 'loading' | 'ready' | 'error';
 export interface RuntimeOptions {
   /** Let `LOAD` accept an extension whose signature does not verify. */
   allowUnsignedExtensions?: boolean;
+  /**
+   * Serve the DuckDB-Wasm engine from explicit same-origin URLs instead of the
+   * jsDelivr CDN. Used by the offline SQL verifier (`sql/browserRunner`): the
+   * harness passes the locally-served `duckdb-*.wasm` / worker script so a CI
+   * run never reaches the network. When set, `#create()` skips
+   * `getJsDelivrBundles()`/`selectBundle()` and the cross-origin blob-worker
+   * wrapper (the worker is same-origin here, so it is constructed directly).
+   */
+  bundle?: LocalBundle;
+}
+
+/**
+ * A locally-served DuckDB-Wasm bundle: absolute same-origin URLs for the
+ * engine wasm and its worker script. `pthreadWorker` is only needed for the
+ * cross-origin-isolated (COI) bundle; the default non-COI `eh`/`mvp` bundles run
+ * single-threaded and leave it unset.
+ */
+export interface LocalBundle {
+  mainModule: string;
+  mainWorker: string;
+  pthreadWorker?: string;
 }
 
 /** Options for {@link DuckDBRuntime.loadExtension}. */
@@ -96,6 +117,8 @@ export class DuckDBRuntime {
   #db: DuckdbWasm.AsyncDuckDB | null = null;
   #conn: DuckdbWasm.AsyncDuckDBConnection | null = null;
   #allowUnsigned = false;
+  /** A locally-served engine bundle (offline verifier); `null` means CDN. */
+  #bundle: LocalBundle | null = null;
   /** The injected site config; read (and validated) once on first init. */
   #site: SiteRuntimeConfig | null = null;
   /** Loaded / in-flight extensions, keyed by repository + name, or by URL. */
@@ -124,6 +147,9 @@ export class DuckDBRuntime {
   init(options: RuntimeOptions = {}): Promise<void> {
     if (options.allowUnsignedExtensions) {
       this.#allowUnsigned = true;
+    }
+    if (options.bundle) {
+      this.#bundle = options.bundle;
     }
     if (this.#state === 'ready') {
       return Promise.resolve();
@@ -154,6 +180,24 @@ export class DuckDBRuntime {
 
   async #create(preload: readonly PreloadEntry[]): Promise<void> {
     const duckdb = await import('@duckdb/duckdb-wasm');
+
+    // Offline verifier path: the engine and its worker are served same-origin
+    // by the runner, so the worker is constructed directly (no cross-origin
+    // blob wrapper) and no CDN bundle is selected.
+    if (this.#bundle) {
+      const worker = new Worker(this.#bundle.mainWorker);
+      this.#db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
+      await this.#db.instantiate(this.#bundle.mainModule, this.#bundle.pthreadWorker ?? null);
+      await this.#db.open({allowUnsignedExtensions: this.#allowUnsigned});
+      this.#conn = await this.#db.connect();
+      for (const entry of preload) {
+        await this.#loadEntry(entry);
+      }
+      this.#state = 'ready';
+      this.#message = '';
+      return;
+    }
+
     const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
     if (!bundle.mainWorker) {
       throw new Error('The selected DuckDB-Wasm bundle has no worker script');

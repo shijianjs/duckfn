@@ -56,8 +56,13 @@ database 句柄，并由它打开一条 `OwnedConnection`，把结果存进进�
   用的是先注册完那个实例的 VFS。
 - **不能用「同一个线程里同步执行 DuckDB」的运行时。** 注册期打开连接会在当前线程上重入引擎，
   而没有别的线程能推进的运行时就此死锁：扩展 `LOAD` 卡住且不报任何错误。已知的唯一一处是
-  DuckDB-Wasm 的 Node **blocking** 绑定（`duckdb-node-blocking.cjs`）；Node 的 worker 模式
-  （`duckdb-node.cjs`，文档站自己的可运行块就跑在它上面）、浏览器与原生命令行都正常。
+  DuckDB-Wasm 的 Node **blocking** 绑定（`duckdb-node-blocking.cjs`）。浏览器、原生命令行与 Node 的
+  worker 模式（`duckdb-node.cjs`）加载都不会卡住。
+- **文件系统只在“真的是文件系统”的地方才忠实。** 原生磁盘上，下面的读写与 POSIX 一致。浏览器 /
+  DuckDB-Wasm 构建下那套裸文件系统不然：打开一个从未写过的文件也“成功”、读回零填充的字节，
+  所以 `exists` 恒真、写 / 追加的字节序也不对 —— 而 DuckDB 的 C API 没有可供扩展纠正这一点的存在性
+  接口。这是平台限制而非 bug，所以文档站把文件系统相关的示例保持为普通（非可运行）块；本站在 CI
+  里跑的可运行 SQL 是在**真实浏览器**里执行的（`duckfn-sql-verify`）。
 
 ## 读一个文件
 

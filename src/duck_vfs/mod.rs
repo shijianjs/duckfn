@@ -65,6 +65,10 @@
 //! - **不能用在「同一个线程里同步执行 DuckDB」的运行时里**：注册期就在当前线程上打开连接并重入
 //!   引擎，那类运行时（单线程 wasm、DuckDB-Wasm 的 Node blocking 绑定）会直接死锁，扩展 LOAD /
 //!   注册卡住不动。Node 的 worker 模式、浏览器与原生 CLI 都不受影响。
+//! - **浏览器 / DuckDB-Wasm 上文件系统语义不可靠**：那套裸文件系统不像 POSIX —— 打开不存在的文件
+//!   也「成功」、读回零填充的垃圾，`exists()`（以「能否只读打开」判定）因此在 wasm 上恒真，写 /
+//!   追加的字节序也不对。DuckDB 的 C API 又没有真正的存在性接口可供纠正，所以这不是能在扩展侧
+//!   闭合的 bug，而是平台限制。原生 CLI 与真实磁盘上语义正确（见 `test/sql/functions/duck_vfs.test`）。
 //!
 //! - Requires DuckDB 1.5.0+ and this crate's `owned-connection` feature (which itself needs
 //!   `duckdb-1-5`).
@@ -77,6 +81,12 @@
 //!   connection is opened, and the engine re-entered, on the current thread during registration, so
 //!   such a runtime (single-threaded wasm, DuckDB-Wasm's Node blocking bindings) deadlocks and the
 //!   extension LOAD just hangs. Node's worker mode, the browser and the native CLI are unaffected.
+//! - **The file system is not faithful under the browser / DuckDB-Wasm build**: that raw file system
+//!   is not POSIX — opening a missing file "succeeds" and reads back zero-filled garbage, so
+//!   [`exists`] (which decides by "can it be opened read-only") is always true there, and write /
+//!   append byte order is wrong too. DuckDB's C API exposes no real existence primitive to correct
+//!   it, so this is a platform limit rather than a bug fixable from the extension. On the native CLI
+//!   and a real disk the semantics are correct (see `test/sql/functions/duck_vfs.test`).
 
 mod capture;
 mod file;
