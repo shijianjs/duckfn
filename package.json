@@ -12,7 +12,7 @@
     "start:zh-Hans": "npm run build -w duckfn-docs-kit && npm run start:zh-Hans -w docs"
   },
   "allowScripts": {
-    "@swc/core@1.16.2": true,
-    "core-js@3.50.0": true
+    "core-js@3.50.0": true,
+    "@swc/core@1.16.12": true
   }
 }

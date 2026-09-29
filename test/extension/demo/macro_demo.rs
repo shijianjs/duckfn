@@ -13,8 +13,11 @@ pub struct DuckStructDemo1 {
     pub nest_data: Option<Vec<Vec<i64>>>,
 }
 
+// 名字必须与 `scalar_function_demo.rs` 里真正的 `error_scalar_demo` 区分开：
+// `#[duck_scalar_function]` 会按函数名注册，重名会和它冲突（签名不同 → 调用报
+// "function signature mismatch"）。这里只是宏用法演示，按本文件 `_w_demo` 的命名习惯改名。
 #[duck_scalar_function]
-fn error_scalar_demo(input: i64,_input2: i64) -> duckfn::DuckOptionResult<i64> {
+fn error_scalar_w_demo(input: i64, _input2: i64) -> duckfn::DuckOptionResult<i64> {
     Ok(Some(input * 2))
 }
 
