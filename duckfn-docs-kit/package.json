@@ -1,6 +1,6 @@
 {
   "name": "duckfn-docs-kit",
-  "version": "0.2.1",
+  "version": "0.2.2-dev.0",
   "description": "Shared Docusaurus building blocks (TOC toggle, home-page web components, brand tokens, remark version placeholder) for duckfn-family extension docs sites.",
   "license": "MIT",
   "keywords": [
