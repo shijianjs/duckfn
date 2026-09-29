@@ -24,7 +24,7 @@ npm install duckfn-docs-kit
 | --- | --- | --- |
 | `duckfn-docs-kit` | browser | Home-page custom elements (`<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>`, `<dfk-sql>`), `registerDfkElements()` and the value types their setters accept |
 | `duckfn-docs-kit/remark` | Node (build) | `remarkVersionPlaceholder`: replaces `{{DUCKFN_VERSION}}` inside `text` / `inlineCode` / `code` nodes |
-| `duckfn-docs-kit/sql/remark` | Node (build) | `remarkRunnableSql`: turns fenced `sql run` blocks into `<dfk-sql>` elements |
+| `duckfn-docs-kit/sql/remark` | Node (build) | `remarkRunnableSql`: turns fenced `sql {"type":"duckfn",…}` blocks into `<dfk-sql>` elements |
 | `duckfn-docs-kit/sql/extensions` | Node (build) | `dfkExtensions()` Docusaurus plugin: preloads a site's DuckDB extensions before the first block runs |
 | `duckfn-docs-kit/toc-toggle/plugin` | Node (build) | `dfkTocToggle()` Docusaurus plugin: adds the TOC collapse control |
 | `duckfn-docs-kit/toc-toggle/TocToggle` | browser | The TOC collapse class, for a site that drives it itself |
@@ -97,10 +97,12 @@ styles inside the JS bundle, so they need nothing here.
 
 ## Documentation
 
-The user guide lives at <https://shijianjs.github.io/duckfn/docs/docs-kit>. The
-conventions this package is written to — retained-mode components, shadow DOM,
-SSR safety, the SQL rendering contract — are documented in
-[`AGENTS.md`](./AGENTS.md), which ships inside the package.
+The user guide lives at <https://shijianjs.github.io/duckfn/docs/docs-kit>. If you —
+or an AI agent — are *using* this package, read [`AGENTS.md`](./AGENTS.md): it ships
+inside the package and states the contracts (the block metastring, the config
+fields, the traps). The conventions this package is *written to* — retained-mode
+components, shadow DOM, SSR safety — live in `CONVENTIONS.md` in the repository and
+are not published.
 
 ## License
 

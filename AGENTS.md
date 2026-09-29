@@ -119,8 +119,8 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 而且校验是双向的 —— 声明会失败却跑成功同样会被报出来。块周围的正文与 `-- error:` 注释只写给读者看，
 不参与判定。
 
-跑不通或结果不对时，先看这几条（完整版见 `duckfn-docs-kit/AGENTS.md`，面向读者的说明见
-`docs/docs/docs-kit/sql-test.md`）：
+跑不通或结果不对时，先看这几条（完整版见 `duckfn-docs-kit/CONVENTIONS.md`，下游向的用法说明见
+`duckfn-docs-kit/AGENTS.md`，面向读者的说明见 `docs/docs/docs-kit/sql-test.md`）：
 
 - **必须用 Node 的 worker target**（`duckdb-node.cjs`）。`duckdb-node-blocking.cjs` 在 `LOAD`
   一个「注册期会自行打开连接的扩展」时**死锁**（duckfn 正是如此），表现是进程挂住、心跳停摆，
@@ -261,6 +261,7 @@ just release_dev 0.0.6-dev.0
   所有需要一致的名字。原先放在本仓库 `templates/` 下的那套模板已由该仓库取代。
 - [`docs/docs/build-and-release.md`](docs/docs/build-and-release.md)：面向读者的构建与发布说明。
 - [`docs/docs/contributing.md`](docs/docs/contributing.md)：本地开发流程与约定。
-- [`docs/docs/docs-kit/sql-test.md`](docs/docs/docs-kit/sql-test.md) 与
-  [`duckfn-docs-kit/AGENTS.md`](duckfn-docs-kit/AGENTS.md)：文档站可运行 SQL 的测试 —— 用法与
-  平台约束（Node worker target、http 加载、Windows 端口）。
+- [`docs/docs/docs-kit/sql-test.md`](docs/docs/docs-kit/sql-test.md)、
+  [`duckfn-docs-kit/AGENTS.md`](duckfn-docs-kit/AGENTS.md)（随包发布的下游向用法说明）与
+  [`duckfn-docs-kit/CONVENTIONS.md`](duckfn-docs-kit/CONVENTIONS.md)（本包开发约定）：文档站可运行
+  SQL 的测试 —— 用法与平台约束（Node worker target、http 加载、Windows 端口）。

@@ -18,7 +18,7 @@ import {el, HTMLElementBase} from '../dom';
  * Everything but the result is in the shadow root. The result is a slotted
  * light-DOM sibling because VTable injects a *document-level* stylesheet that a
  * shadow boundary could not host — and it is only created when a query runs,
- * long after hydration, so the light DOM still starts empty (AGENTS.md rule 11).
+ * long after hydration, so the light DOM still starts empty (CONVENTIONS.md rule 11).
  * The editor has no such problem: it sits in this shadow root, so CodeMirror's
  * style-mod resolves the root to the same tree its styles are used in.
  *
@@ -30,7 +30,7 @@ import {el, HTMLElementBase} from '../dom';
  * which a renderer builds, so the component keeps the node (and its state) and
  * hands it over through `RenderContext.fullscreenButton`.
  *
- * Content entry is an **attribute seed** (see AGENTS.md rule 5 exception): the
+ * Content entry is an **attribute seed** (see CONVENTIONS.md rule 5 exception): the
  * `config` / `sql` attributes are read once in `connectedCallback` because the
  * remark-generated JSX cannot hand content through a ref setter. Reading once
  * to initialise is not an attribute→render loop, so the retained-mode contract

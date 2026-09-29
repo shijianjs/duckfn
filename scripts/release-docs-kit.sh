@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # duckfn-docs-kit（npm 包）的发版辅助脚本，由根 Justfile 的 release_kit_* recipe 调用，
-# 完整流程见 duckfn-docs-kit/AGENTS.md。
+# 完整流程见 duckfn-docs-kit/CONVENTIONS.md。
 #
 # 与 scripts/release.sh 分开：那个发的是 crates.io 上的两个 crate、打 v*.*.* tag，会触发
 # 扩展构建与文档站部署；这个发的是 npm 包、打 docs-kit-v* tag，不触发任何 workflow。
@@ -70,10 +70,11 @@ cmd_bump() {
 
     echo
     echo "残留的旧版本号（应为空）："
-    # AGENTS.md 里的版本号只是流程示例；lockfile 已由 write_version 同步过。
+    # 两份说明里的版本号只是流程示例（根 AGENTS.md 与 kit 的 CONVENTIONS.md）；
+    # lockfile 已由 write_version 同步过。
     git grep -n -F -- "$old" -- . \
         ':(exclude)AGENTS.md' \
-        ':(exclude)duckfn-docs-kit/AGENTS.md' \
+        ':(exclude)duckfn-docs-kit/CONVENTIONS.md' \
         ':(exclude)package-lock.json' || true
 
     echo

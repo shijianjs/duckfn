@@ -123,7 +123,7 @@ publish_dry:
 publish:
     cargo publish -p duckfn --registry crates-io
 
-# ==== duckfn-docs-kit（npm 包）发版流程（完整步骤见 duckfn-docs-kit/AGENTS.md） ====
+# ==== duckfn-docs-kit（npm 包）发版流程（完整步骤见 duckfn-docs-kit/CONVENTIONS.md） ====
 #
 # 与上面的 release_* 完全独立：那个发 crates.io 上的 crate、打 v*.*.* tag（会触发扩展构建与
 # 文档站部署），这个发 npm 包、打 docs-kit-v* tag（不触发任何 workflow）。

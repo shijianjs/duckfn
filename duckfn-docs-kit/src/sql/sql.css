@@ -1,7 +1,7 @@
 /* Light-DOM styles for `<dfk-sql>`: the result container. It lives in the
    element's light DOM (not the shadow root) because VTable injects a
    *document-level* stylesheet that a shadow boundary could not host — the same
-   light-DOM exception as the TOC toggle (see AGENTS.md rule 9). It is created
+   light-DOM exception as the TOC toggle (see CONVENTIONS.md rule 9). It is created
    only when a query runs, so the light DOM still starts empty (rule 11). Every
    class carries the `dfk-sql-` prefix so nothing can collide with the host site.
  *
