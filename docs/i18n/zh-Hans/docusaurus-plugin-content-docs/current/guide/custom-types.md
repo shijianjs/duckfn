@@ -155,4 +155,4 @@ bind 阶段的标签用 `Value::as_str()` 从 `duckdb_value` 取。
 ## 接下来
 
 - [类型映射](./types.md) —— 哪些已经内置，哪些还没有。
-- [架构](../internals/architecture.md#6-值类型) —— 读写器之间如何协作。
+- [架构](../development/architecture.md#6-值类型) —— 读写器之间如何协作。

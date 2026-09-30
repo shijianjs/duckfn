@@ -26,6 +26,16 @@ SELECT * FROM range(10);
 ```
 ````
 
+构建期它会先走一段很短的流水线，才到读者手里：
+
+```mermaid
+flowchart LR
+  A["信息串带 JSON 的<br/>fenced sql 代码块"] --> B["remarkRunnableSql<br/>构建期改写"]
+  B --> C["dfk-sql<br/>自定义元素"]
+  C --> D["CodeMirror 编辑器<br/>带执行按钮"]
+  D --> E["读者浏览器里的<br/>DuckDB-Wasm"]
+```
+
 ## `.md` 与 `.mdx` 表现一致
 
 可运行块不依赖任何 MDX 特性：JSON 信息串由 `remarkRunnableSql` remark 插件在构建期读取，

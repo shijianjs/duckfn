@@ -28,6 +28,13 @@ src/
 三个 root 指向的都是 `src/extension/mod.rs` —— 一个**目录**模块，所以三者看到的是同一棵树，
 `duckfn_entrypoint!` 也只出现在一个地方。
 
+```mermaid
+flowchart TB
+  L["src/lib.rs<br/>原生，cdylib"] --> M["src/extension/mod.rs<br/>mod demo、mod functions、mod types、<br/>duckfn_entrypoint!"]
+  W["src/wasm_lib.rs<br/>wasm，staticlib"] --> M
+  B["src/bin/duckfn.rs<br/>CLI"] --> M
+```
+
 ## 两个入口保持逐行一致
 
 `crate-type` 无法按 target 区分，而两个 target 需要的值不同：本地编译要 `cdylib`，WebAssembly 要
@@ -106,8 +113,8 @@ mod extension;
 ## 相关页面
 
 - [创建项目](./create-a-project.md) —— 这套目录结构来自哪个模板。
-- [构建与发布](../build-and-release.md#webassembly) —— WebAssembly 目标是怎么构建的。
+- [构建与发布](../development/build-and-release.md#webassembly) —— WebAssembly 目标是怎么构建的。
 - [社区扩展文档页](../community-extension-docs.md) —— `src/bin/duckfn.rs` 是干什么的。
-- [贡献指南](../contributing.md) —— duckfn 仓库自身的布局是刻意不同的：示例扩展就在发布包里，
+- [贡献指南](../development/contributing.md) —— duckfn 仓库自身的布局是刻意不同的：示例扩展就在发布包里，
   因此它的 lib 自己带上原生、wasm 与 `rlib` 三种 crate-type，而不是另开一个 wasm root。
-- [问题排查](../troubleshooting.md) —— 与目录结构无关的那些问题。
+- [已知问题](../known-issues.md) —— 与目录结构无关的那些问题。

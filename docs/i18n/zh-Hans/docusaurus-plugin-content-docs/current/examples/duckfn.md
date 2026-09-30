@@ -141,7 +141,7 @@ SELECT error_scalar_demo(30);  -- 报错：explicit panic
 上面两个 `panic!` 例子（`20`、`30`）在原生 CLI 上会打印可读消息，但**在浏览器里会变成
 `Maximum call stack size exceeded`** —— Rust 的 `panic!` 不会以一条消息的形式穿过 wasm→JS 边界。
 只有 `error_scalar_demo(10)`（返回 `Err(duck_error(...))`）在两边都能干净报错。报错请用
-`Err(duck_error(...))` 而不是 `panic!`；参见[问题排查](../troubleshooting.md)。
+`Err(duck_error(...))` 而不是 `panic!`；参见[已知问题](../known-issues.md)。
 :::
 
 ## 聚合函数
@@ -260,4 +260,4 @@ make configure debug test   # 或者：just test
 
 - [同样功能的两种写法](./side-by-side.md) —— `rusty_echo`、`rusty_quack`、`word_count`、`first_word` 与它们用原始 `duckdb` / `quack-rs` 写法的对照。
 - [快速开始](../getting-started/quick-start.md) —— 在一个最小 crate 上重复这些思路。
-- [构建与发布](../build-and-release.md) —— 这个扩展是如何打包与发布的。
+- [构建与发布](../development/build-and-release.md) —— 这个扩展是如何打包与发布的。

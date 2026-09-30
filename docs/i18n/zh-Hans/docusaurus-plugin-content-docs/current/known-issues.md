@@ -1,13 +1,14 @@
 ---
-title: 问题排查
+title: 已知问题
 sidebar_position: 10
 description: 官方 CI 的 WebAssembly 构建对 Rust 1.86 的锁定（已解决）、会把全 NULL 列表字面量读坏的上游 bug，以及为什么 `panic!` 在 WebAssembly 上不可用。
 ---
 
-# 问题排查
+# 已知问题
 
 下面几件事基本都不是 duckfn 造成的，但做 WebAssembly 构建时轻易会碰到。第一条上游已修复，保留作为
-背景。每一条都说清现象、原因和处理办法。
+背景。每一条都说清现象、原因和处理办法。用法层面的疑问（函数为什么没注册上、为什么必须加 `-unsigned`）
+在[常见问题](./faq.md)。
 
 与**目录结构**有关的那些 —— 几个 crate root、`error[E0583]`、IDE 对独立 wasm root 标红 ——
 搬到了[项目结构约定](./getting-started/project-structure.md)，因为那是「项目怎么搭起来」的问题，
@@ -109,5 +110,5 @@ RangeError: Maximum call stack size exceeded
 - [项目结构约定](./getting-started/project-structure.md) —— 几个 crate root、`error[E0583]`、IDE 对
   独立 wasm root 标红。
 - [常见问题](./faq.md) —— 写函数时实际踩到的那些报错。
-- [构建与发布](./build-and-release.md) —— 打 tag 时流水线做了什么。
-- [架构](./internals/architecture.md) —— 注册与派发到底怎么运作。
+- [构建与发布](./development/build-and-release.md) —— 打 tag 时流水线做了什么。
+- [架构](./development/architecture.md) —— 注册与派发到底怎么运作。

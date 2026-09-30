@@ -1,6 +1,6 @@
 ---
 title: Build and release
-sidebar_position: 7
+sidebar_position: 2
 description: Local build and test commands, the WebAssembly target, and how DuckDB's official pipeline turns a version tag into published binaries.
 ---
 
@@ -159,4 +159,4 @@ accepted.
 ## Next
 
 - [Contributing](./contributing.md) — the day-to-day workflow.
-- [Quick start](./getting-started/quick-start.md) — a minimal build.
+- [Quick start](../getting-started/quick-start.md) — a minimal build.

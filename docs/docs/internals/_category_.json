@@ -1,8 +1,0 @@
-{
-  "label": "Internals",
-  "position": 5,
-  "link": {
-    "type": "generated-index",
-    "description": "How duckfn is put together: macro expansion, registration, adapters and value types."
-  }
-}

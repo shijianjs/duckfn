@@ -152,9 +152,9 @@ runnable example extension — lives at **<https://shijianjs.github.io/duckfn/>*
 | [SQL macros](https://shijianjs.github.io/duckfn/docs/guide/sql-macros) | Macros from Rust or from `.sql` files. |
 | [Type mapping](https://shijianjs.github.io/duckfn/docs/guide/types) | DuckDB ↔ Rust types, nullability and known gaps. |
 | [Community extension docs](https://shijianjs.github.io/duckfn/docs/community-extension-docs) | The `description` / `comment` / `example` attributes, and the CSV DuckDB's community-extension pages read. |
-| [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) · [Architecture](https://shijianjs.github.io/duckfn/docs/internals/architecture) | Error handling, expansion, registration and adapters. |
+| [Errors and panics](https://shijianjs.github.io/duckfn/docs/guide/errors-and-panics) · [Architecture](https://shijianjs.github.io/duckfn/docs/development/architecture) | Error handling, expansion, registration and adapters. |
 | [Example extension](https://shijianjs.github.io/duckfn/docs/examples/duckfn) | `duckfn`, the example shipped with this package, with runnable SQL for every feature. |
-| [Build and release](https://shijianjs.github.io/duckfn/docs/build-and-release) · [Contributing](https://shijianjs.github.io/duckfn/docs/contributing) · [FAQ](https://shijianjs.github.io/duckfn/docs/faq) | Local builds, CI, and troubleshooting. |
+| [Build and release](https://shijianjs.github.io/duckfn/docs/development/build-and-release) · [Contributing](https://shijianjs.github.io/duckfn/docs/development/contributing) · [FAQ](https://shijianjs.github.io/duckfn/docs/faq) | Local builds, CI, and troubleshooting. |
 
 中文文档：<https://shijianjs.github.io/duckfn/zh-Hans/>
 

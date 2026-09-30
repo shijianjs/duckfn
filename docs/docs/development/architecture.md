@@ -42,6 +42,13 @@ after it:
 }
 ```
 
+```mermaid
+flowchart LR
+  F["an annotated Rust function"] --> C["common_build"]
+  C --> K["the function, untouched"]
+  C --> M["a module named after it:<br/>DuckArgsImpl, adapter impl,<br/>registration item"]
+```
+
 `DuckArgsImpl` is the bridge between the argument list and the two directions data flows:
 `#[derive(DuckStruct)]` turns it into a `DuckColumns` type, so the same struct is used to read
 arguments from a chunk and to write them back for struct arguments. The adapter impl then calls the
@@ -68,6 +75,14 @@ There are three registries, one per registration strategy:
 | `DuckFunctionItem` | Most macros, and every `#[duck_custom_register]` function | `register_all_duckfn` |
 | `DuckAggregateOverloadItem` | `overloads_name` on aggregates | `register_all_aggregate_overload` |
 | `DuckScalarOverloadItem` | `overloads_name` on scalars | `register_all_scalar_overload` |
+
+```mermaid
+flowchart TB
+  R["register_all_duckfn(connection)"]
+  R --> A["DuckFunctionItem<br/>most macros, plus duck_custom_register"]
+  R --> B["DuckAggregateOverloadItem<br/>aggregates with overloads_name"]
+  R --> C["DuckScalarOverloadItem<br/>scalars with overloads_name"]
+```
 
 `register_all_duckfn` applies them in that order, and the overload passes group items by name with
 `itertools::into_grouping_map_by` so that every signature sharing an `overloads_name` ends up in one
@@ -96,11 +111,17 @@ With the `loadable-extension` feature, DuckDB API functions are not linked. Inst
 through an `AtomicPtr` table that DuckDB fills in when it loads the extension and calls the entry
 point:
 
-```
-LOAD 'my_ext.duckdb_extension'
-  -> DuckDB calls my_ext_init_c_api(connection)
-     -> quack-rs installs the API table
-        -> register_all_duckfn(connection) registers every collected item
+```mermaid
+sequenceDiagram
+  participant D as DuckDB
+  participant E as my_ext cdylib
+  participant Q as quack-rs
+  participant R as duckfn
+  D->>E: LOAD my_ext.duckdb_extension
+  D->>E: my_ext_init_c_api(connection)
+  E->>Q: install the API table
+  Q->>R: register_all_duckfn(connection)
+  R-->>D: every collected item registered
 ```
 
 This is why the extension does not need a DuckDB build, and why it is tied to the DuckDB version it
@@ -109,6 +130,17 @@ was compiled against.
 ## 5. The adapters
 
 Each registration kind has an adapter trait that turns Rust values into DuckDB's vector-based callbacks.
+
+```mermaid
+flowchart LR
+  S["scalar"] --> S1["per row, or a batch:<br/>apply_with_null / apply_batch"]
+  A["aggregate"] --> A1["six callbacks on the state type"]
+  T["table"] --> T1["bind, then scan"]
+  C["copy"] --> C1["bind, global_init, sink, finalize"]
+  X["cast"] --> X1["per row, Normal or Try"]
+  P["replacement scan"] --> P1["scan_callback, then handle_path"]
+  M["sql macro"] --> M1["register the SqlMacro"]
+```
 
 ### Scalar
 
@@ -254,4 +286,4 @@ row), and `DuckBindArgs` (usable as a table function's arguments).
 ## Next
 
 - [Attributes](../guide/attributes.md) — the user-facing view of expansion.
-- [Contributing](../contributing.md) — working on these crates.
+- [Contributing](./contributing.md) — working on these crates.

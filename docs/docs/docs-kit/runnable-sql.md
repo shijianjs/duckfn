@@ -32,6 +32,16 @@ SELECT * FROM range(10);
 ```
 ````
 
+At build time the block goes through a short pipeline before it reaches the reader:
+
+```mermaid
+flowchart LR
+  A["a fenced sql block<br/>with a JSON info string"] --> B["remarkRunnableSql<br/>rewrites it at build time"]
+  B --> C["a dfk-sql<br/>custom element"]
+  C --> D["CodeMirror editor<br/>with a Run button"]
+  D --> E["DuckDB-Wasm<br/>in the reader's browser"]
+```
+
 ## Works in `.md`, not just `.mdx`
 
 A runnable block needs no MDX feature: the JSON metastring is read by the

@@ -6,11 +6,14 @@ description: 为什么不需要编译 DuckDB、与 duckdb-rs 的区别，以及�
 
 # 常见问题
 
+这里回答**使用** duckfn 时最常冒出来的疑问 —— 它为什么这么设计、某个函数不按预期工作该怎么办。
+属于上游 bug、平台怪癖与规避办法的内容，请改看[已知问题](./known-issues.md)。
+
 ### 为什么不需要本地编译 DuckDB？
 
 因为什么都不链接。`libduckdb-sys` 以 `loadable-extension` feature 编译：只使用 DuckDB 的头文件，
 所有 API 函数都通过一张指针表解析，而这张表由宿主 DuckDB 在加载扩展时填好。代价是扩展与编译时所用的
-DuckDB 版本绑定，详见[架构](./internals/architecture.md#4-分发)。
+DuckDB 版本绑定，详见[架构](./development/architecture.md#4-分发)。
 
 ### 为什么加载扩展必须加 `-unsigned`？
 
@@ -90,7 +93,7 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 用 `test/sql/` 下的 sqllogictest 文件，通过 `make test`（`just test`）运行。文件中用
 `require duckfn`
-声明依赖的扩展，然后成对给出语句与期望输出。见[贡献指南](./contributing.md#测试)。
+声明依赖的扩展，然后成对给出语句与期望输出。见[贡献指南](./development/contributing.md#测试)。
 
 ### 扩展能加载，但调用时报版本错误
 
@@ -101,4 +104,4 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 与目录结构有关的 —— 几个 crate root、嵌套模块后的 `error[E0583]`、IDE 对独立 wasm root 标红 ——
 在[项目结构约定](./getting-started/project-structure.md)；官方 CI 的 WebAssembly 作业锁定 Rust 1.86，
-以及几个值得知道的上游 bug，在[问题排查](./troubleshooting.md)。
+以及几个值得知道的上游 bug，在[已知问题](./known-issues.md)。

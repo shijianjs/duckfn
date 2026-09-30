@@ -147,7 +147,7 @@ Building with Cargo covers development, but two things expect `make`:
 
 The usual arrangement is therefore: get `make configure` working once, build with Cargo while
 iterating, and run `make test` before pushing. On Windows that means running `make` from Git Bash
-rather than PowerShell — see [Contributing](../contributing.md#windows).
+rather than PowerShell — see [Contributing](../development/contributing.md#windows).
 
 ## Brief your coding agent
 
@@ -164,7 +164,7 @@ and readable. The published `duckfn` package is more than that: it also carries 
 sources under `docs/docs/**` with their Simplified Chinese translations *and* the example extension —
 `test/extension/**` together with its sqllogictest suite under `test/sql/` — so the guide, the example
 page and a complete worked extension can all be read straight out of the unpacked crate. See
-[Build and release](../build-and-release.md) for the exact file list.
+[Build and release](../development/build-and-release.md) for the exact file list.
 
 What the crate does not carry is the repository around them: the issue history, the CI workflows, the
 documentation site's own tooling, and the `AGENTS.md` file itself. That is why the `AGENTS.md` points
@@ -178,4 +178,4 @@ version — so it cannot go stale.
 
 - [Installation](./installation.md) — add duckfn to the crate.
 - [Quick start](./quick-start.md) — write, build and load the extension.
-- [Build and release](../build-and-release.md) — what the template's CI does on a version tag.
+- [Build and release](../development/build-and-release.md) — what the template's CI does on a version tag.

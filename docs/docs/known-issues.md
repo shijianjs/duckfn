@@ -1,14 +1,15 @@
 ---
-title: Troubleshooting
+title: Known issues
 sidebar_position: 10
 description: The (resolved) Rust 1.86 pin in the official CI's WebAssembly build, the upstream bug that corrupts all-NULL list literals, and why a `panic!` is unusable on WebAssembly.
 ---
 
-# Troubleshooting
+# Known issues
 
-Three things that largely are not duckfn's doing but that WebAssembly builders run into. The first is
-now fixed upstream and is kept for context. Each one says what you see, why it happens, and what to do
-about it.
+Upstream bugs and platform quirks that bite extension builds, each with a workaround. They are
+largely not duckfn's doing, and the first one is already fixed upstream and kept for context. For
+usage questions — why a function does not show up, why `-unsigned` is needed — see
+[FAQ](./faq.md).
 
 Problems with the *layout* — the crate roots, `error[E0583]`, and the IDE flagging a separate wasm
 root — live in [Project structure](./getting-started/project-structure.md) instead,
@@ -118,5 +119,5 @@ message. Measured against a locally built `wasm_eh` extension on emscripten 3.1.
 - [Project structure](./getting-started/project-structure.md) — the crate roots, `error[E0583]`, and the
   IDE flagging a separate wasm root.
 - [FAQ](./faq.md) — the errors people hit while writing functions.
-- [Build and release](./build-and-release.md) — what the pipeline does on a version tag.
-- [Architecture](./internals/architecture.md) — how registration and dispatch actually work.
+- [Build and release](./development/build-and-release.md) — what the pipeline does on a version tag.
+- [Architecture](./development/architecture.md) — how registration and dispatch actually work.

@@ -29,6 +29,13 @@ src/
 All three roots point at `src/extension/mod.rs` — a *directory* module — so they all see the same
 tree, and `duckfn_entrypoint!` sits in exactly one place.
 
+```mermaid
+flowchart TB
+  L["src/lib.rs<br/>native, cdylib"] --> M["src/extension/mod.rs<br/>mod demo, mod functions, mod types,<br/>duckfn_entrypoint!"]
+  W["src/wasm_lib.rs<br/>wasm, staticlib"] --> M
+  B["src/bin/duckfn.rs<br/>CLI"] --> M
+```
+
 ## Keep the two entry points identical
 
 `crate-type` cannot be chosen per target, and the two targets need different ones: `cdylib` when
@@ -114,9 +121,9 @@ The second attribute silences the lint about a crate root that is not named `lib
 ## See also
 
 - [Create a project](./create-a-project.md) — the template this layout comes from.
-- [Build and release](../build-and-release.md#webassembly) — how the WebAssembly target is built.
+- [Build and release](../development/build-and-release.md#webassembly) — how the WebAssembly target is built.
 - [Community extension docs](../community-extension-docs.md) — what `src/bin/duckfn.rs` is for.
-- [Contributing](../contributing.md) — the duckfn repository itself, whose layout deliberately
+- [Contributing](../development/contributing.md) — the duckfn repository itself, whose layout deliberately
   differs: there the example extension sits inside the published package, so its library carries the
   native, wasm and `rlib` crate types itself instead of adding a separate wasm root.
-- [Troubleshooting](../troubleshooting.md) — problems that are not about the layout.
+- [Known issues](../known-issues.md) — problems that are not about the layout.

@@ -42,7 +42,14 @@ duckfn_entrypoint!("my_ext");
 ```
 
 The attribute generates the FFI wrapper, the column readers and writers, and the registration code,
-so everything above is safe Rust.
+so everything above is safe Rust. One attribute is the whole pipeline:
+
+```mermaid
+flowchart LR
+  A["Rust function<br/>+ duckfn attribute"] --> B["duckfn-macro<br/>FFI wrapper, reader/writer,<br/>registration item"]
+  B --> C["cdylib<br/>my_ext.duckdb_extension"]
+  C -->|LOAD| D["DuckDB<br/>SELECT double_it(21)"]
+```
 
 ## Why duckfn
 

@@ -11,6 +11,15 @@ description: 编写、构建并加载一个最小的 duckfn 扩展，然后在 S
 
 如果想直接从带 CI 的可用骨架起步，见[创建项目](./create-a-project.md)。
 
+整条流程就是下面四步：
+
+```mermaid
+flowchart LR
+  A["1. 创建 crate<br/>Cargo.toml、src/lib.rs"] --> B["2. 写扩展<br/>一个 duck_scalar_function"]
+  B --> C["3. 构建<br/>make debug"]
+  C --> D["4. 加载并调用<br/>duckdb -unsigned"]
+```
+
 ## 1. 创建 crate
 
 ```toml title="Cargo.toml"

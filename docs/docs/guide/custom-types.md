@@ -167,4 +167,4 @@ undefined behaviour into a query error.
 ## Next
 
 - [Type mapping](./types.md) — what is already built in, and what is not.
-- [Architecture](../internals/architecture.md#6-value-types) — how the readers and writers fit together.
+- [Architecture](../development/architecture.md#6-value-types) — how the readers and writers fit together.

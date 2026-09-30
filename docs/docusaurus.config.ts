@@ -36,6 +36,12 @@ const config: Config = {
 
   onBrokenLinks: 'throw',
 
+  // ```mermaid fences render as diagrams through the theme registered below —
+  // used for the flow diagrams in the architecture and getting-started pages.
+  markdown: {
+    mermaid: true,
+  },
+
   // GitHub Pages serves `<path>/index.html` at `<path>/`, and 301-redirects `<path>` to `<path>/`.
   // Keeping the slash in Docusaurus' own output means the sitemap, the canonical tags and every
   // internal link advertise the URL that answers 200 instead of a redirect hop — which is also what
@@ -64,6 +70,11 @@ const config: Config = {
       },
     },
   },
+
+  // The classic preset already registers the search UI (see the note below), but
+  // Mermaid is not part of it: this theme is what turns ```mermaid fences into
+  // diagrams, and it follows the light/dark color mode on its own.
+  themes: ['@docusaurus/theme-mermaid'],
 
   presets: [
     [
@@ -150,11 +161,25 @@ const config: Config = {
         src: 'img/duckfn-logo.svg',
       },
       items: [
+        // One navbar entry per sidebar (see sidebars.ts): the user-facing docs,
+        // the docs-kit tooling, and the project's own development guide.
         {
           type: 'docSidebar',
-          sidebarId: 'docsSidebar',
+          sidebarId: 'userGuide',
           position: 'left',
-          label: 'Docs',
+          label: 'User guide',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'docsKit',
+          position: 'left',
+          label: 'Docs kit',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'development',
+          position: 'left',
+          label: 'Development',
         },
         {
           type: 'localeDropdown',

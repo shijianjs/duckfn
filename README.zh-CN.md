@@ -141,9 +141,9 @@ duckfn_entrypoint!("my_ext");
 | [SQL 宏](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/sql-macros) | 用 Rust 或 `.sql` 文件注册宏。 |
 | [类型映射](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/types) | DuckDB 与 Rust 的类型对应、可空性规则与已知缺口。 |
 | [社区扩展文档页](https://shijianjs.github.io/duckfn/zh-Hans/docs/community-extension-docs) | `description` / `comment` / `example` 三个属性，以及 DuckDB 社区扩展文档页读取的那份 CSV。 |
-| [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) · [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/internals/architecture) | 错误处理、宏展开、注册与适配器。 |
+| [错误与 panic](https://shijianjs.github.io/duckfn/zh-Hans/docs/guide/errors-and-panics) · [架构](https://shijianjs.github.io/duckfn/zh-Hans/docs/development/architecture) | 错误处理、宏展开、注册与适配器。 |
 | [示例扩展](https://shijianjs.github.io/duckfn/zh-Hans/docs/examples/duckfn) | `duckfn`，随本包一起发布的示例，每个功能都配可运行的 SQL。 |
-| [构建与发布](https://shijianjs.github.io/duckfn/zh-Hans/docs/build-and-release) · [贡献指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/contributing) · [常见问题](https://shijianjs.github.io/duckfn/zh-Hans/docs/faq) | 本地构建、CI 与排错。 |
+| [构建与发布](https://shijianjs.github.io/duckfn/zh-Hans/docs/development/build-and-release) · [贡献指南](https://shijianjs.github.io/duckfn/zh-Hans/docs/development/contributing) · [常见问题](https://shijianjs.github.io/duckfn/zh-Hans/docs/faq) | 本地构建、CI 与排错。 |
 
 English docs: <https://shijianjs.github.io/duckfn/>
 

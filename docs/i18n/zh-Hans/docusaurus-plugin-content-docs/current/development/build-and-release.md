@@ -1,6 +1,6 @@
 ---
 title: 构建与发布
-sidebar_position: 7
+sidebar_position: 2
 description: 本地构建与测试命令、WebAssembly 目标，以及 DuckDB 官方流水线如何把版本 tag 变成已发布的二进制。
 ---
 
@@ -148,4 +148,4 @@ rust-version = "1.86"
 ## 接下来
 
 - [贡献指南](./contributing.md) —— 日常开发流程。
-- [快速开始](./getting-started/quick-start.md) —— 最小构建流程。
+- [快速开始](../getting-started/quick-start.md) —— 最小构建流程。

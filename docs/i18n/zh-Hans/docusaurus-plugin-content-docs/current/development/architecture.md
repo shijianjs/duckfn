@@ -40,6 +40,13 @@ description: duckfn 如何把一个加了属性的函数变成已注册的 DuckD
 }
 ```
 
+```mermaid
+flowchart LR
+  F["一个带属性的 Rust 函数"] --> C["common_build"]
+  C --> K["原函数，原样保留"]
+  C --> M["以它命名的模块：<br/>DuckArgsImpl、适配器实现、<br/>注册项"]
+```
+
 `DuckArgsImpl` 是参数列表与数据流向之间的桥梁：`#[derive(DuckStruct)]` 让它变成 `DuckColumns` 类型，
 于是同一个结构体既用来从 DataChunk 读参数，也用来把结构体参数写回去。适配器实现随后调用原函数。
 各宏生成的 item 清单见[属性参考](../guide/attributes.md)。
@@ -66,6 +73,14 @@ inventory::collect!(DuckFunctionItem);
 | `DuckAggregateOverloadItem` | 聚合函数上的 `overloads_name` | `register_all_aggregate_overload` |
 | `DuckScalarOverloadItem` | 标量函数上的 `overloads_name` | `register_all_scalar_overload` |
 
+```mermaid
+flowchart TB
+  R["register_all_duckfn(connection)"]
+  R --> A["DuckFunctionItem<br/>大多数宏，以及 duck_custom_register"]
+  R --> B["DuckAggregateOverloadItem<br/>聚合函数上的 overloads_name"]
+  R --> C["DuckScalarOverloadItem<br/>标量函数上的 overloads_name"]
+```
+
 `register_all_duckfn` 按上表顺序依次处理；重载那两遍用 `itertools::into_grouping_map_by` 按名字分组，
 使共享同一个 `overloads_name` 的签名最终落进同一个函数集。注册表里的 `name` 字段用 `&'static str`
 而不是 `String`，因为 `inventory::submit!` 展开成的是 `static` 初始化表达式，其中无法构造 `String`。
@@ -90,11 +105,17 @@ quack_rs::entry_point_v2!(my_ext_init_c_api, duckfn::register_all_duckfn);
 开启 `loadable-extension` 后，DuckDB 的 API 函数不会被链接，而是经一张 `AtomicPtr` 表解析；
 DuckDB 加载扩展、调用入口点时把这张表填好：
 
-```
-LOAD 'my_ext.duckdb_extension'
-  -> DuckDB 调用 my_ext_init_c_api(connection)
-     -> quack-rs 安装 API table
-        -> register_all_duckfn(connection) 注册全部收集到的项
+```mermaid
+sequenceDiagram
+  participant D as DuckDB
+  participant E as my_ext cdylib
+  participant Q as quack-rs
+  participant R as duckfn
+  D->>E: LOAD my_ext.duckdb_extension
+  D->>E: my_ext_init_c_api(connection)
+  E->>Q: 安装 API table
+  Q->>R: register_all_duckfn(connection)
+  R-->>D: 全部收集项注册完成
 ```
 
 这就是不需要编译 DuckDB 的原因，也是扩展必须与编译时所用 DuckDB 版本绑定的原因。
@@ -102,6 +123,17 @@ LOAD 'my_ext.duckdb_extension'
 ## 5. 适配器
 
 每种注册方式都有一个适配器 trait，负责把 Rust 值接到 DuckDB 基于 vector 的回调上。
+
+```mermaid
+flowchart LR
+  S["标量函数"] --> S1["逐行，或整批：<br/>apply_with_null / apply_batch"]
+  A["聚合函数"] --> A1["状态类型上的六个回调"]
+  T["表函数"] --> T1["先 bind，再 scan"]
+  C["COPY 函数"] --> C1["bind、global_init、sink、finalize"]
+  X["类型转换"] --> X1["逐行，Normal 或 Try"]
+  P["替换扫描"] --> P1["先 scan_callback，再 handle_path"]
+  M["SQL 宏"] --> M1["注册 SqlMacro"]
+```
 
 ### 标量函数
 
@@ -228,4 +260,4 @@ quack-rs 的再导出都在 `duckdb-1-5` feature 后面。
 ## 接下来
 
 - [属性参考](../guide/attributes.md) —— 宏展开在用户侧的样子。
-- [贡献指南](../contributing.md) —— 在这些 crate 上开发。
+- [贡献指南](./contributing.md) —— 在这些 crate 上开发。

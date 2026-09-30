@@ -6,12 +6,16 @@ description: Why no DuckDB build is needed, how this differs from duckdb-rs, and
 
 # FAQ
 
+Quick answers to the questions that come up most while *using* duckfn — why it works the way it
+does, and what to do when a function does not behave. For upstream bugs and platform quirks with
+workarounds, see [Known issues](./known-issues.md) instead.
+
 ### Why doesn't duckfn need a local DuckDB build?
 
 Because nothing is linked. `libduckdb-sys` is compiled with the `loadable-extension` feature, which
 uses DuckDB's headers but resolves every API function through a pointer table that the host DuckDB
 installs when it loads the extension. The trade-off is that the extension is tied to the DuckDB
-version it was built against — see [Architecture](./internals/architecture.md#4-dispatch).
+version it was built against — see [Architecture](./development/architecture.md#4-dispatch).
 
 ### Why do I have to load the extension with `-unsigned`?
 
@@ -99,7 +103,7 @@ key; the other attribute macros reject it.
 
 With sqllogictest files under `test/sql/`, run by `make test` (`just test`). The file
 sets up the extension with `require duckfn`, then pairs statements with their expected output. See
-[Contributing](./contributing.md#tests).
+[Contributing](./development/contributing.md#tests).
 
 ### The extension loads but calls fail with a version error
 
@@ -113,4 +117,4 @@ Problems with the project layout — the crate roots, `error[E0583]` once you ne
 flagging a separate wasm root — are in
 [Project structure](./getting-started/project-structure.md). The Rust 1.86 pin in the official CI's
 WebAssembly job and the upstream bugs worth knowing about are in
-[Troubleshooting](./troubleshooting.md).
+[Known issues](./known-issues.md).

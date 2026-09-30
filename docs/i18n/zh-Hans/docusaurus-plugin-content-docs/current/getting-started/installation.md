@@ -81,4 +81,4 @@ crate-type = ["cdylib"]
 
 - [快速开始](./quick-start.md) —— 编写、构建并加载一个扩展。
 - [属性参考](../guide/attributes.md) —— 完整的属性与参数说明在指南里。
-- [架构](../internals/architecture.md) —— API table 分发到底是怎么工作的。
+- [架构](../development/architecture.md) —— API table 分发到底是怎么工作的。

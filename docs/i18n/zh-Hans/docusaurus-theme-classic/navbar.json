@@ -7,9 +7,17 @@
     "message": "duckfn logo",
     "description": "The alt text of navbar logo"
   },
-  "item.label.Docs": {
-    "message": "文档",
-    "description": "Navbar item with label Docs"
+  "item.label.User guide": {
+    "message": "用户指南",
+    "description": "Navbar item with label User guide"
+  },
+  "item.label.Docs kit": {
+    "message": "文档工具",
+    "description": "Navbar item with label Docs kit"
+  },
+  "item.label.Development": {
+    "message": "开发指南",
+    "description": "Navbar item with label Development"
   },
   "item.label.GitHub": {
     "message": "GitHub",

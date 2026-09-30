@@ -13,6 +13,15 @@ feature.
 To start from a working skeleton with CI already in place instead, see
 [Create a project](./create-a-project.md).
 
+The four steps below, end to end:
+
+```mermaid
+flowchart LR
+  A["1. Create the crate<br/>Cargo.toml, src/lib.rs"] --> B["2. Write the extension<br/>a duck_scalar_function"]
+  B --> C["3. Build it<br/>make debug"]
+  C --> D["4. Load and call it<br/>duckdb -unsigned"]
+```
+
 ## 1. Create the crate
 
 ```toml title="Cargo.toml"

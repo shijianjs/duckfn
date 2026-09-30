@@ -1,6 +1,6 @@
 ---
 title: 贡献指南
-sidebar_position: 8
+sidebar_position: 3
 description: 环境准备、日常命令、测试组织方式，以及需要遵守的约定。
 ---
 
@@ -46,7 +46,7 @@ Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `
 
 根清单锁定 `duckfn-macro = "={{DUCKFN_VERSION}}"`，因此两个 crate 总是一起发布。
 
-扩展项目有三个 crate root —— 见[项目结构约定](./getting-started/project-structure.md) —— 而本仓库只有
+扩展项目有三个 crate root —— 见[项目结构约定](../getting-started/project-structure.md) —— 而本仓库只有
 两个：没有单独的 wasm root，因为示例扩展就在本包里，编到 WebAssembly 的那份也是本包的 lib。
 
 ### 示例为什么在本包里
@@ -164,7 +164,7 @@ npm test                 # 在 DuckDB-Wasm 里跑遍每个可运行 SQL 块
 
 `npm test` 是文档站自己的测试：它收集每个可运行块，用站点预加载的扩展真跑一遍 —— 函数改名或默认
 值变了的后果会在这里暴露，而不是在读者的浏览器里。演示报错的块要在 meta 里声明 `"expect": "error"`，
-否则会被当成真的坏了 —— 见[测试示例](./docs-kit/sql-test.md)。
+否则会被当成真的坏了 —— 见[测试示例](../docs-kit/sql-test.md)。
 
 ## 约定
 
@@ -179,5 +179,5 @@ npm test                 # 在 DuckDB-Wasm 里跑遍每个可运行 SQL 块
 
 ## 接下来
 
-- [架构](./internals/architecture.md) —— 你要改的代码在哪里。
+- [架构](./architecture.md) —— 你要改的代码在哪里。
 - [构建与发布](./build-and-release.md) —— CI 与发版流程。

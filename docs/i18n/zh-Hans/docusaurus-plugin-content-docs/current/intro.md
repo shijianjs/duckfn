@@ -39,7 +39,14 @@ pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
 duckfn_entrypoint!("my_ext");
 ```
 
-FFI 包装、列读写与注册代码都由属性宏生成，所以上面这段完全是安全 Rust。
+FFI 包装、列读写与注册代码都由属性宏生成，所以上面这段完全是安全 Rust。一个属性就是整条流水线：
+
+```mermaid
+flowchart LR
+  A["Rust 函数<br/>+ duckfn 属性"] --> B["duckfn-macro<br/>FFI 包装、列读写器、<br/>注册项"]
+  B --> C["cdylib<br/>my_ext.duckdb_extension"]
+  C -->|LOAD| D["DuckDB<br/>SELECT double_it(21)"]
+```
 
 ## 为什么用 duckfn
 

@@ -89,4 +89,4 @@ marked as using the *unstable* C API, which is why loading it requires `-unsigne
 
 - [Quick start](./quick-start.md) — write, build and load an extension.
 - [Attributes](../guide/attributes.md) — the full attribute and argument reference.
-- [Architecture](../internals/architecture.md) — how the API table dispatch actually works.
+- [Architecture](../development/architecture.md) — how the API table dispatch actually works.

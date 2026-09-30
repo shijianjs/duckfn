@@ -1,6 +1,6 @@
 ---
 title: Contributing
-sidebar_position: 8
+sidebar_position: 3
 description: Setting up the repository, the day-to-day commands, how the tests are organised, and the conventions to follow.
 ---
 
@@ -49,7 +49,7 @@ targets — `make configure`, `make test`, and the CI-equivalent commands.
 The root manifest pins `duckfn-macro = "={{DUCKFN_VERSION}}"`, so the two crates always ship together.
 
 An extension project has three crate roots — see
-[Project structure](./getting-started/project-structure.md) — and this repository has two: there is
+[Project structure](../getting-started/project-structure.md) — and this repository has two: there is
 no separate wasm root, because the example extension is part of the package and its library is what
 gets compiled for WebAssembly.
 
@@ -183,7 +183,7 @@ npm test                 # run every runnable SQL block in DuckDB-Wasm
 it with the site's extension preloaded, so a renamed function or a changed default
 shows up here instead of in a reader's browser. A block that demonstrates a
 failure has to declare it (`"expect": "error"`), otherwise it counts as breakage —
-see [Testing the examples](./docs-kit/sql-test.md).
+see [Testing the examples](../docs-kit/sql-test.md).
 
 ## Conventions
 
@@ -202,5 +202,5 @@ see [Testing the examples](./docs-kit/sql-test.md).
 
 ## Next
 
-- [Architecture](./internals/architecture.md) — where the code you are about to change lives.
+- [Architecture](./architecture.md) — where the code you are about to change lives.
 - [Build and release](./build-and-release.md) — the CI and release flow.

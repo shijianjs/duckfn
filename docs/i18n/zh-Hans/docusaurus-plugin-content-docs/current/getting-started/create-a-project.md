@@ -132,7 +132,7 @@ SELECT double_it(21);
 - CI，跑的是同一套 makefile。
 
 所以常见的搭配是：先让 `make configure` 跑通一次，迭代时用 Cargo 构建，推送前跑 `make test`。
-在 Windows 上，这意味着 `make` 要在 Git Bash 里运行，而不是 PowerShell —— 见[贡献指南](../contributing.md#windows)。
+在 Windows 上，这意味着 `make` 要在 Git Bash 里运行，而不是 PowerShell —— 见[贡献指南](../development/contributing.md#windows)。
 
 ## 让 AI 助手写代码
 
@@ -145,7 +145,7 @@ SELECT double_it(21);
 真相来源 —— 就在磁盘上，可以直接读。发布出去的 `duckfn` 包还不止这些：它一并带着 `docs/docs/**`
 下的文档正文及其简体中文译文，**以及**示例扩展 —— `test/extension/**` 连同 `test/sql/` 下的
 sqllogictest 用例 —— 所以用户指南、示例页和一份完整可抄的扩展都能直接从解包后的 crate 里读，
-确切清单见[构建与发布](../build-and-release.md)。
+确切清单见[构建与发布](../development/build-and-release.md)。
 
 包带不过去的是它们周围的那一整套仓库：issue 历史、CI 工作流、文档站自己的工具链，以及
 `AGENTS.md` 这个文件本身。所以 `AGENTS.md` 把知识源指向本仓库的本地 clone，并明确要求助手查不到时
@@ -158,4 +158,4 @@ sqllogictest 用例 —— 所以用户指南、示例页和一份完整可抄�
 
 - [安装](./installation.md) —— 把 duckfn 加进 crate。
 - [快速开始](./quick-start.md) —— 编写、构建并加载扩展。
-- [构建与发布](../build-and-release.md) —— 模板的 CI 在打 tag 时做了什么。
+- [构建与发布](../development/build-and-release.md) —— 模板的 CI 在打 tag 时做了什么。
