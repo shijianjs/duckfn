@@ -216,10 +216,13 @@ build_wasm_eh:
 # SQL block in a real browser. Locally the docs site preloads *that* file — only the GitHub Pages
 # deployment fetches the release — so this is the entry point for checking the docs on a
 # workstation; `docs_build` / `docs_start` on their own fail without it.
+#
+# 末尾用 `cd docs && npm test` 而不是 `npm test -w docs`：这份文件在下游项目里也跑，而那些项目没有
+# 根 package.json（没有 npm workspace），`-w` 会直接报错。两者在 duckfn 仓库里等价。
 test_wasm: build_wasm_eh
     mkdir -p docs/static/duckdb-extensions
     cp build/wasm_eh/extension/{{extension_name}}/{{extension_name}}.duckdb_extension.wasm docs/static/duckdb-extensions/{{extension_name}}.duckdb_extension.wasm
-    npm test -w docs
+    cd docs && npm test
 
 # 工具链（首次）：固定 Rust 版本 + 装 wasm target
 config_env:
