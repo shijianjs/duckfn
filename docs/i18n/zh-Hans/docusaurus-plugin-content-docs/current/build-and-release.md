@@ -33,15 +33,16 @@ just doc                    # cargo doc -p duckfn
 EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
 TARGET_DUCKDB_VERSION=v1.5.5
-TARGET_INFO += --features quack
+TARGET_INFO += --example $(EXTENSION_NAME) --features quack
 ```
 
 `USE_UNSTABLE_C_API=1` 决定了产出的扩展只能在兼容版本的 DuckDB 里、并加 `-unsigned` 才能加载。
 `TARGET_DUCKDB_VERSION` 指明写入元数据时针对的版本。`EXTENSION_NAME` 必须与
 `test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
-`TARGET_INFO += --features quack` 决定示例会不会被编译：它挂在默认关闭的 `quack` feature 上，而
-`TARGET_INFO` 是 DuckDB 官方 makefile 唯一会原样拼进 `cargo build` 的变量。少了这一行，产出的是一个
-没有入口符号的 cdylib。
+`TARGET_INFO` 里带 `--example $(EXTENSION_NAME)`：扩展产物来自 `[[example]] duckfn` 这个 target；
+再带上 `--features quack` 决定示例树会不会被编译（它挂在默认关闭的 `quack` feature 上）。
+`TARGET_INFO` 是 DuckDB 官方 makefile 唯一会原样拼进 `cargo build` 的变量。少了后面这一项，产出的是
+一个没有入口符号的 cdylib。
 
 ## WebAssembly
 
@@ -52,13 +53,24 @@ rustup target add wasm32-unknown-emscripten
 just build_wasm
 ```
 
-由于最终链接由 `emcc` 完成，该目标需要的是 `staticlib` 而不是 `cdylib`。`crate-type` 不能按 target
-覆写，于是本仓库的 lib 干脆把它被当成的东西都列上（`["rlib", "cdylib", "staticlib"]`），wasm 那边取
-其中的 `.a` 用。两个扩展产物因此都出自 `test/extension/` 的同一次编译 —— 这点很关键：多编一份就会把
-每个函数注册两次，而且在 wasm 上重复的入口符号会直接链接失败。剩下的交给 `make`：它用 `emcc` 把归档链
-成 side module，再补上扩展元数据。扩展项目不需要这些 —— 那边 wasm 目标是单独一个 `[[example]]`
-root（见[项目结构约定](./getting-started/project-structure.md)）；本仓库为什么并进 lib，见
-[贡献指南](./contributing.md)。
+由于最终链接由 `emcc` 完成，该目标要的是 `staticlib` 而不是 `cdylib`。`crate-type` 不能按 target
+覆写，所以这两者都放在同一个 `[[example]] duckfn` target 上（根 `Cargo.toml` 里
+`crate-type = ["cdylib", "staticlib"]`）：原生构建取 cdylib，wasm 构建取 `.a`，而 lib 本身只剩一个
+`rlib`。两个扩展产物因此都出自 `test/extension/` 的同一次编译 —— 这点很关键：多编一份就会把每个
+函数注册两次，而且在 wasm 上重复的入口符号会直接链接失败。剩下的交给 `make`：它用 `emcc` 把归档链成
+side module，再补上扩展元数据。
+
+lib 保持纯 rlib，还有一层**给下游项目**的好处：cargo 同样照依赖的 `crate-type` 办事，cdylib 一旦写在
+lib 上，每个下游项目编 wasm 时都要把 duckfn 的 cdylib 也链一遍 —— 而那条路径下 rustc 不会给 emcc 传
+`-sSIDE_MODULE=2`，emcc 于是按独立模块链接，报：
+
+```
+wasm-ld: error: libstandalonewasm.a(__main_void.o): undefined symbol: main
+```
+
+扩展项目在 duckfn ≤ 0.0.16 时要在自己的 `.cargo/config.toml` 里加
+`[target.wasm32-unknown-emscripten] rustflags = ["-C", "link-arg=-sSIDE_MODULE=2"]` 绕开它；
+duckfn 0.0.17 起 lib 只有 rlib，这段就不需要了。
 
 ## 持续集成
 

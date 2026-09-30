@@ -40,10 +40,10 @@ TARGET_INFO += --features quack
 `USE_UNSTABLE_C_API=1` is what makes the built extension loadable only with `-unsigned`, and only in
 a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metadata is written for.
 `EXTENSION_NAME` has to match `duckfn_entrypoint!` in `test/extension/entry.rs` and the `require` lines
-of the sqllogictest files. `TARGET_INFO += --features quack` is what gets the example compiled: it
-lives behind the `quack` feature (off by default), and `TARGET_INFO` is the one variable DuckDB's
-shared makefiles splice verbatim into `cargo build`. Without it the build would hand back a cdylib
-with no entry-point symbol.
+of the sqllogictest files. `TARGET_INFO` carries `--example $(EXTENSION_NAME)` plus `--features quack`:
+the extension artefacts come from the `[[example]] duckfn` target, and the example tree lives behind the
+`quack` feature (off by default). `TARGET_INFO` is the one variable DuckDB's shared makefiles splice
+verbatim into `cargo build`. Without it the build would hand back a cdylib with no entry-point symbol.
 
 ## WebAssembly
 
@@ -54,15 +54,26 @@ rustup target add wasm32-unknown-emscripten
 just build_wasm
 ```
 
-Because `emcc` performs the final link, that target needs a `staticlib` rather than a `cdylib`.
-`crate-type` cannot be overridden per target, so the lib lists all three types it is taken as:
-`["rlib", "cdylib", "staticlib"]`. Both extension artefacts then come out of one compilation of
-`test/extension/`, which matters: a second copy of the tree would register every function twice, and
-the duplicate entry symbol fails to link on wasm. `make` does the rest — it links the archive into a
-side module with `emcc` and appends the extension metadata. An extension project needs none of this:
-there the wasm target is a separate `[[example]]` root (see
-[Project structure](./getting-started/project-structure.md)); why this repository folds it into the
-lib is in [Contributing](./contributing.md).
+Because `emcc` performs the final link, that target wants a `staticlib`, not a `cdylib`. `crate-type`
+cannot be overridden per target, so both live on one `[[example]] duckfn` target
+(`crate-type = ["cdylib", "staticlib"]`, root `Cargo.toml`): the native build takes the cdylib, the
+wasm build takes the `.a`. The lib itself is a plain `rlib`. Both extension artefacts come out of one
+compilation of `test/extension/`, which matters: a second copy of the tree would register every
+function twice, and the duplicate entry symbol fails to link on wasm. `make` does the rest — it links
+the archive into a side module with `emcc` and appends the extension metadata.
+
+Keeping the lib a plain rlib also keeps **downstream** projects out of trouble. Cargo honours a
+dependency's `crate-type` too, so with the cdylib listed on the lib, every downstream wasm build also
+built duckfn's cdylib — and in that path rustc does not pass `-sSIDE_MODULE=2`, so emcc links it as a
+standalone module and fails:
+
+```
+wasm-ld: error: libstandalonewasm.a(__main_void.o): undefined symbol: main
+```
+
+An extension project on duckfn ≤ 0.0.16 works around it with `[target.wasm32-unknown-emscripten]
+rustflags = ["-C", "link-arg=-sSIDE_MODULE=2"]` in its `.cargo/config.toml`. From duckfn 0.0.17 on the
+lib is just an rlib and the workaround is unnecessary.
 
 ## Continuous integration
 

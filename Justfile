@@ -47,10 +47,10 @@ lint:
 docs_csv:
     cargo run {{_quack}} --bin duckfn-cli -- function_descriptions
 
-# WebAssembly 构建：本包的 wasm 产物来自 lib 的 staticlib，没有 [[example]] 目标，
-# 所以不像下游那样带 --example（见 Cargo.toml 的 crate-type 注释）。
+# WebAssembly 构建：产物是 `examples/duckfn.rs` 的 staticlib（libduckfn.a），与下游一样走
+# --example（见 Cargo.toml 的 [[example]]）；`quack` 是示例树与 CLI 的开关。
 build_wasm:
-    cargo build --release --target wasm32-unknown-emscripten {{_quack}}
+    cargo build --release --target wasm32-unknown-emscripten --example {{extension_name}} {{_quack}}
 
 # 发版前检查：clippy（warning 视为错误）与全 feature 构建都必须干净
 release_check: lint

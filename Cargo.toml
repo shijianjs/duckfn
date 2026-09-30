@@ -52,6 +52,7 @@ include = [
     "/src/**",
     "/tests/**",
     "/test/extension/**",
+    "/examples/**",
     "/test/sql/**/*.test",
     "/demo.sh",
     "/README.md",
@@ -82,24 +83,25 @@ homepage = "https://github.com/shijianjs/duckfn"
 authors = ["shijianjs"]
 
 [lib]
-# 三种 crate-type，各给一个平台用：
-#   rlib     下游当依赖用；
-#   cdylib   原生扩展本体 —— 打开 `quack` 时导出 DuckDB 要的 `duckfn_init_c_api`
-#            （见 test/extension/entry.rs 的 `duckfn_entrypoint!("duckfn")`）；
-#   staticlib WebAssembly 用 —— emcc 负责最终链接，所以 wasm 那边要的是 .a（libduckfn.a）。
-# 三个一起列出，是因为 crate-type 不能按 target 覆写；cargo 每次都会把三种产物都做出来，
-# 各平台取自己需要的那份。这样也就不需要一个单独的 `[[example]]` wasm 根了：示例树只由 lib
-# 编一遍，入口符号与 inventory 注册项都只有一份（多编一遍会重复注册，wasm 上直接链接失败）。
+# 只有 rlib —— 下游项目要的也就是它。
 #
-# Three crate types, one per consumer: rlib for dependents, cdylib as the native extension (it
-# exports `duckfn_init_c_api` when `quack` is on — see `duckfn_entrypoint!("duckfn")` in
-# test/extension/entry.rs), and staticlib for WebAssembly, where emcc does the final link and wants a
-# `.a` (libduckfn.a). They are listed together because crate-type cannot be overridden per target, so
-# cargo builds all three and each platform picks the one it needs. That also removes the need for a
-# separate `[[example]]` wasm root: the example tree is compiled once, by the lib, so the entry symbol
-# and the inventory registrations exist exactly once (a second copy registers everything twice and
-# fails to link on wasm).
-crate-type = ["rlib", "cdylib", "staticlib"]
+# 原生扩展的 cdylib 与 wasm 用的 staticlib 都不在这里，而在下面的 `[[example]] duckfn`：
+#   1. crate-type 不能按 target 覆写，写进 lib 就意味着**每个下游项目**在编 wasm 时都要把
+#      duckfn 的 cdylib 也链一遍；那条路下 rustc 不给 emcc 传 `-sSIDE_MODULE=2`，emcc 按独立
+#      模块链接、去找一个并不存在的 main，直接报
+#      `libstandalonewasm.a(__main_void.o): undefined symbol: main`。
+#   2. 那两个产物本来就只是**本仓库自己**发扩展要用，下游不需要。
+# 挪出去之后，下游只编一份 rlib，既不付多余的链接成本，也不必为 wasm 加任何 rustflags。
+#
+# rlib only — that is all a downstream project needs.
+#
+# The native extension's cdylib and the wasm staticlib live in the `[[example]] duckfn` target below,
+# not here: (1) `crate-type` cannot be overridden per target, so listing them here makes **every
+# downstream project** link duckfn's cdylib when it builds for wasm — and in that path rustc does not
+# pass `-sSIDE_MODULE=2`, so emcc links a standalone module and fails with
+# `libstandalonewasm.a(__main_void.o): undefined symbol: main`. (2) Those two artefacts exist only for
+# shipping *this* extension. Downstream now builds one rlib: no extra link, no wasm rustflags.
+crate-type = ["rlib"]
 
 [[bin]]
 # 命令行工具（导出 function_descriptions.csv）。它自己用 `#[path]` 再编一遍示例源码：直接依赖 rlib
@@ -115,12 +117,32 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 # registrations and the CSV would come out silently empty. That is also why it includes
 # `extension/mod.rs` without the entry symbol (see test/extension/entry.rs).
 #
-# The target is named `duckfn-cli`, not `duckfn` like its file: this package's lib is a cdylib whose
-# artifact is also called duckfn, and on Windows the two .pdb files would collide (cargo reports an
-# output filename collision). A downstream package has a different name and no collision, so the
-# template's bin keeps the plain `duckfn`.
+# The target is named `duckfn-cli`, not `duckfn` like its file: this package's extension artefact is
+# also called duckfn (see the `[[example]] duckfn` below), and on Windows the two .pdb files would
+# collide (cargo reports an output filename collision). A downstream package has a different name and
+# no collision, so the template's bin keeps the plain `duckfn`.
 name = "duckfn-cli"
 path = "src/bin/duckfn.rs"
+required-features = ["quack"]
+
+[[example]]
+# 扩展产物本体：原生扩展的 cdylib（`duckfn.dll` / `libduckfn.so`）与 WebAssembly 用的
+# staticlib（`libduckfn.a`）。crate-type 不能按 target 覆写，所以两个一起列 —— cargo 每次都把
+# 两份都做出来，各平台取自己需要的那份（wasm 那一侧真正喂给 emcc 的是 .a）。
+#
+# 与下游模板（duckfn-extension-template）的做法一致：示例树由这个 target 编一遍，入口符号与
+# inventory 注册项都只有一份；多编一遍会重复注册，wasm 上直接链接失败。
+#
+# The extension artefact itself: the native extension's cdylib (`duckfn.dll` / `libduckfn.so`) and the
+# WebAssembly staticlib (`libduckfn.a`). crate-type cannot be overridden per target, so both are
+# listed — cargo builds both and each platform takes the one it needs (on wasm, emcc consumes the .a).
+#
+# This mirrors the downstream template (duckfn-extension-template): the example tree is compiled once,
+# here, so the entry symbol and the inventory registrations exist exactly once — a second copy would
+# register everything twice and fail to link on wasm.
+name = "duckfn"
+path = "examples/duckfn.rs"
+crate-type = ["cdylib", "staticlib"]
 required-features = ["quack"]
 
 [features]

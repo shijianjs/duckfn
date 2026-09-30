@@ -9,8 +9,9 @@
 | 路径 | 内容 | 是否发布 |
 | --- | --- | --- |
 | `/`（根） | `duckfn` 运行时：`src/`、`tests/`、`README.md`、`LICENSE`；根 `Cargo.toml` 同时是 workspace 根 | 是（crates.io） |
-| `test/extension/` | 示例扩展的模块树（`demo/`、`functions/`、`types/`），与 `test/sql/` 并列 —— 它是跑在真实 DuckDB 里的用例，不是 `tests/` 下的单元测试，所以放在 `src/` 之外，由 `src/lib.rs` 与 `src/bin/duckfn.rs` 用 `#[path]` 挂进来；默认不编译（见下） | 是（随 `duckfn` 包） |
-| `src/bin/duckfn.rs` | 命令行工具入口（`[[bin]] duckfn-cli`，文件名仍是 duckfn.rs，原因见下）。WebAssembly 入口不需要单独文件 —— lib 自己产出 `staticlib`，见下 | 是（随 `duckfn` 包） |
+| `test/extension/` | 示例扩展的模块树（`demo/`、`functions/`、`types/`），与 `test/sql/` 并列 —— 它是跑在真实 DuckDB 里的用例，不是 `tests/` 下的单元测试，所以放在 `src/` 之外，由 `examples/duckfn.rs` 与 `src/bin/duckfn.rs` 用 `#[path]` 挂进来；默认不编译（见下） | 是（随 `duckfn` 包） |
+| `examples/duckfn.rs` | 扩展产物本体：`[[example]] duckfn`，`crate-type = ["cdylib", "staticlib"]` —— 原生扩展取 cdylib，wasm 取 `.a`；入口符号也在这里（见下）。**lib 只有 rlib**，这两个产物不放进 lib 的原因见下 | 是（随 `duckfn` 包） |
+| `src/bin/duckfn.rs` | 命令行工具入口（`[[bin]] duckfn-cli`，文件名仍是 duckfn.rs，原因见下）。它只为收集 inventory 注册项而再编一遍示例树 | 是（随 `duckfn` 包） |
 | `test/sql/` | 示例的 sqllogictest 用例（41 个 `.test`） | 是（随 `duckfn` 包，只收 `.test`） |
 | `duckfn-macro/` | 过程宏 crate | 是（crates.io） |
 | `docs/` | Docusaurus 文档站：`docs/docs/**`（英）与 `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`（中） | 是（随 `duckfn` 包，仅正文源文件） |
@@ -22,15 +23,16 @@
 
 ### 示例的开关：`quack` feature
 
-示例的模块树由默认关闭的 `quack` feature 控制（`src/lib.rs` 里 `#[cfg(feature = "quack")] mod
-extension;`），`[[bin]] duckfn-cli` 也写了 `required-features = ["quack"]`（wasm 没有单独的
-`[[example]]` 目标，产物来自 lib 的 staticlib）：
+示例的模块树由默认关闭的 `quack` feature 控制 —— 它由两个 target 用 `#[path]` 挂进来：
+`examples/duckfn.rs`（扩展产物）与 `src/bin/duckfn.rs`（CLI），两者都写了
+`required-features = ["quack"]`。`src/lib.rs` **不**挂它，lib 只是纯 rlib。
 
-- **下游**：`duckfn = "0.0.11"` 的依赖树与示例并入前完全一致，示例源码在包里但不参与编译。
+- **下游**：`duckfn = "0.0.11"` 的依赖树与示例并入前完全一致，示例源码在包里但不参与编译；而且因为
+  lib 只有 rlib，下游编 wasm 时也不会被「把 duckfn 的 cdylib 也链一遍」拖下水（见下）。
 - **本仓库**：所有构建扩展的命令都必须带上它 —— `make debug`（根 Makefile 里
-  `TARGET_INFO += --features quack`）、`cargo build --features quack`、`just build`、
-  `just build_wasm`。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口符号的 cdylib），
-  `LOAD` 时才报错，很难查。
+  `TARGET_INFO += --example $(EXTENSION_NAME) --features quack`）、`cargo build --features quack`、
+  `just build`、`just build_wasm`。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口符号的
+  cdylib），`LOAD` 时才报错，很难查。
 - `quack = ["all", "owned-connection"]`：示例把每一档可选能力都演示了一遍，包括 `duckfn::duck_vfs`，
   所以除了 `all` 还要显式带上 `owned-connection`（见下）。
 - `all` 是给下游用户用的「全开」档，**不含 `owned-connection`（即 `duck_vfs`）**：宿主文件系统在
@@ -56,18 +58,27 @@ README、LICENSE、文档站正文（英 + 中）。改这个白名单后，用 
 
 DuckDB 扩展名 `duckfn` 必须四处一致：`test/extension/entry.rs` 的 `duckfn_entrypoint!`、根
 `Makefile` 的 `EXTENSION_NAME`、CI 的 `extension_name` / `EXTENSION_NAME`，以及
-`test/sql/**/*.test` 里的 `require`。它与 crate 名相同不是巧合 —— 原生扩展就是本包的 cdylib，
-产物名由 crate 名决定（上游 makefile 按 `lib$(EXTENSION_NAME).*` 取产物），对齐后根 Makefile
-一行平台条件都不用写。
+`test/sql/**/*.test` 里的 `require`。它与 crate 名相同不是巧合 —— 原生扩展就是本包 `[[example]]`
+产出的 cdylib（wasm 那份是同一个 target 的 staticlib），产物名由 crate 名决定（上游 makefile 按
+`lib$(EXTENSION_NAME).*` 取产物），对齐后根 Makefile 一行平台条件都不用写。
 
 两处因此而来的命名细节，改动前先读回来：
 
-- **入口符号单独一个文件**（`test/extension/entry.rs`）：原生 lib 与 wasm 目标各声明一次，而 CLI
-  虽然也编同一棵模块树（`#[path]` 那套），却链接了本包的 lib —— lib 里已经有一份入口符号，再定义
-  一次就是重复定义（Windows 上 LNK2005），所以它只包含 `extension/mod.rs`。
-- **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：本包 cdylib 的产物也叫
-  duckfn，Windows 上两者的 `.pdb` 会撞名（cargo 报 output filename collision）。下游项目的包名
-  不同，不会撞，所以模板里那个 bin 依旧叫 `duckfn`。
+- **入口符号单独一个文件**（`test/extension/entry.rs`）：由 `examples/duckfn.rs` 声明一次 —— 那个
+  target 同时产出原生 cdylib 与 wasm staticlib，两边都要它。CLI 也编同一棵模块树（`#[path]` 那套），
+  但它是 executable、用不上入口符号，而且多一份定义就是重复定义（Windows 上 LNK2005），所以它只包含
+  `extension/mod.rs`。
+- **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：扩展产物那个 target 叫
+  `duckfn`、产物也叫 duckfn，Windows 上两者的 `.pdb` 会撞名（cargo 报 output filename collision）。
+  下游项目的包名不同，不会撞，所以模板里那个 bin 依旧叫 `duckfn`。
+- **扩展产物为什么是 `[[example]]` 而不是写进 `[lib]` 的 `crate-type`**：cargo 照依赖的
+  `crate-type` 办事，cdylib / staticlib 一旦写在 lib 上，**每个下游项目**编 `wasm32-unknown-emscripten`
+  时都要把 duckfn 的 cdylib 也链一遍；那条路径下 rustc 不给 emcc 传 `-sSIDE_MODULE=2`，emcc 按独立
+  模块链接、去找一个并不存在的 main，直接报
+  `libstandalonewasm.a(__main_void.o): undefined symbol: main`。挪到 `[[example]]` 后 lib 只剩 rlib：
+  下游既不用多链一个 cdylib，也不用为 wasm 加任何 rustflags（duckfn ≤ 0.0.16 的下游仍需
+  `[target.wasm32-unknown-emscripten] rustflags = ["-C","link-arg=-sSIDE_MODULE=2"]` 绕开）。改这块时
+  记得同步根 `Makefile` 的 `TARGET_INFO`（要带 `--example $(EXTENSION_NAME)`）与 `IS_EXAMPLE`。
 
 ## 共享的 justfile：`scripts/common.just`
 

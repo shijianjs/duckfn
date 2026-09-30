@@ -157,28 +157,19 @@ pub use quack_rs::prelude::{
     CopyBindInfo, CopyFinalizeInfo, CopyFunctionBuilder, CopyGlobalInitInfo, CopySinkInfo,
 };
 
-// 示例扩展：并进本包后由 `quack` feature 打开，模块树在 test/extension/ —— 它和 test/sql/ 并列，
-// 是 duckfn 自己的用例（跑在真实 DuckDB 里），不是 tests/ 下的那种单元测试，所以放在 src/ 之外，
-// 靠 `#[path]` 挂进来。这份源码只由本 crate 编一遍：本 lib 同时产出原生扩展的 cdylib 与
-// WebAssembly 用的 staticlib（见 Cargo.toml 的 crate-type），CLI（src/bin/duckfn.rs）再自带一份以便
-// 收集注册项。feature 关闭时示例源码随包发布但不参与编译，下游依赖树因此完全不受影响。
+// 示例扩展**不在本 lib 里**编：模块树在 test/extension/（与 test/sql/ 并列，是 duckfn 自己的用例 ——
+// 跑在真实 DuckDB 里，不是 tests/ 下的单元测试），由两个 target 各编一份：
+//   - `examples/duckfn.rs`：扩展产物本体（cdylib / staticlib），入口符号也在这里；
+//   - `src/bin/duckfn.rs`：命令行工具，只为收集 inventory 的注册项。
+// 本 lib 只留 rlib（见 Cargo.toml），所以下游依赖 duckfn 时既不会编到示例源码，也不会被
+// 「顺手把 duckfn 的 cdylib 也链一遍」这种事拖累 —— 后者在 wasm 上会直接失败。
 //
-// The example extension: folded into this package and switched on by the `quack` feature, with its
-// module tree in test/extension/ — beside test/sql/, because it is duckfn's own test code (it runs
-// inside a real DuckDB) rather than the unit tests under tests/, which is why it sits outside src/ and
-// is pulled in through `#[path]`. That source is compiled exactly once, by this crate: the lib produces
-// both the native cdylib and the WebAssembly staticlib (see the crate-type in Cargo.toml), and the CLI
-// (src/bin/duckfn.rs) carries its own copy so it can collect the registrations. With the feature off
-// the example sources ship in the package without being compiled, so a downstream dependency tree is
-// unaffected.
-#[cfg(feature = "quack")]
-#[path = "../test/extension/mod.rs"]
-mod extension;
-// 入口符号（`duckfn_entrypoint!`）单独放，CLI 编同一棵树时要能跳过它 —— 原因见该文件与
-// src/bin/duckfn.rs 的注释。
-//
-// The entry point (`duckfn_entrypoint!`) is kept apart so the CLI can skip it while compiling the same
-// tree — see the note in that file and in src/bin/duckfn.rs.
-#[cfg(feature = "quack")]
-#[path = "../test/extension/entry.rs"]
-mod extension_entry;
+// The example extension is **not** compiled into this lib: its module tree lives in test/extension/
+// (beside test/sql/ — it is duckfn's own test code, running in a real DuckDB rather than a unit test
+// under tests/) and is compiled by two targets instead:
+//   - `examples/duckfn.rs`: the extension artefact (cdylib / staticlib), which also owns the entry
+//     symbol;
+//   - `src/bin/duckfn.rs`: the command-line tool, which only needs the inventory registrations.
+// The lib itself stays a plain rlib (see Cargo.toml), so a downstream project that depends on duckfn
+// neither compiles the example sources nor gets dragged into linking duckfn's cdylib — the latter
+// fails outright on wasm.

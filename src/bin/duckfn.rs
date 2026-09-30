@@ -9,9 +9,10 @@
 //! 时，链接器可能因为没人引用那些模块而把它们整块丢掉，导出的 CSV 就会是空的（而且是静默的）。
 //! 让 bin 自己把同一份源码编一遍，注册项就落在本 crate 里，一定齐全。
 //!
-//! 注意只编 `extension/mod.rs`：入口符号在 `extension/entry.rs`（lib 与 wasm 各自声明它），而这个
-//! bin 链接了 lib，再定义一次就是重复定义（Windows 上 LNK2005）。目标名之所以是 `duckfn-cli`
-//! 而不是文件名里的 `duckfn`，是为了避开本包 cdylib 的产物同名冲突，见根 Cargo.toml 的说明。
+//! 注意只编 `extension/mod.rs`：入口符号在 `extension/entry.rs`，由扩展产物那个 target
+//! （`examples/duckfn.rs`）声明；这个 bin 是个 executable，用不上它。目标名之所以是 `duckfn-cli`
+//! 而不是文件名里的 `duckfn`，是为了避开扩展产物（也叫 duckfn）的同名冲突，见根 Cargo.toml 的
+//! 说明。
 //!
 //! The entry point of the duckfn command-line tool:
 //! `cargo run --features quack --bin duckfn-cli -- function_descriptions`. The tool itself lives in
@@ -22,11 +23,11 @@
 //! merely depending on an rlib, the linker may drop those modules entirely and the exported CSV would
 //! come out empty — silently.
 //!
-//! Only `extension/mod.rs` is included: the entry symbol lives in `extension/entry.rs` (declared by
-//! the lib and by the wasm target), and this bin links the lib, so defining it again would be a
-//! duplicate definition (LNK2005 on Windows). The target is called `duckfn-cli` rather than the
-//! `duckfn` its file is named after to avoid colliding with this package's cdylib artifact — see the
-//! note in the root Cargo.toml.
+//! Only `extension/mod.rs` is included: the entry symbol lives in `extension/entry.rs`, declared by the
+//! extension-artefact target (`examples/duckfn.rs`); this bin is an executable and has no use for it.
+//! The target is called `duckfn-cli` rather than the `duckfn` its file is named after to avoid
+//! colliding with the extension artefact, which is also called duckfn — see the note in the root
+//! Cargo.toml.
 
 #[path = "../../test/extension/mod.rs"]
 mod extension;

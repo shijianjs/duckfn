@@ -86,11 +86,17 @@ include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 #     upstream `--example $(EXTENSION_NAME)` is dropped and only `--target` is kept; IS_EXAMPLE is
 #     cleared as well, because the artefact sits at the root of target/<target>/<profile>/ instead of
 #     in an examples/ subdirectory.
+# 扩展产物（cdylib / staticlib）来自 `[[example]] duckfn`，两个分支都要带上 `--example`
+# 并把 IS_EXAMPLE 指到 examples/ —— 与上游 rust.Makefile 的默认约定一致。
+#
+# The extension artefact (cdylib / staticlib) comes from `[[example]] duckfn`, so both branches pass
+# `--example` and point IS_EXAMPLE at examples/ — the same convention the upstream rust.Makefile uses.
 ifneq ($(DUCKDB_WASM_PLATFORM),)
-TARGET_INFO := --target $(TARGET) --features quack
-IS_EXAMPLE :=
+TARGET_INFO := --target $(TARGET) --example $(EXTENSION_NAME) --features quack
+IS_EXAMPLE := /examples
 else
-TARGET_INFO += --features quack
+TARGET_INFO += --example $(EXTENSION_NAME) --features quack
+IS_EXAMPLE := /examples
 endif
 
 configure: venv platform extension_version
