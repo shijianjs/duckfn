@@ -156,6 +156,20 @@ const config: Config = {
         hideable: true,
       },
     },
+    // Mermaid (`@docusaurus/theme-mermaid`, registered in `themes`): the `neo` look with the
+    // redux palette — `redux-color` in light mode, `redux-dark-color` in dark. The theme is per
+    // color mode (the theme component reads `theme[colorMode]` and re-initialises on a switch),
+    // while `look` has no light/dark counterpart and goes through `options`, which the theme
+    // spreads into `mermaid.initialize`.
+    mermaid: {
+      theme: {
+        light: 'redux-color',
+        dark: 'redux-dark-color',
+      },
+      options: {
+        look: 'neo',
+      },
+    },
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     colorMode: {

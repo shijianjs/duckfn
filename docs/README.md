@@ -116,11 +116,16 @@ resolve (in both locales), and code fences should use one of the languages enabl
 `docusaurus.config.ts` — `bash`, `rust`, `sql` or `toml`.
 
 **Mermaid.** A ```` ```mermaid ```` fence renders a diagram through `@docusaurus/theme-mermaid`
-(registered in `themes`, with `markdown.mermaid: true`). It follows the light/dark color mode on its
-own. Diagrams render on the client, so a syntax error shows up in the page rather than failing the
-build — check a diagram in a browser (`npm start -w docs`) rather than trusting `npm run build`.
-Keep labels quoted (`A["text"]`) and use `<br/>` for line breaks; avoid `#` and unescaped `&` in
-labels.
+(registered in `themes`, with `markdown.mermaid: true`). The look and the palette come from
+`themeConfig.mermaid`: `options.look: 'neo'`, and `theme: {light: 'redux-color', dark:
+'redux-dark-color'}`. That `theme` has to be the `{light, dark}` object — the component reads
+`theme[colorMode]` and re-initialises on a mode switch — while `look` has no per-mode variant and
+goes through `options`, which is spread into `mermaid.initialize`. Both settings are easy to get
+wrong silently: Mermaid ignores an unrecognised value and falls back, so after changing them check a
+diagram in a browser rather than trusting `npm run build` (`node` elements carry `data-look="neo"`,
+which is the quick way to confirm the look). Diagrams render on the client, so a syntax error shows
+up in the page rather than failing the build. Keep labels quoted (`A["text"]`) and use `<br/>` for
+line breaks; avoid `#` and unescaped `&` in labels.
 
 **Prefer `.md`.** In Docusaurus 3 both formats go through the same MDX pipeline,
 and the kit's runnable blocks need no MDX feature — so the tree sticks to `.md`
