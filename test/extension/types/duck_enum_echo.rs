@@ -155,3 +155,37 @@ pub enum Severity {
 fn dfn_echo_severity(s: Severity) -> Severity {
     s
 }
+
+// ============================================================================
+// create_type = "replace"：加载期覆盖同名旧类型
+//
+// `OR REPLACE` 与 `true`（`IF NOT EXISTS`）渲染的是同一份 DDL，只有冲突子句不同：
+//   CREATE OR REPLACE TYPE "replace_severity" AS ENUM('quiet', 'loud');
+// 所以同名类型已存在时旧定义会被覆盖 —— 旧字典里没有的标签（比如 'quiet'）覆盖后就能用了。
+// ============================================================================
+
+/// 替换模式：`#[duck(create_type = "replace")]`。
+///
+/// 加载期执行 `CREATE OR REPLACE TYPE "replace_severity" AS ENUM('quiet', 'loud');`；同名类型已存在
+/// 时旧定义被覆盖（`create_type = true` 的 `IF NOT EXISTS` 则会保留旧的）。
+///
+/// Replace mode: `CREATE OR REPLACE TYPE "replace_severity" AS ENUM('quiet', 'loud');` runs at load
+/// time, overwriting a type of that name (`create_type = true`'s `IF NOT EXISTS` would keep the old
+/// definition instead).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, DuckEnum)]
+#[duck(rename_all = "lowercase", sql_name = "replace_severity", create_type = "replace")]
+pub enum ReplaceSeverity {
+    #[default]
+    Quiet,
+    Loud,
+}
+
+/// 替换模式建的命名类型照样能当函数参数用。
+///
+/// ```sql
+/// SELECT dfn_echo_replace_severity('loud'::replace_severity);
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_replace_severity(s: ReplaceSeverity) -> ReplaceSeverity {
+    s
+}

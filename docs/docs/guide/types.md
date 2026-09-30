@@ -356,8 +356,10 @@ the extension twice is fine and a type of that name that already exists is left 
 
 Write `create_type = "print"` instead of `true` to render that same statement without creating
 anything: the DDL is printed once, after every registration has run, inside a `-- [duckfn]` frame
-that says it was *not* executed — easy to inspect, and to copy and run. See
-[Attributes → Named types in the catalog](./attributes.md#named-types-in-the-catalog).
+that says it was *not* executed — easy to inspect, and to copy and run. Write
+`create_type = "replace"` to take over a name that may already be taken: the same statement is
+rendered as `CREATE OR REPLACE TYPE`, so the extension's definition overwrites the old one on every
+load. See [Attributes → Named types in the catalog](./attributes.md#named-types-in-the-catalog).
 
 ## Containers of containers
 
@@ -436,8 +438,9 @@ pub enum Priority {
   field or a container element, and `Option<Priority>` makes it nullable;
 - `create_type = true` additionally runs `CREATE TYPE IF NOT EXISTS "priority" AS ENUM (...) ` when the
   extension loads — idempotent, and it leaves an existing type of that name alone — so SQL can write
-  `'high'::priority` and use `priority` as a column type; `create_type = "print"` renders that same
-  statement but only prints it to stderr, leaving the catalog untouched;
+  `'high'::priority` and use `priority` as a column type; `create_type = "replace"` renders that same
+  statement as `CREATE OR REPLACE TYPE` and overwrites a type of that name, while
+  `create_type = "print"` renders it and only prints it to stderr, leaving the catalog untouched;
 - as with any argument, a **non-nullable** enum parameter needs `Default` (the generated argument
   struct derives it), hence the `#[derive(Default)]` + `#[default]` in the example.
 

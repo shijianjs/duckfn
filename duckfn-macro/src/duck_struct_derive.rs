@@ -35,10 +35,12 @@ struct DuckStructDeriveArgs {
     /// lowercase snake_case.
     sql_name: Option<String>,
 
-    /// `#[duck(create_type = ...)]`：加载期如何处理这个命名类型，默认 `false`。
+    /// `#[duck(create_type = ...)]`：加载期如何处理这个命名类型，默认 `false`
+    /// （`true` 建类型、`"replace"` 覆盖建类型、`"print"` 只打印 DDL）。
     ///
     /// `#[duck(create_type = ...)]`: how the named type is handled at load time; defaults to
-    /// `false`.
+    /// `false` (`true` creates it, `"replace"` creates it with `OR REPLACE`, `"print"` only prints
+    /// the DDL).
     create_type: Option<CreateTypeMode>,
 }
 
@@ -143,13 +145,15 @@ impl DuckStructContext {
     ///
     /// 只在 `#[duck(create_type = ...)]` 不是 `false` 时生成：字段类型不在这里拼 SQL —— 注册函数把
     /// `<Self as DuckValueType>::logical_type()`（也就是引擎眼里的那个 STRUCT 逻辑类型）交给
-    /// [`duckfn::register_named_type`]，由它递归渲染成 SQL 并建类型，因此自定义字段类型同样适用；
+    /// `duckfn::register_named_type`（`"replace"` 交给带冲突策略的 `register_named_type_with`），
+    /// 由它递归渲染成 SQL 并建类型，因此自定义字段类型同样适用；
     /// `"print"` 模式则把同一份渲染结果交给 `duckfn::queue_named_type_ddl`，收进队列、由入口点统一打印。
     ///
     /// Generates the registration function and the inventory submission that handle the named
     /// STRUCT type at load time; emitted for every `create_type` other than `false`. The field types
     /// are not assembled here: the registrar hands `<Self as DuckValueType>::logical_type()` to
-    /// `duckfn::register_named_type`, which renders it recursively and creates the type — so custom
+    /// `duckfn::register_named_type` (`"replace"` goes through the conflict-aware
+    /// `register_named_type_with`), which renders it recursively and creates the type — so custom
     /// field types work. The `"print"` mode hands the very same rendering to
     /// `duckfn::queue_named_type_ddl`, which queues it for the entry point to print as one block.
     fn build_type_registration(&self) -> TokenStream2Result {
@@ -183,6 +187,20 @@ impl DuckStructContext {
                 /// EXISTS ...`, idempotent).
                 pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
                     ::duckfn::register_named_type(connection, #sql_name, #logical_type)
+                }
+            },
+            CreateTypeMode::Replace => quote! {
+                /// 加载期把 STRUCT 类型建进 catalog（`CREATE OR REPLACE TYPE ...`，覆盖同名旧定义）。
+                ///
+                /// Creates the STRUCT type in the catalog at load time (`CREATE OR REPLACE
+                /// TYPE ...`, overwriting an existing type of that name).
+                pub fn register(connection: &::duckfn::Connection) -> ::duckfn::DuckResult<()> {
+                    ::duckfn::register_named_type_with(
+                        connection,
+                        #sql_name,
+                        #logical_type,
+                        ::duckfn::TypeConflict::Replace,
+                    )
                 }
             },
             CreateTypeMode::Print => quote! {

@@ -87,10 +87,11 @@ Both derives also accept:
 | Argument | Default | Meaning |
 | --- | --- | --- |
 | `sql_name` | the type name in snake_case | The SQL-side type name (`Priority` → `priority`, `Ticket` → `ticket`). |
-| `create_type` | `false` | `true` runs `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` when the extension loads, `"print"` only prints that statement (to stderr), `false` does nothing. |
+| `create_type` | `false` | `true` runs `CREATE TYPE IF NOT EXISTS <sql_name> AS <type>;` when the extension loads, `"replace"` runs `CREATE OR REPLACE TYPE <sql_name> AS <type>;` instead (overwriting an existing type of that name), `"print"` only prints the `IF NOT EXISTS` statement (to stderr), `false` does nothing. |
 
-The statement is idempotent — loading the extension twice is fine — and leaves an existing type of
-that name untouched. It goes through the same execution path as the SQL macros (`duckdb_query`). An
+With `true` — and with `"print"`, which renders the same statement — loading the extension twice is
+fine and an existing type of that name is left untouched; `"replace"` is the flavour that overwrites
+it. Either way execution goes through the same path as the SQL macros (`duckdb_query`). An
 enum becomes `ENUM(...)`; a struct becomes `STRUCT(...)`, and its field types are rendered from
 DuckDB's *own* logical types, so nested enums and structs, `LIST` / `ARRAY` / `MAP` and hand-written
 custom field types come along automatically:
@@ -129,6 +130,22 @@ CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT("id" BIGINT, "priority" ENUM('low',
 -- [duckfn] end - nothing above was executed.
 ```
 
+Use `create_type = "replace"` when the extension should own a name that may already exist: the same
+statement is rendered with `OR REPLACE`, so the existing definition is overwritten on every load
+instead of being left alone. Handy while iterating on a type definition, and for an extension whose
+type is the source of truth:
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = "replace")]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,
+}
+// CREATE OR REPLACE TYPE "ticket" AS
+//   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'));
+```
+
 Keep `create_type = false` (the default) when the macro should stay out of the way entirely, and
 print the DDL yourself — from `#[duck_custom_register]`, with wording of your own:
 
@@ -149,6 +166,12 @@ fn show_the_create_type_ddl(_connection: &Connection) -> DuckResult<()> {
 An enum works the same way — `duckfn::named_type_ddl("priority", &Priority::logical_type())` (its
 `logical_type()` already carries the dictionary), or `duckfn::register_enum_type` /
 `duckfn::queue_enum_type_ddl` for a hand-written label list.
+
+The same helpers come in a conflict-aware flavour: pass `duckfn::TypeConflict::Replace` to
+`named_type_ddl_with` / `register_named_type_with` / `register_enum_type_with` /
+`queue_named_type_ddl_with` / `queue_enum_type_ddl_with` to render (or run) `CREATE OR REPLACE TYPE`
+instead — that is exactly what `create_type = "replace"` calls, so a hand-written registrar can get
+the same behaviour.
 
 SQL can then use `ticket` as a type — a column type or a cast target — even though the functions are
 registered with the equivalent structural type; the two are interchangeable. See

@@ -84,9 +84,10 @@ pub enum Priority {
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
 | `sql_name` | 类型名的小写蛇形 | SQL 侧类型名（`Priority` → `priority`、`Ticket` → `ticket`）。 |
-| `create_type` | `false` | `true`：扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`；`"print"`：只把该语句打印到 stderr；`false`：什么都不做。 |
+| `create_type` | `false` | `true`：扩展加载时执行 `CREATE TYPE IF NOT EXISTS <sql_name> AS <类型>;`；`"replace"`：改执行 `CREATE OR REPLACE TYPE <sql_name> AS <类型>;`（覆盖同名旧定义）；`"print"`：只把 `IF NOT EXISTS` 那条语句打印到 stderr；`false`：什么都不做。 |
 
-语句是幂等的 —— `LOAD` 两次也没问题 —— 且不会覆盖已存在的同名类型；执行路径与 SQL 宏相同
+`true`（以及渲染同一条语句的 `"print"`）是幂等的 —— `LOAD` 两次也没问题 —— 且不会覆盖已存在的同名类型；
+`"replace"` 则是唯一会**覆盖**旧定义的那一档。两者的执行路径都与 SQL 宏相同
 （`duckdb_query`）。枚举建成 `ENUM(...)`，结构体建成 `STRUCT(...)`，而结构体的字段类型是从 DuckDB
 **自己的逻辑类型**渲染出来的，所以嵌套枚举/结构体、`LIST` / `ARRAY` / `MAP`、手写的自定义字段类型
 都会自动带上：
@@ -124,6 +125,21 @@ CREATE TYPE IF NOT EXISTS "ticket" AS STRUCT("id" BIGINT, "priority" ENUM('low',
 -- [duckfn] end - nothing above was executed.
 ```
 
+`create_type = "replace"` 用于「这个名字可能已经被占住、而这个类型就该由扩展说了算」的场景：渲染的是
+同一条语句，只是把 `IF NOT EXISTS` 换成 `OR REPLACE`，于是每次 `LOAD` 都会覆盖同名旧定义（迭代类型
+定义时尤其方便）：
+
+```rust
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "ticket", create_type = "replace")]
+pub struct Ticket {
+    pub id: i64,
+    pub priority: Priority,
+}
+// CREATE OR REPLACE TYPE "ticket" AS
+//   STRUCT("id" BIGINT, "priority" ENUM('low', 'medium', 'high'));
+```
+
 如果希望宏完全不介入、DDL 与提示都由自己安排，就保持默认的 `create_type = false`，在
 `#[duck_custom_register]` 里自己打印 —— 用现成的 `duckfn::named_type_ddl` 渲染、
 用 `duckfn::print_sql_preview` 加自己的说明：
@@ -144,6 +160,11 @@ fn show_the_create_type_ddl(_connection: &Connection) -> DuckResult<()> {
 
 枚举同理：`duckfn::named_type_ddl("priority", &Priority::logical_type())`（`logical_type()` 本身就
 带字典），或者用 `duckfn::register_enum_type` / `duckfn::queue_enum_type_ddl` 直接给标签列表。
+
+同一组函数还有「带冲突策略」的版本：把 `duckfn::TypeConflict::Replace` 传给 `named_type_ddl_with` /
+`register_named_type_with` / `register_enum_type_with` / `queue_named_type_ddl_with` /
+`queue_enum_type_ddl_with`，渲染（或执行）的就是 `CREATE OR REPLACE TYPE` —— `create_type = "replace"`
+调用的正是它们，手写注册函数也能拿到同样的行为。
 
 之后 SQL 里就能直接把 `ticket` 当类型用（列类型、cast 目标），而函数注册用的仍是等价的结构化类型 ——
 两者可以互相转换。见[类型 → 枚举](./types.md#枚举)与[类型 → 结构体](./types.md#结构体)。

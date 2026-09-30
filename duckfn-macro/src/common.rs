@@ -552,11 +552,18 @@ pub(crate) enum DuckScalarResult {
 /// 注册项跑完，入口点把这一批一次性打到 stderr —— 可以先看看渲染出来的 SQL 长什么样、再决定要不要
 /// 真的建类型，也可以把语句抄走自己执行。
 ///
+/// 冲突策略只影响已存在同名类型时怎么办：`true` 是 `CREATE TYPE IF NOT EXISTS`（保留旧定义、幂等），
+/// `"replace"` 是 `CREATE OR REPLACE TYPE`（覆盖成这次的定义）。
+///
 /// The values `#[duck(create_type = ...)]` accepts (shared by `#[derive(DuckStruct)]` and
 /// `#[derive(DuckEnum)]`). The print mode (`create_type = "print"`) queues the very DDL the macro
 /// would run without touching the catalog, and the entry point prints the collected batch in one
 /// block once every registration has run — so the rendered statements can be inspected and copied
 /// before committing to them.
+///
+/// The conflict policy only decides what happens when a type of that name already exists: `true`
+/// emits `CREATE TYPE IF NOT EXISTS` (idempotent, the old definition is kept) while `"replace"`
+/// emits `CREATE OR REPLACE TYPE` (the old definition is overwritten).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum CreateTypeMode {
     /// `create_type = false`（默认）：不建类型、不打印。
@@ -568,6 +575,11 @@ pub(crate) enum CreateTypeMode {
     ///
     /// `create_type = true`: run `CREATE TYPE IF NOT EXISTS ...` at load time.
     Create,
+    /// `create_type = "replace"`：加载期执行 `CREATE OR REPLACE TYPE ...`，覆盖同名旧定义。
+    ///
+    /// `create_type = "replace"`: run `CREATE OR REPLACE TYPE ...` at load time, overwriting an
+    /// existing type of that name.
+    Replace,
     /// `create_type = "print"`：把 `CREATE TYPE IF NOT EXISTS ...` 收进队列，由入口点统一打印；不建类型。
     ///
     /// `create_type = "print"`: queue `CREATE TYPE IF NOT EXISTS ...` for the entry point to print
@@ -587,12 +599,13 @@ impl FromMeta for CreateTypeMode {
         })
     }
 
-    /// `create_type = "print"`。
+    /// `create_type = "print"` / `create_type = "replace"`。
     ///
-    /// `create_type = "print"`.
+    /// `create_type = "print"` / `create_type = "replace"`.
     fn from_string(value: &str) -> darling::Result<Self> {
         Ok(match value {
             "print" => CreateTypeMode::Print,
+            "replace" => CreateTypeMode::Replace,
             other => return Err(darling::Error::unknown_value(other)),
         })
     }

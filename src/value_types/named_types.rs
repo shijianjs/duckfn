@@ -35,13 +35,16 @@
 //! produce a logical type renders — hand-written custom ones included — with no parallel
 //! "Rust type → SQL text" table to keep in sync.
 //!
-//! 语句一律用 `CREATE TYPE IF NOT EXISTS`：扩展可能被 `LOAD` 多次，重复执行不能报错，
-//! 同时也不会覆盖用户已有的同名类型。执行路径与 SQL 宏相同（[`register_sql_macro_str`]，
-//! 内部就是 `duckdb_query`）。
+//! 语句默认用 `CREATE TYPE IF NOT EXISTS`：扩展可能被 `LOAD` 多次，重复执行不能报错，
+//! 同时也不会覆盖用户已有的同名类型。改用 [`TypeConflict::Replace`] 则发 `CREATE OR REPLACE TYPE`，
+//! **覆盖**同名旧定义（宏侧的写法是 `#[duck(create_type = "replace")]`）。执行路径与 SQL 宏相同
+//! （[`register_sql_macro_str`]，内部就是 `duckdb_query`）。
 //!
-//! Every statement uses `CREATE TYPE IF NOT EXISTS`: an extension may be loaded more than once, so
-//! re-running must not fail, and a pre-existing type of that name is left alone. Execution goes
-//! through the same path as the SQL macros ([`register_sql_macro_str`], i.e. `duckdb_query`).
+//! Statements default to `CREATE TYPE IF NOT EXISTS`: an extension may be loaded more than once, so
+//! re-running must not fail, and a pre-existing type of that name is left alone.
+//! [`TypeConflict::Replace`] emits `CREATE OR REPLACE TYPE` instead and **overwrites** the existing
+//! definition (the macro spelling is `#[duck(create_type = "replace")]`). Execution goes through the
+//! same path as the SQL macros ([`register_sql_macro_str`], i.e. `duckdb_query`).
 
 use crate::register_sql_macro_str;
 use crate::{DuckResult, duck_error};
@@ -165,28 +168,110 @@ pub fn logical_type_sql(logical_type: &LogicalType) -> DuckResult<String> {
     Ok(sql)
 }
 
-/// 生成「创建命名类型」的 SQL 语句（幂等）。
+/// `CREATE TYPE` 遇到同名类型时的处理方式。
+///
+/// How `CREATE TYPE` treats a type of the same name.
+///
+/// 默认的 [`IfNotExists`](TypeConflict::IfNotExists) 让加载保持幂等：重复 `LOAD` 不报错，
+/// 同名旧类型原样保留。[`Replace`](TypeConflict::Replace) 换发 `CREATE OR REPLACE TYPE`，
+/// **覆盖**同名旧定义。
+///
+/// The default [`IfNotExists`](TypeConflict::IfNotExists) keeps loading idempotent: reloading never
+/// fails and a type of that name is left as it is. [`Replace`](TypeConflict::Replace) emits
+/// `CREATE OR REPLACE TYPE` instead and **overwrites** the existing definition.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TypeConflict {
+    /// `CREATE TYPE IF NOT EXISTS ...`（默认）：同名类型已存在就跳过，保留旧定义。
+    ///
+    /// `CREATE TYPE IF NOT EXISTS ...` (the default): an existing type of that name is skipped and
+    /// kept as it is.
+    #[default]
+    IfNotExists,
+    /// `CREATE OR REPLACE TYPE ...`：同名类型已存在就覆盖成这次的定义。
+    ///
+    /// `CREATE OR REPLACE TYPE ...`: an existing type of that name is overwritten by this
+    /// definition.
+    Replace,
+}
+
+/// 生成「创建命名类型」的 SQL 语句。
 ///
 /// 类型名是**带引号**的，因此区分大小写；两个 derive 的 `sql_name` 默认取类型名的小写蛇形。
+/// 同名类型怎么办交给 [`TypeConflict`]：默认 `IF NOT EXISTS`（幂等，不动旧定义），
+/// `Replace` 则发 `OR REPLACE` 覆盖。
 ///
-/// Builds an idempotent `CREATE TYPE` statement. The type name is quoted and therefore
-/// case-sensitive; both derives default `sql_name` to the type name in lowercase snake_case.
-pub fn named_type_ddl(name: &str, logical_type: &LogicalType) -> DuckResult<String> {
+/// Builds a `CREATE TYPE` statement. The type name is quoted and therefore case-sensitive; both
+/// derives default `sql_name` to the type name in lowercase snake_case. [`TypeConflict`] decides
+/// what happens when the name is taken: an idempotent `IF NOT EXISTS` (leaving the old definition
+/// alone) by default, an overwriting `OR REPLACE` otherwise.
+pub fn named_type_ddl_with(
+    name: &str,
+    logical_type: &LogicalType,
+    conflict: TypeConflict,
+) -> DuckResult<String> {
+    // 两个冲突子句的位置不同：`IF NOT EXISTS` 在 `TYPE` **之后**，`OR REPLACE` 在 `CREATE` 之后
+    // （即 `TYPE` 之前），所以整段关键字一起选，而不是往一个位置插子句。
+    //
+    // The two conflict clauses sit in different places: `IF NOT EXISTS` comes *after* `TYPE`, while
+    // `OR REPLACE` comes right after `CREATE` (i.e. before `TYPE`), so pick the whole keyword run
+    // instead of splicing a clause into one position.
+    let keyword = match conflict {
+        TypeConflict::IfNotExists => "TYPE IF NOT EXISTS",
+        TypeConflict::Replace => "OR REPLACE TYPE",
+    };
     Ok(format!(
-        "CREATE TYPE IF NOT EXISTS {} AS {};",
+        "CREATE {keyword} {} AS {};",
         quote_identifier(name),
         logical_type_sql(logical_type)?
     ))
 }
 
-/// 在 catalog 里创建一个命名类型（幂等）。
+/// [`named_type_ddl_with`] 的默认形式：`CREATE TYPE IF NOT EXISTS ...`（幂等，不覆盖同名类型）。
+///
+/// The default flavour of [`named_type_ddl_with`]: `CREATE TYPE IF NOT EXISTS ...` (idempotent, a
+/// type of that name is left alone).
+pub fn named_type_ddl(name: &str, logical_type: &LogicalType) -> DuckResult<String> {
+    named_type_ddl_with(name, logical_type, TypeConflict::IfNotExists)
+}
+
+/// 在 catalog 里按给定冲突策略创建一个命名类型。
 ///
 /// 复用 SQL 宏那条执行路径，所以它既能被 `#[duck_custom_register]` 手写调用，也能像
-/// `create_type = true` 那样在加载期自动执行。
+/// `create_type = true` / `create_type = "replace"` 那样在加载期自动执行。
 ///
-/// Creates a named type in the catalog, idempotently, through the same execution path the SQL
-/// macros use. It can be called from `#[duck_custom_register]` or, automatically, by
-/// `create_type = true`.
+/// Creates a named type in the catalog with the given conflict policy, through the same execution
+/// path the SQL macros use. It can be called from `#[duck_custom_register]` or, automatically, by
+/// `create_type = true` / `create_type = "replace"`.
+///
+/// ```ignore
+/// #[duck_custom_register]
+/// fn register_my_types(c: &Connection) -> DuckResult<()> {
+///     // 建一个 STRUCT 类型：字段类型由 DuckDB 自己的逻辑类型渲染出来；
+///     // 同名类型已存在时以 OR REPLACE 覆盖（默认是 IF NOT EXISTS，即保留旧定义）
+///     duckfn::register_named_type_with(
+///         c,
+///         "ticket",
+///         Ticket::logical_type(),
+///         duckfn::TypeConflict::Replace,
+///     )
+/// }
+/// ```
+pub fn register_named_type_with(
+    connection: &Connection,
+    name: &str,
+    logical_type: LogicalType,
+    conflict: TypeConflict,
+) -> DuckResult<()> {
+    register_sql_macro_str(
+        connection,
+        &named_type_ddl_with(name, &logical_type, conflict)?,
+    )
+}
+
+/// [`register_named_type_with`] 的默认形式：`CREATE TYPE IF NOT EXISTS ...`（幂等）。
+///
+/// The default flavour of [`register_named_type_with`]: `CREATE TYPE IF NOT EXISTS ...`
+/// (idempotent).
 ///
 /// ```ignore
 /// #[duck_custom_register]
@@ -200,7 +285,7 @@ pub fn register_named_type(
     name: &str,
     logical_type: LogicalType,
 ) -> DuckResult<()> {
-    register_sql_macro_str(connection, &named_type_ddl(name, &logical_type)?)
+    register_named_type_with(connection, name, logical_type, TypeConflict::IfNotExists)
 }
 
 /// 打一行 `-- [duckfn] ...` 提示。
@@ -253,31 +338,44 @@ pub fn print_sql_preview(before: &str, sql: &str, after: &str) {
 /// registration has finished.
 static QUEUED_TYPE_DDL: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// 渲染 `CREATE TYPE` 的 DDL 并**收进队列**（不执行、也不立刻打印）。
+/// 按给定冲突策略渲染 `CREATE TYPE` 的 DDL 并**收进队列**（不执行、也不立刻打印）。
 ///
 /// `#[duck(create_type = "print")]` 生成的注册函数调的就是它：`LOAD` 时先把每个类型要建的 DDL
 /// 攒起来，等所有注册项跑完，入口点 [`crate::register_all_duckfn`] 再调 [`flush_queued_type_ddl`]
 /// 一次性打印 —— 所以一个扩展里有几个 `"print"` 类型，也只有**一块**提示，不会每个类型重复一遍
 /// 「未执行 / 可手动执行」。
 ///
-/// Renders the `CREATE TYPE` DDL and queues it — it is neither run nor printed right away. This is
-/// what the registration function generated for `#[duck(create_type = "print")]` calls: the DDLs are
-/// collected during `LOAD` and the entry point ([`crate::register_all_duckfn`]) flushes them in one
-/// block afterwards ([`flush_queued_type_ddl`]), so any number of print-mode types produces a single
-/// notice instead of one per type.
+/// Renders the `CREATE TYPE` DDL with the given conflict policy and queues it — it is neither run nor
+/// printed right away. This is what the registration function generated for
+/// `#[duck(create_type = "print")]` calls: the DDLs are collected during `LOAD` and the entry point
+/// ([`crate::register_all_duckfn`]) flushes them in one block afterwards
+/// ([`flush_queued_type_ddl`]), so any number of print-mode types produces a single notice instead
+/// of one per type.
 ///
 /// # Errors
 ///
-/// 逻辑类型无法渲染成 SQL 时返回错误（同 [`named_type_ddl`]）。
+/// 逻辑类型无法渲染成 SQL 时返回错误（同 [`named_type_ddl_with`]）。
 ///
-/// Returns an error when the logical type has no SQL spelling (as [`named_type_ddl`] does).
-pub fn queue_named_type_ddl(name: &str, logical_type: &LogicalType) -> DuckResult<()> {
-    let ddl = named_type_ddl(name, logical_type)?;
+/// Returns an error when the logical type has no SQL spelling (as [`named_type_ddl_with`] does).
+pub fn queue_named_type_ddl_with(
+    name: &str,
+    logical_type: &LogicalType,
+    conflict: TypeConflict,
+) -> DuckResult<()> {
+    let ddl = named_type_ddl_with(name, logical_type, conflict)?;
     QUEUED_TYPE_DDL
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .push(ddl);
     Ok(())
+}
+
+/// [`queue_named_type_ddl_with`] 的默认形式：排队一条 `CREATE TYPE IF NOT EXISTS ...`。
+///
+/// The default flavour of [`queue_named_type_ddl_with`]: queues a `CREATE TYPE IF NOT EXISTS ...`
+/// statement.
+pub fn queue_named_type_ddl(name: &str, logical_type: &LogicalType) -> DuckResult<()> {
+    queue_named_type_ddl_with(name, logical_type, TypeConflict::IfNotExists)
 }
 
 /// 把 [`queue_named_type_ddl`] / [`queue_enum_type_ddl`] 收集到的 DDL 一次性打印出来（队列为空则什么都不做）。
@@ -330,12 +428,37 @@ fn enum_logical_type(name: &str, members: &[&str]) -> DuckResult<LogicalType> {
     Ok(LogicalType::enum_type(members))
 }
 
-/// 在 catalog 里创建一个 ENUM 类型（幂等）。
+/// 在 catalog 里按给定冲突策略创建一个 ENUM 类型。
 ///
-/// [`register_named_type`] 的便捷版本：字典直接给标签列表，不需要先有 `DuckValueType` 实现。
+/// [`register_named_type_with`] 的便捷版本：字典直接给标签列表，不需要先有 `DuckValueType` 实现。
 ///
-/// The convenience flavour of [`register_named_type`]: the dictionary is given as a list of labels,
-/// and no `DuckValueType` implementation is needed.
+/// The convenience flavour of [`register_named_type_with`]: the dictionary is given as a list of
+/// labels, and no `DuckValueType` implementation is needed.
+///
+/// ```ignore
+/// #[duck_custom_register]
+/// fn register_my_types(c: &Connection) -> DuckResult<()> {
+///     duckfn::register_enum_type_with(
+///         c,
+///         "color",
+///         &["red", "green", "blue"],
+///         duckfn::TypeConflict::Replace,
+///     )
+/// }
+/// ```
+pub fn register_enum_type_with(
+    connection: &Connection,
+    name: &str,
+    members: &[&str],
+    conflict: TypeConflict,
+) -> DuckResult<()> {
+    register_named_type_with(connection, name, enum_logical_type(name, members)?, conflict)
+}
+
+/// [`register_enum_type_with`] 的默认形式：`CREATE TYPE IF NOT EXISTS ...`（幂等）。
+///
+/// The default flavour of [`register_enum_type_with`]: `CREATE TYPE IF NOT EXISTS ...`
+/// (idempotent).
 ///
 /// ```ignore
 /// #[duck_custom_register]
@@ -344,17 +467,37 @@ fn enum_logical_type(name: &str, members: &[&str]) -> DuckResult<LogicalType> {
 /// }
 /// ```
 pub fn register_enum_type(connection: &Connection, name: &str, members: &[&str]) -> DuckResult<()> {
-    register_named_type(connection, name, enum_logical_type(name, members)?)
+    register_enum_type_with(connection, name, members, TypeConflict::IfNotExists)
 }
 
-/// 渲染 ENUM 的 `CREATE TYPE` DDL 并收进队列：[`queue_named_type_ddl`] 的 ENUM 便捷版本。
+/// 按给定冲突策略渲染 ENUM 的 `CREATE TYPE` DDL 并收进队列：[`queue_named_type_ddl_with`] 的
+/// ENUM 便捷版本。
 ///
-/// [`register_enum_type`] 的「只排队、不执行」对应物，`#[duck(create_type = "print")]` 在枚举上走的
-/// 就是它；字典照样直接给标签列表，不需要先有 `DuckValueType` 实现。
+/// [`register_enum_type_with`] 的「只排队、不执行」对应物，`#[duck(create_type = "print")]` 在枚举上
+/// 走的就是它；字典照样直接给标签列表，不需要先有 `DuckValueType` 实现。
 ///
-/// The queueing counterpart of [`register_enum_type`] and the ENUM flavour of
-/// [`queue_named_type_ddl`]; `#[duck(create_type = "print")]` on an enum calls exactly this. The
-/// dictionary is still a plain label list, so no `DuckValueType` implementation is needed.
+/// The queueing counterpart of [`register_enum_type_with`] and the ENUM flavour of
+/// [`queue_named_type_ddl_with`]; `#[duck(create_type = "print")]` on an enum calls exactly this.
+/// The dictionary is still a plain label list, so no `DuckValueType` implementation is needed.
+///
+/// ```ignore
+/// #[duck_custom_register]
+/// fn queue_my_types(_connection: &Connection) -> DuckResult<()> {
+///     duckfn::queue_enum_type_ddl_with("color", &["red", "green", "blue"], duckfn::TypeConflict::Replace)
+/// }
+/// ```
+pub fn queue_enum_type_ddl_with(
+    name: &str,
+    members: &[&str],
+    conflict: TypeConflict,
+) -> DuckResult<()> {
+    queue_named_type_ddl_with(name, &enum_logical_type(name, members)?, conflict)
+}
+
+/// [`queue_enum_type_ddl_with`] 的默认形式：排队一条 `CREATE TYPE IF NOT EXISTS ...`。
+///
+/// The default flavour of [`queue_enum_type_ddl_with`]: queues a `CREATE TYPE IF NOT EXISTS ...`
+/// statement.
 ///
 /// ```ignore
 /// #[duck_custom_register]
@@ -363,5 +506,5 @@ pub fn register_enum_type(connection: &Connection, name: &str, members: &[&str])
 /// }
 /// ```
 pub fn queue_enum_type_ddl(name: &str, members: &[&str]) -> DuckResult<()> {
-    queue_named_type_ddl(name, &enum_logical_type(name, members)?)
+    queue_enum_type_ddl_with(name, members, TypeConflict::IfNotExists)
 }

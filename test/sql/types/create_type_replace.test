@@ -1,0 +1,86 @@
+# name: test/sql/types/create_type_replace.test
+# description: create_type = "replace" 的 CREATE OR REPLACE TYPE 覆盖同名旧定义；对照 create_type = true 的 IF NOT EXISTS 保留旧定义
+# group: [types]
+
+# ============================================================================
+# 扩展加载**之前**先手工占住三个类型名（旧定义）：
+#   replace_ticket / replace_severity 由 create_type = "replace" 建，加载时应当被覆盖；
+#   ticket 由 create_type = true 建（CREATE TYPE IF NOT EXISTS），加载时应当保留这份旧定义。
+#
+# 每个用例文件都跑在自己的空库里（同 demo/rusty_quack.test 「require 之前函数还不存在」的用法），
+# 所以「先建类型、再 require 加载扩展」这种顺序是安全的，不会影响别的用例文件。
+# ============================================================================
+
+statement ok
+CREATE TYPE "replace_ticket" AS STRUCT("old" INTEGER);
+
+statement ok
+CREATE TYPE "replace_severity" AS ENUM ('old');
+
+statement ok
+CREATE TYPE "ticket" AS ENUM ('legacy');
+
+# 扩展在这里加载，注册期执行建类型语句
+require duckfn
+
+# ============================================================================
+# create_type = "replace"：发 CREATE OR REPLACE TYPE，旧定义被覆盖
+#
+#   CREATE OR REPLACE TYPE "replace_ticket" AS STRUCT("id" BIGINT, "name" VARCHAR);
+#   CREATE OR REPLACE TYPE "replace_severity" AS ENUM('quiet', 'loud');
+# ============================================================================
+
+query T
+SELECT typeof(NULL::replace_ticket);
+----
+STRUCT(id BIGINT, "name" VARCHAR)
+
+query T
+SELECT typeof(NULL::replace_severity);
+----
+ENUM('quiet', 'loud')
+
+# 覆盖之后新字典里的标签可用
+query T
+SELECT CAST('loud'::replace_severity AS VARCHAR);
+----
+loud
+
+# ============================================================================
+# 对照：create_type = true 是 CREATE TYPE IF NOT EXISTS，同名旧定义原样保留
+# ============================================================================
+
+query T
+SELECT typeof(NULL::ticket);
+----
+ENUM('legacy')
+
+# ============================================================================
+# 覆盖出来的命名类型照常可用：函数参数、列类型
+# ============================================================================
+
+query T
+SELECT CAST((dfn_echo_struct_replace_ticket({'id': 1, 'name': 'a'})).name AS VARCHAR);
+----
+a
+
+query T
+SELECT CAST(dfn_echo_replace_severity('loud') AS VARCHAR);
+----
+loud
+
+statement ok
+CREATE TABLE replaced_rows (t replace_ticket);
+
+statement ok
+INSERT INTO replaced_rows VALUES ({'id': 1, 'name': 'a'});
+
+query T
+SELECT CAST(t.name AS VARCHAR) FROM replaced_rows;
+----
+a
+
+query TT
+SELECT CAST(r.t.id AS VARCHAR), CAST(r.t.name AS VARCHAR) FROM replaced_rows r;
+----
+1	a

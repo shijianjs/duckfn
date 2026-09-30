@@ -337,7 +337,9 @@ SELECT dfn_echo_struct_ticket(v) FROM tickets;   -- 函数用的是等价的结�
 已存在的同名类型也不会被覆盖。
 
 把 `create_type = true` 换成 `create_type = "print"`，渲染的是**同一条**语句，但不建类型：
-DDL 先收进队列，等全部注册跑完再一次性打印（带 `-- [duckfn]` 提示框、写明没有执行，可直接复制去跑）。见
+DDL 先收进队列，等全部注册跑完再一次性打印（带 `-- [duckfn]` 提示框、写明没有执行，可直接复制去跑）。
+换成 `create_type = "replace"` 则用于「这个名字可能已经被占住」的场景：同一条语句渲染成
+`CREATE OR REPLACE TYPE`，每次加载都用扩展的定义覆盖旧定义。见
 [属性参考 → 在 catalog 里建命名类型](./attributes.md#在-catalog-里建命名类型)。
 
 ## 容器的组合
@@ -410,6 +412,7 @@ pub enum Priority {
   `Option<Priority>` 表示可空；
 - `create_type = true` 还会在扩展加载时执行 `CREATE TYPE IF NOT EXISTS "priority" AS ENUM (...)` ——
   幂等，且不会覆盖已存在的同名类型 —— 之后 SQL 里可以直接写 `'high'::priority`，也能把列声明成 `priority`；
+  `create_type = "replace"` 把同一条语句渲染成 `CREATE OR REPLACE TYPE`，会覆盖同名旧定义；
   `create_type = "print"` 渲染的是同一条语句，但只打印到 stderr，catalog 不受影响；
 - 与其它参数一样，**非可空**的枚举参数需要 `Default`（宏生成的参数结构体会 `derive(Default)`），
   所以例子里有 `#[derive(Default)]` + `#[default]`。

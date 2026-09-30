@@ -395,3 +395,40 @@ pub struct DuckStructPreviewTicket {
 fn dfn_echo_struct_preview_ticket(t: DuckStructPreviewTicket) -> DuckStructPreviewTicket {
     t
 }
+
+// ---------------------------------------------------------------------------
+// create_type = "replace"：加载期覆盖同名旧类型
+// ---------------------------------------------------------------------------
+
+/// `#[duck(create_type = "replace")]`：加载期执行
+/// `CREATE OR REPLACE TYPE "replace_ticket" AS STRUCT("id" BIGINT, "name" VARCHAR);`。
+///
+/// 与 `create_type = true`（`CREATE TYPE IF NOT EXISTS`）的区别只在同名类型已存在时：那时
+/// `IF NOT EXISTS` 会跳过、保留旧定义，`OR REPLACE` 则把旧定义**覆盖**掉。同名类型不存在时两者
+/// 一样，都只是把类型建出来。
+///
+/// `#[duck(create_type = "replace")]` runs
+/// `CREATE OR REPLACE TYPE "replace_ticket" AS STRUCT(...)` at load time. The only difference from
+/// `create_type = true` (`CREATE TYPE IF NOT EXISTS`) shows when a type of that name already exists:
+/// `IF NOT EXISTS` skips it and keeps the old definition, `OR REPLACE` overwrites it. When the name
+/// is free the two behave identically and simply create the type.
+///
+/// ```sql
+/// SELECT typeof(NULL::replace_ticket);   -- STRUCT(id BIGINT, "name" VARCHAR)
+/// ```
+#[derive(Clone, Debug, Default, DuckStruct)]
+#[duck(sql_name = "replace_ticket", create_type = "replace")]
+pub struct DuckStructReplaceTicket {
+    pub id: i64,
+    pub name: String,
+}
+
+/// 替换模式建的命名类型照样能当函数参数 / 列类型用。
+///
+/// ```sql
+/// SELECT dfn_echo_struct_replace_ticket({'id': 1, 'name': 'a'});
+/// ```
+#[duck_scalar_function]
+fn dfn_echo_struct_replace_ticket(t: DuckStructReplaceTicket) -> DuckStructReplaceTicket {
+    t
+}
