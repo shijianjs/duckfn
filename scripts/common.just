@@ -123,10 +123,15 @@ docs_install:
     cd docs && npm install
 
 # 构建静态站点 -> docs/build（改完文档想确认链接都还通时跑它）
+#
+# 前置：文档站预加载的扩展本地取自 static/duckdb-extensions/，所以先 `just build_wasm_eh`
+# （或直接 `just test_wasm`）；没有那个文件构建会报错。
 docs_build:
     cd docs && npm run build
 
 # 本地预览文档站（http://localhost:3000；中文用 npm start -- --locale zh-Hans）
+#
+# 前置同上：先 `just build_wasm_eh` 把扩展放进 static/duckdb-extensions/。
 docs_start:
     cd docs && npm start
 
@@ -170,8 +175,14 @@ build_wasm:
 
 # 打出可加载的 wasm_eh 扩展 -> build/wasm_eh/extension/<extension_name>/<extension_name>.duckdb_extension.wasm
 #
-# 直接调官方 makefile 的 wasm_eh 目标（configure → release → move_wasm_extension）：
-# cargo 出 libduckfn.a → emcc 出 side module → append_extension_metadata 出 .duckdb_extension.wasm。
+# 走官方 makefile 的三个目标（configure → release → move_wasm_extension）：
+# cargo 出 lib<name>.a → emcc 出 side module → append_extension_metadata 出 .duckdb_extension.wasm。
+#
+# 这里把上游 `wasm_eh` 目标**摊开**执行，而不是 `make wasm_eh`：那条目标自己又调一次 `make`
+# （`DUCKDB_PLATFORM=wasm_eh make configure release move_wasm_extension`），而 just 在 Windows 上
+# 用 windows-shell 起的是**非登录** Git Bash，内层 make 的 recipe shell（/usr/bin/sh）拿到的 PATH
+# 里没有 scoop 的 shims，于是报 `make: command not found`。摊开后只有一层 make，从 PowerShell / Git
+# Bash / `just` 里跑都成立（登录 shell 里 PATH 完整，原来的写法只是碰巧能跑）。
 #
 # 前提：系统装好 emsdk 3.1.71 并把它的目录配进 PATH（`emcc` / `emcc.bat` 能直接执行）。版本必须与
 # CI 一致（见 _extension_distribution.yml），否则产物能构建出来、LOAD 时报 Could not load dynamic lib。
@@ -182,11 +193,33 @@ build_wasm:
 #
 # 注意：跑完 configure/platform.txt 会停在 wasm_eh；之后要跑本地原生的 make test 之前先 `make configure`。
 #
-# Loadable wasm_eh build via the upstream makefile target; the emsdk/emscripten on PATH must match CI
-# (3.1.71). `RUST_LIBNAME` is the override that makes it work on Windows, where the makefile expects
-# the native dll instead of the wasm target's lib<name>.a.
+# Loadable wasm_eh build via the upstream makefile targets. They are spelled out instead of calling
+# `make wasm_eh`, because that upstream target re-invokes `make` and just's non-login Git Bash on
+# Windows hands the inner recipe shell a PATH without the shims (`make: command not found`).
+# The emsdk/emscripten on PATH must match CI (3.1.71). `RUST_LIBNAME` is the override that makes it
+# work on Windows, where the makefile expects the native dll instead of the wasm target's
+# lib<name>.a.
 build_wasm_eh:
-    make wasm_eh RUST_LIBNAME=lib{{extension_name}}.a
+    DUCKDB_PLATFORM=wasm_eh make configure release move_wasm_extension RUST_LIBNAME=lib{{extension_name}}.a
+
+# 一条命令验证文档站里的 wasm 侧示例：构建 wasm_eh 扩展 → 放进文档站的 static/ → 跑遍每个
+# 可运行 SQL 块（在真实浏览器的 DuckDB-Wasm 里执行）。产物落到
+# docs/static/duckdb-extensions/<extension_name>.duckdb_extension.wasm。
+#
+# 文档站里的可运行块本地**就用这个文件** —— 只有 GitHub Pages 那次部署才去拉 release（由
+# DOCS_EXTENSION_FROM_RELEASE 区分，见 docs/docusaurus.config.ts），所以本地别单跑
+# `just docs_build` / `docs_start`：static/ 下没有产物它们会直接报错。要试文档里的 SQL 就跑这条。
+#
+# 前提同 build_wasm_eh：emsdk 与 CI 同版本且在 PATH 上。
+#
+# Build the wasm_eh extension, drop it into the docs site's static directory and run every runnable
+# SQL block in a real browser. Locally the docs site preloads *that* file — only the GitHub Pages
+# deployment fetches the release — so this is the entry point for checking the docs on a
+# workstation; `docs_build` / `docs_start` on their own fail without it.
+test_wasm: build_wasm_eh
+    mkdir -p docs/static/duckdb-extensions
+    cp build/wasm_eh/extension/{{extension_name}}/{{extension_name}}.duckdb_extension.wasm docs/static/duckdb-extensions/{{extension_name}}.duckdb_extension.wasm
+    npm test -w docs
 
 # 工具链（首次）：固定 Rust 版本 + 装 wasm target
 config_env:

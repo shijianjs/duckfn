@@ -689,9 +689,9 @@ git commit -m "chore(release-kit): 发布 duckfn-docs-kit v0.1.1"
 just release_kit_tag 0.1.1     # 打 docs-kit-v0.1.1，推送 main 与 tag
 ```
 
-`docs-kit-v*` **故意**不匹配两个 workflow 的 tag 过滤器（`MainDistributionPipeline.yml` 与
-`DeployDocs.yml` 都只认 `v*.*.*`）：推这个 tag 不构建扩展、也不重发文档站，所以 kit 发版不必
-等流水线；文档站仍然只由 crate 的 `v*.*.*` tag 触发。
+`docs-kit-v*` **故意**不匹配 `MainDistributionPipeline.yml` 的 tag 过滤器（只认 `v*.*.*`）：推这个
+tag 不构建扩展，也就不会触发文档站（`DeployDocs.yml` 现在监听的是那条流水线跑完，而不是 tag 本身）。
+所以 kit 发版不必等流水线，文档站也仍然只在 crate 发版时更新。
 
 ### 3. 发布到 npm
 

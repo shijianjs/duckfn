@@ -33,7 +33,8 @@ plugins: [
     // `duckdb -unsigned` 是同一个原因。
     allowUnsignedExtensions: true,
     preload: [
-      // 本站文档化的扩展：同源提供，来自其 GitHub 仓库的最新 release。
+      // 本站文档化的扩展：同源提供。带 release 时构建期去该仓库的最新 release 取资产；
+      // 去掉 release 就是直接用 static/ 下放好的文件。
       {
         url: 'duckdb-extensions/duckfn.duckdb_extension.wasm',
         release: {
@@ -46,7 +47,10 @@ plugins: [
 ],
 ```
 
-插件在 `npm start` 与生产构建时都会执行拉取，所以 dev server 与 `static/` 里都会有这个文件。
+拉取在 `npm start` 与生产构建时都会发生 —— 但只针对带 `release` 的条目。只写 `{url}` 的条目会被
+原样放过，所以一个站点可以本地用自己的构建产物、只在部署时才切到 release：duckfn 自己的站点就是
+这么做（用 `DOCS_EXTENSION_FROM_RELEASE` 区分，见它的 `docs/README.md`），因此本地跑文档从不接触
+release。
 
 ## 三种来源
 

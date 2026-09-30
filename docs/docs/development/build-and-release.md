@@ -147,14 +147,19 @@ presence leaves a dependency on `duckfn` untouched.
 
 ## Documentation site
 
-The Docusaurus site in `docs/` is deployed by `.github/workflows/DeployDocs.yml` on every `v*.*.*`
-tag — the same tags that start the extension build — and on demand from the Actions tab. Ordinary
-commits do not build it. It reads the Pages URL from `actions/configure-pages`, builds both locales
-with `npm run build`, and publishes the result.
+The Docusaurus site in `docs/` is deployed by `.github/workflows/DeployDocs.yml`, which runs when the
+multi-platform build above **finishes** — not on the tag push itself — and on demand from the Actions
+tab. Ordinary commits do not build it. Waiting for the pipeline is what makes the site correct: the
+deployed pages preload the *released* wasm extension, so that release has to exist first, and a
+tag-triggered deploy raced the build and fetched the previous one.
 
-The `github-pages` environment is protected, so the tag pattern `v*.*.*` has to be listed in
-`Settings -> Environments -> github-pages -> Deployment branches and tags` for the deployment to be
-accepted.
+It reads the Pages URL from `actions/configure-pages`, builds both locales with `npm run build`, and
+publishes the result. Locally the same site serves the extension `just build_wasm_eh` produced
+instead of a release — `just test_wasm` builds it and then runs the examples.
+
+The `github-pages` environment is protected, so the refs that may deploy have to be listed in
+`Settings -> Environments -> github-pages -> Deployment branches and tags` — currently branch `main`
+(a `workflow_run` runs on the default branch) plus tag `v*.*.*` for manual runs.
 
 ## Next
 

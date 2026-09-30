@@ -6,6 +6,7 @@ import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
 import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {DUCKFN_VERSION} from './duckfn-version';
+import type {UrlPreloadEntry} from 'duckfn-docs-kit/sql/runtimeConfig';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -20,6 +21,25 @@ const baseUrl = process.env.DOCS_BASE_URL ?? '/';
 // a domain root (`npm start`, or a mirror on its own domain) has to drop it again — see the
 // `replaceSearchResultPathname` comment below.
 const algoliaIndexBaseUrl = '/duckfn/';
+
+// The duckfn extension the runnable SQL blocks preload. The file name keeps `duckfn` before its
+// first dot — that base is the entry symbol DuckDB looks up, which is why the release asset (which
+// carries the wasm platform suffix) is renamed on the way in.
+//
+// *Where* that file comes from depends on `DOCS_EXTENSION_FROM_RELEASE`: the GitHub Pages
+// deployment sets it and fetches the asset from the repository's latest release, which is safe
+// because that workflow runs only after the extension pipeline has published the release (see
+// ../.github/workflows/DeployDocs.yml). Every other build leaves `release` off, so the plugin
+// serves the file that is already under `static/duckdb-extensions/` — the one `just build_wasm_eh`
+// writes, i.e. the working tree's own build, never the last release. `just test_wasm` builds it and
+// then runs the docs' SQL test, so local runs have no reason to touch the release at all.
+const duckfnExtension: UrlPreloadEntry =
+  process.env.DOCS_EXTENSION_FROM_RELEASE === '1'
+    ? {
+        url: 'duckdb-extensions/duckfn.duckdb_extension.wasm',
+        release: {repository: 'shijianjs/duckfn', asset: 'duckfn-wasm_eh.duckdb_extension.wasm'},
+      }
+    : {url: 'duckdb-extensions/duckfn.duckdb_extension.wasm'};
 
 const config: Config = {
   title: 'duckfn',
@@ -107,28 +127,20 @@ const config: Config = {
     ],
   ],
 
-  // The docs-kit wiring: `dfkExtensions` fetches the released wasm files into
-  // `static/` at dev/build startup — cached locally, re-downloaded only when
-  // the release asset's sha256 changes — injects the ordered preload list into
-  // every page (the kit's `src/sql/runtime.ts` loads them while DuckDB
-  // initialises) and registers the `dfk-*` elements; `dfkTocToggle` adds the
-  // TOC collapse control. Together they replace the client modules this site
-  // used to keep under src/clientModules/.
+  // The docs-kit wiring: `dfkExtensions` makes every page's preload list
+  // resolvable — an entry that names a release is fetched into `static/` at
+  // dev/build startup (cached locally, re-downloaded only when the release
+  // asset's sha256 changes), one without a release is left as it is — then
+  // injects the ordered list into every page (the kit's `src/sql/runtime.ts`
+  // loads them while DuckDB initialises) and registers the `dfk-*` elements;
+  // `dfkTocToggle` adds the TOC collapse control. Together they replace the
+  // client modules this site used to keep under src/clientModules/.
   plugins: [
     dfkExtensions({
       // CI builds the release assets without DuckDB's signing keys — the same
       // reason local development runs `duckdb -unsigned`.
       allowUnsignedExtensions: true,
-      preload: [
-        {
-          // Served at <baseUrl>/duckdb-extensions/duckfn.duckdb_extension.wasm.
-          // The name must keep `duckfn` before the first dot: that base is the
-          // entry symbol DuckDB looks up, hence the rename from the release
-          // asset (which carries the wasm platform suffix).
-          url: 'duckdb-extensions/duckfn.duckdb_extension.wasm',
-          release: {repository: 'shijianjs/duckfn', asset: 'duckfn-wasm_eh.duckdb_extension.wasm'},
-        },
-      ],
+      preload: [duckfnExtension],
     }),
     dfkTocToggle(),
   ],

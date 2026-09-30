@@ -86,8 +86,8 @@ DuckDB 扩展名 `duckfn` 必须四处一致：`test/extension/entry.rs` 的 `du
 与由它生成的项目（业务插件等）各自 `import "scripts/common.just"`，副本逐字节相同。本仓库自己也
 import 同一份（`Justfile` 里写明 `set allow-duplicate-recipes := true`，再覆盖几条）。
 
-- **改命令只改这里**（`build` / `sql` / `repl` / `lint` / `test` / `docs_*` / `ci-*` / `build_wasm*` /
-  `release_*` …），然后在各项目跑 `just sync-common` 拉回副本：
+- **改命令只改这里**（`build` / `sql` / `repl` / `lint` / `test` / `docs_*` / `ci-*` /
+  `build_wasm*` / `test_wasm` / `release_*` …），然后在各项目跑 `just sync-common` 拉回副本：
   `raw.githubusercontent.com/shijianjs/duckfn/<ref>/scripts/common.just`，默认 ref 是 `main`，
   `DUCKFN_JUST_REF=vX.Y.Z just sync-common` 可钉到某个已发布版本。`just check-common` 只比对不写回，
   不一致时非零退出（下游可以挂进自己的 CI）。
@@ -252,10 +252,11 @@ git commit -m "chore(release): 发布 vX.Y.Z" \
 just release_tag 0.0.5     # 打 tag v0.0.5，推送 main 与 tag
 ```
 
-`release_tag` 会先检查工作区是否干净。推送 tag 会触发两个 workflow：
-
-- `Main Extension Distribution Pipeline`（`.github/workflows/MainDistributionPipeline.yml`）：构建各平台扩展，并为该 tag 创建（或更新）GitHub Release。
-- `Deploy Docs`：构建并部署文档站。
+`release_tag` 会先检查工作区是否干净。推 tag 触发的是 `Main Extension Distribution Pipeline`
+（`.github/workflows/MainDistributionPipeline.yml`）：构建各平台扩展，并为该 tag 创建（或更新）
+GitHub Release。`Deploy Docs` 不直接挂在 tag 上 —— 它用 `workflow_run` 监听这条流水线，等它整条
+成功跑完（含 Release 创建）之后再构建并部署文档站，这样站点预加载的 wasm 就是本次发布的产物，
+而不是上一个 release。
 
 ### 3. 等 CI 全绿
 

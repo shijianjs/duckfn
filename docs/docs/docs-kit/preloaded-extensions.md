@@ -36,8 +36,9 @@ plugins: [
     // reason local development runs `duckdb -unsigned`.
     allowUnsignedExtensions: true,
     preload: [
-      // The extension this site documents, served same-origin from the
-      // latest release of its GitHub repository.
+      // The extension this site documents, served same-origin. With `release`
+      // the build fetches the asset from that repository's latest release;
+      // drop `release` to serve a file placed under static/ instead.
       {
         url: 'duckdb-extensions/duckfn.duckdb_extension.wasm',
         release: {
@@ -50,8 +51,11 @@ plugins: [
 ],
 ```
 
-The plugin runs its fetch at startup for both `npm start` and the production
-build, so the file exists in the dev server and in `static/`.
+That fetch happens for both `npm start` and the production build — but only for entries that carry
+`release`. An entry with just `{url}` is left alone, so a site can serve its own build locally and
+switch to the release only where it deploys: duckfn's own site does exactly that, keying the switch
+off `DOCS_EXTENSION_FROM_RELEASE` (see its `docs/README.md`), which is why its local runs never touch
+a release.
 
 ## The three source kinds
 

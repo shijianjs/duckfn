@@ -1,21 +1,33 @@
 #
 # Builds the Docusaurus site in docs/ and publishes it to GitHub Pages.
 #
-# Triggered by a version tag (`v*.*.*`) or manually from the Actions tab; ordinary commits do not
-# build the site.
+# Triggered by the extension pipeline finishing — `Main Extension Distribution
+# Pipeline` — or manually from the Actions tab; ordinary commits do not build
+# the site.
+#
+# It has to come *after* that pipeline rather than off the version tag itself:
+# the deployed site preloads the released extension wasm (see
+# DOCS_EXTENSION_FROM_RELEASE below), and the release it needs is created by the
+# pipeline's last job. Deploying on the tag push raced the build and fetched the
+# *previous* release.
+#
+# `workflow_run` runs in the context of the default branch, so the tag the
+# pipeline just released is checked out explicitly below, and the deploy job's
+# guard sees branch `main`.
 #
 # The `github-pages` environment is protected, so the refs that may deploy are listed in
 # Settings -> Environments -> github-pages -> Deployment branches and tags (currently: branch
-# `main`, tag `v*.*.*`). Any other ref is rejected with
+# `main`, tag `v*.*.*` — `main` is the one that matters now, since a `workflow_run` runs on it).
+# Any other ref is rejected with
 #   Tag "vX.Y.Z" is not allowed to deploy to github-pages due to environment protection rules.
 # — the deploy job below skips such a run instead of failing.
 #
 # One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
-#
 name: Deploy Docs
 on:
-  push:
-    tags: ['v*.*.*']
+  workflow_run:
+    workflows: ['Main Extension Distribution Pipeline']
+    types: [completed]
   workflow_dispatch:
 
 # Required by actions/deploy-pages: it exchanges the OIDC token for a Pages deployment.
@@ -32,10 +44,23 @@ concurrency:
 jobs:
   build:
     name: Build documentation
+    # A `workflow_run` also fires for pull-request runs and for manual runs of
+    # the pipeline; only a successful run started by pushing a version tag
+    # deploys the site. (A manual run of *this* workflow is always allowed.)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A `workflow_run` checks out the default branch by default; the site
+          # has to be built from the tag whose release the pipeline just
+          # published.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -60,10 +85,13 @@ jobs:
         # A project site is served from /<repo>/, so Docusaurus is told the real url/baseUrl
         # instead of relying on the local-development fallbacks in docusaurus.config.ts.
         #
-        # GITHUB_TOKEN lifts the anonymous release-API rate limit the dfkExtensions plugin
-        # hits when it fetches the extension wasm files from the latest release.
+        # DOCS_EXTENSION_FROM_RELEASE is what tells the site to preload the released wasm: it is
+        # set here and nowhere else, so every local build serves the extension `just build_wasm_eh`
+        # produced instead. GITHUB_TOKEN lifts the anonymous release-API rate limit the
+        # dfkExtensions plugin hits when it fetches that asset.
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DOCS_EXTENSION_FROM_RELEASE: '1'
         run: |
           set -euo pipefail
           # `base_url` is "https://<host>/<path>" and Docusaurus rejects it: `url` must be a bare

@@ -137,13 +137,18 @@ rust-version = "1.86"
 
 ## 文档站
 
-`docs/` 下的 Docusaurus 站点由 `.github/workflows/DeployDocs.yml` 在推送 `v*.*.*` tag 时部署
-（和扩展构建用的是同一批 tag），也可以在 Actions 页面手动触发；普通提交不会构建它。
+`docs/` 下的 Docusaurus 站点由 `.github/workflows/DeployDocs.yml` 部署：它在上面那条多平台构建
+**跑完之后**触发，而不是在推 tag 的那一刻；也可以在 Actions 页面手动触发。普通提交不会构建它。
+等流水线是必要的：部署出去的页面预加载的是**已发布**的 wasm 扩展，所以 Release 必须先存在 —— 在
+推 tag 时部署会和构建抢跑，拉到的还是上一个 release。
+
 它从 `actions/configure-pages` 读取 Pages 地址，用 `npm run build` 构建两种语言，然后发布产物。
+本地相反：同一个站点用的是 `just build_wasm_eh` 产出的扩展，不碰 release（`just test_wasm` 会
+构建它并跑一遍示例）。
 
 `github-pages` 环境带保护规则，需要在
-`Settings -> Environments -> github-pages -> Deployment branches and tags` 中列出 `v*.*.*`
-这个 tag 模式，部署才会被接受。
+`Settings -> Environments -> github-pages -> Deployment branches and tags` 中列出允许部署的 ref ——
+现在是分支 `main`（`workflow_run` 跑在默认分支上），加上手动触发时用的 `v*.*.*` tag。
 
 ## 接下来
 

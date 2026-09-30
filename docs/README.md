@@ -34,23 +34,34 @@ lockfile and `node_modules` live at the root.
 
 The runnable SQL blocks preload the `duckfn` extension through the
 `dfkExtensions` plugin (`duckfn-docs-kit/sql/extensions`), configured in
-`docusaurus.config.ts`: on `npm start` / `npm run build` it fetches the latest
-release's `duckfn-wasm_eh.duckdb_extension.wasm` into
-`static/duckdb-extensions/duckfn.duckdb_extension.wasm` — the file name must keep
-`duckfn` before the first dot, because that base is the entry symbol DuckDB looks
-up. It also injects the ordered preload list into every page, and the kit's
-runtime loads it while DuckDB initialises — which starts in the background as
-soon as a page with a runnable block opens, so the first Run click does not wait
-for the download.
+`docusaurus.config.ts`. Where that file comes from is decided by
+`DOCS_EXTENSION_FROM_RELEASE`:
+
+- **Set — only the GitHub Pages build sets it.** The build fetches the latest
+  release's `duckfn-wasm_eh.duckdb_extension.wasm` into
+  `static/duckdb-extensions/duckfn.duckdb_extension.wasm`. That is safe there
+  because Deploy Docs runs *after* the extension pipeline published the release
+  (see Deployment below).
+- **Unset — every local run.** Nothing is fetched: the plugin serves whatever
+  already sits under `static/duckdb-extensions/`, i.e. the wasm
+  `just build_wasm_eh` put there. `just test_wasm` builds it and then runs the
+  SQL test, so local runs never touch a release; `just docs_build` / `docs_start`
+  on their own fail until that file exists.
+
+Either way the file name must keep `duckfn` before the first dot, because that
+base is the entry symbol DuckDB looks up. The plugin also injects the ordered
+preload list into every page, and the kit's runtime loads it while DuckDB
+initialises — which starts in the background as soon as a page with a runnable
+block opens, so the first Run click does not wait for the download.
 
 The plugins also carry the client wiring: `dfkExtensions` registers the `dfk-*`
 elements and `dfkTocToggle` (`duckfn-docs-kit/toc-toggle/plugin`) adds the TOC
 collapse control, so the site keeps no `src/clientModules/` files of its own.
 
-Downloads are cached under `.cache/duckfn-docs-kit/` and only re-fetched when the
-release asset's sha256 changes; with a warm cache the build works offline. Both
-`.cache/` and `static/duckdb-extensions/` are gitignored — a file placed there by
-hand needs `git add -f`.
+Release downloads are cached under `.cache/duckfn-docs-kit/` and only re-fetched
+when the release asset's sha256 changes. Both `.cache/` and
+`static/duckdb-extensions/` are gitignored — a file placed there by hand needs
+`git add -f`.
 
 The extension is built by CI for DuckDB v1.5.5, and the site pins
 `@duckdb/duckdb-wasm` to the exact dev build whose engine matches
@@ -68,7 +79,14 @@ npm start -w docs -- --locale zh-Hans   # dev server, Chinese
 npm run build -w docs        # static site into docs/build/
 npm run serve -w docs        # preview the build
 npm run typecheck -w docs    # tsc
+npm test -w docs             # run every runnable SQL block in DuckDB-Wasm
 ```
+
+`just test_wasm` is the local end-to-end check and wraps the whole path: build
+the wasm extension (`just build_wasm_eh`), copy it into
+`static/duckdb-extensions/` and run `npm test -w docs`. Run that rather than
+`npm run build` / `npm start` alone — those need the extension file to be there
+already (see above).
 
 `duckfn-docs-kit` is a source dependency, so rebuild it (`npm run build -w duckfn-docs-kit`)
 after editing anything under `duckfn-docs-kit/src/`. The components' styles are inlined into
@@ -139,8 +157,22 @@ steps above.
 
 ## Deployment
 
-Pushing a version tag (`v*.*.*`) builds the site and publishes it to GitHub Pages; the same workflow
-can be started by hand from the Actions tab.
+`.github/workflows/DeployDocs.yml` builds and publishes the site to GitHub Pages. It is triggered by
+the `Main Extension Distribution Pipeline` **finishing**, not by the version tag itself:
+
+```yaml
+on:
+  workflow_run:
+    workflows: ['Main Extension Distribution Pipeline']
+    types: [completed]
+```
+
+The order is the point. The deployed site preloads the released wasm
+(`DOCS_EXTENSION_FROM_RELEASE=1`), and that release is created by the pipeline's last job — deploying
+on the tag push raced the build and fetched the *previous* release. The build job's guard admits only
+a run that succeeded, was started by pushing a `v*.*.*` tag, and the tag is then checked out by SHA
+(a `workflow_run` runs on the default branch). Pull-request runs of the pipeline, and manual runs of
+it, stop at that guard. The workflow can still be started by hand from the Actions tab.
 
 `url` and `baseUrl` are not hard-coded — the workflow reads them from `actions/configure-pages` and
 passes them to the build as `DOCS_URL` and `DOCS_BASE_URL`, which `docusaurus.config.ts` picks up.
