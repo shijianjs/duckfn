@@ -307,8 +307,9 @@ just release_dev 0.0.6-dev.0
 - [duckfn-extension-template](https://github.com/shijianjs/duckfn-extension-template)：给下游扩展项目的
   脚手架，骨架、CI、sqllogictest、文档站与发版脚本都已就位；克隆后 `just rename <新扩展名>` 一次改齐
   所有需要一致的名字。原先放在本仓库 `templates/` 下的那套模板已由该仓库取代。
-- [`docs/docs/build-and-release.md`](docs/docs/build-and-release.md)：面向读者的构建与发布说明。
-- [`docs/docs/contributing.md`](docs/docs/contributing.md)：本地开发流程与约定。
+- [`docs/docs/development/build-and-release.md`](docs/docs/development/build-and-release.md)：面向读者的构建与发布说明。
+- [`docs/docs/development/contributing.md`](docs/docs/development/contributing.md)：本地开发流程与约定。
+- [`docs/docs/known-issues.md`](docs/docs/known-issues.md)：上游 bug 与平台怪癖的规避办法。
 - [`docs/docs/docs-kit/sql-test.md`](docs/docs/docs-kit/sql-test.md)、
   [`duckfn-docs-kit/AGENTS.md`](duckfn-docs-kit/AGENTS.md)（随包发布的下游向用法说明）与
   [`duckfn-docs-kit/CONVENTIONS.md`](duckfn-docs-kit/CONVENTIONS.md)（本包开发约定）：文档站可运行
