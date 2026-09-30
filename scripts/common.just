@@ -17,7 +17,7 @@
 # 改共享内容：改 duckfn 仓库（shijianjs/duckfn）里的 scripts/common.just，然后在各项目跑
 #
 #     just sync-common                      # 默认跟 main
-#     DUCKFN_JUST_REF=v0.0.16 just sync-common   # 也可以钉到某个已发布版本
+#     DUCKFN_JUST_REF=vX.Y.Z just sync-common   # 也可以钉到某个已发布版本
 #     just check-common                     # 只比对不写回，不一致时非零退出（发版前顺手跑一次）
 #
 # 副本与源逐字节相同，「这次同步改了什么」看 git diff 即可。文件里不写具体版本号、一律用 X.Y.Z
