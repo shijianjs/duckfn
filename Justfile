@@ -46,6 +46,7 @@ lint:
 # 跑 test/sql/**/*.test（等价 make configure debug test）
 test: ci-build
     make test
+    git clean -fdX -- test/sql
 
 # WebAssembly 构建（产物是 lib 的 staticlib：target/wasm32-unknown-emscripten/release/libduckfn.a）
 build_wasm:
