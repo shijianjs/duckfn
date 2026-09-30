@@ -14,7 +14,7 @@
 | `test/sql/` | 示例的 sqllogictest 用例（41 个 `.test`） | 是（随 `duckfn` 包，只收 `.test`） |
 | `duckfn-macro/` | 过程宏 crate | 是（crates.io） |
 | `docs/` | Docusaurus 文档站：`docs/docs/**`（英）与 `docs/i18n/zh-Hans/docusaurus-plugin-content-docs/current/**`（中） | 是（随 `duckfn` 包，仅正文源文件） |
-| `Makefile` / `Justfile` | 本地与 CI 的构建入口。Makefile 必须留在仓库根（CI 在根目录执行 `make`） | — |
+| `Makefile` / `Justfile` / `scripts/` | 本地与 CI 的构建入口。Makefile 必须留在仓库根（CI 在根目录执行 `make`）；`Justfile` 只留本仓库特有的 recipe 与覆盖，日常命令在 `scripts/common.just`（下游共享，见下） | — |
 | `extension-ci-tools/` | DuckDB 官方 CI 子模块，不要修改它的内容 | — |
 
 示例扩展是**本包的一部分**，不再是独立 crate —— 这个区别是关键：cargo 会无条件跳过任何含
@@ -68,6 +68,26 @@ DuckDB 扩展名 `duckfn` 必须四处一致：`test/extension/entry.rs` 的 `du
 - **CLI 的 bin 目标叫 `duckfn-cli`**（文件仍是 `src/bin/duckfn.rs`）：本包 cdylib 的产物也叫
   duckfn，Windows 上两者的 `.pdb` 会撞名（cargo 报 output filename collision）。下游项目的包名
   不同，不会撞，所以模板里那个 bin 依旧叫 `duckfn`。
+
+## 共享的 justfile：`scripts/common.just`
+
+`scripts/common.just` 是**下游扩展项目共享的那份 recipe**，也是唯一的源：`duckfn-extension-template`
+与由它生成的项目（业务插件等）各自 `import "scripts/common.just"`，副本逐字节相同。本仓库自己也
+import 同一份（`Justfile` 里写明 `set allow-duplicate-recipes := true`，再覆盖几条）。
+
+- **改命令只改这里**（`build` / `sql` / `repl` / `lint` / `test` / `docs_*` / `ci-*` / `build_wasm*` /
+  `release_*` …），然后在各项目跑 `just sync-common` 拉回副本：
+  `raw.githubusercontent.com/shijianjs/duckfn/<ref>/scripts/common.just`，默认 ref 是 `main`，
+  `DUCKFN_JUST_REF=vX.Y.Z just sync-common` 可钉到某个已发布版本。`just check-common` 只比对不写回，
+  不一致时非零退出（下游可以挂进自己的 CI）。
+- 各项目根 `Justfile` 只留三类东西：机器相关的 `set windows-shell`、项目相关的 `extension_name`、
+  以及本项目特有的 recipe（模板的 `rename`、本仓库的 `publish_*` / `release_kit_*` / `doc`）。
+- **覆盖共享 recipe 必须显式开 `set allow-duplicate-recipes := true`**：不开这个开关，重名 recipe 会让
+  just 在解析期直接报错，连 `just --list` 都跑不了。本仓库就是这么覆盖 `build` / `release` /
+  `build_wasm` / `lint` / `docs_csv` / `release_check` 的（示例与 CLI 挂在 `quack` feature 上）。
+- 共享文件里**不写具体版本号**，用 `X.Y.Z` 占位：否则下游副本会被各自的 `scripts/release.sh`
+  换个版本号，每次 `just sync-common` 都白白多出一行 diff。
+- 它也**不进 crate 包**：根 `Cargo.toml` 的 `include` 白名单里没有 `scripts/`。
 
 ## 仓库约定
 
@@ -196,7 +216,8 @@ just release_bump 0.0.5
 - **文档 / README / CI 注释**：取**最近一次 tag** 的版本（如 `0.0.4`）→ `0.0.5`。
   涉及的文件由 `git grep` 自动找出，不需要维护清单：
   - `README.md`、`README.zh-CN.md`
-  - `Justfile`：注释里的示例命令
+  - `Justfile`：注释里的示例命令（`scripts/common.just` 里的示例一律写 `X.Y.Z` 占位，
+    因此它不在替换范围内，下游副本也不会因为发版而漂移）
   - `.github/workflows/MainDistributionPipeline.yml`：注释里的示例 tag
   - `docs/duckfn-version.ts`：文档站版本号的唯一来源
 
@@ -268,6 +289,8 @@ just release_dev 0.0.6-dev.0
 - [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md)：`duckfn` 的 crate README（根 README，同时在 GitHub 首页与 crates.io 上展示）。
 - [`test/extension/`](test/extension/) 与 [`test/sql/`](test/sql/)：随包发布的示例扩展与 sqllogictest 用例；[`demo.sh`](demo.sh) 是一组可直接跑的 `just sql` 示例。
 - [`scripts/release.sh`](scripts/release.sh)：`release_bump` / `release_dev` / `release_tag` 的实际实现。
+- [`scripts/common.just`](scripts/common.just)：下游扩展项目共享的 Justfile 片段（唯一的源，各项目
+  `import` 一份副本、用 `just sync-common` 同步；本仓库自己也 import 它）。
 - [`docs/duckfn-version.ts`](docs/duckfn-version.ts) 与 [`docs/plugins/remark-version-placeholder.ts`](docs/plugins/remark-version-placeholder.ts)：文档站的版本占位符机制。
 - [duckfn-extension-template](https://github.com/shijianjs/duckfn-extension-template)：给下游扩展项目的
   脚手架，骨架、CI、sqllogictest、文档站与发版脚本都已就位；克隆后 `just rename <新扩展名>` 一次改齐

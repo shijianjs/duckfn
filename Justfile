@@ -1,124 +1,66 @@
-# duckfn workspace 的 Justfile。
+# duckfn 运行时仓库自己的 Justfile。
 #
-# 日常开发走 Cargo（just build / just sql / just repl），发版流程见根目录 AGENTS.md。
-# 下游扩展项目要的是精简版：duckfn-extension-template 仓库里的 Justfile。
+# 日常命令（build / sql / repl / lint / test / docs_* / ci-* / release_* …）都在
+# scripts/common.just 里 —— 那份是**共享源**，下游扩展项目（duckfn-extension-template 与由它
+# 生成的项目）各自 import 一份同样的副本，用 `just sync-common` 同步；改共享内容改的就是这里。
 #
+# 本文件只留三类东西：
+#   1. 机器相关的设置与项目相关的变量（windows-shell、extension_name）；
+#   2. 需要**覆盖**共享 recipe 的少数几条（示例挂在 `quack` feature 上，命令得带上它）；
+#   3. 本仓库特有、下游用不到的 recipe（crates.io 发布、duckfn-docs-kit 的 npm 发版）。
+#
+# 覆盖同名 recipe 必须显式允许（见下面的 set）：不开的话 just 在解析期就报
+# 「recipe ... is redefined」，连 `just --list` 都跑不了。
+
 # Windows 下 recipe 交给 Git Bash 执行；按自己的 Git 安装路径调整。
+# 这是机器相关的路径，所以留在本地文件里，不放进共享文件。
 set windows-shell := ["C:\\Program Files\\Git\\bin\\bash.exe", "-c"]
+
+# 共享 recipe 允许在本文件里覆盖（浅层覆盖深层：以下定义生效）。
+set allow-duplicate-recipes := true
+
+import "scripts/common.just"
 
 # 示例扩展名（根包 duckfn 的 cdylib 就是它），与 test/extension/entry.rs 里
 # duckfn_entrypoint!("...")、根 Makefile 的 EXTENSION_NAME、CI 的 extension_name 一致
 extension_name := "duckfn"
 
-# duckdb 命令行；不在 PATH 里时用 `just DUCKDB=/path/to/duckdb repl`
-duckdb := env_var_or_default("DUCKDB", "duckdb")
+# 本仓库的示例扩展与 CLI 都挂在默认关闭的 `quack` feature 上，涉及 cargo 的命令都得显式带上它
+# （不带的话 cargo 只是静默跳过目标，产物没有入口符号，LOAD 时才报错）。
+_quack := "--features quack"
 
-ext_path := "./target/debug/" + extension_name + ".duckdb_extension"
+# ==== 覆盖共享 recipe ====
 
-# 不带参数运行 just 时列出所有 recipe
-default:
-    @just --list
-
-# 构建示例扩展 -> target/debug/duckfn.duckdb_extension
-#
-# 示例扩展并进本包后挂在默认关闭的 `quack` feature 上，所以构建命令必须显式带上它（不带的话
-# cargo 只会产出一个没有入口符号的 cdylib，LOAD 时才报错）；`--` 之后的参数会被透传给 cargo build。
+# 日常构建 -> target/debug/duckfn.duckdb_extension
 build:
-    cargo duckdb-ext build -- --features quack
+    cargo duckdb-ext build -- {{_quack}}
 
-# 构建后跑一条 SQL 就退出：just sql "SELECT double_it(21);"
-sql sql: build
-    {{duckdb}} -unsigned -c "LOAD '{{ext_path}}'; {{sql}}"
-
-# 构建后进入 REPL（扩展已 LOAD）：just repl
-repl: build
-    {{duckdb}} -unsigned -cmd "LOAD '{{ext_path}}';"
-
-# release 模式的扩展构建（注意：与下面的 release_* 发版流程不是一回事）
+# 全量 release 构建
 release:
-    cargo build --release --features quack
+    cargo build --release {{_quack}}
 
-# clippy，warning 视为错误。必须 --all-features：示例、CLI 与 wasm example 目标都挂在 `quack` 上，
-# 不带 feature 时它们根本不参与检查。
+# 提交前检查：这是全 workspace 的 crate，所以 --workspace；示例、CLI 都在 `quack` 上，所以 --all-features
 lint:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-# 跑 test/sql/**/*.test（等价 make configure debug test）
-test: ci-build
-    make test
-    git clean -fdX -- test/sql
+# 生成 function_descriptions.csv（本仓库的 CLI 目标名是 duckfn-cli，理由见 Cargo.toml 的 [[bin]]）
+docs_csv:
+    cargo run {{_quack}} --bin duckfn-cli -- function_descriptions
 
-# WebAssembly 构建（产物是 lib 的 staticlib：target/wasm32-unknown-emscripten/release/libduckfn.a）
+# WebAssembly 构建：本包的 wasm 产物来自 lib 的 staticlib，没有 [[example]] 目标，
+# 所以不像下游那样带 --example（见 Cargo.toml 的 crate-type 注释）。
 build_wasm:
-    cargo build --release --target wasm32-unknown-emscripten --features quack
+    cargo build --release --target wasm32-unknown-emscripten {{_quack}}
 
-# 打出可加载的 wasm_eh 扩展 -> build/wasm_eh/extension/duckfn/duckfn.duckdb_extension.wasm
-#
-# 直接调官方 makefile 的 wasm_eh 目标（configure → release → move_wasm_extension）：
-# cargo 出 libduckfn.a → emcc 出 side module → append_extension_metadata 出 .duckdb_extension.wasm。
-#
-# 前提：系统装好 emsdk 3.1.71 并把它的目录配进 PATH（`emcc` / `emcc.bat` 能直接执行）。版本必须与
-# CI 一致（见 _extension_distribution.yml），否则产物能构建出来、LOAD 时报 Could not load dynamic lib。
-# 不需要 source emsdk_env.sh —— emcc 已在 PATH 上就行。
-#
-# RUST_LIBNAME 覆盖是必须的：上游 rust.Makefile 按宿主 OS 取产物名，Windows 上会去找 duckfn.dll，
-# 而 wasm 产物是 libduckfn.a。少了它 make 会在拷贝那步报文件不存在。
-#
-# 注意：跑完 configure/platform.txt 会停在 wasm_eh；之后要跑本地原生的 make test 之前先 `make configure`。
-#
-# Loadable wasm_eh build via the upstream makefile target; the emsdk/emscripten on PATH must match CI
-# (3.1.71). `RUST_LIBNAME` is the override that makes it work on Windows, where the makefile expects
-# the native `duckfn.dll` instead of the wasm target's `libduckfn.a`.
-build_wasm_eh:
-    make wasm_eh RUST_LIBNAME=lib{{extension_name}}.a
+# 发版前检查：clippy（warning 视为错误）与全 feature 构建都必须干净
+release_check: lint
+    cargo build --workspace --all-features
 
-# 工具链（首次）：固定 Rust 版本 + 装 wasm target
-config_env:
-    rustup override set 1.86.0
-    rustup target add wasm32-unknown-emscripten
-    rustup target list --installed
+# ==== 本仓库特有：crates.io 发布 ====
 
 # 生成 duckfn 的 rustdoc
 doc:
     cargo doc -p duckfn
-
-# 生成社区扩展文档页用的 function_descriptions.csv（只做转发，逻辑在 cargo CLI 里）
-# 描述写在 #[duck_*] 属性上；要连没写描述的函数一起导出：
-#   cargo run --features quack --bin duckfn-cli -- function_descriptions --all
-# 那个 bin 自己挂在 `quack` 上（它需要把示例源码再编一遍才能收集到全部注册项），
-# 目标名是 duckfn-cli 而不是文件名的 duckfn —— 避开本包 cdylib 的产物同名冲突，见根 Cargo.toml。
-docs_csv:
-    cargo run --features quack --bin duckfn-cli -- function_descriptions
-
-# ==== 官方 makefile 流程：sqllogictest 与 CI 走这条 ====
-
-# 初始化 extension-ci-tools（生成 configure/ 与 python venv）；只需一次
-ci-init:
-    make configure
-
-ci-build: ci-init
-    make debug
-
-ci-release: ci-init
-    make release
-
-# ==== 发版流程（完整步骤见根目录 AGENTS.md） ====
-
-# 发版前检查：clippy 与构建必须无 warning，有问题先修再发版
-release_check: lint
-    cargo build --workspace --all-features
-
-# 提升版本号（项目 + 文档）：just release_bump 0.0.15
-release_bump new_version:
-    bash scripts/release.sh bump "{{new_version}}"
-
-# 打 tag 并推送，触发 CI 发版：just release_tag 0.0.15
-release_tag version:
-    bash scripts/release.sh tag "{{version}}"
-
-# 查看最近的 CI 运行状态
-release_ci:
-    gh run list --limit 5
 
 # 发布两个 crate 到 crates.io（duckfn-macro 必须先上线）
 release_publish:
@@ -126,11 +68,6 @@ release_publish:
     just publish_macro
     just publish_dry
     just publish
-
-# 切到下一开发版本（参数形如 X.Y.Z-dev.0）：just release_dev <新版本>
-# 只动根 Cargo.toml 与 Cargo.lock
-release_dev new_version:
-    bash scripts/release.sh dev "{{new_version}}"
 
 publish_macro_dry:
     cargo publish -p duckfn-macro --registry crates-io --dry-run
@@ -144,10 +81,14 @@ publish_dry:
 publish:
     cargo publish -p duckfn --registry crates-io
 
-# ==== duckfn-docs-kit（npm 包）发版流程（完整步骤见 duckfn-docs-kit/CONVENTIONS.md） ====
+# ==== 本仓库特有：duckfn-docs-kit（npm 包）发版 ====
 #
 # 与上面的 release_* 完全独立：那个发 crates.io 上的 crate、打 v*.*.* tag（会触发扩展构建与
 # 文档站部署），这个发 npm 包、打 docs-kit-v* tag（不触发任何 workflow）。
+#
+# This is independent of the release_* recipes above: those publish the crates.io crates under a
+# v*.*.* tag (triggering the extension build and the docs deployment), while these publish the npm
+# package under a docs-kit-v* tag (no workflow runs).
 
 # 发版前检查：构建 + 类型检查 + 预览 npm 包里会装进什么
 release_kit_check:
@@ -155,15 +96,15 @@ release_kit_check:
     npm run typecheck -w duckfn-docs-kit
     npm pack -w duckfn-docs-kit --dry-run
 
-# 提升版本号（只动 duckfn-docs-kit/package.json 与根 package-lock.json）：just release_kit_bump 0.1.1
+# 提升版本号（只动 duckfn-docs-kit/package.json 与根 package-lock.json）：just release_kit_bump X.Y.Z
 release_kit_bump new_version:
     bash scripts/release-docs-kit.sh bump "{{new_version}}"
 
-# 打 docs-kit-v* tag 并推送，不触发任何 CI：just release_kit_tag 0.1.1
+# 打 docs-kit-v* tag 并推送，不触发任何 CI：just release_kit_tag X.Y.Z
 release_kit_tag version:
     bash scripts/release-docs-kit.sh tag "{{version}}"
 
-# 切到下一开发版本（参数形如 X.Y.Z-dev.0）：just release_kit_dev 0.1.2-dev.0
+# 切到下一开发版本（参数形如 X.Y.Z-dev.0）：just release_kit_dev X.Y.Z-dev.0
 release_kit_dev new_version:
     bash scripts/release-docs-kit.sh dev "{{new_version}}"
 
