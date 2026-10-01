@@ -49,28 +49,22 @@ depending on the ABI type this encodes the duckdb version or the C API version."
 
 ## Where the values come from
 
-The two settings live in different files. The pairing below is the **stable** one; duckfn's own
-example extension sits on the other side (`USE_UNSTABLE_C_API=1`, `TARGET_DUCKDB_VERSION=v1.5.6`)
-because its `quack` example really does use the unstable region.
+Two files carry the settings — the headers come from `Cargo.toml`, the declaration from the
+`Makefile`:
 
 ```toml
 # Cargo.toml — the headers
 libduckdb-sys = { version = ">=1.10500, <2", features = ["loadable-extension"] }
 ```
 
-```make
-# Makefile — the declaration
-USE_UNSTABLE_C_API=0
-TARGET_DUCKDB_VERSION=v1.2.0
-```
-
 `libduckdb-sys` encodes a DuckDB release as `1.<major*10000 + minor*100 + patch>.0`, so `1.10506.0`
 is DuckDB 1.5.6 and the `>=1.10500` above means "DuckDB 1.5 headers or newer".
 
-Nothing else rewrites `TARGET_DUCKDB_VERSION`: ci-tools' `set_duckdb_version` is a no-op for C API
+Nothing else rewrites the `Makefile` line: ci-tools' `set_duckdb_version` is a no-op for C API
 extensions, and the community registry's `duckdb_version` only chooses which DuckDB source to check
-out, how the artifacts are named and which version directory they are deployed into. The line is
-yours to maintain — see [Build and release](./development/build-and-release.md).
+out, how the artifacts are named and which version directory they are deployed into. It is yours to
+maintain — see [Build and release](./development/build-and-release.md). The next section gives both
+complete sets.
 
 ## Choosing for your own extension
 
@@ -82,22 +76,71 @@ One question decides it: **does your code touch the unstable region?**
 - Everything else is in the stable region: scalars, aggregates, table functions, casts, replacement
   scans, SQL macros, named STRUCT / ENUM types, and the chrono / uuid / rust_decimal bridges.
 
-| Your code | `USE_UNSTABLE_C_API` | `TARGET_DUCKDB_VERSION` | What you get |
-| --- | --- | --- | --- |
-| Stable region only | `0` | the C API version you need — today `v1.2.0` | one binary for every engine whose C API is at least that |
-| Anything from the unstable region | `1` | the exact release, e.g. `v1.5.6` | one binary, on that engine only |
+### Stable region — the complete set
 
-Three consequences worth knowing before you pick:
+```make
+# Makefile
+EXTENSION_NAME=my_extension
+USE_UNSTABLE_C_API=0
+TARGET_DUCKDB_VERSION=v1.2.0
+```
+
+```toml
+# Cargo.toml — the ABI point is that `duckdb-1-5` stays off (`cli` is only for the
+# `function_descriptions` bin and has nothing to do with the ABI).
+duckfn = { version = "0.0.17", features = ["cli"] }
+```
+
+```yaml
+# .github/workflows/MainDistributionPipeline.yml
+      duckdb_version: v1.5.6     # any engine at or above the floor; the newest is the safe pick
+```
+
+- `TARGET_DUCKDB_VERSION` is a **C API floor**, not a release — that is what the mode buys.
+  `v1.2.0` is where DuckDB 1.3.2 through 1.5.5 all sit, so one artifact covers them (measured, below).
+- **`export QUACK_RS_TARGET_DUCKDB_VERSION` is deliberately absent here, and adding it would not
+  help.** quack-rs reads that variable only in the unstable path: `abi::check()` returns `StableOnly`
+  before it ever calls `built_against_version()`, whenever `uses_unstable_api()` — i.e.
+  `cfg!(feature = "duckdb-1-5")` — is false.
+- `DUCKDB_TEST_VERSION` is absent for the same reason: the test runner may be any newer engine,
+  because every engine at or above the floor accepts the artifact.
+
+### Unstable region — the complete set
+
+```make
+# Makefile
+EXTENSION_NAME=my_extension
+USE_UNSTABLE_C_API=1
+TARGET_DUCKDB_VERSION=v1.5.6
+export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
+DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
+```
+
+```toml
+# Cargo.toml
+duckfn = { version = "0.0.17", features = ["duckdb-1-5"] }   # + "owned-connection" for duckfn::duck_vfs
+```
+
+```yaml
+# .github/workflows/MainDistributionPipeline.yml
+      duckdb_version: v1.5.6     # must equal TARGET_DUCKDB_VERSION; it is the engine `make test` loads into
+```
+
+- **The `export` keyword is part of the line, not decoration.** quack-rs' build script reads
+  `QUACK_RS_TARGET_DUCKDB_VERSION` from the *environment*, and `make` does not put a variable there
+  unless it is exported. Drop `export` and cargo sees nothing — no error, just an empty value, and
+  the layout check then falls back to quack-rs' own table, which is exactly what rejects the engine
+  when it is a release quack-rs has not catalogued yet.
+- `TARGET_DUCKDB_VERSION` is a **release** in this mode and the engine has to match it literally —
+  which is why the test-runner pin (`DUCKDB_TEST_VERSION`) and the CI pin move together with it.
+- Going back to the stable side means dropping all three version-flavoured lines at once: the
+  `export`, the `DUCKDB_TEST_VERSION` derivation, and the CI pin's "must equal" requirement.
+
+The one trap that survives in either mode:
 
 - **Do not turn `duckdb-1-5` on while claiming `C_STRUCT`.** The loader only checks what you declared,
   so the file would be accepted by engines whose unstable layout differs — and the mismatch would show
   up as undefined behaviour instead of a load error. Pick one side and match the feature to it.
-- **With the unstable API off, the ABI guard never fires.** quack-rs decides that from the same switch
-  (`abi::uses_unstable_api()` is `cfg!(feature = "duckdb-1-5")`) and returns `StableOnly` before it
-  asks anything, so the `QUACK_RS_TARGET_DUCKDB_VERSION` export the unstable path needs is redundant
-  there. Leaving it out while the unstable API *is* on is not — add it back when you flip the flag.
-- **The two numbers move together when you flip the flag.** Going back to `USE_UNSTABLE_C_API=1` means
-  `TARGET_DUCKDB_VERSION` becomes a release number (and has to equal the engine), not a C API floor.
 
 ### What a stable build actually covers
 
@@ -132,9 +175,16 @@ duckdb -unsigned -c "LOAD '<path>/my_extension.duckdb_extension'; SELECT my_gree
 
 Two traps come up here:
 
-- **A pinned test runner is not the engine under test.** The `configure/venv` directory is a one-time
-  stamp, so `make` never refreshes the Python `duckdb` inside it; a stale runner refuses a freshly
-  built extension. Upgrade it in place after moving a pin.
+- **A pinned test runner is not the engine under test.** `make configure` builds `configure/venv`
+  once and never refreshes the Python `duckdb` inside it (the recipe hangs off the directory, so a
+  second `make` skips it), and a stale runner refuses a freshly built extension. Upgrade it in place —
+  these are the two paths `base.Makefile` itself uses:
+
+```shell
+configure/venv/Scripts/python.exe -m pip install --upgrade "duckdb==1.5.6"   # Windows
+configure/venv/bin/python3       -m pip install --upgrade "duckdb==1.5.6"   # Linux / macOS
+```
+
 - **The header pin and the engine are separate.** Updating `libduckdb-sys` changes what you may call,
   not what will load you — and vice versa.
 
