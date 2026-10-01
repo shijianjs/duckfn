@@ -311,7 +311,7 @@ src/
   `@docusaurus/types`。
 - **版本耦合（改动前先读回）**：wasm 扩展只能由「与 duckdb-wasm 内置 DuckDB 版本 ABI
   兼容」的构建提供，所以 kit 的 `package.json` 把 `@duckdb/duckdb-wasm` 固定成**精确
-  版本**（当前 `1.33.1-dev64.0`，内置 v1.5.5，与 CI 的 `TARGET_DUCKDB_VERSION` 一致）。
+  版本**（当前 `1.33.1-dev65.0`，内置 v1.5.6，与 CI 的 `TARGET_DUCKDB_VERSION` 一致）。
   实测：`1.32.0`（内置 v1.4.3）拒绝 v1.5.5 构建的扩展（C API slot 数 459 vs 546，
   报 `C extension API layout mismatch`）；`1.33.1-dev57.0`（内置 v1.5.4）反而能加载
   ——wasm 补丁只校验 C API slot 数（1.5.4/1.5.5 的 unstable 区未变），原生则按版本

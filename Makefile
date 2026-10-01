@@ -25,7 +25,7 @@ EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
 
 # Target DuckDB version
-TARGET_DUCKDB_VERSION=v1.5.5
+TARGET_DUCKDB_VERSION=v1.5.6
 
 # 测试用的 DuckDB 版本必须与构建目标一致：扩展在 USE_UNSTABLE_C_API=1 下构建，产物被钉死在精确版本上
 # （加载时校验），而 base.Makefile 里 DUCKDB_TEST_VERSION 默认留空 = 从 PyPI 装 latest —— 上游一发新的

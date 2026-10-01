@@ -82,7 +82,7 @@ marked as using the *unstable* C API, which is why loading it requires `-unsigne
 | | |
 | --- | --- |
 | Rust | 1.86 or newer (the crates use edition 2024) |
-| DuckDB | tested against v1.5.5 |
+| DuckDB | tested against v1.5.6 |
 | Python 3 *(optional)* | only for the `make configure` / `make test` flow, which sets up the sqllogictest runner |
 
 ## Where next

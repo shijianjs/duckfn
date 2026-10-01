@@ -74,7 +74,7 @@ crate-type = ["cdylib"]
 | | |
 | --- | --- |
 | Rust | 1.86 及以上（crate 使用 edition 2024） |
-| DuckDB | 针对 v1.5.5 验证 |
+| DuckDB | 针对 v1.5.6 验证 |
 | Python 3 *（可选）* | 仅 `make configure` / `make test` 流程需要，用于准备 sqllogictest 运行环境 |
 
 ## 接下来

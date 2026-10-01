@@ -22,7 +22,7 @@ jobs:
     name: Build extension binaries
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
-      duckdb_version: v1.5.5
+      duckdb_version: v1.5.6
       ci_tools_version: v1.5-variegata
       # 扩展并进根包后由 `quack` feature 打开（根 Makefile 里 `TARGET_INFO += --features quack`）；
       # 这个名字必须与根 Makefile 的 EXTENSION_NAME、test/extension/entry.rs 的 duckfn_entrypoint!
@@ -46,7 +46,7 @@ jobs:
       contents: write
     env:
       EXTENSION_NAME: duckfn
-      DUCKDB_VERSION: v1.5.5
+      DUCKDB_VERSION: v1.5.6
     steps:
       # Needed to list the commits since the previous version tag when building the release notes.
       - name: Checkout

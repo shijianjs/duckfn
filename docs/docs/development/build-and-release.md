@@ -33,12 +33,14 @@ Four settings in the `Makefile` are worth knowing:
 ```make
 EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v1.5.5
+TARGET_DUCKDB_VERSION=v1.5.6
 TARGET_INFO += --features quack
 ```
 
 `USE_UNSTABLE_C_API=1` is what makes the built extension loadable only with `-unsigned`, and only in
-a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metadata is written for.
+a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metadata is written for —
+and, because the ABI type is unstable, that value is read as a DuckDB release number and must match
+the engine exactly. [DuckDB version compatibility](../duckdb-versions.md) covers both ABI types.
 `EXTENSION_NAME` has to match `duckfn_entrypoint!` in `test/extension/entry.rs` and the `require` lines
 of the sqllogictest files. `TARGET_INFO` carries `--example $(EXTENSION_NAME)` plus `--features quack`:
 the extension artefacts come from the `[[example]] duckfn` target, and the example tree lives behind the
@@ -90,7 +92,7 @@ jobs:
   duckdb-stable-build:
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
-      duckdb_version: v1.5.5
+      duckdb_version: v1.5.6
       ci_tools_version: v1.5-variegata
       extension_name: duckfn
       extra_toolchains: rust;python3

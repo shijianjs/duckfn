@@ -15,7 +15,8 @@ workarounds, see [Known issues](./known-issues.md) instead.
 Because nothing is linked. `libduckdb-sys` is compiled with the `loadable-extension` feature, which
 uses DuckDB's headers but resolves every API function through a pointer table that the host DuckDB
 installs when it loads the extension. The trade-off is that the extension is tied to the DuckDB
-version it was built against — see [Architecture](./development/architecture.md#4-dispatch).
+version it was built against — see [Architecture](./development/architecture.md#4-dispatch) and
+[DuckDB version compatibility](./duckdb-versions.md).
 
 ### Why do I have to load the extension with `-unsigned`?
 
@@ -108,8 +109,10 @@ sets up the extension with `require duckfn`, then pairs statements with their ex
 ### The extension loads but calls fail with a version error
 
 The extension is compiled against a specific DuckDB version (`TARGET_DUCKDB_VERSION`, currently
-v1.5.5) and uses the unstable C API, so it only works with a compatible DuckDB. Load it into the
-matching version, or rebuild against the version you are running.
+v1.5.6) and uses the unstable C API, so it only works with a compatible DuckDB. Load it into the
+matching version, or rebuild against the version you are running. What "compatible" means — and how
+the same error reads under the stable ABI — is in
+[DuckDB version compatibility](./duckdb-versions.md).
 
 ### Where do tooling problems go?
 

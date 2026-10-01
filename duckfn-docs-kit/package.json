@@ -58,7 +58,7 @@
     "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
-    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
+    "@duckdb/duckdb-wasm": "1.33.1-dev65.0",
     "@panzoom/panzoom": "^4.6.2",
     "@visactor/vtable": "^1.26.8",
     "codemirror": "^6.0.2",
