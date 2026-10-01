@@ -9,6 +9,7 @@ import {
   loadPanzoom,
   parseMermaidSvg,
   renderMermaid,
+  serializeMermaidSvg,
   watchColorMode,
 } from './render';
 import {mermaidStyles} from './styles';
@@ -27,10 +28,10 @@ import {mermaidStyles} from './styles';
  * What a reader gets on top of the diagram:
  *
  * - **Zoom and pan** — wheel to zoom, drag to pan (`@panzoom/panzoom` on the
- *   content box, so the SVG itself is never mutated and the downloaded file is
- *   the one mermaid produced). Panning only engages once the diagram is zoomed,
- *   which is what lets the page keep scrolling normally over a diagram that
- *   fits.
+ *   content box, so the SVG node itself is never mutated; the download
+ *   re-serialises that same untouched node, see `serializeMermaidSvg`). Panning
+ *   only engages once the diagram is zoomed, which is what lets the page keep
+ *   scrolling normally over a diagram that fits.
  * - **Reset zoom**, **fullscreen**, **source editing** (a CodeMirror dialog),
  *   and **download SVG** as floating icon buttons in the top-right corner, the
  *   same idiom as the kit's code blocks.
@@ -130,9 +131,13 @@ export class DfkMermaid extends HTMLElementBase {
   #labels: MermaidLabels = LABELS.en;
   #config: DfkMermaidConfig = parseMermaidConfig(null);
   #source = '';
-  /** The markup of the diagram on screen; `null` until one renders. Kept so the
-   * download hands over exactly what mermaid produced, not the live DOM. */
-  #svgText: string | null = null;
+  /**
+   * The diagram currently on screen, held as a *node* rather than as mermaid's
+   * returned string: the download re-serialises it (`serializeMermaidSvg`), which
+   * is the only way to get well-formed SVG out of mermaid's HTML-serialised
+   * output. `null` until a diagram renders.
+   */
+  #svg: SVGElement | null = null;
   #colorMode: MermaidColorMode | null = null;
   #seeded = false;
   #expanded = false;
@@ -293,7 +298,7 @@ export class DfkMermaid extends HTMLElementBase {
     this.#colorMode = colorMode;
     // A re-render keeps the old diagram up while the new one is in flight, so the
     // status line is only for the first paint (or for an error that left nothing).
-    if (this.#svgText === null) {
+    if (this.#svg === null) {
       this.#setMessage(this.#labels.rendering, false);
     }
     try {
@@ -309,7 +314,7 @@ export class DfkMermaid extends HTMLElementBase {
       if (!svg) {
         throw new Error(this.#labels.renderFailed);
       }
-      this.#svgText = output.svg;
+      this.#svg = svg;
       this.#content.replaceChildren(svg);
       // Mermaid's own hook for click handlers on nodes; it takes the container
       // that holds the SVG.
@@ -322,7 +327,7 @@ export class DfkMermaid extends HTMLElementBase {
       if (token !== this.#renderToken || !this.isConnected) {
         return;
       }
-      this.#svgText = null;
+      this.#svg = null;
       this.#content.replaceChildren();
       this.#canvas.hidden = true;
       this.#setActionsAvailable(false);
@@ -408,12 +413,19 @@ export class DfkMermaid extends HTMLElementBase {
 
   // --- Download --------------------------------------------------------------
 
-  /** Hands over mermaid's own markup, so the file is the diagram at its natural size. */
+  /**
+   * Saves the diagram as a standalone `.svg` file.
+   *
+   * The markup is re-serialised from the rendered node, not taken from mermaid's
+   * return value — that one is HTML, and its void elements come out unclosed,
+   * which a browser opening the file as XML rejects. See `serializeMermaidSvg`.
+   */
   #download(): void {
-    if (this.#svgText === null) {
+    if (this.#svg === null) {
       return;
     }
-    const blob = new Blob([this.#svgText], {type: 'image/svg+xml;charset=utf-8'});
+    const markup = serializeMermaidSvg(this.#svg);
+    const blob = new Blob([markup], {type: 'image/svg+xml;charset=utf-8'});
     const url = URL.createObjectURL(blob);
     const link = el('a', {href: url, download: DOWNLOAD_NAME});
     // Anchored in the shadow tree for the click; a detached anchor is ignored by

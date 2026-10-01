@@ -387,9 +387,17 @@ src/
   产生方（remark 插件、可运行 SQL 的 `mermaid` 渲染器）都没有 React 挂载点可挂 setter；读取时**只在
   属性真的存在时**才赋值，所以调用方在插入前 `setAttribute` 也成立（元素在 `createElement` 后插入时
   upgrade，`connectedCallback` 才读）。
-- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，不改 SVG 本身 —— 所以「下载 SVG」给的就是
-  mermaid 原样产出的那份）。`panOnlyWhenZoomed: true` + `touchAction: 'pan-y'` 是刻意的取舍：图没放大
+- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，**不改 SVG 节点本身**）。`panOnlyWhenZoomed:
+  true` + `touchAction: 'pan-y'` 是刻意的取舍：图没放大
   时不吞拖拽、页面照常滚，放大后拖拽才接管。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
+- **「下载 SVG」必须用 `XMLSerializer` 重新序列化那个节点，不能直接用 mermaid 返回的字符串**
+  （`serializeMermaidSvg()`）。mermaid 是用 `innerHTML` 序列化的（HTML 序列化），空元素**不写闭合
+  斜杠**：作者写的 `<br/>` 出来就是 `<br>`。页面里没问题（HTML 解析器照收），但下载下来的 `.svg`
+  浏览器是**当 XML 打开**的，于是在 `<p>` 里遇到 `<br>` 就报
+  `Opening and ending tag mismatch: br … and p`，图从错误处截断。XML 序列化会补齐斜杠，并补上独立
+  文档需要的命名空间声明（`<svg>` 的 `xmlns`、`foreignObject` 里那段 XHTML 的 `xmlns` —— 后者在
+  页面里是从宿主继承来的，节点上并没有这个属性）。这也是元素持有渲染出来的 `<svg>` **节点**
+  （而不是 mermaid 的字符串）的唯一原因。
 - **全屏是 canvas 上的一个类**（`position: fixed`），Esc 与按钮都能退出；背景用
   `--ifm-background-surface-color`，理由同 SQL 结果区（站点可以把 `--ifm-background-color` 声明成
   `transparent`）。

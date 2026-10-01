@@ -151,3 +151,28 @@ export async function loadPanzoom(): Promise<typeof import('@panzoom/panzoom')['
   const module = await import('@panzoom/panzoom');
   return module.default;
 }
+
+/**
+ * Serialises a rendered diagram into standalone SVG markup.
+ *
+ * Mermaid hands its SVG back as an **HTML** string (it stringifies a detached
+ * element through `innerHTML`), and HTML serialisation writes a void element
+ * without a closing slash: a `<br/>` the author put inside a label comes back as
+ * `<br>`. That is fine where it lands — the page's HTML parser reads it, and
+ * `parseMermaidSvg()` parses it the same way — but it is fatal for a *file*: a
+ * browser opening an `.svg` parses XML, and `<br>` inside a `<p>` there is
+ * `Opening and ending tag mismatch: br … and p`, with the drawing cut off at the
+ * first error.
+ *
+ * Re-serialising the live node with `XMLSerializer` fixes both halves at once:
+ * XML serialisation closes every element, and it emits the namespace declarations
+ * a standalone document needs (`xmlns` on the `<svg>`, and one on any
+ * `foreignObject` subtree, whose XHTML content inherits its namespace from the
+ * page rather than carrying it as an attribute).
+ *
+ * This is why the element keeps the rendered `<svg>` node for the download
+ * instead of mermaid's own string: only the node can be re-serialised.
+ */
+export function serializeMermaidSvg(svg: SVGElement): string {
+  return new XMLSerializer().serializeToString(svg);
+}
