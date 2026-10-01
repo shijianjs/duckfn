@@ -9,9 +9,10 @@ description: What duckfn-docs-kit is, what the package includes and how a Docusa
 
 `duckfn-docs-kit` is the shared library behind this documentation site. It
 holds the pieces a duckfn-family extension docs site needs but should not
-copy — the runnable SQL blocks, the extension preloading, the TOC collapse
-control, the home-page web components and the version placeholder — each as a
-self-contained entry point that a site wires into its own Docusaurus config.
+copy — the runnable SQL blocks, mermaid diagrams, the extension preloading, the
+TOC collapse control, the home-page web components and the version placeholder —
+each as a self-contained entry point that a site wires into its own Docusaurus
+config.
 
 The package is plain TypeScript over the native DOM (no React and no UI
 framework of its own) and is maintained for reuse by other extension docs
@@ -25,6 +26,7 @@ these pages matches the code you are reading.
 | Feature | Entry point | Page |
 | --- | --- | --- |
 | Runnable SQL blocks | `duckfn-docs-kit/sql/remark` + the `<dfk-sql>` element | [Runnable SQL blocks](./runnable-sql.md) |
+| Mermaid diagrams | `duckfn-docs-kit/mermaid/remark` + the `<dfk-mermaid>` element | [Mermaid diagrams](./mermaid.md) |
 | Extension preloading | `duckfn-docs-kit/sql/extensions` | [Preloaded extensions](./preloaded-extensions.md) |
 | TOC collapse control | `duckfn-docs-kit/toc-toggle/plugin` | [TOC toggle](./toc-toggle.md) |
 | Home-page components | `duckfn-docs-kit` (the barrel) | [Home components](./home-components.md) |
@@ -44,6 +46,7 @@ import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
+import {remarkMermaid} from 'duckfn-docs-kit/mermaid/remark';
 import {DUCKFN_VERSION} from './duckfn-version';
 
 export default {
@@ -55,6 +58,7 @@ export default {
           remarkPlugins: [
             [remarkVersionPlaceholder, {version: DUCKFN_VERSION}],
             remarkRunnableSql,
+            remarkMermaid,
           ],
         },
       },

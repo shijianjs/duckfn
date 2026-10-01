@@ -1,8 +1,8 @@
-import type {IconifyIconHTMLElement} from 'iconify-icon';
 import type {RunnableSqlConfig} from './remark';
 import {DuckDBRuntime, type QueryResult} from './runtime';
 import {rendererFor, type RenderContext} from './renderers';
-import {mountSqlEditor, type SqlEditor} from './editor';
+import {mountCodeEditor, type CodeEditor} from '../codemirror';
+import {IconButton} from '../IconButton';
 import {sqlStyles} from './styles';
 import {el, HTMLElementBase} from '../dom';
 
@@ -204,7 +204,7 @@ export class DfkSql extends HTMLElementBase {
   };
 
   #resultHost: HTMLElement | null = null;
-  #editor: SqlEditor | null = null;
+  #editor: CodeEditor | null = null;
   #disposeResult: (() => void) | null = null;
 
   constructor() {
@@ -337,9 +337,14 @@ export class DfkSql extends HTMLElementBase {
     this.#mounting = true;
     this.#setEditorPending(true);
     try {
-      const editor = await mountSqlEditor(this.#editorHost, this.#currentSql, (value) => {
-        this.#currentSql = value;
-      });
+      const editor = await mountCodeEditor(
+        this.#editorHost,
+        this.#currentSql,
+        (value) => {
+          this.#currentSql = value;
+        },
+        {language: 'sql'},
+      );
       if (!this.isConnected) {
         // Disconnected while the CodeMirror modules were loading: nothing will
         // ever dispose this editor, so dispose it here.
@@ -567,46 +572,6 @@ export class DfkSql extends HTMLElementBase {
     if (this.#resultHost) {
       this.#resultHost.replaceChildren();
       this.#resultHost.hidden = true;
-    }
-  }
-}
-
-/**
- * A compact icon-only button with a hover tooltip, built once. The tooltip is
- * also the accessible name — an icon-only control has no text to fall back on.
- */
-class IconButton {
-  readonly root = el('button', {class: 'dfk-sql-icon-button', type: 'button'});
-  readonly #icon: IconifyIconHTMLElement = el('iconify-icon', {
-    class: 'dfk-sql-icon',
-    attrs: {'aria-hidden': 'true'},
-  });
-
-  constructor(icon: string, onClick: () => void) {
-    this.root.appendChild(this.#icon);
-    this.root.addEventListener('click', onClick);
-    this.setIcon(icon);
-  }
-
-  setIcon(icon: string): void {
-    this.#icon.setAttribute('icon', icon);
-  }
-
-  setLabel(text: string): void {
-    this.root.setAttribute('data-tip', text);
-    this.root.setAttribute('aria-label', text);
-  }
-
-  /** Marks a toggle as currently on (the wrap button). */
-  setOn(on: boolean): void {
-    this.root.classList.toggle('dfk-sql-icon-on', on);
-  }
-
-  setDisabled(disabled: boolean): void {
-    if (disabled) {
-      this.root.setAttribute('disabled', '');
-    } else {
-      this.root.removeAttribute('disabled');
     }
   }
 }

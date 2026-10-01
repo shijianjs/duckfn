@@ -109,6 +109,18 @@ SVG 与页面共享同一个文档，所有可能执行或导航的内容（scri
 SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260" height="100"><circle cx="50" cy="50" r="40" fill="#14459b"/><circle cx="120" cy="50" r="30" fill="#3d7bd6"/><text x="170" y="56" font-family="system-ui" font-size="16" fill="#181818">from SVG</text></svg>';
 ```
 
+## Mermaid 图（`show: "mermaid"`）
+
+`mermaid` 把该列的源码渲染成图，用的正是 ```` ```mermaid ```` 围栏产出的同一个
+`<dfk-mermaid>` 元素——所以一条查询也能画出图，而且读者顺带得到该元素的缩放、全屏、
+改源码与下载 SVG。与其它预览一样：每行一个页签，原始数据留在末尾的 `Table` 页签里。
+
+```sql {"type":"duckfn","show":"mermaid"}
+SELECT 'flowchart LR' || chr(10)
+  || '  A["一条 SELECT"] --> B["一个结果单元格"]' || chr(10)
+  || '  B --> C["一张图"]' AS diagram;
+```
+
 ## 加载扩展
 
 本站文档化的扩展在每一页预加载，所以这里的示例直接调用即可——预加载列表见
@@ -139,9 +151,9 @@ FROM range(40) t(i);
 | 字段 | 含义 |
 | --- | --- |
 | `type` | `"duckfn"`——标记该块可运行。必填。 |
-| `show` | `table`（默认）、`text`、`html`、`iframe`、`svg`。 |
+| `show` | `table`（默认）、`text`、`html`、`iframe`、`svg`、`mermaid`。 |
 | `expect` | `ok`（默认）或 `error`——文档站的 [SQL 测试](./sql-test.md) 对本块的要求；`error` 表示这是一个演示失败的块。 |
-| `field` | 放着标记的列，用于 `html` / `iframe` / `svg`。 |
+| `field` | 放着标记的列，用于 `html` / `iframe` / `svg` / `mermaid`。 |
 | `tab_name` | 标注每个预览页签的列。 |
 | `option.width` · `option.height` | 预览框的 CSS 长度。 |
 | `option.sandbox` | iframe 的 sandbox tokens，替换默认的 `allow-scripts`。 |

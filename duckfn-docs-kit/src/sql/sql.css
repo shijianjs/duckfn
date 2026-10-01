@@ -237,11 +237,13 @@ dfk-sql:not(:defined) {
 
 /* --- Icon buttons and their tooltips ------------------------------------- */
 
-/* The same rules (and the `[data-tip]` tooltip below) are declared in
-   `DfkSql.css`, because the buttons are split across the shadow boundary: the
-   code-block actions live in the shadow tree, the fullscreen toggle lives in
-   this light-DOM tab strip. Keep the two copies in sync. */
-.dfk-sql-icon-button {
+/* The class names are written by the shared `IconButton` widget
+   (`src/IconButton.ts`). The same rules (and the `[data-tip]` tooltip below) are
+   declared in `DfkSql.css` and `DfkMermaid.css`, because the buttons are split
+   across shadow boundaries: the code-block actions live in `<dfk-sql>`'s tree,
+   a diagram's cluster in `<dfk-mermaid>`'s, and the fullscreen toggle in this
+   light-DOM tab strip. Keep the copies in sync. */
+.dfk-icon-button {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -257,27 +259,27 @@ dfk-sql:not(:defined) {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.dfk-sql-icon-button:hover:not(:disabled),
-.dfk-sql-icon-button:focus-visible {
+.dfk-icon-button:hover:not(:disabled),
+.dfk-icon-button:focus-visible {
   background: var(--ifm-color-emphasis-200, #e6e6e6);
   color: var(--ifm-color-primary, #14459b);
 }
 
-.dfk-sql-icon-button:disabled {
+.dfk-icon-button:disabled {
   opacity: 0.45;
   cursor: progress;
 }
 
-.dfk-sql-icon-button[hidden] {
+.dfk-icon-button[hidden] {
   display: none;
 }
 
 /* A sticky state, e.g. the wrap toggle while wrapping is on. */
-.dfk-sql-icon-on {
+.dfk-icon-on {
   color: var(--ifm-color-primary, #14459b);
 }
 
-.dfk-sql-icon {
+.dfk-icon {
   font-size: 1rem;
 }
 

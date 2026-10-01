@@ -3,6 +3,7 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
+import {remarkMermaid} from 'duckfn-docs-kit/mermaid/remark';
 import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {DUCKFN_VERSION} from './duckfn-version';
@@ -56,12 +57,6 @@ const config: Config = {
 
   onBrokenLinks: 'throw',
 
-  // ```mermaid fences render as diagrams through the theme registered below —
-  // used for the flow diagrams in the architecture and getting-started pages.
-  markdown: {
-    mermaid: true,
-  },
-
   // GitHub Pages serves `<path>/index.html` at `<path>/`, and 301-redirects `<path>` to `<path>/`.
   // Keeping the slash in Docusaurus' own output means the sitemap, the canonical tags and every
   // internal link advertise the URL that answers 200 instead of a redirect hop — which is also what
@@ -91,10 +86,12 @@ const config: Config = {
     },
   },
 
-  // The classic preset already registers the search UI (see the note below), but
-  // Mermaid is not part of it: this theme is what turns ```mermaid fences into
-  // diagrams, and it follows the light/dark color mode on its own.
-  themes: ['@docusaurus/theme-mermaid'],
+  // The classic preset already registers the search UI (see the note below), and
+  // says nothing about mermaid: ```mermaid fences are turned into `<dfk-mermaid>`
+  // elements by the kit's `remarkMermaid` (in the docs `remarkPlugins` below),
+  // which is this site's whole mermaid integration. No `@docusaurus/theme-mermaid`
+  // and no swizzled component — the kit's element renders the diagram itself, and
+  // is the only place that knows about the dark-mode first-load fix.
 
   presets: [
     [
@@ -107,10 +104,15 @@ const config: Config = {
           // The plugin itself ships in duckfn-docs-kit for reuse by other
           // extension docs sites; the version value stays site-specific.
           // `remarkRunnableSql` turns ```sql {"type":"duckfn",…}``` blocks into
-          // `<dfk-sql>` runnable examples (also from the kit).
+          // `<dfk-sql>` runnable examples, and `remarkMermaid` turns ```mermaid
+          // fences into `<dfk-mermaid>` diagrams — both from the kit. The diagram
+          // element carries the kit's default palette (the `neo` look, redux
+          // colours per colour mode); `remarkMermaid({config: {…}})` overrides it
+          // for a site that wants its own.
           remarkPlugins: [
             [remarkVersionPlaceholder, {version: DUCKFN_VERSION}],
             remarkRunnableSql,
+            remarkMermaid,
           ],
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/shijianjs/duckfn/tree/main/docs/',
@@ -154,20 +156,6 @@ const config: Config = {
     docs: {
       sidebar: {
         hideable: true,
-      },
-    },
-    // Mermaid (`@docusaurus/theme-mermaid`, registered in `themes`): the `neo` look with the
-    // redux palette — `redux-color` in light mode, `redux-dark-color` in dark. The theme is per
-    // color mode (the theme component reads `theme[colorMode]` and re-initialises on a switch),
-    // while `look` has no light/dark counterpart and goes through `options`, which the theme
-    // spreads into `mermaid.initialize`.
-    mermaid: {
-      theme: {
-        light: 'redux-color',
-        dark: 'redux-dark-color',
-      },
-      options: {
-        look: 'neo',
       },
     },
     // Replace with your project's social card

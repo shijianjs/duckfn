@@ -1,11 +1,11 @@
 # duckfn-docs-kit
 
 Shared building blocks for [duckfn](https://github.com/shijianjs/duckfn)-family
-DuckDB extension documentation sites: runnable SQL blocks, extension preloading,
-a TOC collapse control, the home-page web components and the version-placeholder
-remark plugin. Each one is a self-contained entry point that a Docusaurus 3 site
-wires into its own config — the alternative is copying the same glue into every
-extension's docs site.
+DuckDB extension documentation sites: runnable SQL blocks, mermaid diagrams,
+extension preloading, a TOC collapse control, the home-page web components and
+the version-placeholder remark plugin. Each one is a self-contained entry point
+that a Docusaurus 3 site wires into its own config — the alternative is copying
+the same glue into every extension's docs site.
 
 Plain TypeScript over the native DOM: no React and no UI framework of its own.
 The components are retained-mode classes — they build their DOM once, expose
@@ -22,9 +22,10 @@ npm install duckfn-docs-kit
 
 | Import | Runs in | What it provides |
 | --- | --- | --- |
-| `duckfn-docs-kit` | browser | Home-page custom elements (`<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>`, `<dfk-sql>`), `registerDfkElements()` and the value types their setters accept |
+| `duckfn-docs-kit` | browser | Custom elements (`<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>`, `<dfk-sql>`, `<dfk-mermaid>`), `registerDfkElements()` and the value types their setters accept |
 | `duckfn-docs-kit/remark` | Node (build) | `remarkVersionPlaceholder`: replaces `{{DUCKFN_VERSION}}` inside `text` / `inlineCode` / `code` nodes |
 | `duckfn-docs-kit/sql/remark` | Node (build) | `remarkRunnableSql`: turns fenced `sql {"type":"duckfn",…}` blocks into `<dfk-sql>` elements |
+| `duckfn-docs-kit/mermaid/remark` | Node (build) | `remarkMermaid`: turns ```` ```mermaid ```` fences into `<dfk-mermaid>` diagrams |
 | `duckfn-docs-kit/sql/extensions` | Node (build) | `dfkExtensions()` Docusaurus plugin: preloads a site's DuckDB extensions before the first block runs |
 | `duckfn-docs-kit/toc-toggle/plugin` | Node (build) | `dfkTocToggle()` Docusaurus plugin: adds the TOC collapse control |
 | `duckfn-docs-kit/toc-toggle/TocToggle` | browser | The TOC collapse class, for a site that drives it itself |
@@ -43,6 +44,7 @@ import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
+import {remarkMermaid} from 'duckfn-docs-kit/mermaid/remark';
 import {DUCKFN_VERSION} from './duckfn-version';
 
 export default {
@@ -54,6 +56,8 @@ export default {
           remarkPlugins: [
             [remarkVersionPlaceholder, {version: DUCKFN_VERSION}],
             remarkRunnableSql,
+            // ```mermaid fences become diagrams; no @docusaurus/theme-mermaid.
+            remarkMermaid,
           ],
         },
       },

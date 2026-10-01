@@ -36,8 +36,13 @@ export interface RunnableSqlConfig {
    *
    * `html` and `iframe` are the same renderer: both sandbox the markup in an
    * iframe, so scripts run with an opaque origin.
+   *
+   * `mermaid` renders the column's mermaid source as a diagram through
+   * `<dfk-mermaid>` (the same element a ```mermaid fence produces), so the result
+   * gets the element's zoom, fullscreen, source editing and SVG download for
+   * free.
    */
-  show?: 'table' | 'html' | 'iframe' | 'svg' | 'text';
+  show?: 'table' | 'html' | 'iframe' | 'svg' | 'text' | 'mermaid';
   /**
    * What this block is expected to do when the docs' own SQL test suite runs it
    * (`duckfn-docs-kit/sql/verify`). Defaults to `'ok'`; `'error'` marks a block

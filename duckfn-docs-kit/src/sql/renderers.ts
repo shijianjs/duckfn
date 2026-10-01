@@ -9,6 +9,8 @@ import {el} from '../dom';
  *
  * The registry is the seam later phases plug into. It ships `table` (VisActor
  * VTable), a `text` fallback, the markup previews `iframe` / `html` / `svg`,
+ * `mermaid` (which hands the cell to the kit's own `<dfk-mermaid>` element, so a
+ * query can produce a diagram the reader can zoom, expand, edit and download),
  * plus the `error` view every renderer shares.
  *
  * Heavy dependencies (`@visactor/vtable`) load through dynamic `import()`
@@ -808,8 +810,11 @@ function applyPreviewSize(node: HTMLElement, config: RunnableSqlConfig): void {
   }
 }
 
+/** How a preview panel is filled for one row of the result. */
+type PreviewKind = 'iframe' | 'svg' | 'mermaid';
+
 function mountPreviewPanel(
-  kind: 'iframe' | 'svg',
+  kind: PreviewKind,
   panel: HTMLElement,
   value: unknown,
   label: string,
@@ -834,6 +839,20 @@ function mountPreviewPanel(
     return;
   }
 
+  if (kind === 'mermaid') {
+    // The cell is handed to the kit's own diagram element rather than rendered
+    // here: `<dfk-mermaid>` loads mermaid through the page-wide render queue and
+    // brings the zoom / fullscreen / edit / download chrome with it. A `mermaid`
+    // result and a ```mermaid fence therefore behave identically, and there is
+    // one place that knows about the dark-mode-first-load fix.
+    //
+    // The source travels as an attribute (the element's attribute seed) rather
+    // than through a setter, so this works whether or not the element has been
+    // upgraded yet: an attribute set before insertion is read at upgrade time.
+    panel.appendChild(el('dfk-mermaid', {attrs: {source: markup}}));
+    return;
+  }
+
   const svg = parseSvgMarkup(panel.ownerDocument, markup);
   if (!svg) {
     // Not SVG: show the markup as text rather than an empty panel.
@@ -848,9 +867,10 @@ function mountPreviewPanel(
 
 /**
  * Builds a preview renderer: one tab per row, then the raw rows in the trailing
- * `Table` tab. `iframe` and `svg` share everything except how a panel is filled.
+ * `Table` tab. `iframe`, `svg` and `mermaid` share everything except how a panel
+ * is filled.
  */
-function previewRenderer(kind: 'iframe' | 'svg'): Renderer {
+function previewRenderer(kind: PreviewKind): Renderer {
   return async ({host, config, labels, fullscreenButton}, result) => {
     const field = resolveField(config, result);
     if (!field) {
@@ -900,6 +920,7 @@ const registry: Record<string, Renderer> = {
   // `html` is the historical spelling of the same renderer; both stay valid.
   html: previewRenderer('iframe'),
   svg: previewRenderer('svg'),
+  mermaid: previewRenderer('mermaid'),
 };
 
 /**

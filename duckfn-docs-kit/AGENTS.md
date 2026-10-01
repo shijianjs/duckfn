@@ -16,10 +16,10 @@ Read it before writing runnable SQL blocks or configuring preloads.
    examples in one block means the reader sees one result and the others silently vanish. One
    example per block; several statements only for a preamble (`SET`, `CREATE`, …) that the last
    query needs.
-2. **`show: "html"` / `"iframe"` / `"svg"` need to be told which column holds the markup.** With more
-   than one result column you **must** name it: `"field": "<column>"`. Without it the renderer has
-   nothing to preview. `"tab_name"` names the column that labels each preview tab, and without it
-   tabs read `Row 1`, `Row 2`, …
+2. **`show: "html"` / `"iframe"` / `"svg"` / `"mermaid"` need to be told which column holds the
+   markup.** With more than one result column you **must** name it: `"field": "<column>"`. Without
+   it the renderer has nothing to preview. `"tab_name"` names the column that labels each preview
+   tab, and without it tabs read `Row 1`, `Row 2`, …
 3. **Only a block whose info string is JSON with `"type":"duckfn"` becomes runnable.** A bare
    ```` ```sql ```` block (or any other metastring) stays a plain, un-runnable code block — no Run
    button, nothing executed.
@@ -50,8 +50,8 @@ is compiled.
 | Field | Meaning |
 | --- | --- |
 | `type` | `"duckfn"`. Required — this is what makes the block runnable. |
-| `show` | `table` (default), `text`, `html`, `iframe`, `svg`. See *Result renderers*. |
-| `field` | The column holding the markup, for `html` / `iframe` / `svg`. Required when the result has more than one column. |
+| `show` | `table` (default), `text`, `html`, `iframe`, `svg`, `mermaid`. See *Result renderers*. |
+| `field` | The column holding the markup, for `html` / `iframe` / `svg` / `mermaid`. Required when the result has more than one column. |
 | `tab_name` | The column whose value labels each preview tab. Defaults to `Row N`. |
 | `option.width` · `option.height` | CSS lengths for the preview box (`"100%"`, `"640px"`). |
 | `option.sandbox` | Sandbox tokens for the iframe, replacing the default `allow-scripts`. Widen deliberately. |
@@ -84,6 +84,7 @@ is compiled.
 | `text` | A bare scalar, as one line. | A single column/row result. |
 | `html` / `iframe` | One tab per row; the markup goes into a sandboxed `iframe` (`srcdoc`), with a trailing `Table` tab that is always last. | `field` (unless the result has exactly one column). `tab_name` to label tabs. |
 | `svg` | The markup is spliced **into the page** (one tab per row, trailing `Table` tab). | Same as above. |
+| `mermaid` | The cell is handed to `<dfk-mermaid>`, so the reader gets a real diagram with zoom, fullscreen, source editing and SVG download. One tab per row, trailing `Table` tab. | Same as above. |
 
 Two facts worth knowing before you pick one:
 
@@ -130,15 +131,59 @@ SELECT '127.0.0.1'::INET::VARCHAR AS ip;
 ```
 ````
 
+A diagram built by a query (the same element a ```` ```mermaid ```` fence produces):
+
+````md
+```sql {"type":"duckfn","show":"mermaid"}
+SELECT 'flowchart LR' || chr(10)
+  || '  A["a SELECT"] --> B["one result cell"]' AS diagram;
+```
+````
+
 ### Mistakes to check for when reviewing a page
 
 - Several independent examples stacked in one block — only the last result is visible. **Split
   them into one block per example.**
-- `show: "html"` / `"iframe"` / `"svg"` with a multi-column result and no `field`.
+- `show: "html"` / `"iframe"` / `"svg"` / `"mermaid"` with a multi-column result and no `field`.
 - No `tab_name`, so the preview tabs read `Row 1`, `Row 2`, … instead of something meaningful.
 - A bare ```` ```sql ```` block where a runnable one was intended (it renders as a plain listing).
 - Declaring `extensions` for the extension the site already preloads.
 - A block that depends on a table created on a *different* page.
+
+## Mermaid diagrams (`remarkMermaid`)
+
+````ts
+// docusaurus.config.ts, in the docs preset's `remarkPlugins`
+remarkPlugins: [remarkMermaid],
+````
+
+A ```` ```mermaid ```` fence becomes a `<dfk-mermaid>` element that renders the diagram **in the
+browser** (mermaid is a lazy `import()`, so a page with no diagram never downloads it). Do **not**
+also install `@docusaurus/theme-mermaid` or list it in `themes`, and do not set `markdown.mermaid`:
+the kit's element replaces both, and two renderers on one page would fight.
+
+What the reader gets, in the element's top-right corner on hover: **reset zoom** (wheel zooms,
+dragging pans once zoomed), **fullscreen**, **edit the source** in a CodeMirror dialog, and
+**download SVG**.
+
+- **The palette is a site choice, not a page one.** The kit's default is the `neo` look with
+  `redux-color` / `redux-dark-color`; a site overrides it in its own config, which also keeps the
+  kit fork-free for downstream docs sites:
+
+  ````ts
+  remarkMermaid({config: {theme: {light: 'neutral', dark: 'dark'}, options: {look: 'classic'}}})
+  ````
+
+  `theme` is per colour mode (the element re-renders on a theme switch); `look` has no light/dark
+  counterpart and lives in `options`. Mermaid silently ignores a value it does not recognise, so
+  check a diagram in a browser — a build proves nothing here.
+- **Diagrams render per page, in the page's own colour mode** — read from `<html data-theme>` (the
+  attribute written before first paint), not from a framework hook. That is what keeps a dark-mode
+  first load from painting a light diagram and then a dark one.
+- **Labels**: keep them quoted (`A["text"]`), use `<br/>` for a line break, and avoid a bare `#` or
+  an unescaped `&`. A syntax error shows up in the page, not in the build.
+- A ```` ```mermaid ```` fence inside a longer fence (documenting it, as here) is *not* turned into
+  a diagram — it is text inside the outer code block.
 
 ## Preloading extensions (the `dfkExtensions` plugin)
 
@@ -215,8 +260,9 @@ file instead of every page. It only touches that exact placeholder — anything 
 
 ## Home-page components
 
-`<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>` (and `<dfk-sql>`) are registered by the barrel
-import (`duckfn-docs-kit`). The home components are **setter-driven and do not reflect attributes**:
+`<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>` (along with `<dfk-sql>` and `<dfk-mermaid>`,
+which the plugins generate) are registered by the barrel import (`duckfn-docs-kit`). The home
+components are **setter-driven and do not reflect attributes**:
 give them named setters (`setTitle`, `setTagline`, `setFeatures`, …), not markup content. They
 render into shadow roots, inherit `--duckfn-*` / `--ifm-*` CSS variables from the page, and are
 safe to call before the element is connected.
@@ -232,3 +278,5 @@ safe to call before the element is connected.
 | `LOAD` fails with a signature error | `allowUnsignedExtensions: true` missing for a third-party asset. |
 | A preloaded extension fails to load | The served file name's pre-dot part does not match the extension's entry symbol, or the platform does not match the runtime bundle. |
 | Only the last of several examples shows a result | That is the contract — split the block. |
+| A ```` ```mermaid ```` fence renders as a plain code block | `remarkMermaid` is not in the docs preset's `remarkPlugins`; and if `@docusaurus/theme-mermaid` is still installed, remove it and `markdown.mermaid`. |
+| A diagram is blank, or shows a message instead | The mermaid source does not parse — the message carries mermaid's own error text. |

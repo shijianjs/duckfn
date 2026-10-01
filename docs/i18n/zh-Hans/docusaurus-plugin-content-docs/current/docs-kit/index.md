@@ -7,9 +7,9 @@ description: duckfn-docs-kit 是什么、包含哪些能力，以及文档站怎
 
 # 总览
 
-`duckfn-docs-kit` 是本文档站的共享基础库：可运行 SQL 块、扩展预加载、TOC 折叠控件、
-首页 Web 组件与版本占位符——凡是可以从 duckfn 系扩展文档站里沉淀、不该被复制的部分，
-都在这里，各自作为独立入口，由站点接进自己的 Docusaurus 配置。
+`duckfn-docs-kit` 是本文档站的共享基础库：可运行 SQL 块、Mermaid 图、扩展预加载、
+TOC 折叠控件、首页 Web 组件与版本占位符——凡是可以从 duckfn 系扩展文档站里沉淀、
+不该被复制的部分，都在这里，各自作为独立入口，由站点接进自己的 Docusaurus 配置。
 
 本包用 TypeScript 直接封装浏览器原生 DOM（自身不依赖 React，也不引入任何 UI 框架），
 面向其它扩展文档站的复用而维护，已发布到 npm
@@ -21,6 +21,7 @@ description: duckfn-docs-kit 是什么、包含哪些能力，以及文档站怎
 | 能力 | 入口 | 页面 |
 | --- | --- | --- |
 | 可运行 SQL 块 | `duckfn-docs-kit/sql/remark` + `<dfk-sql>` 元素 | [可运行 SQL 块](./runnable-sql.md) |
+| Mermaid 图 | `duckfn-docs-kit/mermaid/remark` + `<dfk-mermaid>` 元素 | [Mermaid 图](./mermaid.md) |
 | 扩展预加载 | `duckfn-docs-kit/sql/extensions` | [扩展预加载](./preloaded-extensions.md) |
 | TOC 折叠控件 | `duckfn-docs-kit/toc-toggle/plugin` | [TOC 折叠](./toc-toggle.md) |
 | 首页组件 | `duckfn-docs-kit`（桶文件） | [首页组件](./home-components.md) |
@@ -39,6 +40,7 @@ import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
+import {remarkMermaid} from 'duckfn-docs-kit/mermaid/remark';
 import {DUCKFN_VERSION} from './duckfn-version';
 
 export default {
@@ -50,6 +52,7 @@ export default {
           remarkPlugins: [
             [remarkVersionPlaceholder, {version: DUCKFN_VERSION}],
             remarkRunnableSql,
+            remarkMermaid,
           ],
         },
       },

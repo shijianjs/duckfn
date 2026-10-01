@@ -124,6 +124,20 @@ page, anything that could execute or navigate (scripts, `foreignObject`,
 SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260" height="100"><circle cx="50" cy="50" r="40" fill="#14459b"/><circle cx="120" cy="50" r="30" fill="#3d7bd6"/><text x="170" y="56" font-family="system-ui" font-size="16" fill="#181818">from SVG</text></svg>';
 ```
 
+## Mermaid diagrams (`show: "mermaid"`)
+
+`mermaid` renders the column's source as a diagram, through the very same
+`<dfk-mermaid>` element a ```` ```mermaid ```` fence produces — so a query can
+build a diagram, and the reader gets the element's zoom, fullscreen, source
+editing and SVG download with it. As with the other previews, there is one tab
+per row and the raw rows stay in the trailing `Table` tab.
+
+```sql {"type":"duckfn","show":"mermaid"}
+SELECT 'flowchart LR' || chr(10)
+  || '  A["a SELECT"] --> B["one result cell"]' || chr(10)
+  || '  B --> C["a diagram"]' AS diagram;
+```
+
 ## Loading extensions
 
 The extension this site documents is preloaded on every page, so the examples
@@ -160,9 +174,9 @@ FROM range(40) t(i);
 | Field | Meaning |
 | --- | --- |
 | `type` | `"duckfn"` — marks the block as runnable. Required. |
-| `show` | `table` (default), `text`, `html`, `iframe`, `svg`. |
+| `show` | `table` (default), `text`, `html`, `iframe`, `svg`, `mermaid`. |
 | `expect` | `ok` (default) or `error` — what the docs' [SQL test](./sql-test.md) requires of this block; `error` marks one that demonstrates a failure. |
-| `field` | Column holding the markup, for `html` / `iframe` / `svg`. |
+| `field` | Column holding the markup, for `html` / `iframe` / `svg` / `mermaid`. |
 | `tab_name` | Column labelling each preview tab. |
 | `option.width` · `option.height` | CSS lengths for the preview box. |
 | `option.sandbox` | Sandbox tokens for the iframe, replacing `allow-scripts`. |

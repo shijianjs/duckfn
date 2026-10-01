@@ -1,7 +1,14 @@
 import type {HTMLAttributes} from 'react';
+// Imported as well as re-exported: the `HTMLElementTagNameMap` augmentation below
+// names the classes, and a module augmentation can only refer to local bindings.
+import {DfkFeatures} from './home/DfkFeatures';
+import {DfkHero} from './home/DfkHero';
+import {DfkMermaid} from './mermaid/DfkMermaid';
+import {DfkNextSteps} from './home/DfkNextSteps';
+import {DfkSql} from './sql/DfkSql';
 
 /**
- * Browser entry for duckfn-docs-kit: the home-page custom elements and the
+ * Browser entry for duckfn-docs-kit: the custom elements it registers and the
  * value types their `set*` methods accept.
  *
  * The components are retained-mode (build once, then mutate held nodes) and
@@ -13,17 +20,16 @@ import type {HTMLAttributes} from 'react';
  * web component, which `registerDfkElements()` registers as a side effect, so
  * this package ships no icon data.
  *
- * `TocToggle` and the remark plugin keep their own subpaths
- * (`duckfn-docs-kit/toc-toggle/TocToggle`, `duckfn-docs-kit/remark`) instead of
+ * `TocToggle` and the remark plugins keep their own subpaths
+ * (`duckfn-docs-kit/toc-toggle/TocToggle`, `duckfn-docs-kit/remark`,
+ * `duckfn-docs-kit/sql/remark`, `duckfn-docs-kit/mermaid/remark`) instead of
  * being merged here: a Docusaurus config file must never pull browser code into
  * Node, and a site that only wants the TOC collapse button should not pay for
  * the bundled `iconify-icon`.
  */
-export {DfkFeatures} from './home/DfkFeatures';
-export {DfkHero} from './home/DfkHero';
-export {DfkNextSteps} from './home/DfkNextSteps';
-export {DfkSql} from './sql/DfkSql';
+export {DfkFeatures, DfkHero, DfkMermaid, DfkNextSteps, DfkSql};
 export {registerDfkElements} from './register';
+export type {DfkMermaidConfig, DfkMermaidConfigInput} from './mermaid/config';
 export type {RunnableSqlConfig} from './sql/remark';
 export type {
   FeatureItem,
@@ -47,6 +53,23 @@ export type {
  */
 export type DfkElementProps = HTMLAttributes<HTMLElement>;
 
+/**
+ * The kit's tags in the DOM's own tag map, so `document.createElement('dfk-sql')`
+ * (and the kit's `el()` helper) is typed as the class it upgrades to. Without
+ * this, every place that builds a `dfk-*` element from scratch — `sql/renderers.ts`
+ * building a `<dfk-mermaid>` for a `mermaid` result, `docs/src/pages/index.tsx`
+ * mounting the home elements — would have to cast the result.
+ */
+declare global {
+  interface HTMLElementTagNameMap {
+    'dfk-hero': DfkHero;
+    'dfk-features': DfkFeatures;
+    'dfk-next-steps': DfkNextSteps;
+    'dfk-sql': DfkSql;
+    'dfk-mermaid': DfkMermaid;
+  }
+}
+
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
@@ -54,6 +77,7 @@ declare module 'react' {
       'dfk-features': DfkElementProps;
       'dfk-next-steps': DfkElementProps;
       'dfk-sql': DfkElementProps;
+      'dfk-mermaid': DfkElementProps;
     }
   }
 }

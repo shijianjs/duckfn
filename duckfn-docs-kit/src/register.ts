@@ -4,6 +4,7 @@
 import 'iconify-icon';
 import {DfkFeatures} from './home/DfkFeatures';
 import {DfkHero} from './home/DfkHero';
+import {DfkMermaid} from './mermaid/DfkMermaid';
 import {DfkNextSteps} from './home/DfkNextSteps';
 import {DfkSql} from './sql/DfkSql';
 
@@ -12,6 +13,7 @@ const TAGS = {
   features: 'dfk-features',
   nextSteps: 'dfk-next-steps',
   sql: 'dfk-sql',
+  mermaid: 'dfk-mermaid',
 } as const;
 
 /**
@@ -31,6 +33,7 @@ export function registerDfkElements(): void {
     [TAGS.features]: DfkFeatures,
     [TAGS.nextSteps]: DfkNextSteps,
     [TAGS.sql]: DfkSql,
+    [TAGS.mermaid]: DfkMermaid,
   })) {
     if (!customElements.get(name)) {
       customElements.define(name, ctor);

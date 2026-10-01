@@ -159,10 +159,13 @@
 
 /* --- Icon buttons and their tooltips ------------------------------------- */
 
-/* Duplicated in `sql.css`: these buttons live in this shadow tree, while the
-   fullscreen toggle a renderer parks in the result's tab strip lives in the
-   light DOM, where a shadow rule could not reach it. Keep both copies in sync. */
-.dfk-sql-icon-button {
+/* The class names are written by the shared `IconButton` widget (`src/IconButton.ts`).
+   The rules are duplicated in `sql.css` and `DfkMermaid.css`: these buttons live
+   in this shadow tree, the fullscreen toggle a renderer parks in the result's tab
+   strip lives in the light DOM, and a diagram's cluster lives in another shadow
+   tree entirely — a shadow rule can only ever reach one of the three. Keep the
+   copies in sync. */
+.dfk-icon-button {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -178,27 +181,27 @@
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.dfk-sql-icon-button:hover:not(:disabled),
-.dfk-sql-icon-button:focus-visible {
+.dfk-icon-button:hover:not(:disabled),
+.dfk-icon-button:focus-visible {
   background: var(--ifm-color-emphasis-200, #e6e6e6);
   color: var(--ifm-color-primary, #14459b);
 }
 
-.dfk-sql-icon-button:disabled {
+.dfk-icon-button:disabled {
   opacity: 0.45;
   cursor: progress;
 }
 
-.dfk-sql-icon-button[hidden] {
+.dfk-icon-button[hidden] {
   display: none;
 }
 
 /* A sticky state, e.g. the wrap toggle while wrapping is on. */
-.dfk-sql-icon-on {
+.dfk-icon-on {
   color: var(--ifm-color-primary, #14459b);
 }
 
-.dfk-sql-icon {
+.dfk-icon {
   font-size: 1rem;
 }
 

@@ -115,17 +115,21 @@ Two more things worth knowing: `onBrokenLinks` is `throw`, so every internal lin
 resolve (in both locales), and code fences should use one of the languages enabled for Prism in
 `docusaurus.config.ts` — `bash`, `rust`, `sql` or `toml`.
 
-**Mermaid.** A ```` ```mermaid ```` fence renders a diagram through `@docusaurus/theme-mermaid`
-(registered in `themes`, with `markdown.mermaid: true`). The look and the palette come from
-`themeConfig.mermaid`: `options.look: 'neo'`, and `theme: {light: 'redux-color', dark:
-'redux-dark-color'}`. That `theme` has to be the `{light, dark}` object — the component reads
-`theme[colorMode]` and re-initialises on a mode switch — while `look` has no per-mode variant and
-goes through `options`, which is spread into `mermaid.initialize`. Both settings are easy to get
-wrong silently: Mermaid ignores an unrecognised value and falls back, so after changing them check a
-diagram in a browser rather than trusting `npm run build` (`node` elements carry `data-look="neo"`,
-which is the quick way to confirm the look). Diagrams render on the client, so a syntax error shows
-up in the page rather than failing the build. Keep labels quoted (`A["text"]`) and use `<br/>` for
-line breaks; avoid `#` and unescaped `&` in labels.
+**Mermaid.** A ```` ```mermaid ```` fence renders a diagram through the kit's `<dfk-mermaid>` element,
+wired up by `remarkMermaid` in the docs preset's `remarkPlugins`. `@docusaurus/theme-mermaid` is
+deliberately **not** installed and `markdown.mermaid` is not set — the element replaces both, and
+two renderers on one page would fight (see [`duckfn-docs-kit/CONVENTIONS.md`](../duckfn-docs-kit/CONVENTIONS.md),
+*Mermaid*). The look and the palette come from the kit's default — `options.look: 'neo'`, `theme:
+{light: 'redux-color', dark: 'redux-dark-color'}` — and this site does not override them; a site that
+wants its own passes `remarkMermaid({config: {theme:…, options:…}})`. That `theme` has to be the
+`{light, dark}` object (the element re-renders on a mode switch) while `look` has no per-mode variant
+and goes through `options`. Both settings are easy to get wrong silently: mermaid ignores an
+unrecognised value and falls back, so after changing them check a diagram in a browser rather than
+trusting `npm run build` (`node` elements carry `data-look="neo"`, which is the quick way to confirm
+the look). Diagrams render on the client, so a syntax error shows up in the page rather than failing
+the build. Keep labels quoted (`A["text"]`) and use `<br/>` for line breaks; avoid `#` and
+unescaped `&` in labels. Each diagram carries reset-zoom, fullscreen, source-editing and
+download-SVG buttons in its top-right corner on hover.
 
 **Prefer `.md`.** In Docusaurus 3 both formats go through the same MDX pipeline,
 and the kit's runnable blocks need no MDX feature — so the tree sticks to `.md`

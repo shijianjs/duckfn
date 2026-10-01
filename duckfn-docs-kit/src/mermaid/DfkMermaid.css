@@ -1,0 +1,274 @@
+/* Shadow-root styles for `<dfk-mermaid>`: the diagram viewport, the action
+   cluster floating in its top-right corner, and the source-editing dialog.
+
+   Theme colours arrive through the inherited `--ifm-*` custom properties;
+   box-sizing must be re-declared here because the host page's universal reset
+   does not cross the shadow boundary. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:host {
+  display: block;
+  margin: 1rem 0;
+}
+
+.dfk-mermaid-canvas {
+  position: relative;
+}
+
+/* The zoom/pan viewport. Panzoom transforms `.dfk-mermaid-content` *inside* this
+   box, so the overflow stays clipped here rather than spilling over the page —
+   `overflow: hidden` is also what panzoom expects of a pan element's parent. */
+.dfk-mermaid-viewport {
+  overflow: hidden;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  background: var(--ifm-background-surface-color, #fff);
+  padding: 0.75rem;
+}
+
+/* Mermaid sizes its own `<svg>` (`width="100%"` plus an inline `max-width`), so
+   nothing here fights that: the rules only centre it once the inline cap kicks
+   in, and give it a line box so the viewport has a height. */
+.dfk-mermaid-content > svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- Status line --------------------------------------------------------- */
+
+/* Doubles as the "still rendering" placeholder: the mermaid bundle is a lazy
+   `import()`, and this line is what the reader sees while it lands (or the error
+   message, if the source does not parse). It is the component's only
+   pre-render content — a diagram's height is unknowable before it renders, so
+   the alternative would be inventing a placeholder height that is wrong for
+   every diagram but one. */
+.dfk-mermaid-message {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-700, #666);
+}
+
+.dfk-mermaid-message:empty {
+  display: none;
+}
+
+.dfk-mermaid-message-error {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  color: var(--ifm-color-danger-contrast, #fff);
+  background: var(--ifm-color-danger, #d32f2f);
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  font-size: var(--ifm-code-font-size, 95%);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dfk-mermaid-canvas[hidden],
+.dfk-mermaid-message[hidden] {
+  display: none;
+}
+
+/* --- Floating actions ---------------------------------------------------- */
+
+/* Hover/focus-revealed, like the buttons on Docusaurus' own code blocks and the
+   ones on a runnable SQL block. The cluster is inert while hidden so an
+   invisible button is never a click target over the diagram. */
+.dfk-mermaid-actions {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: var(--ifm-global-radius, 0.3rem);
+  background: var(--ifm-color-emphasis-100, #f5f5f5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.dfk-mermaid-canvas:hover .dfk-mermaid-actions,
+.dfk-mermaid-canvas:focus-within .dfk-mermaid-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* --- Icon buttons and their tooltips ------------------------------------- */
+
+/* The class names are written by the shared `IconButton` widget
+   (`src/IconButton.ts`); the same rules live in `DfkSql.css` and `sql.css`,
+   once per shadow tree they have to reach. Keep the copies in sync. */
+.dfk-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: transparent;
+  color: var(--ifm-color-emphasis-700, #666);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.dfk-icon-button:hover:not(:disabled),
+.dfk-icon-button:focus-visible {
+  background: var(--ifm-color-emphasis-200, #e6e6e6);
+  color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-icon-button:disabled {
+  opacity: 0.45;
+  cursor: progress;
+}
+
+.dfk-icon-button[hidden] {
+  display: none;
+}
+
+.dfk-icon {
+  font-size: 1rem;
+}
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 2;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: var(--ifm-color-emphasis-800, #333);
+  color: var(--ifm-color-emphasis-0, #fff);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+}
+
+/* --- Fullscreen ---------------------------------------------------------- */
+
+/* The whole canvas becomes a fixed overlay. `z-index` has to clear Docusaurus'
+   navbar and its own overlays. The background must be the *surface* colour, not
+   `--ifm-background-color`: a site may legitimately define the latter as
+   `transparent` (this repository's docs site does), which would leave the
+   overlay see-through with the page showing underneath. */
+.dfk-mermaid-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  background: var(--ifm-background-surface-color, #fff);
+}
+
+.dfk-mermaid-expanded .dfk-mermaid-viewport {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+}
+
+/* --- Source dialog ------------------------------------------------------- */
+
+.dfk-mermaid-dialog {
+  width: min(56rem, 92vw);
+  max-width: none;
+  padding: 0;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  background: var(--ifm-background-surface-color, #fff);
+  color: var(--ifm-font-color-base, #181818);
+}
+
+.dfk-mermaid-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.dfk-mermaid-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.dfk-mermaid-dialog-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* CodeMirror mounts here, inside the shadow tree, so style-mod puts its base
+   theme in the same root the `.cm-*` rules are needed in (`src/codemirror.ts`).
+   The content inset is CodeMirror's own (`padding: 4px 0`) and is left alone —
+   see the note in `DfkSql.css` about `ViewState.measure()`. */
+.dfk-mermaid-dialog-editor {
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  overflow: hidden;
+  background: var(--ifm-background-surface-color, #fff);
+  font-size: var(--ifm-code-font-size, 95%);
+}
+
+.dfk-mermaid-dialog-editor .cm-editor {
+  outline: none;
+}
+
+.dfk-mermaid-dialog-editor .cm-scroller {
+  max-height: 55vh;
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  line-height: 1.6;
+}
+
+.dfk-mermaid-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.dfk-mermaid-dialog-button {
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: var(--ifm-background-surface-color, #fff);
+  color: var(--ifm-font-color-base, #181818);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dfk-mermaid-dialog-button:hover {
+  border-color: var(--ifm-color-primary, #14459b);
+  color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-mermaid-dialog-apply {
+  border-color: var(--ifm-color-primary, #14459b);
+  background: var(--ifm-color-primary, #14459b);
+  color: var(--ifm-button-color, #fff);
+}
+
+.dfk-mermaid-dialog-apply:hover {
+  color: var(--ifm-button-color, #fff);
+  filter: brightness(1.1);
+}

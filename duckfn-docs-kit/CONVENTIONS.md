@@ -42,7 +42,7 @@ src/
 │                    #   + client.ts / plugin.ts（胶水：插件把 client 注入每个页面）
 ├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow：编辑器
 │                    #   + 悬浮图标按钮）+ sql.css（light-DOM 结果区，见第 9 条）
-│                    #   + runtime.ts（DuckDB-Wasm 单例）+ editor.ts / renderers.ts
+│                    #   + runtime.ts（DuckDB-Wasm 单例）+ renderers.ts
 │                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
 │                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
 │                    #     （两侧共享的注入配置契约，见「扩展预加载」）
@@ -50,9 +50,16 @@ src/
 │                    #     `duckfn-sql-verify` 命令）+ browserRunner.ts / harness.ts
 │                    #     （浏览器：Playwright/playwright-core 驱系统浏览器跑块；harness 是给它的页面）
 │                    #   + client.ts（dfk-* 元素注册，插件注入到每个页面）
+├── mermaid/         # Mermaid 图：DfkMermaid.ts + DfkMermaid.css/styles.ts（shadow：
+│                    #   图 + 悬浮图标按钮 + 源码编辑对话框）+ render.ts（mermaid
+│                    #   单例加载、全页渲染队列、配色契约、SVG 解析）
+│                    #   + config.ts（两侧共享的配色契约）+ remark.ts（Node：```mermaid
+│                    #   围栏 → <dfk-mermaid>）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
+├── codemirror.ts    # CodeMirror 挂载（SQL 编辑器与 mermaid 源码编辑器共用）
+├── IconButton.ts    # 悬浮图标按钮小部件（sql / mermaid 两处共用）
 ├── index.ts         # 浏览器桶文件
 ├── register.ts      # customElements 注册
 ├── remark.ts        # Node 构建期 remark 插件
@@ -70,7 +77,8 @@ src/
 - 构建：Vite lib 模式产出 ESM（`dist/`），`tsc -p tsconfig.build.json` 产出
   `.d.ts`。`npm run build` 一步完成。全局 CSS（`theme/tokens.css`、
   `toc-toggle/TocToggle.css`）不经构建、作为源文件直接导出；组件自己的
-  `home/home.css` 由 `home/styles.ts` 以 `?inline` 内联进 bundle（见第 9 条）。
+  `home/home.css` / `sql/DfkSql.css` / `mermaid/DfkMermaid.css` 由各自目录下的
+  `styles.ts` 以 `?inline` 内联进 bundle（见第 9 条）。
 - **package.json 与业务解耦（硬性要求）**：`exports` 只有三条**永远不改**的规则
   —— `.`（主入口）、`./src/*`（源文件直出，CSS 走这里）、`./*`（通配，
   `dist/` 下任何产物自动成为可导入子路径）。新增 / 移动 / 重命名模块**一律不碰
@@ -82,6 +90,7 @@ src/
   - `duckfn-docs-kit/toc-toggle/TocToggle`（浏览器：TOC 折叠类）
   - `duckfn-docs-kit/remark`（**Node 构建期**：版本占位符 remark 插件）
   - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
+  - `duckfn-docs-kit/mermaid/remark`（**Node 构建期**：```mermaid 围栏 → `<dfk-mermaid>`）
   - `duckfn-docs-kit/sql/extensions`（**Node 构建期**：扩展预加载 Docusaurus 插件）
   - `duckfn-docs-kit/sql/verify`（**Node 运行期**：文档站 SQL 测试的入口与 CLI；
     `sql/collect`（收集）与 `sql/browserRunner`（用 playwright-core 驱浏览器跑块）是它的两半；
@@ -338,6 +347,61 @@ src/
 - 故意失败的块在 meta 里声明 `"expect": "error"`（`expectsError(config)` 读它，默认 `ok`）：
   期望是数据，不能靠对注释做字符串匹配；校验**双向** —— 声明会失败却跑成功同样要报出来。
 
+### Mermaid 图（`mermaid/`）
+
+`mermaid/` 是 **`@docusaurus/theme-mermaid` 的替代品**，不是它的补充：站点既不装那个主题、也不开
+`markdown.mermaid`，```mermaid 围栏由 `remark.ts`（构建期）改写成 `<dfk-mermaid>`，图由 `DfkMermaid.ts`
+在浏览器里画。这样做的原因是上游主题组件**结构上**避不开两个缺陷（`facebook/docusaurus#8357`，
+指向 `mermaid-js/mermaid#3577`）：
+
+1. **暗色首屏闪白 / 偶发空图**。上游用 `useColorMode()` 取配色，而它在客户端首帧**故意滞后**
+   （state 在 effect 里初始化，避免 hydration mismatch）：暗色首次加载会先按亮色画一遍、再按暗色画
+   一遍 —— 亮色那份会短暂显示（闪白），两份又在 mermaid 的可变单例里重叠，可能解析出空 SVG
+   （空容器、不报错），而且**无法从 `docusaurus.config.ts` 或图源里修**。
+2. **并发渲染**。mermaid 是一个可变单例（`initialize()` 设的是全局配置），同时画两张图会互相踩。
+
+`render.ts` 因此做三件事，都是硬性契约：
+
+- **配色只读 `<html data-theme>`**（`<head>` 内联脚本在首帧前写好的那个属性），不再有「未知模式」的
+  窗口；`watchColorMode()` 用 MutationObserver 跟随主题切换，切换时**重新渲染**（每个模式各一次）。
+- **全页单队列**：`renderMermaid()` 把 `initialize()` + `render()` 串成一条 promise 链，任何时刻只有
+  一张图在画，失败的任务不会毒化队列。
+- **`theme` 是每模式一项、`look` 在 `options` 里**（`config.ts`）：mermaid 对不认识的取值**静默回退**，
+  所以改配色只能在浏览器里验证，构建通过说明不了什么。默认 `{light: 'redux-color', dark:
+  'redux-dark-color'}` + `look: 'neo'`；站点用自己的值经 `remarkMermaid({config})` 覆盖，值随
+  `config` 属性挂在每个元素上（元素缺省时回落到 kit 默认）—— 这样下游换配色不用 fork kit。
+- **SVG 用 `DOMParser('text/html')` 取 `<svg>` 再 `importNode`**，不是 `image/svg+xml`：mermaid 是用
+  `innerHTML` 序列化的（HTML 标签里可以出现裸 `<br>`），严格 XML 解析会失败；这条路也避开
+  `innerHTML`（第 1 条）。
+
+界面契约（`DfkMermaid.ts`）：
+
+- **每个图一个 shadow root，图本身也在里面**：mermaid 会在每个 SVG 内部塞一份 `<style>`，一个 shadow
+  树一份才能把它框在这一个组件里（塞进同一棵树的两张图会互相染色，落进 light DOM 则会污染页面）。
+  light DOM 因此**恒为空**（连子节点都没有：源走 `source` 属性，不走 slot），
+  是第 11 条最干净的一种。
+- **整棵子树只在渲染时整体替换**（`#content.replaceChildren(svg)`）：这是第 4 条允许的「确实需要整体
+  更新的局部集合」—— 一次渲染就是一份新文档，与一次查询结果同性质；除此之外全部是字段持有的节点，
+  没有重整棵树的入口。
+- **内容入口只有属性种子**（第 5 条例外）：`source` / `config` 在 `connectedCallback()` 各读一次。两个
+  产生方（remark 插件、可运行 SQL 的 `mermaid` 渲染器）都没有 React 挂载点可挂 setter；读取时**只在
+  属性真的存在时**才赋值，所以调用方在插入前 `setAttribute` 也成立（元素在 `createElement` 后插入时
+  upgrade，`connectedCallback` 才读）。
+- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，不改 SVG 本身 —— 所以「下载 SVG」给的就是
+  mermaid 原样产出的那份）。`panOnlyWhenZoomed: true` + `touchAction: 'pan-y'` 是刻意的取舍：图没放大
+  时不吞拖拽、页面照常滚，放大后拖拽才接管。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
+- **全屏是 canvas 上的一个类**（`position: fixed`），Esc 与按钮都能退出；背景用
+  `--ifm-background-surface-color`，理由同 SQL 结果区（站点可以把 `--ifm-background-color` 声明成
+  `transparent`）。
+- **源码编辑对话框**用 `<dialog>` + 共享的 `codemirror.ts`（无语言，mermaid 没有一等公民语法高亮）。
+  对话框**先 `showModal()` 再挂编辑器**：CodeMirror 构造时要量容器，`display: none` 量出来是 0。
+- 图标按钮的相对定位/提示规则在 `DfkMermaid.css`、`DfkSql.css`、`sql.css` **各一份**，因为三者分处
+  不同的树（两个 shadow root + light DOM）；类名由共用的 `IconButton.ts` 写出（`dfk-icon-button` /
+  `dfk-icon`），改规则要三处一起改。
+
+**可运行 SQL 的 `mermaid` 输出格式**（`sql/renderers.ts`）复用同一个元素：面板里放一个
+`<dfk-mermaid source="…">`，于是查询结果与 ```mermaid 围栏行为完全一致，kit 里只有一处知道首屏修复。
+
 ## 代码风格（硬性要求）
 
 这些规则是本包存在的意义所在，评审时逐条对照。
@@ -491,7 +555,9 @@ features.setFeatures(items);
   去调 setter —— 内容只能来自 `config` / `sql` 两个字符串属性。因此它在
   `connectedCallback()` 里 `getAttribute` **各读一次**作初始种子。这与「不做
   attribute reflection」不冲突：读一次用于初始化，不是 attribute 变化再驱动
-  重渲染，仍是保留模式。新增同类「由构建期插件生成、无 React 挂载点」的元素
+  重渲染，仍是保留模式。`<dfk-mermaid>` 套用同一条例外（`source` / `config`
+  两个属性），而且它的两个产生方**都不是**手写 JSX：remark 插件，以及可运行 SQL
+  的 `mermaid` 渲染器。新增同类「由构建期插件生成、无 React 挂载点」的元素
   才可套用此例外，手写 JSX 的元素仍走 setter。
 
 ### 6. 生命周期：构造函数建树 + 挂 shadow root
@@ -593,6 +659,10 @@ CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其
 shadow root，light DOM 唯一的节点（结果容器）只在**用户点「执行」之后**才创建，
 hydration 早已完成。
 
+`<dfk-mermaid>` 是**纯 shadow**、没有例外：图、按钮、源码对话框都在 shadow 树里。这既是
+因为它不需要复用宿主的任何规则，也因为 mermaid 的 SVG 自带一份 `<style>`，必须框在一个
+shadow root 里（见「Mermaid 图」）。
+
 ### 10. SSR 安全
 
 Docusaurus 预渲染在 Node 里 import 本包。
@@ -608,9 +678,15 @@ Docusaurus 预渲染在 Node 里 import 本包。
   才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
   `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
-- Node 侧模块只有 `src/remark.ts`、`src/sql/remark.ts`、`src/sql/extensions.ts`（构建期）
+- Node 侧模块只有 `src/remark.ts`、`src/sql/remark.ts`、`src/mermaid/remark.ts`、
+  `src/sql/extensions.ts`（构建期）
   与 `src/sql/collect.ts`、`src/sql/browserRunner.ts`、`src/sql/verify.ts`（测试期），
-  连同无依赖的共享契约 `src/sql/runtimeConfig.ts`；它们都不得 import 任何浏览器模块。
+  连同无依赖的共享契约 `src/sql/runtimeConfig.ts`、`src/mermaid/config.ts`；它们都不得
+  import 任何浏览器模块。
+- **重依赖一律 `import()`**：mermaid 与 `@panzoom/panzoom` 只在浏览器里按需加载
+  （`mermaid/render.ts` 的 `loadMermaid()` / `loadPanzoom()`），`vite.config.ts` 把它们列为
+  external，让站点的打包器切出独立 chunk。`config.ts` 是两侧共享的纯数据，**不能** import
+  mermaid（哪怕只是取值列表）—— 主题名在 `render.ts` 里一次性窄化，见「Mermaid 图」。
 
 ### 11. React 19 自定义元素
 

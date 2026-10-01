@@ -40,6 +40,7 @@ export default defineConfig({
         'toc-toggle/plugin': src('toc-toggle/plugin.ts'),
         remark: src('remark.ts'),
         'sql/remark': src('sql/remark.ts'),
+        'mermaid/remark': src('mermaid/remark.ts'),
         'sql/client': src('sql/client.ts'),
         'sql/extensions': src('sql/extensions.ts'),
         // The browser-side test of a docs site's own examples: `collect` finds
@@ -78,6 +79,11 @@ export default defineConfig({
         // the library build — owns how the engine is loaded.
         /^@duckdb\/duckdb-wasm/,
         '@visactor/vtable',
+        // Mermaid and the pan/zoom controller behind `<dfk-mermaid>`: both are
+        // reached only through dynamic `import()`s, and staying external is what
+        // lets the site's bundler code-split them into their own chunks.
+        'mermaid',
+        '@panzoom/panzoom',
         'codemirror',
         '@codemirror/lang-sql',
         '@codemirror/view',
