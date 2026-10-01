@@ -166,6 +166,18 @@ What the reader gets, in the element's top-right corner on hover: **reset zoom**
 dragging pans once zoomed), **fullscreen**, **edit the source** in a CodeMirror dialog, and
 **download SVG**.
 
+- **The file is named after the section it sits in.** `1. Expansion.svg`, not
+  `mermaid-diagram.svg`, in a cascade that walks from the most specific source to the most general:
+  the diagram's own title (mermaid frontmatter, `---\ntitle: …\n---`) → the nearest heading above
+  it → the document title → `mermaid-diagram.svg`. So a diagram is best named by the heading it
+  lives under; give it a frontmatter `title:` when the heading is not the name you want. The name
+  goes through `filenamify`, so nothing a filesystem chokes on (`:`, `?`, `*`, `|`, …) reaches the
+  file.
+- **The diagram is inert until it is zoomed.** At fit the pointer is the browser's: the cursor is
+  the normal one (an I-beam over a label), and dragging selects text — the labels are still text,
+  and copying one should work. Zooming in is what turns the pointer into a `grab` hand and gives a
+  drag to panning; **Reset zoom** hands it back. There is no mode switch to remember.
+
 - **The palette is a site choice, not a page one.** The kit's default is the `neo` look with
   `redux-color` / `redux-dark-color`; a site overrides it in its own config, which also keeps the
   kit fork-free for downstream docs sites:

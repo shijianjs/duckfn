@@ -78,10 +78,31 @@ Hovering a diagram reveals four buttons in its top-right corner:
 
 | Button | What it does |
 | --- | --- |
-| Reset zoom | Back to fit. The wheel zooms and dragging pans, but panning only engages once the diagram is zoomed — so the page keeps scrolling normally over a diagram that fits. |
+| Reset zoom | Back to fit. The wheel zooms and dragging pans, but panning only engages once the diagram is zoomed — see below. |
 | Fullscreen | Fills the viewport; <kbd>Esc</kbd> exits. |
 | Edit source | Opens the mermaid source in a CodeMirror dialog. **Apply** re-renders; the change is local to the page. |
-| Download SVG | Saves the diagram as an `.svg` file, at the size mermaid produced it. |
+| Download SVG | Saves the diagram as an `.svg` file, named after the section it sits in. |
+
+**Until the diagram is zoomed, the pointer belongs to the browser.** The cursor is the ordinary
+one — an I-beam over a label — and dragging selects text, so a label can be copied like any other
+text on the page. Zooming in is what turns the pointer into a `grab` hand and gives a drag to
+panning; **Reset zoom** hands it back. There is no select/drag mode to switch.
+
+**The downloaded file is named from the page**, not `mermaid-diagram.svg` — the section it sits in
+(`2. Registration.svg`). The name comes from the first of these that says anything: the diagram's
+own title (mermaid frontmatter, `---\ntitle: …\n---`) → the nearest heading above it → the page
+title → `mermaid-diagram.svg`. Give a fence a frontmatter `title:` when the heading is not the name
+you want:
+
+````md
+```mermaid
+---
+title: Where duckfn sits
+---
+flowchart LR
+  A["write Rust"] --> B["a DuckDB extension"]
+```
+````
 
 ## Notes
 

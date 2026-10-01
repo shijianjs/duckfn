@@ -84,6 +84,9 @@ export default defineConfig({
         // lets the site's bundler code-split them into their own chunks.
         'mermaid',
         '@panzoom/panzoom',
+        // Names the downloaded file after the section a diagram sits in. Tiny, but
+        // external like the rest: the kit never bundles a runtime dependency.
+        'filenamify',
         'codemirror',
         '@codemirror/lang-sql',
         '@codemirror/view',

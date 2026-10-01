@@ -52,9 +52,9 @@ src/
 │                    #   + client.ts（dfk-* 元素注册，插件注入到每个页面）
 ├── mermaid/         # Mermaid 图：DfkMermaid.ts + DfkMermaid.css/styles.ts（shadow：
 │                    #   图 + 悬浮图标按钮 + 源码编辑对话框）+ render.ts（mermaid
-│                    #   单例加载、全页渲染队列、配色契约、SVG 解析）
-│                    #   + config.ts（两侧共享的配色契约）+ remark.ts（Node：```mermaid
-│                    #   围栏 → <dfk-mermaid>）
+│                    #   单例加载、全页渲染队列、配色契约、SVG 解析/序列化）
+│                    #   + config.ts（两侧共享的配色契约）+ title.ts（下载文件名
+│                    #   的级联与消毒）+ remark.ts（Node：```mermaid 围栏 → <dfk-mermaid>）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
@@ -387,9 +387,28 @@ src/
   产生方（remark 插件、可运行 SQL 的 `mermaid` 渲染器）都没有 React 挂载点可挂 setter；读取时**只在
   属性真的存在时**才赋值，所以调用方在插入前 `setAttribute` 也成立（元素在 `createElement` 后插入时
   upgrade，`connectedCallback` 才读）。
-- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，**不改 SVG 节点本身**）。`panOnlyWhenZoomed:
-  true` + `touchAction: 'pan-y'` 是刻意的取舍：图没放大
-  时不吞拖拽、页面照常滚，放大后拖拽才接管。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
+- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，**不改 SVG 节点本身**）。三个常量（`MIN_SCALE`
+  / `MAX_SCALE` / `ZOOM_STEP`）与两条 panzoom 的坑都写在这里：`minScale: 1` 让 fit 成为下限，
+  「放大」于是是一个干净的布尔，光标与手势处理都挂在它上面。`touchAction: 'pan-y'` 是刻意的取舍：
+  竖页滚留给浏览器，捏合与横向拖拽归图。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
+  两条必须绕开的默认行为（都在 `DfkMermaid.ts` 的 `#ensurePanzoom` 里，改动前先读回）：
+  - **panzoom 构造时无条件往元素与父节点写内联样式**：`cursor`（默认 `'move'`）写在元素上，
+    `user-select: none` 写在元素**和它的父节点**上，而且没有任何选项能关掉。前者让整个图看起来
+    可以拽，后者让图里**一个字都选不中**（实测：清理前 `getComputedStyle(label).userSelect` 是
+    `none`，双击选不到词）。只能构造后清掉：`cursor: ''` + `elem.style.userSelect = ''` +
+    `parent.style.userSelect = ''`。panzoom 只在构造与 `setOptions()` 里写这几条，本组件不调
+    `setOptions`，所以清一次就够。它原本的用途（拖拽时别选文字）已经由下面的 `handleStartEvent`
+    覆盖。
+  - **`handleStartEvent` 的默认实现对每次 `pointerdown` 都 `preventDefault()` +
+    `stopPropagation()`**，与是否真的会平移无关 —— 这就是「图里选不中文字」的另一半原因。必须改成
+    「只有真的会平移时才接管」（即 `#isZoomed()` 为真）。panzoom 的 move 监听是 `{passive: true}`
+    且从不 preventDefault，所以放行之后没有别的拦截点。
+  - 光标因此**不交给 panzoom 的 `cursor` 选项**，而是由缩放状态驱动 CSS：canvas 上的
+    `dfk-mermaid-zoomed` → `grab`，再叠 `dfk-mermaid-grabbing`（拖拽中）→ `grabbing`；未放大时
+    什么都不设，标签上就是浏览器默认的 I 型。`cursor` 是继承属性，所以规则打在 canvas 上即可。
+    panzoom 通过**在元素上派发 `CustomEvent`**（v4 没有 `on()` API）报告状态，所以
+    `panzoomchange` / `panzoomstart` / `panzoomend` 监听写在构造函数里、挂在自有节点 `#content`
+    上（无需拆除，也不会因重连而重复注册）。
 - **「下载 SVG」必须用 `XMLSerializer` 重新序列化那个节点，不能直接用 mermaid 返回的字符串**
   （`serializeMermaidSvg()`）。mermaid 是用 `innerHTML` 序列化的（HTML 序列化），空元素**不写闭合
   斜杠**：作者写的 `<br/>` 出来就是 `<br>`。页面里没问题（HTML 解析器照收），但下载下来的 `.svg`
@@ -398,6 +417,16 @@ src/
   文档需要的命名空间声明（`<svg>` 的 `xmlns`、`foreignObject` 里那段 XHTML 的 `xmlns` —— 后者在
   页面里是从宿主继承来的，节点上并没有这个属性）。这也是元素持有渲染出来的 `<svg>` **节点**
   （而不是 mermaid 的字符串）的唯一原因。
+- **文件名在 `title.ts`，三级级联 + `filenamify`**：图的 frontmatter `title:` → 它上方最近的标题
+  （限定在 `<article>` 内，否则导航栏/侧栏/页脚那些标题会串进来）→ `document.title` →
+  `mermaid-diagram.svg`。两处别自己重写：
+  - **不要手写字符类做文件名消毒**，走 `filenamify`（它还会处理 Windows 保留设备名、结尾的点与空格、
+    按字素截断、Unicode 空白归一）。浏览器的 `download` 属性只把 `/` 和 `\` 换掉，`:`、`?`、`*`
+    一概不管。
+  - **候选值要先去掉首尾的「格式字符」**（`\p{Cf}`）：Docusaurus 给每个标题挂的锚链接，其标签是一个
+    零宽空格，`textContent` 因此是 `"2. Registration\u200B"`；`filenamify` 会把这类字符**替换**成
+    替换串而不是删掉，不清就成了 `2. Registration-.svg`（实测）。只清首尾 —— 中间的零宽连接符是
+    emoji 的一部分。
 - **全屏是 canvas 上的一个类**（`position: fixed`），Esc 与按钮都能退出；背景用
   `--ifm-background-surface-color`，理由同 SQL 结果区（站点可以把 `--ifm-background-color` 声明成
   `transparent`）。

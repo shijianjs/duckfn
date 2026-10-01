@@ -41,6 +41,21 @@
   height: auto;
 }
 
+/* --- Cursor -------------------------------------------------------------- */
+
+/* The cursor says what a drag will actually do, which is why it is driven by the
+   zoom state rather than set on the element once and for all (panzoom's `cursor`
+   option does the latter, and it was promising a pan at fit — over text that is
+   perfectly selectable). `cursor` is inherited, so these two rules reach the
+   diagram and every label in it; the buttons override it with `pointer`. */
+.dfk-mermaid-canvas.dfk-mermaid-zoomed {
+  cursor: grab;
+}
+
+.dfk-mermaid-canvas.dfk-mermaid-zoomed.dfk-mermaid-grabbing {
+  cursor: grabbing;
+}
+
 /* --- Status line --------------------------------------------------------- */
 
 /* Doubles as the "still rendering" placeholder: the mermaid bundle is a lazy

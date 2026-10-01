@@ -13,10 +13,11 @@ import {
   watchColorMode,
 } from './render';
 import {mermaidStyles} from './styles';
+import {diagramFileName} from './title';
 
 /**
  * `<dfk-mermaid>` — a ```mermaid fence rendered as a diagram, produced by
- * `remarkMermaid` (or built by hand, see `setSource`).
+ * `remarkMermaid`.
  *
  * This element *is* the kit's mermaid integration: it replaces
  * `@docusaurus/theme-mermaid`, whose React component cannot avoid the two
@@ -93,11 +94,14 @@ const LABELS: Record<string, MermaidLabels> = {
 };
 
 /**
- * The file a downloaded diagram is written to. Diagrams have no name of their
- * own (the fence carries none), so this is a fixed stem; a browser that sees a
- * second download adds a suffix of its own.
+ * The zoom range. `MIN_SCALE` is the fit-to-box scale: the diagram opens there
+ * and cannot go below it, which is what makes "zoomed" a clean yes/no — it is
+ * exactly the state in which a drag pans, the wheel has something to undo, and
+ * the cursor stops promising plain text.
  */
-const DOWNLOAD_NAME = 'mermaid-diagram.svg';
+const MIN_SCALE = 1;
+const MAX_SCALE = 8;
+const ZOOM_STEP = 0.25;
 
 export class DfkMermaid extends HTMLElementBase {
   readonly #canvas = el('div', {class: 'dfk-mermaid-canvas', hidden: true});
@@ -159,6 +163,18 @@ export class DfkMermaid extends HTMLElementBase {
   readonly #onWheel = (event: WheelEvent): void => {
     this.#panzoom?.zoomWithWheel(event);
   };
+  /** The cursor follows the zoom state, so it never promises a pan that cannot happen. */
+  readonly #onPanzoomChange = (): void => {
+    this.#canvas.classList.toggle('dfk-mermaid-zoomed', this.#isZoomed());
+  };
+  readonly #onPanzoomEnd = (): void => {
+    this.#canvas.classList.remove('dfk-mermaid-grabbing');
+  };
+  readonly #onPanzoomStart = (): void => {
+    // `panzoomstart` fires at fit too, where the gesture was left to the browser;
+    // only a drag that will really pan gets the closed hand.
+    this.#canvas.classList.toggle('dfk-mermaid-grabbing', this.#isZoomed());
+  };
   readonly #onColorModeChange = (): void => {
     if (documentColorMode() !== this.#colorMode) {
       void this.#render();
@@ -182,6 +198,13 @@ export class DfkMermaid extends HTMLElementBase {
     );
     this.#viewport.appendChild(this.#content);
     this.#canvas.append(this.#viewport, this.#actions);
+    // panzoom reports state as DOM `CustomEvent`s dispatched on the element it
+    // transforms (`@panzoom/panzoom` v4 has no `on()` API), so they are listened
+    // for here, on our own node — which also means they need no teardown, and
+    // that re-creating the panzoom instance after a reconnect cannot double them.
+    this.#content.addEventListener('panzoomchange', this.#onPanzoomChange);
+    this.#content.addEventListener('panzoomstart', this.#onPanzoomStart);
+    this.#content.addEventListener('panzoomend', this.#onPanzoomEnd);
 
     this.#applyBtn.addEventListener('click', () => this.#applyEdit());
     this.#cancelBtn.addEventListener('click', () => this.#dialog.close());
@@ -231,6 +254,8 @@ export class DfkMermaid extends HTMLElementBase {
     this.#viewport.removeEventListener('wheel', this.#onWheel);
     this.#panzoom?.destroy();
     this.#panzoom = null;
+    // The zoom-state classes describe the instance that is now gone.
+    this.#canvas.classList.remove('dfk-mermaid-zoomed', 'dfk-mermaid-grabbing');
     this.#renderToken += 1;
     this.#editor?.destroy();
     this.#editor = null;
@@ -354,11 +379,21 @@ export class DfkMermaid extends HTMLElementBase {
    * requirement: if its chunk never arrives, the diagram still renders, only
    * wheel zoom and dragging stay inert.
    *
-   * `panOnlyWhenZoomed` is the setting that keeps a docs page usable — a diagram
-   * that already fits does not swallow drags, so the pointer still selects text
-   * and `touchAction: 'pan-y'` leaves vertical page scrolling to the browser.
-   * Touch-action is a deliberate trade: pinch and horizontal drags go to the
-   * diagram, the page keeps scrolling.
+   * Three settings carry the interaction contract:
+   *
+   * - `panOnlyWhenZoomed` — a diagram that already fits must not swallow drags,
+   *   so panning only engages once it is enlarged. That is also what keeps
+   *   `touchAction: 'pan-y'` meaningful: vertical page scrolling stays the
+   *   browser's, pinch and horizontal drags go to the diagram.
+   * - `handleStartEvent` — panzoom's default takes the gesture on *every*
+   *   pointerdown (`preventDefault` + `stopPropagation`), which costs the reader
+   *   text selection at every zoom level. Handing the gesture over only when a
+   *   drag will really pan is what makes the labels selectable while the diagram
+   *   is at fit. Nothing else blocks it: panzoom's move listener is `passive` and
+   *   never calls `preventDefault`.
+   * - no `cursor` option — panzoom would then put `grab` on the element for good,
+   *   over text that is perfectly selectable. The cursor is driven by the zoom
+   *   state instead, from `DfkMermaid.css`.
    */
   async #ensurePanzoom(): Promise<void> {
     if (this.#panzoom !== null || this.#panzoomLoading) {
@@ -372,18 +407,43 @@ export class DfkMermaid extends HTMLElementBase {
       }
       this.#viewport.addEventListener('wheel', this.#onWheel, {passive: false});
       this.#panzoom = Panzoom(this.#content, {
-        maxScale: 8,
-        minScale: 0.5,
-        step: 0.25,
-        cursor: 'grab',
+        maxScale: MAX_SCALE,
+        minScale: MIN_SCALE,
+        step: ZOOM_STEP,
         panOnlyWhenZoomed: true,
         touchAction: 'pan-y',
+        // panzoom's own default is `move`, written inline on the element — the
+        // cursor has to stay a CSS decision (see `DfkMermaid.css`), so it is
+        // switched off here.
+        cursor: '',
+        handleStartEvent: (event) => {
+          if (!this.#isZoomed()) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+        },
       });
+      // panzoom also forces `user-select: none` inline on the element *and its
+      // parent*, with no option to prevent it — that alone made every label in
+      // every diagram unselectable. It exists to stop a drag from selecting while
+      // panning, which `handleStartEvent` already covers: whenever a pan will
+      // happen, the gesture is taken with `preventDefault()` before the browser
+      // can start a selection. panzoom writes these styles only here and in
+      // `setOptions`, which this component never calls, so clearing them once is
+      // enough.
+      this.#content.style.userSelect = '';
+      this.#viewport.style.userSelect = '';
     } catch {
       // Nothing to report: the diagram is already usable without pan/zoom.
     } finally {
       this.#panzoomLoading = false;
     }
+  }
+
+  /** Whether the diagram is enlarged past its fit-to-box size. */
+  #isZoomed(): boolean {
+    return (this.#panzoom?.getScale() ?? MIN_SCALE) > MIN_SCALE;
   }
 
   #resetView(): void {
@@ -427,7 +487,9 @@ export class DfkMermaid extends HTMLElementBase {
     const markup = serializeMermaidSvg(this.#svg);
     const blob = new Blob([markup], {type: 'image/svg+xml;charset=utf-8'});
     const url = URL.createObjectURL(blob);
-    const link = el('a', {href: url, download: DOWNLOAD_NAME});
+    // Named after the section the diagram sits in (see `title.ts`), so the reader
+    // gets `2. Registration.svg` rather than a second `mermaid-diagram.svg`.
+    const link = el('a', {href: url, download: diagramFileName(this.#source, this)});
     // Anchored in the shadow tree for the click; a detached anchor is ignored by
     // some browsers, and by then the download has already been handed to it.
     this.shadowRoot?.appendChild(link);
