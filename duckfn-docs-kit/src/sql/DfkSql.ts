@@ -50,7 +50,7 @@ type SqlLabels = {
   wrapOff: string;
   copy: string;
   copied: string;
-  /** Context-menu labels for the result table (see `renderers.ts`). */
+  /** Result-table chrome: the tab strip's controls and the context menu. */
   copyAll: string;
   wrapColumn: string;
   unwrapColumn: string;
@@ -58,11 +58,19 @@ type SqlLabels = {
   unfreezeColumns: string;
   resetView: string;
   noData: string;
-  /** Width-mode submenu of the result table (see `renderers.ts`). */
-  widthMode: string;
+  search: string;
+  /** Width-mode button at the right end of the result tab strip. */
   widthAdaptive: string;
   widthStandard: string;
   widthFill: string;
+  /** The tab strip's download button (every result format). */
+  download: string;
+  /** Figure controls: the svg viewer, and embedded `<dfk-mermaid>`. */
+  resetZoom: string;
+  editSource: string;
+  svgSource: string;
+  apply: string;
+  cancel: string;
   running: string;
   initializing: string;
   loadingExtensions: string;
@@ -93,10 +101,16 @@ const LABELS: Record<string, SqlLabels> = {
     unfreezeColumns: 'Unfreeze columns',
     resetView: 'Reset view',
     noData: 'No rows',
-    widthMode: 'Column width',
+    search: 'Search',
     widthAdaptive: 'Fill the width',
     widthStandard: 'Content widths, scroll sideways',
     widthFill: 'Content first, fill when it fits',
+    download: 'Download',
+    resetZoom: 'Reset zoom',
+    editSource: 'Edit source',
+    svgSource: 'SVG source',
+    apply: 'Apply',
+    cancel: 'Cancel',
     running: 'Running…',
     initializing: 'Initializing DuckDB…',
     loadingExtensions: 'Loading extensions…',
@@ -125,10 +139,16 @@ const LABELS: Record<string, SqlLabels> = {
     unfreezeColumns: '取消冻结',
     resetView: '重置视图',
     noData: '无数据',
-    widthMode: '列宽模式',
+    search: '搜索',
     widthAdaptive: '铺满宽度',
     widthStandard: '按内容列宽（可横向滚动）',
     widthFill: '内容优先，装得下就铺满',
+    download: '下载',
+    resetZoom: '还原缩放',
+    editSource: '编辑源码',
+    svgSource: 'SVG 源码',
+    apply: '应用',
+    cancel: '取消',
     running: '执行中…',
     initializing: '正在初始化 DuckDB…',
     loadingExtensions: '正在加载扩展…',
@@ -206,6 +226,13 @@ export class DfkSql extends HTMLElementBase {
   #resultHost: HTMLElement | null = null;
   #editor: CodeEditor | null = null;
   #disposeResult: (() => void) | null = null;
+  /**
+   * Renderers watching the result area's fullscreen state. A figure zooms only
+   * where the result is expanded, so its renderer subscribes through
+   * `RenderContext.onFullscreenChange` and forwards every change — including the
+   * one at subscription time — to its viewer.
+   */
+  readonly #fullscreenListeners = new Set<(value: boolean) => void>();
 
   constructor() {
     super();
@@ -443,6 +470,22 @@ export class DfkSql extends HTMLElementBase {
       }
       this.#escBound = value;
     }
+    for (const listener of this.#fullscreenListeners) {
+      listener(value);
+    }
+  }
+
+  /**
+   * Subscribes a renderer to the fullscreen state above, calling back with the
+   * current value straight away (a renderer can mount while the result is
+   * already expanded) and returning the unsubscribe.
+   */
+  #onFullscreenChange(listener: (value: boolean) => void): () => void {
+    this.#fullscreenListeners.add(listener);
+    listener(this.#expanded);
+    return () => {
+      this.#fullscreenListeners.delete(listener);
+    };
   }
 
   // --- Run -------------------------------------------------------------------
@@ -549,6 +592,7 @@ export class DfkSql extends HTMLElementBase {
       config: this.#config,
       labels: this.#labels,
       fullscreenButton: this.#fullscreenBtn.root,
+      onFullscreenChange: (listener) => this.#onFullscreenChange(listener),
     };
     const renderer = rendererFor(this.#config, result);
     void renderer(context, result).then((dispose) => {

@@ -73,8 +73,9 @@ is compiled.
   `extensions` for the extension the site documents.
 - **Errors are a result, not a broken block.** A failing statement renders its message in the result
   area and keeps whatever the reader typed.
-- **Every result has a tab strip** (even a plain table), and the fullscreen toggle lives at its right
-  end. Table results bring sorting, resizable rows/columns, a right-click menu and header drag.
+- **Every result has a tab strip** (even a plain table), and all of its result-wide chrome sits at the
+  strip's right end — see *The strip at the right of the tabs*. Table results bring sorting, resizable
+  rows/columns, a right-click menu and header drag.
 
 ### Result renderers
 
@@ -83,8 +84,8 @@ is compiled.
 | `table` | The result grid. | — |
 | `text` | A bare scalar, as one line. | A single column/row result. |
 | `html` / `iframe` | One tab per row; the markup goes into a sandboxed `iframe` (`srcdoc`), with a trailing `Table` tab that is always last. | `field` (unless the result has exactly one column). `tab_name` to label tabs. |
-| `svg` | The markup is spliced **into the page** (one tab per row, trailing `Table` tab). | Same as above. |
-| `mermaid` | The cell is handed to `<dfk-mermaid>`, so the reader gets a real diagram with zoom, fullscreen, source editing and SVG download. One tab per row, trailing `Table` tab. | Same as above. |
+| `svg` | The markup is spliced **into the page** (one tab per row, trailing `Table` tab). Zoom and pan open in fullscreen, where the tab strip also offers **reset zoom** / **edit source**. | Same as above. |
+| `mermaid` | The cell is handed to `<dfk-mermaid>`, which renders in its **embedded** mode: no frame of its own and no floating cluster — **reset zoom** and **edit source** join the result's tab strip instead. One tab per row, trailing `Table` tab. | Same as above. |
 
 Two facts worth knowing before you pick one:
 
@@ -94,6 +95,32 @@ Two facts worth knowing before you pick one:
   `iframe.contentDocument` (it is `null` by design).
 - `svg` shares the page, so anything that could execute or navigate — `script`, `foreignObject`,
   `on*` handlers, `javascript:` links — is stripped before insertion.
+
+### The strip at the right of the tabs
+
+Every result — a plain table included — carries the same tab strip, and the right end of it is where
+the result-wide controls live, in this order: **the active tab's own buttons**, **download**, then
+the **fullscreen** toggle.
+
+| Active tab | Controls |
+| --- | --- |
+| `Table` | Search, copy table, column-width mode, reset view, unfreeze columns |
+| `svg` / `mermaid` | Reset zoom, edit source |
+| `html` / `iframe` / `text` | — |
+
+- Those table buttons are the "whole table" half of the grid's right-click menu, placed where they
+  cannot cover a cell; the menu itself keeps the per-cell items (copy this cell, wrap this
+  row/column, freeze up to this column). Freezing, column widths and the current view therefore
+  survive a switch to another tab and back. **Unfreeze columns** is hidden until a column has
+  actually been frozen, so it does not sit there as a dead control.
+- **Search** opens as an input in the strip rather than floating over the cells it searches, because
+  the table spans the full width. It highlights every hit, shows `3/12`, and steps with the arrows;
+  it is per result, not shared between blocks.
+- **Download** saves whatever the active tab shows, in that tab's format: `.csv` for a table, `.svg`
+  for `svg` / `mermaid`, `.html` for `html` / `iframe`, `.txt` for `text`. It is hidden only while
+  there is nothing to save yet (a figure that has not rendered).
+- **Fullscreen** makes the result fill the viewport; the same button (now "Exit fullscreen") stays
+  put, and <kbd>Esc</kbd> works too. It is also the only place a figure zooms or pans.
 
 ### Examples
 
@@ -162,9 +189,9 @@ browser** (mermaid is a lazy `import()`, so a page with no diagram never downloa
 also install `@docusaurus/theme-mermaid` or list it in `themes`, and do not set `markdown.mermaid`:
 the kit's element replaces both, and two renderers on one page would fight.
 
-What the reader gets, in the element's top-right corner on hover: **reset zoom** (wheel zooms,
-dragging pans once zoomed), **fullscreen**, **edit the source** in a CodeMirror dialog, and
-**download SVG**.
+What the reader gets, in the element's top-right corner on hover: **reset zoom**, **fullscreen**,
+**edit the source** in a CodeMirror dialog, and **download SVG**. Zoom and pan are off until the
+diagram is expanded — fullscreen is what turns the wheel into a zoom and a drag into a pan.
 
 - **The file is named after the section it sits in.** `1. Expansion.svg`, not
   `mermaid-diagram.svg`, in a cascade that walks from the most specific source to the most general:
@@ -173,10 +200,15 @@ dragging pans once zoomed), **fullscreen**, **edit the source** in a CodeMirror 
   lives under; give it a frontmatter `title:` when the heading is not the name you want. The name
   goes through `filenamify`, so nothing a filesystem chokes on (`:`, `?`, `*`, `|`, …) reaches the
   file.
-- **The diagram is inert until it is zoomed.** At fit the pointer is the browser's: the cursor is
-  the normal one (an I-beam over a label), and dragging selects text — the labels are still text,
-  and copying one should work. Zooming in is what turns the pointer into a `grab` hand and gives a
-  drag to panning; **Reset zoom** hands it back. There is no mode switch to remember.
+- **The diagram on the page is a picture, not a viewport.** The cursor is the browser's (an I-beam
+  over a label), the wheel scrolls the page, and dragging selects text — labels are still text, and
+  copying one works. Expanding the diagram is what turns the pointer into a `grab` hand and gives a
+  drag to panning; **Reset zoom** returns it to fit without leaving fullscreen, and zooming is off
+  again the moment the diagram is back inline. There is no select/drag mode to remember.
+- **A `show: "mermaid"` result reuses the same element**, in an *embedded* mode: the result panel
+  already draws the frame and the strip, so the element renders neither a frame nor a floating
+  cluster, and **reset zoom** / **edit source** move into the tab strip. See *The strip at the right
+  of the tabs*.
 
 - **The palette is a site choice, not a page one.** The kit's default is the `neo` look with
   `redux-color` / `redux-dark-color`; a site overrides it in its own config, which also keeps the

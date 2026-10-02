@@ -43,7 +43,9 @@ src/
 ├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow：编辑器
 │                    #   + 悬浮图标按钮）+ sql.css（light-DOM 结果区，见第 9 条）
 │                    #   + runtime.ts（DuckDB-Wasm 单例）+ renderers.ts
-│                    #   + PreviewTabs.ts（预览页签，末尾恒定 Table）+ remark.ts
+│                    #   + PreviewTabs.ts（预览页签，右端 [页签按钮][下载][全屏]）
+│                    #   + SvgViewer.ts（svg 结果的缩放视口 + 源码编辑）
+│                    #   + remark.ts
 │                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
 │                    #     （两侧共享的注入配置契约，见「扩展预加载」）
 │                    #   + collect.ts / verify.ts（Node：文档站自己的 SQL 测试与
@@ -51,15 +53,18 @@ src/
 │                    #     （浏览器：Playwright/playwright-core 驱系统浏览器跑块；harness 是给它的页面）
 │                    #   + client.ts（dfk-* 元素注册，插件注入到每个页面）
 ├── mermaid/         # Mermaid 图：DfkMermaid.ts + DfkMermaid.css/styles.ts（shadow：
-│                    #   图 + 悬浮图标按钮 + 源码编辑对话框）+ render.ts（mermaid
-│                    #   单例加载、全页渲染队列、配色契约、SVG 解析/序列化）
-│                    #   + config.ts（两侧共享的配色契约）+ title.ts（下载文件名
-│                    #   的级联与消毒）+ remark.ts（Node：```mermaid 围栏 → <dfk-mermaid>）
+│                    #   图 + 悬浮图标按钮 + 源码编辑对话框；`embedded` 时两者交给
+│                    #   结果区）+ render.ts（mermaid 单例加载、全页渲染队列、
+│                    #   配色契约、SVG 解析/序列化）+ config.ts（两侧共享的配色契约）
+│                    #   + remark.ts（Node：```mermaid 围栏 → <dfk-mermaid>）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
-├── codemirror.ts    # CodeMirror 挂载（SQL 编辑器与 mermaid 源码编辑器共用）
-├── IconButton.ts    # 悬浮图标按钮小部件（sql / mermaid 两处共用）
+├── codemirror.ts    # CodeMirror 挂载（SQL 编辑器与 mermaid / svg 源码编辑器共用）
+├── download.ts      # 下载文件名（章节级联 + 消毒）与触发保存
+├── panzoom-view.ts  # 缩放/平移视口（svg 与 mermaid 共用，全屏内才激活）
+├── source-dialog.ts # 源码编辑对话框（svg 与 mermaid 共用）
+├── IconButton.ts    # 图标按钮小部件（三处 shadow/light 样式表各一份副本）
 ├── index.ts         # 浏览器桶文件
 ├── register.ts      # customElements 注册
 ├── remark.ts        # Node 构建期 remark 插件
@@ -130,7 +135,8 @@ src/
 - 新增一种 `show` = `registry` 加一项 + `RunnableSqlConfig.show` 联合类型加一个字面量。
   渲染器签名统一是 `(context, result) => Promise<void | (() => void)>` —— **一律
   异步**，返回的 disposer 由 `DfkSql` 在重跑 / 断开时调用，调用方只处理一种形态。
-- `html` 与 `iframe` 是**同一个渲染器**（都写 `srcdoc`）；`svg` 是另一个（内联进页面）。
+- `html` 与 `iframe` 是**同一个渲染器**（都写 `srcdoc`）；`svg` 是另一个（内联进页面，
+  见 `SvgViewer.ts`：缩放视口 + 源码编辑，与 mermaid 共用 `PanZoomView` / `SourceDialog`）。
 - iframe 默认 `sandbox="allow-scripts"` 且**不含 `allow-same-origin`**：报告里的
   JavaScript 照跑，但 frame 持有 opaque origin，与文档站主体隔离。**父文档因此读不到
   `iframe.contentDocument`（为 `null`）——这是设计，不是 bug**，验证时别拿它当失败。
@@ -138,9 +144,12 @@ src/
   必须走 `attrs`）。
 - 内联 SVG 走 `DOMParser` + `parsererror` / `namespaceURI` 检查，插入前**剥离**所有
   可执行或可导航内容（`script`、`foreignObject`、`on*`、`javascript:` 的
-  `href`/`xlink:href`）；解析失败退化为 `pre` 文本，绝不把裸标记塞进 DOM。
+  `href`/`xlink:href`）；解析失败退化为 `pre` 文本，绝不把裸标记塞进 DOM。解析函数
+  （`parseSvgMarkup`）住在 `SvgViewer.ts`（`renderers.ts` 单向依赖它，反过来会把两个模块
+  绕成循环），编辑对话框改完源码也走同一条路：重新解析、重新 `setContent`，失败同样降级。
 - 预览尺寸用 CSS 自定义属性表达（`--dfk-sql-preview-width` / `-height`、
-  `--dfk-sql-table-height`），靠选择器特异性覆盖，不写 `!important`。
+  `--dfk-sql-table-height`），靠选择器特异性覆盖，不写 `!important`。`svg` 的视口与 iframe
+  的 frame 都用 `-width` / `-height`，所以 `option.height` 对两者是同一个开关。
 - **结果面底色一律用 `--ifm-background-surface-color`，不要用
   `--ifm-background-color`**：后者可以被站点声明成 `transparent`（本仓库文档站
   正是如此，页面底色另有来源），全屏 overlay 会因此变成透明、内容直接透出。
@@ -170,16 +179,32 @@ src/
   `above` 偏移）。因此覆盖值不是整像素就会留下小数偏移（`0.4rem` = 6.4px 被读成 6px，
   行号偏高 0.4px），而两侧都加等于把同一段内缩算两遍、行号整体低于代码行约 6px。基类主题
   自带的 `padding: 4px 0` 既是整数又够紧凑，**保持原样**。
-- **每个结果都有 tab 栏**，包括只有一个 `Table` 页签的普通表格结果 —— 因为 tab 栏是
-  全屏按钮唯一的落脚点。`text` 结果是 `[Text, Table]`；`table` 结果是 `[]` + 末尾 Table。
+- **每个结果都有 tab 栏**，包括只有一个 `Table` 页签的普通表格结果 —— 因为 tab 栏右端就是
+  结果级 chrome 唯一的落脚点：`[当前页签的动作][下载][全屏]`。`text` 结果是 `[Text, Table]`；
+  `table` 结果是 `[]` + 末尾 Table；`svg` / `mermaid` / `html` 是每行一个预览页签 + 末尾 Table。
+- **页签自己的动作（`PreviewTabItem.actions`）由渲染器建、`PreviewTabs` 摆位**：容器的
+  `hidden` 由 strip 统一切换（`#select`），所以只有当前页签的动作可见 —— 表格的搜索/列宽
+  模式/重置视图/取消冻结、图的还原缩放/编辑源码都走这条。容器是**先建后交给 strip** 的
+  （构造 `PreviewTabs` 之前就要有节点），`SvgViewer` 是普通类可以直接建，`<dfk-mermaid>`
+  则靠 `actions` getter 触发幂等的 `#ensureSeeded()` 支持「未连接时读 `embedded`/`source`」。
+- **下载按钮随「当前页签有没有东西可存」显示**（`PreviewTabItem.download` 返回 `null` =
+  还没渲染完）：`PreviewTabs` 只管点击，`<dfk-sql>` 与各渲染器只管各自的
+  `DownloadPayload`（名字/类型/文本），实际保存统一走 `download.ts` 的 `saveDownload`。
+  格式按页签定：表格 `.csv`、图 `.svg`、frame `.html`、文本 `.txt`。
 - **全屏按钮归 `DfkSql` 所有**（状态在它手里），节点经 `RenderContext.fullscreenButton`
-  交给 `PreviewTabs`，由后者摆到 tab 栏右端、`role="tablist"` 之外，所以不随页签滚动。
-  全屏 overlay 不再需要 `padding-top` 给悬浮工具栏让位，退出按钮就在原来的位置。
+  交给 `PreviewTabs`，由后者摆到 tab 栏**最右端**、`role="tablist"` 之外，所以不随页签滚动。
+  全屏 overlay 不需要 `padding-top` 给悬浮工具栏让位，退出按钮就在原来的位置。
+- **全屏状态用 `RenderContext.onFullscreenChange` 订阅**（订阅即回调当前值，返回退订）：
+  只在全屏里缩放的图（`svg` / `mermaid`）把它转发给自己的 `PanZoomView.setActive`，
+  `PreviewTabs.setFullscreen` 只转给**当前**页签（切页签时在 `#select` 里重放一次当前值）。
+  退订由渲染器的 disposer 负责 —— 订阅早了或漏退订，元素就多一个永远不会变的监听者。
 - 代码块那五个按钮（执行 / 格式化 / 重置 / 折行 / 复制）是紧凑的图标按钮，悬浮在代码区右上角
   （`.dfk-sql-code:hover / :focus-within` 时才 `opacity: 1` + `pointer-events: auto`，
-  隐藏时不可点）；提示用 `data-tip` + `::after`。这套图标按钮与 tooltip 规则**在
-  `DfkSql.css`（shadow）与 `sql.css`（light）各写一份** —— 前五个按钮在 shadow 树里，
-  全屏按钮在 light DOM 的结果区，一条规则够不着两处；两处都留了交叉引用注释。
+  隐藏时不可点）；提示用 `data-tip` + `::after`。这套图标按钮与 tooltip 规则**每个 shadow 树
+  各写一份**：`DfkSql.css`（代码区）、`sql.css`（结果区的 light DOM，含 tab 栏里的下载与
+  全屏按钮）、`DfkMermaid.css`（独立 `<dfk-mermaid>` 的悬浮簇）；三处都留了交叉引用注释，
+  改一处要同步另外两处。嵌入结果区的 `<dfk-mermaid>` 不在此列 —— 它的动作容器会被**移出**
+  shadow 树交给 strip，那时生效的是 `sql.css`。
 - 折行默认**开启**，用 `Compartment` + `wrap.reconfigure(lineWrapping)` 切换，不重建
   编辑器（`@codemirror/state` 因此是动态 import 列表的一员，也在 vite external 里）。
   复制成功后按钮变 `lucide:check` + `Copied` 约 1.6s 再复位，定时器在
@@ -203,12 +228,18 @@ src/
   `updateColumns(cols, {clearColWidthCache:true, clearRowHeightCache:false})` 触发
   （`createSceneGraph` → `computeColsWidth` 按新模式重测）；特意**不用 `updateOption`**，
   因为它会把 sortState 一并清掉。列宽模式也属于「重置视图」的回退范围。
-- 右键子菜单：父项 `children` 即子菜单（html 模式原生支持，箭头用 `.vtable__menu-element__arrow`）。
-  子菜单的当前项用文本前缀 `✓ ` 标记 —— vendor 的 `--select` 高亮只认
-  `menu.dropDownMenuHighlight`，且要按当前单元格解析，不适合表达全局状态。
-- **结果区/表格/面板都要 `overscroll-behavior: contain`**：它不是继承属性，必须打到
+- 列宽模式、重置视图、取消冻结与「复制整表」都在 **tab 栏右端**，不再进右键菜单：表格与页面
+  同宽，菜单是弹出层，会盖住它正要操作的单元格。右键菜单只留按单元格/列的项（复制此单元格、
+  此列折行/停止折行、冻结到此列），文案与 `MENU.*` key 的对应关系因此短了一截。
+  **`WIDTH_MODES` 的 `menuKey` 字段随之改名 `id`**：它已经是按钮的 `id`（`dfk-width-*`），
+  不再是菜单 key。
+- **表格链路上每个滚动盒都要 `overscroll-behavior: contain`**：它不是继承属性，必须打到
   每个真正滚动的盒子上（含 `.dfk-sql-table *`，VTable 的内部滚动容器藏在里面）。
   否则滚轮滑到表格底部会继续链式滚动整页 —— 表现是「页面刷一下飞上去、表格消失」。
+  但 **`.dfk-sql-panel` 只在全屏（`.dfk-sql-result-expanded`）时才 contain**：`contain`
+  对任何 `overflow` 非 `visible` 的盒子都生效，而面板始终是滚动容器，内联时它自己没东西
+  可滚，却会把本该滚页面的滚轮吞掉（图在正文里是「一张图」而非「一个视口」，见
+  `DfkMermaid.css`）；全屏时面板真的会滚动，没有它滚轮就会去滚遮罩**后面**的页面。
 - VTable 的尺寸变化交给 `ResizeObserver`，不向外传 resize 管道；但回调里**必须把
   `table.resize()` 延到 `requestAnimationFrame`**（并在 disposer 里
   `cancelAnimationFrame`）—— `resize()` 本身会改变被观察的盒子，同步调用会被浏览器
@@ -246,8 +277,25 @@ src/
   内置比较器那样自行按 order 翻转），所以方向要在比较器里处理；空**记录**由引擎兜底排后，
   但空**字段值**（NULL）得比较器自己管（本仓库选择恒排最后、desc 不翻转）。
 - 复制：`keyboardOptions` **没有默认值**，Ctrl+C / Ctrl+A 必须显式写 `copySelected` /
-  `selectAllOnCtrlA` 才生效；右键菜单的「复制单元格 / 复制整表」不走选区，是自己遍历
+  `selectAllOnCtrlA` 才生效；「复制整表」（tab 栏右端）不走选区，是自己遍历
   `getCellRawValue` + `stringify` 拼 TSV 再 `navigator.clipboard.writeText`。
+- **导出 `.csv` 与复制整表是两条路，不能合并**：剪贴板要的是 TSV（表格软件按 TSV 粘），
+  文件要的是真 CSV —— `csv()` 逐格过 `csvCell()`（RFC 4180：含 `"` `,` CR LF 时加引号并
+  把 `"` 翻倍），表头按**显示顺序**（`#displayOrder()`，用户拖过列也一致），行从
+  `columnHeaderLevelCount` 起（跳过表头行）。VTable 加载失败时没有实例，降级为
+  `csvText(result)`（同一套转义，数据来自原始结果）。
+- **搜索用 `@visactor/vtable-search`**（1.26.8 的 `@visactor/vtable` 里**没有**这个组件，
+  所以是独立依赖，也在 vite external 里）：`new SearchComponent({table, autoJump, skipHeader,
+  highlightCellStyle, focusHighlightCellStyle, callback})`，`search()` / `next()` / `prev()` /
+  `clear()`；`callback.index` 是 **0 基**、无结果时也是 0，所以计数显示要
+  `count === 0 ? 0 : index + 1`。它直接操作表格 DOM 画高亮，`dispose()` 时必须
+  `clear()` 再丢掉实例（否则高亮留在后面的结果上）。
+  - **`highlightCellStyle` 的类型是完整的 `CellStyle`（不是 `Partial`）**，而 vendor
+    实际只读 `bgColor`：TS 上过不去，用
+    `NonNullable<ConstructorParameters<typeof SearchComponent>[0]['highlightCellStyle']>`
+    断言并注释清楚；颜色按当前 `data-theme` 取（暗色用浅蓝半透明），主题切换时重建。
+  - 搜索框**在 tab 栏里内联展开**（`input` 宽 `9rem` + 计数 `min-width: 2.2rem`、
+    `tabular-nums`），因为表格铺满页面宽度，浮层会盖住正在找的单元格。
 - 折行：右键「此列折行」把 field 记进 `#wrapped`，随即 `defaultRowHeight = 'auto'` +
   `updateColumns(cols, {clearColWidthCache:false, clearRowHeightCache:true})` —— 只清行高
   缓存让行重新长高，保留用户拖过的列宽与行高（`updateColumns` 不动 `sortState`）。
@@ -387,28 +435,32 @@ src/
   产生方（remark 插件、可运行 SQL 的 `mermaid` 渲染器）都没有 React 挂载点可挂 setter；读取时**只在
   属性真的存在时**才赋值，所以调用方在插入前 `setAttribute` 也成立（元素在 `createElement` 后插入时
   upgrade，`connectedCallback` 才读）。
-- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，**不改 SVG 节点本身**）。三个常量（`MIN_SCALE`
-  / `MAX_SCALE` / `ZOOM_STEP`）与两条 panzoom 的坑都写在这里：`minScale: 1` 让 fit 成为下限，
-  「放大」于是是一个干净的布尔，光标与手势处理都挂在它上面。`touchAction: 'pan-y'` 是刻意的取舍：
+- **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，**不改 SVG 节点本身**），实现在共享的
+  `panzoom-view.ts`（`PanZoomView`，svg 结果与 mermaid 共用；`MIN_SCALE` / `MAX_SCALE` /
+  `ZOOM_STEP` 与下面几条坑都在那里）。`minScale: 1` 让 fit 成为下限，「放大」于是是一个干净的
+  布尔（`zoomed` getter），光标与手势处理都挂在它上面。`touchAction: 'pan-y'` 是刻意的取舍：
   竖页滚留给浏览器，捏合与横向拖拽归图。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
-  两条必须绕开的默认行为（都在 `DfkMermaid.ts` 的 `#ensurePanzoom` 里，改动前先读回）：
-  - **panzoom 构造时无条件往元素与父节点写内联样式**：`cursor`（默认 `'move'`）写在元素上，
-    `user-select: none` 写在元素**和它的父节点**上，而且没有任何选项能关掉。前者让整个图看起来
-    可以拽，后者让图里**一个字都选不中**（实测：清理前 `getComputedStyle(label).userSelect` 是
-    `none`，双击选不到词）。只能构造后清掉：`cursor: ''` + `elem.style.userSelect = ''` +
-    `parent.style.userSelect = ''`。panzoom 只在构造与 `setOptions()` 里写这几条，本组件不调
-    `setOptions`，所以清一次就够。它原本的用途（拖拽时别选文字）已经由下面的 `handleStartEvent`
-    覆盖。
+  - **缩放默认关闭，只在 `setActive(true)` 时打开**（`PanZoomView` 的 opt-in 契约）：页面上
+    行内显示时滚轮是页面的、拖拽是选文字，全屏才是视口。deactivate 时连内联样式一起复位
+    （`reset()` + `disablePan/disableZoom` + 解绑 wheel），所以下次进入全屏是从 fit 开始。
+  - 两条必须绕开的默认行为（原在 `DfkMermaid.ts`，现集中在 `panzoom-view.ts`，改动前先读回）：
+    **panzoom 构造时无条件往元素与父节点写内联样式**：`cursor`（默认 `'move'`）写在元素上，
+    `user-select: none` 写在元素**和它的父节点**上，而且没有任何选项能关掉；**`setOptions()`
+    还会再写一遍**，所以清理挂在构造后与每次 `setOptions` 后（`#clearPanzoomStyles()`）。前者让
+    整个图看起来可以拽，后者让图里**一个字都选不中**（实测：清理前
+    `getComputedStyle(label).userSelect` 是 `none`，双击选不到词）。它原本的用途（拖拽时别选文字）
+    由下面的 `handleStartEvent` 覆盖。
   - **`handleStartEvent` 的默认实现对每次 `pointerdown` 都 `preventDefault()` +
     `stopPropagation()`**，与是否真的会平移无关 —— 这就是「图里选不中文字」的另一半原因。必须改成
-    「只有真的会平移时才接管」（即 `#isZoomed()` 为真）。panzoom 的 move 监听是 `{passive: true}`
+    「只有真的会平移时才接管」（即 `zoomed` 为真）。panzoom 的 move 监听是 `{passive: true}`
     且从不 preventDefault，所以放行之后没有别的拦截点。
-  - 光标因此**不交给 panzoom 的 `cursor` 选项**，而是由缩放状态驱动 CSS：canvas 上的
-    `dfk-mermaid-zoomed` → `grab`，再叠 `dfk-mermaid-grabbing`（拖拽中）→ `grabbing`；未放大时
-    什么都不设，标签上就是浏览器默认的 I 型。`cursor` 是继承属性，所以规则打在 canvas 上即可。
-    panzoom 通过**在元素上派发 `CustomEvent`**（v4 没有 `on()` API）报告状态，所以
-    `panzoomchange` / `panzoomstart` / `panzoomend` 监听写在构造函数里、挂在自有节点 `#content`
-    上（无需拆除，也不会因重连而重复注册）。
+  - 光标因此**不交给 panzoom 的 `cursor` 选项**，而是由缩放状态驱动 CSS：viewport 上的
+    `dfk-panzoom-zoomed` → `grab`，再叠 `dfk-panzoom-grabbing`（拖拽中）→ `grabbing`；未放大时
+    什么都不设，标签上就是浏览器默认的 I 型。`cursor` 是继承属性，所以规则打在 viewport 上即可，
+    两份副本在 `DfkMermaid.css` 与 `sql.css`（各自的选择器不同：`.dfk-mermaid-viewport` /
+    `.dfk-sql-svg`）。panzoom 通过**在元素上派发 `CustomEvent`**（v4 没有 `on()` API）报告状态，
+    所以 `panzoomchange` / `panzoomstart` / `panzoomend` 监听写在 `PanZoomView` 构造函数里、挂在
+    自有内容节点上（无需拆除，也不会因重连而重复注册）。
 - **「下载 SVG」必须用 `XMLSerializer` 重新序列化那个节点，不能直接用 mermaid 返回的字符串**
   （`serializeMermaidSvg()`）。mermaid 是用 `innerHTML` 序列化的（HTML 序列化），空元素**不写闭合
   斜杠**：作者写的 `<br/>` 出来就是 `<br>`。页面里没问题（HTML 解析器照收），但下载下来的 `.svg`
@@ -417,9 +469,10 @@ src/
   文档需要的命名空间声明（`<svg>` 的 `xmlns`、`foreignObject` 里那段 XHTML 的 `xmlns` —— 后者在
   页面里是从宿主继承来的，节点上并没有这个属性）。这也是元素持有渲染出来的 `<svg>` **节点**
   （而不是 mermaid 的字符串）的唯一原因。
-- **文件名在 `title.ts`，三级级联 + `filenamify`**：图的 frontmatter `title:` → 它上方最近的标题
-  （限定在 `<article>` 内，否则导航栏/侧栏/页脚那些标题会串进来）→ `document.title` →
-  `mermaid-diagram.svg`。两处别自己重写：
+- **文件名在共享的 `download.ts`（`sectionFileName()`），三级级联 + `filenamify`**：图的 frontmatter
+  `title:` → 它上方最近的标题（限定在 `<article>` 内，否则导航栏/侧栏/页脚那些标题会串进来）→
+  `document.title` → 调用方给的 `fallback`（图是 `mermaid-diagram`，sql 结果是 `table` /
+  `preview` / `diagram`）。svg 结果与表格结果是**同一个函数**，只是扩展名不同。两处别自己重写：
   - **不要手写字符类做文件名消毒**，走 `filenamify`（它还会处理 Windows 保留设备名、结尾的点与空格、
     按字素截断、Unicode 空白归一）。浏览器的 `download` 属性只把 `/` 和 `\` 换掉，`:`、`?`、`*`
     一概不管。
@@ -427,17 +480,25 @@ src/
     零宽空格，`textContent` 因此是 `"2. Registration\u200B"`；`filenamify` 会把这类字符**替换**成
     替换串而不是删掉，不清就成了 `2. Registration-.svg`（实测）。只清首尾 —— 中间的零宽连接符是
     emoji 的一部分。
-- **全屏是 canvas 上的一个类**（`position: fixed`），Esc 与按钮都能退出；背景用
-  `--ifm-background-surface-color`，理由同 SQL 结果区（站点可以把 `--ifm-background-color` 声明成
-  `transparent`）。
-- **源码编辑对话框**用 `<dialog>` + 共享的 `codemirror.ts`（无语言，mermaid 没有一等公民语法高亮）。
-  对话框**先 `showModal()` 再挂编辑器**：CodeMirror 构造时要量容器，`display: none` 量出来是 0。
+- **全屏分两种，别混**：独立围栏里是 canvas 上的一个类 `dfk-mermaid-expanded`（`position: fixed`），
+  Esc 与自己的按钮都能退出；嵌进结果区后是**外部驱动**的 `setFullscreen(value)` —— 落成 host 上的
+  `dfk-mermaid-fullscreen` 并转发给 `PanZoomView.setActive`。shadow 边界挡得住后代选择器，挡不住
+  打在 **host 自身**上的类，所以「全屏时填满高度」写成 `:host(.dfk-mermaid-fullscreen)`。两种都让
+  背景用 `--ifm-background-surface-color`，理由同 SQL 结果区（站点可以把 `--ifm-background-color`
+  声明成 `transparent`）。
+- **源码编辑对话框**用 `<dialog>` + 共享的 `source-dialog.ts` 与 `codemirror.ts`（无语言，mermaid
+  没有一等公民语法高亮）。对话框**先 `showModal()` 再挂编辑器**：CodeMirror 构造时要量容器，
+  `display: none` 量出来是 0；svg 结果用的是同一个类，只是 `sql.css` 里另有一份 `.dfk-source-dialog*`
+  规则（它在 light DOM）。
 - 图标按钮的相对定位/提示规则在 `DfkMermaid.css`、`DfkSql.css`、`sql.css` **各一份**，因为三者分处
   不同的树（两个 shadow root + light DOM）；类名由共用的 `IconButton.ts` 写出（`dfk-icon-button` /
-  `dfk-icon`），改规则要三处一起改。
+  `dfk-icon`），改规则要三处一起改（`dfk-icon-on` 只有 SQL 侧在用，独立图没有开关型按钮）。
 
-**可运行 SQL 的 `mermaid` 输出格式**（`sql/renderers.ts`）复用同一个元素：面板里放一个
-`<dfk-mermaid source="…">`，于是查询结果与 ```mermaid 围栏行为完全一致，kit 里只有一处知道首屏修复。
+**可运行 SQL 的 `mermaid` 输出格式**（`sql/renderers.ts`）复用同一个元素，但以 `embedded` 属性进入
+**嵌入模式**：不画外框、不浮按钮组，`actions` getter 把（还原缩放 / 编辑源码）两个按钮交给
+`PreviewTabs` 摆到 tab 栏，`downloadPayload()` 交给下载按钮，缩放与全屏由结果区经 `setFullscreen`
+驱动 —— 于是查询结果与 ```mermaid 围栏行为一致，kit 里只有一处知道首屏修复。**`actions` 必须在插入
+元素之前就能取到**，所以种子是懒的（`#ensureSeeded()` 幂等，读属性即可，不必等到连接）。
 
 ## 代码风格（硬性要求）
 
@@ -683,14 +744,20 @@ CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其
 `dfk-` 前缀（或 `toc-` 这类自有前缀），避免与宿主撞名。新增例外要在评审时说清楚
 「依赖了宿主的哪条规则」。
 
-`<dfk-sql>` 是**混合**形态，且 light-DOM 部分只剩一件事：CodeMirror 编辑器与那簇悬浮
-图标按钮**全在 shadow root 里**（编辑器不再 slot，因为 style-mod 会把 `.cm-*` 基础主题
-以 `adoptedStyleSheets` 挂到 `getRoot()` 解析出的根上 —— 编辑器在 shadow 里，解析出的
-就是同一个 shadow root，样式正好落在用它的那棵树里；反过来把编辑器放 light DOM、样式
-却落进 shadow root，就是第一阶段那个「编辑器没样式」的 bug）。只有 **VTable 结果容器**
-在 light DOM（`slot="dfk-result"`），因为 VTable 往**文档级**注入样式表，shadow 边界
-挡得住它。其 light-DOM 样式（`.dfk-sql-result` 一族）走 `sql/sql.css` → `kit.css` 的全局
-通道，同样全部 `dfk-sql-` 前缀。
+`<dfk-sql>` 是**混合**形态，分成两半：
+
+- **代码区在 shadow root 里** —— CodeMirror 编辑器与那簇悬浮图标按钮（编辑器不再 slot，
+  因为 style-mod 会把 `.cm-*` 基础主题以 `adoptedStyleSheets` 挂到 `getRoot()` 解析出的
+  根上：编辑器在 shadow 里，解析出的就是同一个 shadow root，样式正好落在用它的那棵树里；
+  反过来把编辑器放 light DOM、样式却落进 shadow root，就是第一阶段那个「编辑器没样式」的
+  bug）。
+- **整个结果区在 light DOM**（`#resultHost`，`slot="dfk-result"`）—— 不只是 VTable 的
+  表格容器：页签栏、每种预览、源码对话框、搜索框都在里面。起点是 VTable 往**文档级**注入
+  样式表，shadow 边界挡得住它；但这块地方本来就满是三方部件（VTable、panzoom、
+  结果区自己那份 CodeMirror 源码对话框），统一留在 light DOM 比「一半在 shadow、一半在
+  light」少一份心智负担。它的样式走 `sql/sql.css` → `kit.css` 的全局通道，同样全部
+  `dfk-sql-` 前缀；`IconButton` / 源码对话框这类**两边都用**的部件因此各有一份样式副本
+  （`DfkSql.css`、`DfkMermaid.css` 是 shadow 的，`sql.css` 是 light 的）。
 
 这条也是第 11 条「light DOM 恒为空」的例外之所以安全的原因：编辑器在构造函数里就挂进
 shadow root，light DOM 唯一的节点（结果容器）只在**用户点「执行」之后**才创建，

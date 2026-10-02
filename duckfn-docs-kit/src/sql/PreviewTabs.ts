@@ -1,32 +1,43 @@
+import {el} from '../dom';
+import {saveDownload, type DownloadPayload} from '../download';
+import {IconButton} from '../IconButton';
+
 /**
  * Every renderer's result shell: a tab strip plus the panels behind it.
  *
- * The strip is one tab per preview row plus a `Table` tab that always comes
- * **last**; a renderer with a single view passes no items at all, so a plain
- * table result is a strip holding nothing but that trailing `Table` tab. Every
- * result therefore has the same chrome — which is where the fullscreen toggle
- * lives.
+ * The strip holds one tab per item — a preview row, a `Text` view, or the
+ * trailing `Table` view — and, at its right end, the chrome that acts on the
+ * result as a whole: the active tab's own {@link PreviewTabItem.actions}, a
+ * **download** button, and whatever the caller parks last (the fullscreen toggle
+ * `<dfk-sql>` owns). Every result therefore has the same chrome, and the panel
+ * behind a tab is built the first time that tab is shown.
  *
- * Retained mode: every button and panel is built in the constructor and held in
- * a field. Activating a tab mutates the nodes it owns (`hidden`, `classList`,
- * `aria-selected`, `tabIndex`) — there is no rebuild, and a panel is filled the
- * first time it is shown rather than up front.
- *
- * The table panel is mounted on first activation on purpose: VTable measures
- * its container when it is constructed, and a `hidden` panel measures to zero.
+ * Retained mode: every button, action container and panel is built in the
+ * constructor and held in a field. Activating a tab mutates the nodes it owns
+ * (`hidden`, `classList`, `aria-selected`, `tabIndex`) — there is no rebuild, and
+ * a panel is filled the first time it is shown rather than up front.
  */
 
-import {el} from '../dom';
-
-/** One preview row: its tab label and how to fill its panel. */
+/** One tab: its label, how to fill its panel, and what it offers the strip. */
 export interface PreviewTabItem {
   label: string;
-  mount(panel: HTMLElement): void;
-}
-
-/** What `PreviewTabs` needs from the caller to own the trailing table tab. */
-export interface PreviewTableHandle {
-  dispose(): void;
+  /**
+   * Fills the panel. Called once, the first time the tab is shown; an async mount
+   * may resolve with a disposer, which the strip runs when it is disposed (that is
+   * how the table's handle gets released, including when the countdown lands after
+   * {@link PreviewTabs.dispose}).
+   */
+  mount(panel: HTMLElement): void | (() => void) | Promise<void | (() => void)>;
+  /**
+   * Controls for the strip's right end, shown only while this tab is active — the
+   * place for actions that belong to *this* result (a table's search and view
+   * switches, a figure's zoom reset) rather than to every result.
+   */
+  actions?: HTMLElement;
+  /** This tab's file, or `null` while there is nothing to save yet. */
+  download?: () => DownloadPayload | null;
+  /** Told the result area's fullscreen state, for figures that zoom inside it. */
+  setFullscreen?: (value: boolean) => void;
 }
 
 /** Keeps per-instance element ids unique across every `<dfk-sql>` on a page. */
@@ -35,38 +46,39 @@ let sequence = 0;
 export class PreviewTabs {
   readonly #buttons: HTMLButtonElement[] = [];
   readonly #panels: HTMLElement[] = [];
-  /** `null` marks the trailing table tab. */
-  readonly #items: (PreviewTabItem | null)[] = [];
+  readonly #items: PreviewTabItem[] = [];
   readonly #mounted: boolean[] = [];
-  readonly #mountTable: (panel: HTMLElement) => Promise<PreviewTableHandle>;
+  /** Disposers returned by mounts, run on {@link dispose}. */
+  readonly #disposers: (() => void)[] = [];
+  readonly #downloadBtn: IconButton;
 
-  #tableHandle: PreviewTableHandle | null = null;
+  #active = 0;
+  #fullscreen = false;
   #disposed = false;
 
   /**
-   * @param corner Node parked at the right end of the strip, outside the
-   * scrolling tab list. `<dfk-sql>` passes its fullscreen toggle: it owns that
-   * button's state, so it owns the node and only lends it here.
+   * @param corner Node parked at the very end of the strip, after the download
+   * button. `<dfk-sql>` passes its fullscreen toggle: it owns that button's state,
+   * so it owns the node and only lends it here.
    */
   constructor(
     host: HTMLElement,
     items: readonly PreviewTabItem[],
-    tableLabel: string,
-    mountTable: (panel: HTMLElement) => Promise<PreviewTableHandle>,
+    downloadLabel: string,
     corner?: HTMLElement,
   ) {
-    this.#mountTable = mountTable;
     const uid = `dfk-sql-tabs-${(sequence += 1)}`;
     const bar = el('div', {class: 'dfk-sql-tabs'});
-    // Only the tab buttons belong to the tablist; the corner button must not be
+    // Only the tab buttons belong to the tablist; the corner must not be
     // scrollable with them, hence the nested list.
     const list = el('div', {
       class: 'dfk-sql-tab-list',
       attrs: {role: 'tablist'},
     });
+    const cornerBox = el('div', {class: 'dfk-sql-tab-corner'});
     const panels = el('div', {class: 'dfk-sql-panels'});
 
-    const add = (label: string, item: PreviewTabItem | null): void => {
+    const add = (item: PreviewTabItem): void => {
       const index = this.#buttons.length;
       const panel = el('div', {
         class: 'dfk-sql-panel',
@@ -80,7 +92,7 @@ export class PreviewTabs {
       const button = el('button', {
         class: 'dfk-sql-tab',
         type: 'button',
-        text: label,
+        text: item.label,
         tabIndex: index === 0 ? 0 : -1,
         attrs: {
           role: 'tab',
@@ -98,34 +110,54 @@ export class PreviewTabs {
       this.#mounted.push(false);
       list.appendChild(button);
       panels.appendChild(panel);
+      if (item.actions) {
+        item.actions.hidden = true;
+        cornerBox.appendChild(item.actions);
+      }
     };
 
     for (const item of items) {
-      add(item.label, item);
+      add(item);
     }
-    add(tableLabel, null);
 
-    bar.appendChild(list);
+    this.#downloadBtn = new IconButton('lucide:download', () => this.#download());
+    this.#downloadBtn.setLabel(downloadLabel);
+    this.#downloadBtn.root.hidden = true;
+    cornerBox.appendChild(this.#downloadBtn.root);
     if (corner) {
-      bar.appendChild(corner);
+      cornerBox.appendChild(corner);
     }
+
+    bar.append(list, cornerBox);
     // The one-time installation of this widget's own subtree.
     host.replaceChildren(bar, panels);
     this.#select(0);
   }
 
-  /** Releases the table (if it was ever shown) and empties every panel. */
+  /** Releases every mounted item and empties the panels. */
   dispose(): void {
     this.#disposed = true;
-    this.#tableHandle?.dispose();
-    this.#tableHandle = null;
+    for (const dispose of this.#disposers) {
+      dispose();
+    }
+    this.#disposers.length = 0;
     for (const panel of this.#panels) {
       panel.replaceChildren();
     }
   }
 
+  /**
+   * Records the result area's fullscreen state and passes it on to the tab on
+   * screen: a figure zooms only where the result is expanded (see `PanZoomView`).
+   */
+  setFullscreen(value: boolean): void {
+    this.#fullscreen = value;
+    this.#items[this.#active]?.setFullscreen?.(value);
+  }
+
   /** Activation is pure mutation — no panel is rebuilt, none is discarded. */
   #select(index: number): void {
+    this.#active = index;
     for (let i = 0; i < this.#buttons.length; i += 1) {
       const active = i === index;
       const button = this.#buttons[i];
@@ -133,27 +165,41 @@ export class PreviewTabs {
       button.setAttribute('aria-selected', String(active));
       button.tabIndex = active ? 0 : -1;
       this.#panels[i].hidden = !active;
+      const actions = this.#items[i].actions;
+      if (actions) {
+        actions.hidden = !active;
+      }
     }
+    const item = this.#items[index];
+    // Only a tab that can save something gets a live download button; a figure
+    // that has not rendered yet answers `null` to the click instead.
+    this.#downloadBtn.root.hidden = item.download === undefined;
+    item.setFullscreen?.(this.#fullscreen);
     if (this.#mounted[index]) {
       return;
     }
     this.#mounted[index] = true;
-    const item = this.#items[index];
-    if (item) {
-      item.mount(this.#panels[index]);
-    } else {
-      void this.#mountTableInto(index);
-    }
+    void this.#mountInto(index);
   }
 
-  async #mountTableInto(index: number): Promise<void> {
-    const handle = await this.#mountTable(this.#panels[index]);
-    if (this.#disposed) {
-      // Disposed while the mount was in flight: release what just arrived.
-      handle.dispose();
+  async #mountInto(index: number): Promise<void> {
+    const dispose = await this.#items[index].mount(this.#panels[index]);
+    if (typeof dispose !== 'function') {
       return;
     }
-    this.#tableHandle = handle;
+    if (this.#disposed) {
+      // Disposed while the mount was in flight: release what just arrived.
+      dispose();
+      return;
+    }
+    this.#disposers.push(dispose);
+  }
+
+  #download(): void {
+    const payload = this.#items[this.#active]?.download?.();
+    if (payload) {
+      saveDownload(payload);
+    }
   }
 
   #onKeydown(event: KeyboardEvent, index: number): void {

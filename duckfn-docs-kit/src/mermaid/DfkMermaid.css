@@ -16,6 +16,14 @@
   margin: 1rem 0;
 }
 
+/* Embedded in a SQL result: the result area's tab strip and panel already draw
+   the frame, so the element contributes neither margin nor border nor padding —
+   two nested frames are one too many. Its zoom controls live in the tab strip
+   instead of floating here, which `DfkMermaid.ts` arranges. */
+:host([embedded]) {
+  margin: 0;
+}
+
 .dfk-mermaid-canvas {
   position: relative;
 }
@@ -29,6 +37,25 @@
   border-radius: var(--ifm-global-radius, 0.4rem);
   background: var(--ifm-background-surface-color, #fff);
   padding: 0.75rem;
+}
+
+/* The SQL result panel is the frame; this one is only a clipping box. */
+:host([embedded]) .dfk-mermaid-viewport {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Fullscreen (embedded): the result area hands the panel its height, so the
+   viewport fills it instead of sizing to the diagram. `:host(...)` rather than a
+   descendant selector because the class sits on the element itself, outside this
+   shadow tree. */
+:host(.dfk-mermaid-fullscreen) {
+  height: 100%;
+}
+
+:host(.dfk-mermaid-fullscreen) .dfk-mermaid-viewport {
+  height: 100%;
 }
 
 /* Mermaid sizes its own `<svg>` (`width="100%"` plus an inline `max-width`), so
@@ -47,12 +74,13 @@
    zoom state rather than set on the element once and for all (panzoom's `cursor`
    option does the latter, and it was promising a pan at fit — over text that is
    perfectly selectable). `cursor` is inherited, so these two rules reach the
-   diagram and every label in it; the buttons override it with `pointer`. */
-.dfk-mermaid-canvas.dfk-mermaid-zoomed {
+   diagram and every label in it; the buttons override it with `pointer`. The state
+   classes are written by the shared `PanZoomView`. */
+.dfk-mermaid-viewport.dfk-panzoom-zoomed {
   cursor: grab;
 }
 
-.dfk-mermaid-canvas.dfk-mermaid-zoomed.dfk-mermaid-grabbing {
+.dfk-mermaid-viewport.dfk-panzoom-zoomed.dfk-panzoom-grabbing {
   cursor: grabbing;
 }
 
@@ -205,7 +233,7 @@
 
 /* --- Source dialog ------------------------------------------------------- */
 
-.dfk-mermaid-dialog {
+.dfk-source-dialog {
   width: min(56rem, 92vw);
   max-width: none;
   padding: 0;
@@ -215,18 +243,18 @@
   color: var(--ifm-font-color-base, #181818);
 }
 
-.dfk-mermaid-dialog::backdrop {
+.dfk-source-dialog::backdrop {
   background: rgb(0 0 0 / 45%);
 }
 
-.dfk-mermaid-dialog-body {
+.dfk-source-dialog-body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.75rem;
 }
 
-.dfk-mermaid-dialog-title {
+.dfk-source-dialog-title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
@@ -236,7 +264,7 @@
    theme in the same root the `.cm-*` rules are needed in (`src/codemirror.ts`).
    The content inset is CodeMirror's own (`padding: 4px 0`) and is left alone —
    see the note in `DfkSql.css` about `ViewState.measure()`. */
-.dfk-mermaid-dialog-editor {
+.dfk-source-dialog-editor {
   border: 1px solid var(--ifm-global-border-color, #e0e0e0);
   border-radius: var(--ifm-global-radius, 0.4rem);
   overflow: hidden;
@@ -244,24 +272,24 @@
   font-size: var(--ifm-code-font-size, 95%);
 }
 
-.dfk-mermaid-dialog-editor .cm-editor {
+.dfk-source-dialog-editor .cm-editor {
   outline: none;
 }
 
-.dfk-mermaid-dialog-editor .cm-scroller {
+.dfk-source-dialog-editor .cm-scroller {
   max-height: 55vh;
   font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
     Menlo, monospace);
   line-height: 1.6;
 }
 
-.dfk-mermaid-dialog-footer {
+.dfk-source-dialog-footer {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
 }
 
-.dfk-mermaid-dialog-button {
+.dfk-source-dialog-button {
   padding: 0.3rem 0.9rem;
   border: 1px solid var(--ifm-global-border-color, #e0e0e0);
   border-radius: var(--ifm-global-radius, 0.25rem);
@@ -272,18 +300,18 @@
   cursor: pointer;
 }
 
-.dfk-mermaid-dialog-button:hover {
+.dfk-source-dialog-button:hover {
   border-color: var(--ifm-color-primary, #14459b);
   color: var(--ifm-color-primary, #14459b);
 }
 
-.dfk-mermaid-dialog-apply {
+.dfk-source-dialog-apply {
   border-color: var(--ifm-color-primary, #14459b);
   background: var(--ifm-color-primary, #14459b);
   color: var(--ifm-button-color, #fff);
 }
 
-.dfk-mermaid-dialog-apply:hover {
+.dfk-source-dialog-apply:hover {
   color: var(--ifm-button-color, #fff);
   filter: brightness(1.1);
 }

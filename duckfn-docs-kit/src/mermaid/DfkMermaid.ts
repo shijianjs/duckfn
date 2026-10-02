@@ -1,19 +1,11 @@
-import type {PanzoomObject} from '@panzoom/panzoom';
-import type {CodeEditor} from '../codemirror';
-import {mountCodeEditor} from '../codemirror';
 import {IconButton} from '../IconButton';
 import {el, HTMLElementBase} from '../dom';
+import {saveDownload, sectionFileName, type DownloadPayload} from '../download';
+import {PanZoomView} from '../panzoom-view';
+import {SourceDialog} from '../source-dialog';
 import {parseMermaidConfig, type DfkMermaidConfig, type MermaidColorMode} from './config';
-import {
-  documentColorMode,
-  loadPanzoom,
-  parseMermaidSvg,
-  renderMermaid,
-  serializeMermaidSvg,
-  watchColorMode,
-} from './render';
+import {documentColorMode, parseMermaidSvg, renderMermaid, serializeMermaidSvg, watchColorMode} from './render';
 import {mermaidStyles} from './styles';
-import {diagramFileName} from './title';
 
 /**
  * `<dfk-mermaid>` — a ```mermaid fence rendered as a diagram, produced by
@@ -26,16 +18,18 @@ import {diagramFileName} from './title';
  * rendering happens here rather than inside a React tree, the same code serves
  * the runnable-SQL `mermaid` output — see the renderer in `sql/renderers.ts`.
  *
- * What a reader gets on top of the diagram:
+ * Two ways to use the element:
  *
- * - **Zoom and pan** — wheel to zoom, drag to pan (`@panzoom/panzoom` on the
- *   content box, so the SVG node itself is never mutated; the download
- *   re-serialises that same untouched node, see `serializeMermaidSvg`). Panning
- *   only engages once the diagram is zoomed, which is what lets the page keep
- *   scrolling normally over a diagram that fits.
- * - **Reset zoom**, **fullscreen**, **source editing** (a CodeMirror dialog),
- *   and **download SVG** as floating icon buttons in the top-right corner, the
- *   same idiom as the kit's code blocks.
+ * - **Standalone** (a fence, the default) — the diagram floats the usual icon
+ *   cluster in its top-right corner: reset zoom, source editing, download, and a
+ *   fullscreen toggle of its own; zoom and pan turn on only in that fullscreen.
+ * - **Embedded** (`embedded`, set by the runnable-SQL renderer) — the element
+ *   sheds its frame and its floating cluster, because the SQL result area already
+ *   draws both. Its own zoom controls travel out as {@link actions} (reset zoom /
+ *   source editing) for the result's tab strip, its download travels out as
+ *   {@link downloadPayload} for the same strip's download button, and zoom is
+ *   driven from outside by {@link setFullscreen} — the result area's fullscreen,
+ *   which the element then fills.
  *
  * Everything lives in the shadow root, diagram included: mermaid ships an inline
  * `<style>` inside every SVG it renders, and one shadow root per diagram is what
@@ -47,10 +41,13 @@ import {diagramFileName} from './title';
  * document, the same way a new query result is.
  *
  * Content entry is an **attribute seed** (see CONVENTIONS.md rule 5 exception):
- * `source` / `config` are read once in `connectedCallback`, because neither
- * producer — the remark plugin, or the runnable-SQL `mermaid` renderer — has a
- * React mount point to call a setter from. Reading once to initialise is not an
- * attribute→render loop, so the retained-mode contract still holds.
+ * `source` / `config` / `embedded` are read once, because none of the producers —
+ * the remark plugin, the runnable-SQL `mermaid` renderer — has a React mount point
+ * to call a setter from. Reading once to initialise is not an attribute→render
+ * loop, so the retained-mode contract still holds. Seeding is deferred until the
+ * first need ({@link #ensureSeeded}) rather than pinned to `connectedCallback`:
+ * the SQL renderer has to reach {@link actions} *before* inserting the element, to
+ * hand the container to the tab strip it is building.
  */
 
 type MermaidLabels = {
@@ -93,15 +90,8 @@ const LABELS: Record<string, MermaidLabels> = {
   },
 };
 
-/**
- * The zoom range. `MIN_SCALE` is the fit-to-box scale: the diagram opens there
- * and cannot go below it, which is what makes "zoomed" a clean yes/no — it is
- * exactly the state in which a drag pans, the wheel has something to undo, and
- * the cursor stops promising plain text.
- */
-const MIN_SCALE = 1;
-const MAX_SCALE = 8;
-const ZOOM_STEP = 0.25;
+/** What an embedded diagram is called when nothing on the page says otherwise. */
+const FALLBACK_FILE = 'mermaid-diagram';
 
 export class DfkMermaid extends HTMLElementBase {
   readonly #canvas = el('div', {class: 'dfk-mermaid-canvas', hidden: true});
@@ -112,29 +102,34 @@ export class DfkMermaid extends HTMLElementBase {
   readonly #viewport = el('div', {class: 'dfk-mermaid-viewport'});
   /** The transform target; holds the rendered `<svg>` and nothing else. */
   readonly #content = el('div', {class: 'dfk-mermaid-content'});
-  readonly #actions = el('div', {class: 'dfk-mermaid-actions'});
+  readonly #view = new PanZoomView(this.#viewport, this.#content);
+  /**
+   * The zoom/source controls. Placed inside `#canvas` (floating) when standalone
+   * and handed out through {@link actions} when embedded; the class name is set at
+   * seed time, because which stylesheet has to reach it depends on that.
+   */
+  readonly #actions = el('div');
   readonly #message = el('p', {
     class: 'dfk-mermaid-message',
     attrs: {'aria-live': 'polite'},
     hidden: true,
   });
-  readonly #resetBtn: IconButton;
-  readonly #editBtn: IconButton;
-  readonly #downloadBtn: IconButton;
-  readonly #fullscreenBtn: IconButton;
-  readonly #dialog = el('dialog', {class: 'dfk-mermaid-dialog'});
-  readonly #dialogTitle = el('h2', {class: 'dfk-mermaid-dialog-title'});
-  /** Where the CodeMirror editor mounts, inside the dialog. */
-  readonly #editorHost = el('div', {class: 'dfk-mermaid-dialog-editor'});
-  readonly #applyBtn = el('button', {
-    class: 'dfk-mermaid-dialog-button dfk-mermaid-dialog-apply',
-    type: 'button',
+  readonly #resetBtn = new IconButton('lucide:rotate-ccw', () => this.#view.reset());
+  readonly #editBtn = new IconButton('lucide:pencil', () => this.#openEditor());
+  /** Standalone only; embedded diagrams download through the result chrome. */
+  #downloadBtn: IconButton | null = null;
+  /** Standalone only; embedded diagrams zoom in the result area's fullscreen. */
+  #fullscreenBtn: IconButton | null = null;
+  readonly #dialog = new SourceDialog({
+    title: LABELS.en.editTitle,
+    apply: LABELS.en.apply,
+    cancel: LABELS.en.cancel,
   });
-  readonly #cancelBtn = el('button', {class: 'dfk-mermaid-dialog-button', type: 'button'});
 
   #labels: MermaidLabels = LABELS.en;
   #config: DfkMermaidConfig = parseMermaidConfig(null);
   #source = '';
+  #embedded = false;
   /**
    * The diagram currently on screen, held as a *node* rather than as mermaid's
    * returned string: the download re-serialises it (`serializeMermaidSvg`), which
@@ -144,36 +139,20 @@ export class DfkMermaid extends HTMLElementBase {
   #svg: SVGElement | null = null;
   #colorMode: MermaidColorMode | null = null;
   #seeded = false;
+  /** Standalone fullscreen, which is also this element's zoom switch. */
   #expanded = false;
+  /** Embedded fullscreen, driven from outside; also the zoom switch. */
+  #fullscreen = false;
   /** Whether the document-level Esc handler is currently attached. */
   #escBound = false;
   /** Invalidates an in-flight render when a newer one starts or the element leaves. */
   #renderToken = 0;
-  #panzoom: PanzoomObject | null = null;
-  #panzoomLoading = false;
-  #editor: CodeEditor | null = null;
-  #editorLoading = false;
   #unwatchColorMode: (() => void) | null = null;
 
   readonly #onEsc = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape' && this.#expanded && !this.#dialog.open) {
+    if (event.key === 'Escape' && this.#expanded && !this.#dialog.root.open) {
       this.#setExpanded(false);
     }
-  };
-  readonly #onWheel = (event: WheelEvent): void => {
-    this.#panzoom?.zoomWithWheel(event);
-  };
-  /** The cursor follows the zoom state, so it never promises a pan that cannot happen. */
-  readonly #onPanzoomChange = (): void => {
-    this.#canvas.classList.toggle('dfk-mermaid-zoomed', this.#isZoomed());
-  };
-  readonly #onPanzoomEnd = (): void => {
-    this.#canvas.classList.remove('dfk-mermaid-grabbing');
-  };
-  readonly #onPanzoomStart = (): void => {
-    // `panzoomstart` fires at fit too, where the gesture was left to the browser;
-    // only a drag that will really pan gets the closed hand.
-    this.#canvas.classList.toggle('dfk-mermaid-grabbing', this.#isZoomed());
   };
   readonly #onColorModeChange = (): void => {
     if (documentColorMode() !== this.#colorMode) {
@@ -183,61 +162,32 @@ export class DfkMermaid extends HTMLElementBase {
 
   constructor() {
     super();
-    this.#resetBtn = new IconButton('lucide:rotate-ccw', () => this.#resetView());
-    this.#editBtn = new IconButton('lucide:pencil', () => this.#openEditor());
-    this.#downloadBtn = new IconButton('lucide:download', () => this.#download());
-    this.#fullscreenBtn = new IconButton('lucide:maximize', () =>
-      this.#setExpanded(!this.#expanded),
-    );
-
-    this.#actions.append(
-      this.#resetBtn.root,
-      this.#editBtn.root,
-      this.#downloadBtn.root,
-      this.#fullscreenBtn.root,
-    );
     this.#viewport.appendChild(this.#content);
-    this.#canvas.append(this.#viewport, this.#actions);
-    // panzoom reports state as DOM `CustomEvent`s dispatched on the element it
-    // transforms (`@panzoom/panzoom` v4 has no `on()` API), so they are listened
-    // for here, on our own node — which also means they need no teardown, and
-    // that re-creating the panzoom instance after a reconnect cannot double them.
-    this.#content.addEventListener('panzoomchange', this.#onPanzoomChange);
-    this.#content.addEventListener('panzoomstart', this.#onPanzoomStart);
-    this.#content.addEventListener('panzoomend', this.#onPanzoomEnd);
-
-    this.#applyBtn.addEventListener('click', () => this.#applyEdit());
-    this.#cancelBtn.addEventListener('click', () => this.#dialog.close());
-    this.#dialog.append(
-      el('div', {class: 'dfk-mermaid-dialog-body'}, (body) =>
-        body.append(
-          this.#dialogTitle,
-          this.#editorHost,
-          el('div', {class: 'dfk-mermaid-dialog-footer'}, (footer) =>
-            footer.append(this.#cancelBtn, this.#applyBtn),
-          ),
-        ),
-      ),
-    );
+    this.#canvas.appendChild(this.#viewport);
 
     const shadow = this.attachShadow({mode: 'open'});
     shadow.adoptedStyleSheets = [mermaidStyles()];
     // No slot: nothing is ever handed in as a child (the source travels as an
     // attribute), so the light DOM stays empty and there is nothing to hide.
-    shadow.append(this.#canvas, this.#message, this.#dialog);
+    shadow.append(this.#canvas, this.#message, this.#dialog.root);
     this.#applyLabels();
   }
 
+  /**
+   * The zoom/source controls an embedded diagram offers, for the host to place in
+   * its own chrome. Empty (and unused) when standalone — the element keeps them.
+   */
+  get actions(): HTMLElement {
+    this.#ensureSeeded();
+    return this.#actions;
+  }
+
   connectedCallback(): void {
-    if (!this.#seeded) {
-      this.#seed();
-      this.#seeded = true;
-    }
+    this.#ensureSeeded();
     // Registered here rather than in the constructor: a listener on an *external*
     // object has to be paired with a removal, and connect/disconnect is where
     // that pairing is observable (React may remount the element).
     this.#unwatchColorMode ??= watchColorMode(this.#onColorModeChange);
-    void this.#ensurePanzoom();
     // Only when there is nothing on screen: a reconnect after a move already
     // carries its diagram, and re-rendering it would flash for no reason.
     if (this.#source && !this.#content.hasChildNodes()) {
@@ -251,34 +201,53 @@ export class DfkMermaid extends HTMLElementBase {
     this.#unwatchColorMode = null;
     // Panzoom binds move/up on `document`, so it outlives the element unless it
     // is torn down here.
-    this.#viewport.removeEventListener('wheel', this.#onWheel);
-    this.#panzoom?.destroy();
-    this.#panzoom = null;
-    // The zoom-state classes describe the instance that is now gone.
-    this.#canvas.classList.remove('dfk-mermaid-zoomed', 'dfk-mermaid-grabbing');
+    this.#view.destroy();
     this.#renderToken += 1;
-    this.#editor?.destroy();
-    this.#editor = null;
-    if (this.#dialog.open) {
-      this.#dialog.close();
-    }
+    this.#dialog.destroy();
   }
 
   /**
-   * Reads the `source` / `config` attributes once.
-   *
-   * This is the element's *only* content entry, for both producers: the remark
-   * plugin emits the attributes at build time, and the runnable-SQL `mermaid`
-   * renderer sets them on the element it creates. Neither has a React mount point
-   * to call a setter from, which is the exception CONVENTIONS.md rule 5 makes for
-   * plugin-generated elements — and reading them once to initialise is not an
-   * attribute→render loop, so the retained-mode contract still holds.
-   *
-   * `source` is only applied when the attribute is actually present, so a caller
-   * that sets the attribute before inserting the element keeps it: the attribute
-   * is read at *upgrade* time, which for an element created by
-   * `document.createElement` after `customElements.define` is the insertion.
+   * Turns zoom/pan on or off for an embedded diagram. The host calls this with its
+   * own fullscreen state: an embedded diagram zooms exactly where its result area
+   * is expanded, and fills that area while it is.
    */
+  setFullscreen(value: boolean): void {
+    this.#ensureSeeded();
+    this.#fullscreen = value;
+    this.classList.toggle('dfk-mermaid-fullscreen', value);
+    this.#view.setActive(value);
+  }
+
+  /**
+   * The file this diagram would be saved as, or `null` while nothing is rendered.
+   * An embedded diagram hands this to the result chrome's download button, which
+   * is why the element does not save it itself.
+   */
+  downloadPayload(): DownloadPayload | null {
+    if (this.#svg === null) {
+      return null;
+    }
+    return {
+      name: sectionFileName(this, 'svg', {source: this.#source, fallback: FALLBACK_FILE}),
+      mime: 'image/svg+xml;charset=utf-8',
+      text: serializeMermaidSvg(this.#svg),
+    };
+  }
+
+  /**
+   * Reads the `source` / `config` / `embedded` attributes once, and builds the
+   * part of the structure that depends on the mode. Idempotent, and callable
+   * before connection (see {@link actions}): the SQL renderer reads the attributes
+   * it set through `el()` before it inserts the element.
+   */
+  #ensureSeeded(): void {
+    if (this.#seeded) {
+      return;
+    }
+    this.#seeded = true;
+    this.#seed();
+  }
+
   #seed(): void {
     this.#labels =
       LABELS[(document.documentElement.getAttribute('lang') ?? 'en').toLowerCase()] ??
@@ -288,19 +257,42 @@ export class DfkMermaid extends HTMLElementBase {
       this.#source = source;
     }
     this.#config = parseMermaidConfig(this.getAttribute('config'));
+    this.#embedded = this.hasAttribute('embedded');
+    if (this.#embedded) {
+      // The result chrome places this container and styles it (see `sql.css`);
+      // the class is neutral because a shadow boundary is not involved here.
+      this.#actions.className = 'dfk-sql-tab-actions';
+      this.#actions.append(this.#resetBtn.root, this.#editBtn.root);
+    } else {
+      this.#downloadBtn = new IconButton('lucide:download', () => this.#download());
+      this.#fullscreenBtn = new IconButton('lucide:maximize', () =>
+        this.#setExpanded(!this.#expanded),
+      );
+      this.#actions.className = 'dfk-mermaid-actions';
+      this.#actions.append(
+        this.#resetBtn.root,
+        this.#editBtn.root,
+        this.#downloadBtn.root,
+        this.#fullscreenBtn.root,
+      );
+      this.#canvas.appendChild(this.#actions);
+    }
     this.#applyLabels();
+    this.#setActionsAvailable(false);
   }
 
   #applyLabels(): void {
     this.#resetBtn.setLabel(this.#labels.reset);
     this.#editBtn.setLabel(this.#labels.edit);
-    this.#downloadBtn.setLabel(this.#labels.download);
-    this.#fullscreenBtn.setLabel(
+    this.#downloadBtn?.setLabel(this.#labels.download);
+    this.#fullscreenBtn?.setLabel(
       this.#expanded ? this.#labels.exitFullscreen : this.#labels.fullscreen,
     );
-    this.#dialogTitle.textContent = this.#labels.editTitle;
-    this.#cancelBtn.textContent = this.#labels.cancel;
-    this.#applyBtn.textContent = this.#labels.apply;
+    this.#dialog.setLabels({
+      title: this.#labels.editTitle,
+      apply: this.#labels.apply,
+      cancel: this.#labels.cancel,
+    });
   }
 
   // --- Rendering -------------------------------------------------------------
@@ -340,20 +332,19 @@ export class DfkMermaid extends HTMLElementBase {
         throw new Error(this.#labels.renderFailed);
       }
       this.#svg = svg;
-      this.#content.replaceChildren(svg);
+      this.#view.setContent(svg);
       // Mermaid's own hook for click handlers on nodes; it takes the container
       // that holds the SVG.
       output.bind?.(this.#content);
       this.#canvas.hidden = false;
       this.#setMessage('', false);
       this.#setActionsAvailable(true);
-      this.#resetView();
     } catch (error) {
       if (token !== this.#renderToken || !this.isConnected) {
         return;
       }
       this.#svg = null;
-      this.#content.replaceChildren();
+      this.#view.setContent(null);
       this.#canvas.hidden = true;
       this.#setActionsAvailable(false);
       this.#setMessage(`${this.#labels.renderFailed}: ${messageOf(error)}`, true);
@@ -366,100 +357,23 @@ export class DfkMermaid extends HTMLElementBase {
     this.#message.classList.toggle('dfk-mermaid-message-error', isError);
   }
 
-  /** Reset zoom and download only mean something once a diagram is on screen. */
+  /** Editing and resetting only mean something once a diagram is on screen. */
   #setActionsAvailable(available: boolean): void {
     this.#resetBtn.root.hidden = !available;
-    this.#downloadBtn.root.hidden = !available;
-  }
-
-  // --- Zoom and pan ----------------------------------------------------------
-
-  /**
-   * Binds panzoom to the content box. `@panzoom/panzoom` is an enhancement, not a
-   * requirement: if its chunk never arrives, the diagram still renders, only
-   * wheel zoom and dragging stay inert.
-   *
-   * Three settings carry the interaction contract:
-   *
-   * - `panOnlyWhenZoomed` — a diagram that already fits must not swallow drags,
-   *   so panning only engages once it is enlarged. That is also what keeps
-   *   `touchAction: 'pan-y'` meaningful: vertical page scrolling stays the
-   *   browser's, pinch and horizontal drags go to the diagram.
-   * - `handleStartEvent` — panzoom's default takes the gesture on *every*
-   *   pointerdown (`preventDefault` + `stopPropagation`), which costs the reader
-   *   text selection at every zoom level. Handing the gesture over only when a
-   *   drag will really pan is what makes the labels selectable while the diagram
-   *   is at fit. Nothing else blocks it: panzoom's move listener is `passive` and
-   *   never calls `preventDefault`.
-   * - no `cursor` option — panzoom would then put `grab` on the element for good,
-   *   over text that is perfectly selectable. The cursor is driven by the zoom
-   *   state instead, from `DfkMermaid.css`.
-   */
-  async #ensurePanzoom(): Promise<void> {
-    if (this.#panzoom !== null || this.#panzoomLoading) {
-      return;
+    this.#editBtn.root.hidden = !available;
+    if (this.#downloadBtn) {
+      this.#downloadBtn.root.hidden = !available;
     }
-    this.#panzoomLoading = true;
-    try {
-      const Panzoom = await loadPanzoom();
-      if (!this.isConnected) {
-        return;
-      }
-      this.#viewport.addEventListener('wheel', this.#onWheel, {passive: false});
-      this.#panzoom = Panzoom(this.#content, {
-        maxScale: MAX_SCALE,
-        minScale: MIN_SCALE,
-        step: ZOOM_STEP,
-        panOnlyWhenZoomed: true,
-        touchAction: 'pan-y',
-        // panzoom's own default is `move`, written inline on the element — the
-        // cursor has to stay a CSS decision (see `DfkMermaid.css`), so it is
-        // switched off here.
-        cursor: '',
-        handleStartEvent: (event) => {
-          if (!this.#isZoomed()) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-        },
-      });
-      // panzoom also forces `user-select: none` inline on the element *and its
-      // parent*, with no option to prevent it — that alone made every label in
-      // every diagram unselectable. It exists to stop a drag from selecting while
-      // panning, which `handleStartEvent` already covers: whenever a pan will
-      // happen, the gesture is taken with `preventDefault()` before the browser
-      // can start a selection. panzoom writes these styles only here and in
-      // `setOptions`, which this component never calls, so clearing them once is
-      // enough.
-      this.#content.style.userSelect = '';
-      this.#viewport.style.userSelect = '';
-    } catch {
-      // Nothing to report: the diagram is already usable without pan/zoom.
-    } finally {
-      this.#panzoomLoading = false;
-    }
-  }
-
-  /** Whether the diagram is enlarged past its fit-to-box size. */
-  #isZoomed(): boolean {
-    return (this.#panzoom?.getScale() ?? MIN_SCALE) > MIN_SCALE;
-  }
-
-  #resetView(): void {
-    this.#panzoom?.reset({
-      // Zooming back to fit is a transition the reader did not ask to skip, but
-      // one they may have asked not to have.
-      animate: !prefersReducedMotion(),
-    });
   }
 
   // --- Fullscreen ------------------------------------------------------------
 
+  /** The standalone fullscreen toggle; also switches zoom on and off. */
   #setExpanded(value: boolean): void {
     this.#expanded = value;
     this.#canvas.classList.toggle('dfk-mermaid-expanded', value);
-    this.#fullscreenBtn.setIcon(value ? 'lucide:minimize' : 'lucide:maximize');
+    this.#view.setActive(value);
+    this.#fullscreenBtn?.setIcon(value ? 'lucide:minimize' : 'lucide:maximize');
     this.#applyLabels();
     if (value !== this.#escBound) {
       if (value) {
@@ -473,85 +387,25 @@ export class DfkMermaid extends HTMLElementBase {
 
   // --- Download --------------------------------------------------------------
 
-  /**
-   * Saves the diagram as a standalone `.svg` file.
-   *
-   * The markup is re-serialised from the rendered node, not taken from mermaid's
-   * return value — that one is HTML, and its void elements come out unclosed,
-   * which a browser opening the file as XML rejects. See `serializeMermaidSvg`.
-   */
+  /** Saves the diagram as a standalone `.svg` file (see {@link downloadPayload}). */
   #download(): void {
-    if (this.#svg === null) {
-      return;
+    const payload = this.downloadPayload();
+    if (payload) {
+      saveDownload(payload);
     }
-    const markup = serializeMermaidSvg(this.#svg);
-    const blob = new Blob([markup], {type: 'image/svg+xml;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    // Named after the section the diagram sits in (see `title.ts`), so the reader
-    // gets `2. Registration.svg` rather than a second `mermaid-diagram.svg`.
-    const link = el('a', {href: url, download: diagramFileName(this.#source, this)});
-    // Anchored in the shadow tree for the click; a detached anchor is ignored by
-    // some browsers, and by then the download has already been handed to it.
-    this.shadowRoot?.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   // --- Source editing --------------------------------------------------------
 
-  /**
-   * Opens the source dialog, mounting the editor on first use. The dialog is
-   * shown *before* the editor mounts: CodeMirror measures its container as it is
-   * constructed, and a `display: none` dialog measures to zero.
-   */
+  /** Opens the source dialog; the edited text is re-rendered on Apply. */
   #openEditor(): void {
-    this.#dialog.showModal();
-    if (this.#editor) {
-      this.#editor.setValue(this.#source);
-      return;
-    }
-    void this.#mountEditor();
-  }
-
-  async #mountEditor(): Promise<void> {
-    if (this.#editorLoading) {
-      return;
-    }
-    this.#editorLoading = true;
-    try {
-      // No language: there is no first-party CodeMirror grammar for mermaid, and
-      // the dialog is for touching up a diagram, not writing SQL.
-      const editor = await mountCodeEditor(this.#editorHost, this.#source, () => undefined);
-      if (!this.isConnected || !this.#dialog.open) {
-        // Closed while the modules were loading: nothing will ever dispose this
-        // editor, so dispose it here.
-        editor.destroy();
-        return;
-      }
-      editor.setWrap(true);
-      this.#editor = editor;
-    } catch {
-      // The dialog stays open with an empty editor box; a second click retries.
-    } finally {
-      this.#editorLoading = false;
-    }
-  }
-
-  #applyEdit(): void {
-    const edited = this.#editor?.getValue();
-    this.#dialog.close();
-    if (edited !== undefined && edited !== this.#source) {
-      this.#source = edited;
+    this.#dialog.open(this.#source, (value) => {
+      this.#source = value;
       void this.#render();
-    }
+    });
   }
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }

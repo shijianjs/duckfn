@@ -191,12 +191,13 @@ dfk-sql:not(:defined) {
 
 /* --- Result tabs --------------------------------------------------------- */
 
-/* The strip is a row holding the scrolling tab list and the corner button
-   (the fullscreen toggle, owned by `<dfk-sql>`). */
+/* The strip is a row holding the scrolling tab list and, at its right end, the
+   chrome that acts on the result as a whole: `[the active tab's own controls]
+   [download] [fullscreen]`. The corner never scrolls with the list and never
+   shrinks, so those buttons stay put however many tabs there are. */
 .dfk-sql-tabs {
   display: flex;
   align-items: center;
-  padding-right: 0.3rem;
   border-bottom: 1px solid var(--ifm-global-border-color, #e0e0e0);
   background: var(--ifm-color-emphasis-100, #f5f5f5);
 }
@@ -208,6 +209,63 @@ dfk-sql:not(:defined) {
   min-width: 0;
   padding: 0.3rem 0.5rem 0;
   overflow-x: auto;
+}
+
+.dfk-sql-tab-corner {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.15rem;
+  padding-right: 0.3rem;
+}
+
+/* One tab's own controls — a table's search and view switches, a figure's zoom
+   and edit buttons. Written by the renderers (and by an embedded
+   `<dfk-mermaid>`); only the active tab's container is shown. */
+.dfk-sql-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.dfk-sql-tab-actions[hidden] {
+  display: none;
+}
+
+/* The search box opens in place rather than as a popover over the canvas: the
+   table is as wide as the page, and a popover would cover the cells the reader
+   is searching. */
+.dfk-sql-search-input {
+  width: 9rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: var(--ifm-background-surface-color, #fff);
+  color: var(--ifm-font-color-base, #181818);
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.dfk-sql-search-input:focus-visible {
+  outline: 2px solid var(--ifm-color-primary, #14459b);
+  outline-offset: -1px;
+}
+
+.dfk-sql-search-input[hidden] {
+  display: none;
+}
+
+.dfk-sql-search-count {
+  min-width: 2.2rem;
+  color: var(--ifm-color-emphasis-700, #666);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.dfk-sql-search-count[hidden] {
+  display: none;
 }
 
 .dfk-sql-tab {
@@ -317,11 +375,16 @@ dfk-sql:not(:defined) {
    bottom of the table from continuing into the page scroll (the page lurches
    upward and the example leaves the screen). It is not inherited, so it is
    declared on every scrolling box, including VTable's inner scroll containers
-   under `.dfk-sql-table`. */
-.dfk-sql-panel,
+   under `.dfk-sql-table`.
+   The panel is contained **only while the result is expanded**: `contain` applies
+   to any box with a non-visible `overflow`, and a panel is a scroll container
+   whether or not it has anything to scroll — so, inline, it would swallow the
+   wheel that should have gone to the page (a figure is a picture there, not a
+   viewport: see `DfkMermaid.css`). Expanded, the panel really does scroll, and
+   without this the wheel would move the page *behind* the overlay instead. */
 .dfk-sql-table,
 .dfk-sql-table *,
-.dfk-sql-svg {
+.dfk-sql-result-expanded .dfk-sql-panel {
   overscroll-behavior: contain;
 }
 
@@ -347,16 +410,35 @@ dfk-sql:not(:defined) {
   background: #fff;
 }
 
+/* The `svg` result is a pan/zoom viewport (the shared `PanZoomView`), with the
+   SVG in its content box. It draws no frame: the result panel is the frame, and
+   stacking a second one behind the tab strip is what made a two-box look. The
+   `overflow: hidden` clips a zoomed figure instead of letting it spill over the
+   page, and is also what panzoom expects of a pan element's parent. */
 .dfk-sql-svg {
   width: var(--dfk-sql-preview-width, 100%);
   height: var(--dfk-sql-preview-height, auto);
   padding: 0.5rem;
-  overflow: auto;
+  overflow: hidden;
 }
 
-.dfk-sql-svg > svg {
+.dfk-sql-svg-content > svg {
+  display: block;
+  margin: 0 auto;
   max-width: 100%;
   height: auto;
+}
+
+/* The cursor says what a drag will actually do, so it follows the zoom state
+   rather than being set once (`PanZoomView` writes the two state classes).
+   `cursor` is inherited, so it reaches the figure and every label in it. The
+   same two rules live in `DfkMermaid.css`. */
+.dfk-sql-svg.dfk-panzoom-zoomed {
+  cursor: grab;
+}
+
+.dfk-sql-svg.dfk-panzoom-zoomed.dfk-panzoom-grabbing {
+  cursor: grabbing;
 }
 
 /* --- Fullscreen ---------------------------------------------------------- */
@@ -396,4 +478,90 @@ dfk-sql:not(:defined) {
    panel is one full-height scroll area rather than a strip. */
 .dfk-sql-result-expanded .dfk-sql-svg {
   height: 100%;
+}
+
+/* --- Source dialog ------------------------------------------------------- */
+
+/* The `svg` viewer's source editor (`SourceDialog`). The dialog itself is
+   modal — it renders in the top layer, so its position needs no help — but the
+   class names are written by the shared widget, which `<dfk-mermaid>` uses
+   inside its shadow root; these rules are that sheet's `.dfk-source-dialog*`
+   block, in the light DOM, and the two are kept in sync by hand. */
+.dfk-source-dialog {
+  width: min(56rem, 92vw);
+  max-width: none;
+  padding: 0;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  background: var(--ifm-background-surface-color, #fff);
+  color: var(--ifm-font-color-base, #181818);
+}
+
+.dfk-source-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.dfk-source-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.dfk-source-dialog-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.dfk-source-dialog-editor {
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.4rem);
+  overflow: hidden;
+  background: var(--ifm-background-surface-color, #fff);
+  font-size: var(--ifm-code-font-size, 95%);
+}
+
+.dfk-source-dialog-editor .cm-editor {
+  outline: none;
+}
+
+.dfk-source-dialog-editor .cm-scroller {
+  max-height: 55vh;
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular,
+    Menlo, monospace);
+  line-height: 1.6;
+}
+
+.dfk-source-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.dfk-source-dialog-button {
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--ifm-global-border-color, #e0e0e0);
+  border-radius: var(--ifm-global-radius, 0.25rem);
+  background: var(--ifm-background-surface-color, #fff);
+  color: var(--ifm-font-color-base, #181818);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dfk-source-dialog-button:hover {
+  border-color: var(--ifm-color-primary, #14459b);
+  color: var(--ifm-color-primary, #14459b);
+}
+
+.dfk-source-dialog-apply {
+  border-color: var(--ifm-color-primary, #14459b);
+  background: var(--ifm-color-primary, #14459b);
+  color: var(--ifm-button-color, #fff);
+}
+
+.dfk-source-dialog-apply:hover {
+  color: var(--ifm-button-color, #fff);
+  filter: brightness(1.1);
 }

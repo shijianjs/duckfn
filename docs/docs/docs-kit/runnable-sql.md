@@ -118,7 +118,9 @@ SELECT * FROM (VALUES
 `svg` splices the markup into the page instead of framing it — the panel is
 still one tab per row plus the trailing table. Because inline SVG shares the
 page, anything that could execute or navigate (scripts, `foreignObject`,
-`on*` handlers, `javascript:` links) is stripped before it is inserted.
+`on*` handlers, `javascript:` links) is stripped before it is inserted. The
+figure itself behaves like a diagram: zoom and pan switch on in fullscreen, and
+**Edit source** opens the markup in a dialog to apply and re-render.
 
 ```sql {"type":"duckfn","show":"svg","option":{"height":"140px"}}
 SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260" height="100"><circle cx="50" cy="50" r="40" fill="#14459b"/><circle cx="120" cy="50" r="30" fill="#3d7bd6"/><text x="170" y="56" font-family="system-ui" font-size="16" fill="#181818">from SVG</text></svg>';
@@ -128,9 +130,12 @@ SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260
 
 `mermaid` renders the column's source as a diagram, through the very same
 `<dfk-mermaid>` element a ```` ```mermaid ```` fence produces — so a query can
-build a diagram, and the reader gets the element's zoom, fullscreen, source
-editing and SVG download with it. As with the other previews, there is one tab
-per row and the raw rows stay in the trailing `Table` tab.
+build a diagram, and the reader gets the element's zoom, source editing and SVG
+download with it. Embedded like this, the element adds neither a frame of its own
+nor a floating button cluster: the result area already draws both, so **Reset
+zoom** and **Edit source** move to the tab strip and the diagram zooms in the
+result's fullscreen. As with the other previews, there is one tab per row and the
+raw rows stay in the trailing `Table` tab.
 
 ```sql {"type":"duckfn","show":"mermaid"}
 SELECT 'flowchart LR' || chr(10)
@@ -157,16 +162,51 @@ An extension whose signature does not verify is rejected unless
 with DuckDB's keys — and the *first* block that initialises the shared runtime
 settles the instance either way.
 
-## Fullscreen
+## The strip at the right of the tabs
 
-Every result carries the same tab strip — a plain table result included — and
-the fullscreen toggle sits at the right end of it. Clicking it fills the viewport
-with the result, and the same button (now *Exit fullscreen*) stays in place.
-<kbd>Esc</kbd> exits too.
+Every result carries the same tab strip — a plain table result included — and its
+right end holds the whole-result chrome: the **active tab's own controls**, a
+**Download** button and the fullscreen toggle. The controls belong to the tab, so
+they appear and disappear with it:
+
+| Tab | Controls |
+| --- | --- |
+| `Table` | Search, Copy table, column-width mode, Reset view, Unfreeze columns |
+| `svg` / `mermaid` | Reset zoom, Edit source |
+| `html` / `iframe` / `text` | — |
+
+The table's controls are the whole-table half of its right-click menu, kept where
+they cannot cover a cell; the menu itself still has the per-cell entries (copy this
+cell, wrap this column, freeze up to here). **Unfreeze columns** only appears once
+a column has actually been frozen — freeze from the menu to get there — and goes
+away again when none are.
+
+**Download** saves whatever the active tab shows, in the format that tab has:
+`.csv` for a table, `.svg` for a figure, `.html` for a prepared frame, `.txt` for
+text. It is hidden only while there is nothing to save yet (a figure that has not
+finished rendering).
+
+The fullscreen toggle sits at the very end. Clicking it fills the viewport with
+the result, and the same button (now *Exit fullscreen*) stays in place.
+<kbd>Esc</kbd> exits too. Fullscreen is also the only place a figure zooms and
+pans — see [Mermaid diagrams](./mermaid.md) for what the pointer does there.
 
 ```sql {"type":"duckfn","show":"table"}
 SELECT i AS n, repeat('wide column ', 3) AS filler
 FROM range(40) t(i);
+```
+
+## Searching a table
+
+A table result is as wide as the page, so its search box opens *inside the tab
+strip* rather than floating over the cells it is meant to find. Typing highlights
+every match and the counter (`3/12`) says where you are; the arrows step through
+them and the last button clears the field. Searching is per table result and
+starts over on the next one.
+
+```sql {"type":"duckfn","show":"table"}
+SELECT i AS n, 'row ' || i AS label, i % 3 AS bucket
+FROM range(20) t(i);
 ```
 
 ## Config reference

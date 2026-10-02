@@ -79,6 +79,10 @@ export default defineConfig({
         // the library build — owns how the engine is loaded.
         /^@duckdb\/duckdb-wasm/,
         '@visactor/vtable',
+        // The table's search, a sibling package of `@visactor/vtable` and
+        // versioned in lockstep with it. Also loaded through a dynamic
+        // `import()` (only a reader who searches pays for it).
+        '@visactor/vtable-search',
         // Mermaid and the pan/zoom controller behind `<dfk-mermaid>`: both are
         // reached only through dynamic `import()`s, and staying external is what
         // lets the site's bundler code-split them into their own chunks.

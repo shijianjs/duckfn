@@ -146,12 +146,6 @@ export function parseMermaidSvg(owner: Document, svg: string): SVGElement | null
   return root ? (owner.importNode(root, true) as unknown as SVGElement) : null;
 }
 
-/** The pan/zoom library, loaded once on first use (see `DfkMermaid`). */
-export async function loadPanzoom(): Promise<typeof import('@panzoom/panzoom')['default']> {
-  const module = await import('@panzoom/panzoom');
-  return module.default;
-}
-
 /**
  * Serialises a rendered diagram into standalone SVG markup.
  *

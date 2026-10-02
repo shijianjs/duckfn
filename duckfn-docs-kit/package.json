@@ -61,6 +61,7 @@
     "@duckdb/duckdb-wasm": "1.33.1-dev65.0",
     "@panzoom/panzoom": "^4.6.2",
     "@visactor/vtable": "^1.26.8",
+    "@visactor/vtable-search": "^1.26.8",
     "codemirror": "^6.0.2",
     "filenamify": "^7.0.3",
     "iconify-icon": "^3.0.3",

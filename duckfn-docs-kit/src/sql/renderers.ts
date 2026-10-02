@@ -1,8 +1,12 @@
 import type {ListTable, ListTableConstructorOptions} from '@visactor/vtable';
+import type {SearchComponent} from '@visactor/vtable-search';
 import type {QueryResult} from './runtime';
 import type {RunnableSqlConfig} from './remark';
-import {PreviewTabs, type PreviewTabItem, type PreviewTableHandle} from './PreviewTabs';
+import {PreviewTabs, type PreviewTabItem} from './PreviewTabs';
+import {SvgViewer, parseSvgMarkup, type FigureLabels} from './SvgViewer';
 import {el} from '../dom';
+import {sectionFileName, type DownloadPayload} from '../download';
+import {IconButton} from '../IconButton';
 
 /**
  * Result renderers, keyed by the config's `show` field.
@@ -30,6 +34,13 @@ export interface RenderContext {
    * renderer only borrows it so every result has the same chrome.
    */
   fullscreenButton: HTMLElement;
+  /**
+   * Subscribes to the result area's fullscreen state, calling back with the
+   * current value straight away and returning the unsubscribe. A renderer whose
+   * figure zooms only in fullscreen (`svg`, `mermaid`) forwards the value to its
+   * viewer; the subscription must be released by the renderer's disposer.
+   */
+  onFullscreenChange(listener: (value: boolean) => void): () => void;
 }
 
 /**
@@ -45,6 +56,13 @@ export type Renderer = (
   context: RenderContext,
   result: QueryResult,
 ) => Promise<void | (() => void)>;
+
+/** What a mounted VTable hands back: its release hook, and its export. */
+interface PreviewTableHandle {
+  dispose(): void;
+  /** The visible grid as CSV, in the current display order. */
+  csv(): string;
+}
 
 /**
  * The default `sandbox` for the `iframe` renderer: scripts run (HTML reports
@@ -62,27 +80,26 @@ const ROW_HEIGHT = 30;
 const HEADER_HEIGHT = 32;
 
 /**
- * Stable `menuKey`s for the context-menu items. VTable fires the click through
- * the `dropdown_menu_click` event (see {@link ResultTable.#onMenu}) with
+ * Stable `menuKey`s for the context menu. VTable fires a context-menu click
+ * through the `dropdown_menu_click` event (see {@link ResultTable.#onMenu}) with
  * `menuKey = menuItem.menuKey || menuItem.text`, so giving every item an
  * explicit key keeps the dispatch independent of the (localised) label text.
+ *
+ * Only the per-cell and per-column items live here now: the actions that act on
+ * the grid as a whole (search, copy the table, the width modes, reset, unfreeze)
+ * moved to the result area's tab strip, where they neither cover the cells nor
+ * sit in a menu a reader has to find.
  */
 const MENU = {
   copyCell: 'dfk-copy-cell',
-  copyAll: 'dfk-copy-all',
   wrap: 'dfk-wrap',
   unwrap: 'dfk-unwrap',
   freeze: 'dfk-freeze',
-  unfreeze: 'dfk-unfreeze',
-  reset: 'dfk-reset',
-  widthAdaptive: 'dfk-width-adaptive',
-  widthStandard: 'dfk-width-standard',
-  widthFill: 'dfk-width-fill',
 } as const;
 
 /**
- * The column-width view modes the context menu switches between. Each is a
- * plain pair of official VTable options:
+ * The column-width view modes the tab strip's width button cycles through. Each
+ * is a plain pair of official VTable options:
  *
  * - `adaptive` (the default) hands the container width to the columns: every
  *   column keeps its measured content as its share, so the table always fills
@@ -92,26 +109,27 @@ const MENU = {
  * - `standard` + `autoFillWidth` keeps content widths but stretches them to
  *   fill when the content happens to be narrower than the box.
  *
- * `label`/`fallback` are the labels key and its English default, so a consumer
- * that only provides a few strings still gets text for every item.
+ * `id` is the button's identity (there is no context-menu entry to key it to any
+ * more); `label`/`fallback` are the labels key and its English default, so a
+ * consumer that only provides a few strings still gets text for every item.
  */
 const WIDTH_MODES = [
   {
-    menuKey: MENU.widthAdaptive,
+    id: 'dfk-width-adaptive',
     label: 'widthAdaptive',
     widthMode: 'adaptive',
     autoFillWidth: false,
     fallback: 'Fill the width',
   },
   {
-    menuKey: MENU.widthStandard,
+    id: 'dfk-width-standard',
     label: 'widthStandard',
     widthMode: 'standard',
     autoFillWidth: false,
     fallback: 'Content widths, scroll sideways',
   },
   {
-    menuKey: MENU.widthFill,
+    id: 'dfk-width-fill',
     label: 'widthFill',
     widthMode: 'standard',
     autoFillWidth: true,
@@ -119,9 +137,9 @@ const WIDTH_MODES = [
   },
 ] as const;
 
-/** The width-mode table row for a `MENU.*` key (the default when unknown). */
-function widthModeOption(menuKey: string): (typeof WIDTH_MODES)[number] {
-  return WIDTH_MODES.find((mode) => mode.menuKey === menuKey) ?? WIDTH_MODES[0];
+/** The width-mode table row for an `id` (the default when unknown). */
+function widthModeOption(id: string): (typeof WIDTH_MODES)[number] {
+  return WIDTH_MODES.find((mode) => mode.id === id) ?? WIDTH_MODES[0];
 }
 
 /** Theme shape VTable accepts in the constructor / `updateTheme`. */
@@ -131,6 +149,14 @@ type VTableModule = typeof import('@visactor/vtable');
 /** The two official themes the table switches between. */
 type VTableThemeName = 'DEFAULT' | 'DARK';
 type TableColumns = NonNullable<ListTableConstructorOptions['columns']>;
+/**
+ * The search component's highlight style. Its option type demands a complete
+ * `CellStyle` where only the background is read, so this names that one
+ * property and the tint can be handed over without inventing 26 more.
+ */
+type HighlightStyle = NonNullable<
+  ConstructorParameters<typeof SearchComponent>[0]['highlightCellStyle']
+>;
 /**
  * The context-menu item shape. Mirrors VTable's `MenuListItem`, which is not
  * re-exported from the package root, so it is spelled out locally.
@@ -210,8 +236,6 @@ function compareValues(a: unknown, b: unknown, order: string): -1 | 0 | 1 {
   return (String(order).toLowerCase() === 'desc' ? -sign : sign) as -1 | 0 | 1;
 }
 
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
-
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -229,11 +253,27 @@ function errorText(labels: Record<string, string>, detail: string): string {
 }
 
 /**
+ * One CSV field, quoted per RFC 4180: a value containing a comma, a double quote
+ * or a line break is wrapped in quotes, and its own quotes are doubled. Nothing
+ * else is touched, so plain values stay readable in a raw diff.
+ */
+function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+/**
  * A VTable result grid with the interaction layer a docs example wants:
  * sortable columns, clipboard copy, resizable rows/columns, draggable headers,
- * cross-highlight on hover, per-column text wrapping and column freezing — all
- * driven through VTable's own options and events so the canvas stays the single
- * source of truth (nothing is re-laid-out in DOM).
+ * cross-highlight on hover, per-column text wrapping, column freezing and a
+ * search — all driven through VTable's own options and events so the canvas
+ * stays the single source of truth (nothing is re-laid-out in DOM).
+ *
+ * The actions that act on the grid as a whole (search, copy the table, the
+ * column-width view modes, reset the view, unfreeze) live in the result area's
+ * tab strip, not in a floating cluster over the canvas: the table is as wide as
+ * the page, and anything floating would cover cells. They are built here, into
+ * the container the renderer made for this tab's {@link PreviewTabItem.actions}.
+ * Only the per-cell and per-column items stay in the context menu.
  *
  * All styling comes from VTable's own themes (`themes.DEFAULT` / `themes.DARK`,
  * picked below by the document's colour scheme). The table deliberately does
@@ -251,14 +291,23 @@ class ResultTable {
   readonly #labels: Record<string, string>;
   /** VTable's theme namespace, taken from the dynamic `import()`. */
   readonly #themes: VTableModule['themes'];
+  /** The strip's container for this table's controls. */
+  readonly #actions: HTMLElement;
+  readonly #searchBtn: IconButton;
+  readonly #searchInput: HTMLInputElement;
+  readonly #searchCount: HTMLElement;
+  readonly #widthBtn: IconButton;
+  readonly #unfreezeBtn: IconButton;
   /** Fields whose column currently wraps (row height switches to `auto`). */
   readonly #wrapped = new Set<string>();
   #frozen = 0;
   #frame = 0;
   /** The official theme currently applied, so a repaint happens only on change. */
   #appliedTheme?: VTableThemeName;
-  /** The active width mode, one of `WIDTH_MODES`' keys (default: adaptive). */
-  #widthMode: string = MENU.widthAdaptive;
+  /** The active width mode's `id` (see `WIDTH_MODES`; default: adaptive). */
+  #widthMode: string = WIDTH_MODES[0].id;
+  #search: SearchComponent | null = null;
+  #searchLoading = false;
   #observer?: ResizeObserver;
   #themeObserver?: MutationObserver;
 
@@ -267,13 +316,26 @@ class ResultTable {
     record: HTMLElement,
     result: QueryResult,
     labels: Record<string, string>,
+    actions: HTMLElement,
   ) {
     this.#record = record;
     this.#result = result;
     this.#labels = labels;
     this.#themes = vtable.themes;
+    this.#actions = actions;
+    this.#searchBtn = new IconButton('lucide:search', () => this.#toggleSearch());
+    this.#searchInput = el('input', {
+      class: 'dfk-sql-search-input',
+      type: 'search',
+      hidden: true,
+      attrs: {placeholder: labels.search ?? 'Search', 'aria-label': labels.search ?? 'Search'},
+    });
+    this.#searchCount = el('span', {class: 'dfk-sql-search-count', hidden: true});
+    this.#widthBtn = new IconButton('lucide:stretch-horizontal', () => this.#cycleWidthMode());
+    this.#unfreezeBtn = new IconButton('lucide:pin-off', () => this.#freeze(-1));
     this.#table = new vtable.ListTable(this.#options());
     this.#appliedTheme = this.#themeName();
+    this.#buildActions();
 
     // `resize()` re-measures and repaints inside `record`, so running it straight
     // from the observer callback feeds the resulting box change back into the very
@@ -301,6 +363,152 @@ class ResultTable {
     });
 
     this.#table.on('dropdown_menu_click', (args) => this.#onMenu(args));
+  }
+
+  /**
+   * Builds the strip's controls, once. Each is a plain button or input held in a
+   * field — the search box is revealed in place rather than opened as a popover,
+   * because the strip has the room and a popover over a full-width table is the
+   * thing this arrangement exists to avoid.
+   */
+  #buildActions(): void {
+    const copyAll = new IconButton('lucide:copy', () => void this.#copy(this.#allText()));
+    copyAll.setLabel(this.#labels.copyAll ?? 'Copy table');
+    const reset = new IconButton('lucide:rotate-ccw', () => this.#reset());
+    reset.setLabel(this.#labels.resetView ?? 'Reset view');
+    this.#searchBtn.setLabel(this.#labels.search ?? 'Search');
+    this.#unfreezeBtn.setLabel(this.#labels.unfreezeColumns ?? 'Unfreeze columns');
+    this.#searchInput.addEventListener('input', () => this.#runSearch());
+    this.#searchInput.addEventListener('keydown', (event) => this.#onSearchKey(event));
+    this.#actions.append(
+      this.#searchBtn.root,
+      this.#searchCount,
+      this.#searchInput,
+      copyAll.root,
+      this.#widthBtn.root,
+      reset.root,
+      this.#unfreezeBtn.root,
+    );
+    this.#updateWidthLabel();
+    this.#updateUnfreeze();
+  }
+
+  // --- Search ----------------------------------------------------------------
+
+  /** `@visactor/vtable-search`, loaded on first use like every other heavy dep. */
+  async #ensureSearch(): Promise<SearchComponent | null> {
+    if (this.#search !== null || this.#searchLoading) {
+      return this.#search;
+    }
+    this.#searchLoading = true;
+    try {
+      const {SearchComponent} = await import('@visactor/vtable-search');
+      // The highlight has to be chosen per colour mode: a translucent amber that
+      // reads as "found" over a light cell is glaring over a dark one. The
+      // vendor's option type asks for a *complete* `CellStyle` even though it
+      // only reads the background, so the tint is cast — see `HighlightStyle`.
+      const dark = this.#themeName() === 'DARK';
+      this.#search = new SearchComponent({
+        table: this.#table,
+        // The header row is not content; matching a column title would point the
+        // reader at a cell they cannot compare with anything.
+        skipHeader: true,
+        highlightCellStyle: {
+          bgColor: dark ? 'rgba(255, 214, 0, 0.25)' : 'rgba(255, 214, 0, 0.45)',
+        } as HighlightStyle,
+        focusHighlightCellStyle: {
+          bgColor: dark ? 'rgba(255, 152, 0, 0.55)' : 'rgba(255, 152, 0, 0.7)',
+        } as HighlightStyle,
+      });
+    } catch {
+      // Unavailable (offline, CDN blocked): the box stays, the search does not.
+    } finally {
+      this.#searchLoading = false;
+    }
+    return this.#search;
+  }
+
+  #toggleSearch(): void {
+    if (!this.#searchInput.hidden) {
+      this.#closeSearch();
+      return;
+    }
+    this.#searchInput.hidden = false;
+    this.#searchBtn.setOn(true);
+    this.#searchInput.focus();
+  }
+
+  #closeSearch(): void {
+    this.#searchInput.value = '';
+    this.#searchInput.hidden = true;
+    this.#searchCount.hidden = true;
+    this.#searchCount.textContent = '';
+    this.#searchBtn.setOn(false);
+    this.#search?.clear();
+  }
+
+  #onSearchKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.#closeSearch();
+      return;
+    }
+    if (event.key !== 'Enter') {
+      return;
+    }
+    // Enter walks forward through the matches, Shift+Enter back.
+    event.preventDefault();
+    const query = this.#searchInput.value.trim();
+    if (!query || this.#search === null) {
+      return;
+    }
+    this.#reportSearch(event.shiftKey ? this.#search.prev() : this.#search.next());
+  }
+
+  async #runSearch(): Promise<void> {
+    const query = this.#searchInput.value.trim();
+    if (!query) {
+      this.#search?.clear();
+      this.#reportSearch(null);
+      return;
+    }
+    const search = await this.#ensureSearch();
+    if (search === null) {
+      return;
+    }
+    this.#reportSearch(search.search(query));
+  }
+
+  /** Shows `current / total` while a query is active, nothing otherwise. */
+  #reportSearch(result: {index: number; results: unknown[]} | null): void {
+    const total = result?.results.length ?? 0;
+    const current = total === 0 ? 0 : (result?.index ?? 0) + 1;
+    if (this.#searchInput.value.trim() === '') {
+      this.#searchCount.textContent = '';
+      this.#searchCount.hidden = true;
+      return;
+    }
+    this.#searchCount.textContent = `${current}/${total}`;
+    this.#searchCount.hidden = false;
+  }
+
+  // --- Strip actions ---------------------------------------------------------
+
+  /** Cycles adaptive → content → content-fill → adaptive (see `WIDTH_MODES`). */
+  #cycleWidthMode(): void {
+    const index = WIDTH_MODES.findIndex((mode) => mode.id === this.#widthMode);
+    this.#setWidthMode(WIDTH_MODES[(index + 1) % WIDTH_MODES.length]);
+    this.#updateWidthLabel();
+  }
+
+  /** The tooltip names the mode now active, since the icon alone cannot. */
+  #updateWidthLabel(): void {
+    const mode = widthModeOption(this.#widthMode);
+    this.#widthBtn.setLabel(this.#labels[mode.label] ?? mode.fallback);
+  }
+
+  #updateUnfreeze(): void {
+    this.#unfreezeBtn.root.hidden = this.#frozen === 0;
   }
 
   #columns(order: readonly string[]): TableColumns {
@@ -433,44 +641,27 @@ class ResultTable {
     };
   }
 
+  /**
+   * The context menu, which now holds only what acts on *one cell or one
+   * column*: the field name, copy, wrap and freeze. The grid-wide actions sit in
+   * the tab strip instead (see {@link #buildActions}), so the menu cannot grow
+   * into a second, hidden toolbar.
+   */
   #menuItems(field: string): TableMenuItem[] {
     const labels = this.#labels;
     const wrapped = this.#wrapped.has(field);
-    const freezeOrUnfreeze: TableMenuItem =
-      this.#frozen > 0
-        ? {text: labels.unfreezeColumns ?? 'Unfreeze columns', menuKey: MENU.unfreeze}
-        : {text: labels.freezeColumn ?? 'Freeze up to here', menuKey: MENU.freeze};
     return [
       {text: field, type: 'title'},
       {type: 'split'},
       {text: labels.copy ?? 'Copy cell', menuKey: MENU.copyCell},
-      {text: labels.copyAll ?? 'Copy table', menuKey: MENU.copyAll},
       {
         text: wrapped
           ? (labels.unwrapColumn ?? 'Stop wrapping column')
           : (labels.wrapColumn ?? 'Wrap column'),
         menuKey: wrapped ? MENU.unwrap : MENU.wrap,
       },
-      freezeOrUnfreeze,
-      {type: 'split'},
-      // The width modes sit right above "reset": both are view switches.
-      {text: labels.widthMode ?? 'Column width', children: this.#widthModeItems()},
-      {text: labels.resetView ?? 'Reset view', menuKey: MENU.reset},
+      {text: labels.freezeColumn ?? 'Freeze up to here', menuKey: MENU.freeze},
     ];
-  }
-
-  /**
-   * The width-mode submenu. The vendor html menu has no check state of its own
-   * (its `--select` highlight is driven by `menu.dropDownMenuHighlight`, which
-   * only resolves against the cell being clicked), so the active mode carries a
-   * leading tick — item text goes through `innerHTML`, but a plain character is
-   * safe.
-   */
-  #widthModeItems(): TableMenuItem[] {
-    return WIDTH_MODES.map((mode) => ({
-      text: `${mode.menuKey === this.#widthMode ? '✓ ' : ''}${this.#labels[mode.label] ?? mode.fallback}`,
-      menuKey: mode.menuKey,
-    }));
   }
 
   /**
@@ -496,9 +687,6 @@ class ResultTable {
       case MENU.copyCell:
         void this.#copy(this.#cellText(col, row));
         break;
-      case MENU.copyAll:
-        void this.#copy(this.#allText());
-        break;
       case MENU.wrap:
         if (field) {
           this.#toggleWrap(field, true);
@@ -511,17 +699,6 @@ class ResultTable {
         break;
       case MENU.freeze:
         this.#freeze(col);
-        break;
-      case MENU.unfreeze:
-        this.#freeze(-1);
-        break;
-      case MENU.widthAdaptive:
-      case MENU.widthStandard:
-      case MENU.widthFill:
-        this.#setWidthMode(widthModeOption(menuKey));
-        break;
-      case MENU.reset:
-        this.#reset();
         break;
     }
   }
@@ -556,6 +733,7 @@ class ResultTable {
     // assuming `col + 1` stuck.
     this.#table.setFrozenColCount(col < 0 ? 0 : col + 1);
     this.#frozen = this.#table.frozenColCount;
+    this.#updateUnfreeze();
   }
 
   /**
@@ -569,10 +747,10 @@ class ResultTable {
    * change starts from a clean slate — while the user's row heights survive.
    */
   #setWidthMode(mode: (typeof WIDTH_MODES)[number]): void {
-    if (mode.menuKey === this.#widthMode) {
+    if (mode.id === this.#widthMode) {
       return;
     }
-    this.#widthMode = mode.menuKey;
+    this.#widthMode = mode.id;
     this.#table.widthMode = mode.widthMode;
     this.#table.autoFillWidth = mode.autoFillWidth;
     this.#table.updateColumns(this.#columns(this.#displayOrder()), {
@@ -585,7 +763,7 @@ class ResultTable {
     this.#wrapped.clear();
     this.#frozen = 0;
     // The width mode is a view switch too, so "reset" returns it to the default.
-    this.#widthMode = MENU.widthAdaptive;
+    this.#widthMode = WIDTH_MODES[0].id;
     // `updateOption` (unlike `updateColumns`) also resets the sort state, and
     // with both caches cleared it drops the dragged widths/heights too — a true
     // "back to the initial view". `#options()` carries the query's column order,
@@ -594,18 +772,39 @@ class ResultTable {
       clearColWidthCache: true,
       clearRowHeightCache: true,
     });
+    this.#updateWidthLabel();
+    this.#updateUnfreeze();
   }
 
   /** The whole visible grid as tab-separated text, in current display order. */
   #allText(): string {
     const table = this.#table;
-    const lines = [this.#result.columns.join('\t')];
+    const lines = [this.#displayOrder().join('\t')];
     for (let row = table.columnHeaderLevelCount; row < table.rowCount; row += 1) {
       const cells: string[] = [];
       for (let col = 0; col < table.colCount; col += 1) {
         cells.push(stringify(table.getCellRawValue(col, row)));
       }
       lines.push(cells.join('\t'));
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * The whole visible grid as CSV, in the current display order (the header
+   * included). Distinct from {@link #allText}, which is tab-separated and only
+   * ever lands on the clipboard: a downloaded file is opened in a spreadsheet,
+   * so it has to be genuinely comma-separated and quoted.
+   */
+  csv(): string {
+    const table = this.#table;
+    const lines = [this.#displayOrder().map(csvCell).join(',')];
+    for (let row = table.columnHeaderLevelCount; row < table.rowCount; row += 1) {
+      const cells: string[] = [];
+      for (let col = 0; col < table.colCount; col += 1) {
+        cells.push(csvCell(stringify(table.getCellRawValue(col, row))));
+      }
+      lines.push(cells.join(','));
     }
     return lines.join('\n');
   }
@@ -659,7 +858,8 @@ function tableSkeleton(): HTMLElement {
 }
 
 /**
- * Mounts a VTable list into `parent`, creating the `.dfk-sql-table` box itself.
+ * Mounts a VTable list into `parent`, creating the `.dfk-sql-table` box itself,
+ * and fills `actions` with the controls that act on the table as a whole.
  *
  * VTable is canvas-rendered and measures its container at construction time, so
  * the box gets an explicit height through a custom property (which the
@@ -669,12 +869,13 @@ function tableSkeleton(): HTMLElement {
  * without any resize plumbing through the component.
  *
  * A failed `import()` (offline, CDN blocked) degrades to the error view instead
- * of rejecting the render.
+ * of rejecting the render; the CSV export keeps working from the raw rows.
  */
 async function mountTable(
   parent: HTMLElement,
   result: QueryResult,
   labels: Record<string, string>,
+  actions: HTMLElement,
 ): Promise<PreviewTableHandle> {
   const document = parent.ownerDocument;
   const record = el('div', {class: 'dfk-sql-table'});
@@ -685,40 +886,84 @@ async function mountTable(
 
   try {
     const vtable = await import('@visactor/vtable');
-    const table = new ResultTable(vtable, record, result, labels);
+    const table = new ResultTable(vtable, record, result, labels, actions);
     // VTable draws into the same box; the ghost is one sibling too many. It is
     // dropped after construction (not by VTable) so a failed import can still
     // hand the box over to the error view.
     skeleton.remove();
-    return {dispose: () => table.dispose()};
+    return {dispose: () => table.dispose(), csv: () => table.csv()};
   } catch (error) {
     skeleton.remove();
     record.appendChild(errorBlock(document, errorText(labels, messageOf(error))));
-    return {dispose: () => {}};
+    return {dispose: () => {}, csv: () => csvText(result)};
   }
+}
+
+/**
+ * The trailing `Table` tab, as a plain {@link PreviewTabItem} like any other.
+ *
+ * It is built up front — before the tab is ever shown — because the tab strip
+ * needs the item's `actions` container in its constructor, while the table
+ * itself is only created on first activation (VTable is the heaviest lazy
+ * import in the kit). `download` therefore reads a live handle, and answers
+ * `null` until the table exists rather than exporting something else.
+ */
+function tableItem(
+  result: QueryResult,
+  labels: Record<string, string>,
+  host: HTMLElement,
+): PreviewTabItem {
+  const actions = el('div', {class: 'dfk-sql-tab-actions'});
+  let handle: PreviewTableHandle | null = null;
+  return {
+    label: labels.table ?? 'Table',
+    actions,
+    mount: async (panel) => {
+      handle = await mountTable(panel, result, labels, actions);
+      return () => {
+        handle?.dispose();
+        handle = null;
+      };
+    },
+    download: (): DownloadPayload | null => {
+      if (handle === null) {
+        return null;
+      }
+      return {
+        name: sectionFileName(host, 'csv', {fallback: 'table'}),
+        mime: 'text/csv;charset=utf-8',
+        text: handle.csv(),
+      };
+    },
+  };
 }
 
 const tableRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
   const tabs = new PreviewTabs(
     host,
-    [],
-    labels.table ?? 'Table',
-    (panel) => mountTable(panel, result, labels),
+    [tableItem(result, labels, host)],
+    labels.download ?? 'Download',
     fullscreenButton,
   );
   return () => tabs.dispose();
 };
 
 /** Plain text: one line per row, columns tab-joined. */
-function textBlock(document: Document, result: QueryResult): HTMLPreElement {
-  const pre = document.createElement('pre');
-  pre.className = 'dfk-sql-text';
+function rowsText(result: QueryResult): string {
   const lines = [result.columns.join('\t')];
   for (const row of result.rows) {
-    lines.push(result.columns.map((c) => stringify(row[c])).join('\t'));
+    lines.push(result.columns.map((column) => stringify(row[column])).join('\t'));
   }
-  pre.textContent = lines.join('\n');
-  return pre;
+  return lines.join('\n');
+}
+
+/** The raw rows as CSV; the export used when VTable itself never loaded. */
+function csvText(result: QueryResult): string {
+  const lines = [result.columns.map(csvCell).join(',')];
+  for (const row of result.rows) {
+    lines.push(result.columns.map((column) => csvCell(stringify(row[column]))).join(','));
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -726,16 +971,24 @@ function textBlock(document: Document, result: QueryResult): HTMLPreElement {
  * trailing `Table` tab, so a scalar can still be inspected as a table.
  */
 const textRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
+  const text = rowsText(result);
   const tabs = new PreviewTabs(
     host,
     [
       {
         label: labels.text ?? 'Text',
-        mount: (panel) => panel.appendChild(textBlock(panel.ownerDocument, result)),
+        mount: (panel) => {
+          panel.appendChild(el('pre', {class: 'dfk-sql-text', text}));
+        },
+        download: () => ({
+          name: sectionFileName(host, 'txt', {fallback: 'text'}),
+          mime: 'text/plain;charset=utf-8',
+          text,
+        }),
       },
+      tableItem(result, labels, host),
     ],
-    labels.table ?? 'Table',
-    (panel) => mountTable(panel, result, labels),
+    labels.download ?? 'Download',
     fullscreenButton,
   );
   return () => tabs.dispose();
@@ -757,48 +1010,6 @@ function resolveField(config: RunnableSqlConfig, result: QueryResult): string | 
   return result.columns.length === 1 ? result.columns[0] : null;
 }
 
-/**
- * Parses SVG markup from a result cell into a node this document can host.
- *
- * `image/svg+xml` is strict XML: malformed markup (unclosed tags, a bare `&`,
- * an HTML `<br>`) comes back as a `<parsererror>` element rather than throwing,
- * so the caller can degrade to text. Script-bearing and event-handler content
- * is stripped — inline SVG is *not* isolated (use the `iframe` renderer for
- * untrusted markup).
- */
-function parseSvgMarkup(document: Document, markup: string): SVGElement | null {
-  if (!markup.trim()) {
-    return null;
-  }
-  const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
-  const root = parsed.documentElement;
-  if (!root || root.localName === 'parsererror' || root.namespaceURI !== SVG_NAMESPACE) {
-    return null;
-  }
-  stripActiveContent(root);
-  return document.importNode(root, true) as unknown as SVGElement;
-}
-
-/** Removes the parts of an SVG document that could execute or navigate. */
-function stripActiveContent(root: Element): void {
-  for (const node of root.querySelectorAll('script, foreignObject')) {
-    node.remove();
-  }
-  const visit = (element: Element): void => {
-    for (const attribute of [...element.attributes]) {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value.replace(/\s/g, '').toLowerCase();
-      if (name.startsWith('on') || ((name === 'href' || name === 'xlink:href') && value.startsWith('javascript:'))) {
-        element.removeAttribute(attribute.name);
-      }
-    }
-    for (const child of element.children) {
-      visit(child);
-    }
-  };
-  visit(root);
-}
-
 /** Applies `option.width` / `option.height` as custom properties the CSS consumes. */
 function applyPreviewSize(node: HTMLElement, config: RunnableSqlConfig): void {
   const {width, height} = config.option ?? {};
@@ -810,17 +1021,34 @@ function applyPreviewSize(node: HTMLElement, config: RunnableSqlConfig): void {
   }
 }
 
-/** How a preview panel is filled for one row of the result. */
+/** What a preview tab shows for one row of the result. */
 type PreviewKind = 'iframe' | 'svg' | 'mermaid';
 
-function mountPreviewPanel(
+/** A result cell as markup: `NULL` means there is nothing to show. */
+function markupOf(value: unknown): string {
+  return value === null || value === undefined ? '' : String(value);
+}
+
+/**
+ * Builds one figure tab: the row's markup, shown the way its `kind` calls for.
+ *
+ * All three kinds are built *before* the tab is shown, because the tab strip
+ * needs their `actions` (svg / mermaid) in its own constructor; `mount` only
+ * appends a node that already exists. That is what lets `svg` and `mermaid` sit
+ * inside the result panel with no frame of their own — the panel is the frame —
+ * and hand their controls to the strip rather than floating them over the
+ * content, which is also why the file travels out as a payload instead of a
+ * button. An embedded `<dfk-mermaid>` is driven from the outside through
+ * `setFullscreen`; an `iframe` has no viewer and so no fullscreen interest.
+ */
+function createFigure(
   kind: PreviewKind,
-  panel: HTMLElement,
-  value: unknown,
+  markup: string,
   label: string,
   config: RunnableSqlConfig,
-): void {
-  const markup = value === null || value === undefined ? '' : String(value);
+  host: HTMLElement,
+  figureLabels: FigureLabels,
+): PreviewTabItem {
   if (kind === 'iframe') {
     const frame = el('iframe', {
       class: 'dfk-sql-frame',
@@ -835,43 +1063,62 @@ function mountPreviewPanel(
       },
     });
     applyPreviewSize(frame, config);
-    panel.appendChild(frame);
-    return;
+    return {
+      label,
+      mount: (panel) => {
+        panel.appendChild(frame);
+      },
+      download: () => ({
+        name: sectionFileName(host, 'html', {fallback: 'preview'}),
+        mime: 'text/html;charset=utf-8',
+        text: markup,
+      }),
+    };
   }
 
   if (kind === 'mermaid') {
     // The cell is handed to the kit's own diagram element rather than rendered
-    // here: `<dfk-mermaid>` loads mermaid through the page-wide render queue and
-    // brings the zoom / fullscreen / edit / download chrome with it. A `mermaid`
-    // result and a ```mermaid fence therefore behave identically, and there is
+    // here: `<dfk-mermaid>` loads mermaid through the page-wide render queue, so
+    // a `mermaid` result and a ```mermaid fence share one implementation — and
     // one place that knows about the dark-mode-first-load fix.
     //
-    // The source travels as an attribute (the element's attribute seed) rather
-    // than through a setter, so this works whether or not the element has been
-    // upgraded yet: an attribute set before insertion is read at upgrade time.
-    panel.appendChild(el('dfk-mermaid', {attrs: {source: markup}}));
-    return;
+    // `embedded` makes it shed its frame and its floating cluster; the source
+    // travels as an attribute (the element's attribute seed), so this works
+    // whether or not the element has been upgraded yet. Reading `actions` seeds
+    // the element, which is why it is safe to ask before inserting it.
+    const element = el('dfk-mermaid', {attrs: {embedded: '', source: markup}});
+    return {
+      label,
+      actions: element.actions,
+      mount: (panel) => {
+        panel.appendChild(element);
+      },
+      download: () => element.downloadPayload(),
+      setFullscreen: (value) => element.setFullscreen(value),
+    };
   }
 
-  const svg = parseSvgMarkup(panel.ownerDocument, markup);
-  if (!svg) {
-    // Not SVG: show the markup as text rather than an empty panel.
-    panel.appendChild(el('pre', {class: 'dfk-sql-text', text: markup}));
-    return;
-  }
-  const holder = el('div', {class: 'dfk-sql-svg'});
-  holder.appendChild(svg);
-  applyPreviewSize(holder, config);
-  panel.appendChild(holder);
+  const viewer = new SvgViewer(parseSvgMarkup(host.ownerDocument, markup), markup, figureLabels, 'figure');
+  applyPreviewSize(viewer.root, config);
+  return {
+    label,
+    actions: viewer.actions,
+    mount: (panel) => {
+      panel.appendChild(viewer.root);
+      return () => viewer.dispose();
+    },
+    download: () => viewer.downloadPayload(),
+    setFullscreen: (value) => viewer.setFullscreen(value),
+  };
 }
 
 /**
  * Builds a preview renderer: one tab per row, then the raw rows in the trailing
- * `Table` tab. `iframe`, `svg` and `mermaid` share everything except how a panel
- * is filled.
+ * `Table` tab. `iframe`, `svg` and `mermaid` share everything except how a
+ * figure is built.
  */
 function previewRenderer(kind: PreviewKind): Renderer {
-  return async ({host, config, labels, fullscreenButton}, result) => {
+  return async ({host, config, labels, fullscreenButton, onFullscreenChange}, result) => {
     const field = resolveField(config, result);
     if (!field) {
       host.replaceChildren(
@@ -883,23 +1130,29 @@ function previewRenderer(kind: PreviewKind): Renderer {
       return;
     }
 
+    // A figure zooms only in the result area's fullscreen, which the renderer
+    // hears about through the subscription below.
+    const figureLabels: FigureLabels = {
+      reset: labels.resetZoom ?? 'Reset zoom',
+      edit: labels.editSource ?? 'Edit source',
+      editTitle: labels.svgSource ?? 'SVG source',
+      apply: labels.apply ?? 'Apply',
+      cancel: labels.cancel ?? 'Cancel',
+    };
     const tabName = config.tab_name;
     const items: PreviewTabItem[] = result.rows.map((row, index) => {
       const value = tabName ? row[tabName] : undefined;
-      return {
-        label: value === null || value === undefined ? `${labels.row ?? 'Row'} ${index + 1}` : stringify(value),
-        mount: (panel) => mountPreviewPanel(kind, panel, row[field], '', config),
-      };
+      const label = value === null || value === undefined ? `${labels.row ?? 'Row'} ${index + 1}` : stringify(value);
+      return createFigure(kind, markupOf(row[field]), label, config, host, figureLabels);
     });
+    items.push(tableItem(result, labels, host));
 
-    const tabs = new PreviewTabs(
-      host,
-      items,
-      labels.table ?? 'Table',
-      (panel) => mountTable(panel, result, labels),
-      fullscreenButton,
-    );
-    return () => tabs.dispose();
+    const tabs = new PreviewTabs(host, items, labels.download ?? 'Download', fullscreenButton);
+    const unsubscribe = kind === 'iframe' ? null : onFullscreenChange((value) => tabs.setFullscreen(value));
+    return () => {
+      unsubscribe?.();
+      tabs.dispose();
+    };
   };
 }
 
