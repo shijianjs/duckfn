@@ -189,7 +189,7 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 `cygpath` 翻译解释器路径，而 Git Bash 并不提供它。
 
 版本号形如 `X.Y.Z`（例如 `0.0.5`）。一次完整的发版 =
-提升版本号 → 提交并打 tag → 等 CI 产出 Release → 发布到 crates.io → 切回下一开发版本。
+提升版本号 → 提交并打 tag → 等 CI 产出 Release 并发布 crates.io → 切回下一开发版本。
 
 只有**正式版本**才打 tag；`0.0.6-dev.0` 这类预发布版本留在分支上，不打 tag、不发布。
 
@@ -200,8 +200,8 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 | 0. 前置检查 | `just release_check` |
 | 1. 提升版本号 | `just release_bump 0.0.5` |
 | 2. 提交并打 tag | `git commit …` 后 `just release_tag 0.0.5` |
-| 3. 查看 CI | `just release_ci` |
-| 4. 发布 crate | `just release_publish` |
+| 3. 查看 CI（建 Release + 发 crate） | `just release_ci` |
+| 4. 发布 crate（CI 自动完成，本地补发才用） | `just release_publish` |
 | 5. 切开发版本 | `just release_dev 0.0.6-dev.0` |
 
 ### 0. 前置检查
@@ -253,10 +253,10 @@ just release_tag 0.0.5     # 打 tag v0.0.5，推送 main 与 tag
 ```
 
 `release_tag` 会先检查工作区是否干净。推 tag 触发的是 `Main Extension Distribution Pipeline`
-（`.github/workflows/MainDistributionPipeline.yml`）：构建各平台扩展，并为该 tag 创建（或更新）
-GitHub Release。`Deploy Docs` 不直接挂在 tag 上 —— 它用 `workflow_run` 监听这条流水线，等它整条
-成功跑完（含 Release 创建）之后再构建并部署文档站，这样站点预加载的 wasm 就是本次发布的产物，
-而不是上一个 release。
+（`.github/workflows/MainDistributionPipeline.yml`）：构建各平台扩展，为该 tag 创建（或更新）
+GitHub Release，最后把两个 crate 发到 crates.io（见第 4 步）。`Deploy Docs` 不直接挂在 tag 上 ——
+它用 `workflow_run` 监听这条流水线，等它整条成功跑完（含 Release 创建）之后再构建并部署文档站，
+这样站点预加载的 wasm 就是本次发布的产物，而不是上一个 release。
 
 ### 3. 等 CI 全绿
 
@@ -273,19 +273,27 @@ git tag -f vX.Y.Z                 # 本地 tag 指向修复后的提交
 git push github vX.Y.Z            # 重新推送
 ```
 
-> 删除/移动已发布的 tag 会影响已有的 GitHub Release，谨慎操作。
+> 删除/移动已发布的 tag 会影响已有的 GitHub Release，谨慎操作。tag 已经跑过一轮的话，crate 可能
+> 也已经发出去了 —— crates.io 上的版本删不掉、只能 yank，重发得用新版本号。
 
-### 4. 发布到 crates.io
+### 4. 发布 crate（由 CI 完成）
+
+这条流水线的第三个 job（`publish-crates`）会按依赖顺序发两个 crate：先 `duckfn-macro`，轮询
+sparse index 确认它可见之后再发 `duckfn`。鉴权走 crates.io 的可信发布（OIDC，
+`rust-lang/crates-io-auth-action` 换 30 分钟临时 token），仓库里不存 `CARGO_REGISTRY_TOKEN`。
+
+轮询那一步不能省：`duckfn` 依赖 `duckfn-macro = "=X.Y.Z"`，而发布时依赖图是从 registry 解析的
+（不看本地 path），索引稍有延迟就会变成
+`failed to select a version for the requirement duckfn-macro = "=X.Y.Z"`。
+
+它的触发条件比建 Release 那个 job 更窄 —— `github.event_name == 'push'` 且 ref 是 `refs/tags/v*`。
+crates.io 的版本删不掉，所以手动 `workflow_dispatch`（即使在 main 上）只构建扩展，不会发 crate。
+
+CI 不可用时才走本地路径（用的是 `cargo login` 存下的 token）：
 
 ```bash
 just release_publish   # publish_macro_dry → publish_macro → publish_dry → publish
 ```
-
-两个 crate 按依赖顺序发布，`duckfn-macro` 必须先上线（`cargo publish` 会自动等待它在索引里可见）。
-
-若 `duckfn` 的 dry-run 报
-`failed to select a version for the requirement duckfn-macro = "=X.Y.Z"`，
-说明宏包还没在 crates.io 索引里可见，稍等片刻重试即可。
 
 ### 5. 切到下一开发版本
 

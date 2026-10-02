@@ -113,16 +113,29 @@ A second job turns the pushed tag into a GitHub Release:
 3. Build release notes from the commit list since the previous `v*` tag.
 4. Create the release, or upload to it if it already exists.
 
-So bumping the version is: tag `vX.Y.Z`, push the tag, and wait for both jobs.
+So bumping the version is: tag `vX.Y.Z`, push the tag, and wait for all three jobs — the binaries, the
+GitHub Release, and the crates below.
 
 ## Publishing the crates
 
-The two library crates are published in dependency order — `duckfn` depends on
-`duckfn-macro = "={{DUCKFN_VERSION}}"`, so the macro crate has to exist on crates.io first:
+The same tag also publishes the two library crates, as the third job of that workflow. It is gated
+more tightly than the jobs above: it runs on a version tag *push* and nothing else, so a manual
+`workflow_dispatch` — even started from `main` — builds and releases nothing and never publishes. A
+crates.io version cannot be deleted, only yanked, so that is a one-way door worth guarding.
+
+Authentication uses [crates.io trusted publishing](https://crates.io/docs/trusted-publishing):
+`rust-lang/crates-io-auth-action` exchanges the workflow's OIDC token for a 30-minute publish token,
+so no long-lived `CARGO_REGISTRY_TOKEN` is stored in the repository.
+
+Order matters — `duckfn` depends on `duckfn-macro = "={{DUCKFN_VERSION}}"`, and publishing resolves
+that dependency from the registry rather than from the local path, so the job publishes
+`duckfn-macro` first, waits for the version to appear in the sparse index, and only then publishes
+`duckfn`.
+
+Locally, when CI is not an option:
 
 ```bash
-just publish_dry   # cargo publish -p duckfn-macro --dry-run, then -p duckfn
-just publish
+just release_publish   # publish_macro_dry → publish_macro → publish_dry → publish
 ```
 
 Versions come from the workspace:

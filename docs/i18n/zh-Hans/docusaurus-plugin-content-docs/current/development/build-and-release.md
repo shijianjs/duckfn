@@ -107,15 +107,25 @@ jobs:
 3. 用上一个 `v*` tag 以来的提交记录生成发布说明。
 4. 创建 Release；若已存在则上传覆盖。
 
-因此发版流程就是：打 `vX.Y.Z` tag、推送、等两个作业跑完。
+因此发版流程就是：打 `vX.Y.Z` tag、推送、等三个作业跑完 —— 产物、GitHub Release，以及下面的 crate。
 
 ## 发布 crate
 
-两个库 crate 按依赖顺序发布 —— `duckfn` 依赖 `duckfn-macro = "={{DUCKFN_VERSION}}"`，所以宏 crate 必须先上 crates.io：
+同一个 tag 也会把两个库 crate 发到 crates.io，作为那条流水线的第三个作业。它的触发条件比上面两个
+作业更严：只认版本 tag 的 **push**，手动 `workflow_dispatch`（即使在 `main` 上）不构建、不发版、
+更不会发 crate —— crates.io 上的版本删不掉、只能 yank，这道门值得守住。
+
+鉴权用 [crates.io 可信发布](https://crates.io/docs/trusted-publishing)：由
+`rust-lang/crates-io-auth-action` 拿 workflow 的 OIDC token 换一个 30 分钟有效的发布 token，
+仓库里不存长期有效的 `CARGO_REGISTRY_TOKEN`。
+
+顺序很重要 —— `duckfn` 依赖 `duckfn-macro = "={{DUCKFN_VERSION}}"`，而发布时这个依赖是从 registry
+解析的（不看本地 path），所以作业先发 `duckfn-macro`，等它在 sparse index 里可见，再发 `duckfn`。
+
+CI 用不了时才走本地：
 
 ```bash
-just publish_dry   # 先 cargo publish -p duckfn-macro --dry-run，再 -p duckfn
-just publish
+just release_publish   # publish_macro_dry → publish_macro → publish_dry → publish
 ```
 
 版本来自 workspace：

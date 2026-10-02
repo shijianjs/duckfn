@@ -57,12 +57,16 @@ release_check: lint
     cargo build --workspace --all-features
 
 # ==== 本仓库特有：crates.io 发布 ====
+#
+# 正常路径是 MainDistributionPipeline.yml 里的 publish-crates job：推 v*.*.* tag 后由它用
+# crates.io 可信发布（OIDC）按依赖顺序发两个 crate。下面这几条是 CI 用不了时的本地回退，
+# 用的是 `cargo login` 存下的 token。
 
 # 生成 duckfn 的 rustdoc
 doc:
     cargo doc -p duckfn
 
-# 发布两个 crate 到 crates.io（duckfn-macro 必须先上线）
+# 本地发布两个 crate 到 crates.io（回退路径；duckfn-macro 必须先上线）
 release_publish:
     just publish_macro_dry
     just publish_macro
