@@ -6,12 +6,12 @@
 # 与 scripts/release.sh 分开：那个发的是 crates.io 上的两个 crate、打 v*.*.* tag，会触发
 # 扩展构建与文档站部署；这个发的是 npm 包、打 docs-kit-v* tag，触发
 # .github/workflows/PublishDocsKit.yml —— 由它在 CI 里用可信发布（trusted publishing / OIDC）
-# 发到 npm。两条流程各管各的版本号，互不影响。
+# 把版本送进 npm 暂存区，再由维护者用 2FA 批准上线。两条流程各管各的版本号，互不影响。
 #
 # 用法：
 #   bash scripts/release-docs-kit.sh bump  <new-version>   # 提升版本号（正式版本 X.Y.Z）
 #   bash scripts/release-docs-kit.sh dev   <new-version>   # 切到下一开发版本（X.Y.Z-dev.N）
-#   bash scripts/release-docs-kit.sh tag   <version>       # 打 docs-kit-v<version> tag、推送（即触发发布）
+#   bash scripts/release-docs-kit.sh tag   <version>       # 打 docs-kit-v<version> tag、推送（即触发暂存）
 #   bash scripts/release-docs-kit.sh guard                 # 本地回退发布的检查（npm publish 之前跑）
 set -euo pipefail
 
@@ -116,7 +116,8 @@ cmd_tag() {
     git push github "${TAG_PREFIX}${version}"
     echo "已推送 ${TAG_PREFIX}${version}"
     echo "它不匹配 CI 的 v*.*.* 过滤器，因此不会触发扩展构建与文档站部署，"
-    echo "但会触发 PublishDocsKit.yml —— 发布在 CI 里用可信发布完成，用 just release_kit_ci 看结果"
+    echo "但会触发 PublishDocsKit.yml —— CI 会把版本送进 npm 暂存区，用 just release_kit_ci 看结果，"
+    echo "再从 npmjs.com 的 Staged Packages 页（或 npm stage approve <stage-id>）用 2FA 批准上线"
 }
 
 cmd_guard() {

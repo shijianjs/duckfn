@@ -827,24 +827,27 @@ React 19 的 SSR/hydration 不会把对象 prop 设到自定义元素上（对�
 
 ## 发版流程（npm）
 
-发布的是 `duckfn-docs-kit` 这一个包：**切版本 → 提交并打 tag → 切下一开发版本**。
-**推 tag 就是发布** —— `.github/workflows/PublishDocsKit.yml` 在 CI 里用 npm 的可信发布
-（trusted publishing，OIDC）执行 `npm publish`，仓库里不存任何 npm token，也不需要 OTP。
+发布的是 `duckfn-docs-kit` 这一个包：**切版本 → 提交并打 tag → 批准暂存 → 切下一开发版本**。
+**推 tag 就启动了发布** —— `.github/workflows/PublishDocsKit.yml` 在 CI 里用 npm 的可信发布
+（trusted publishing，OIDC）执行 `npm stage publish`，把该版本送进 npm 的暂存区；仓库里不存任何
+npm token，CI 里也不需要 OTP。真正上线还差一步：维护者在 npmjs.com 的 **Staged Packages** 页
+（或 `npm stage approve <stage-id>`）用 2FA 批准。
 
 命令都在根目录的 `Justfile` 里（`just --list` 可查），实现是
 `scripts/release-docs-kit.sh`。它与 `scripts/release.sh`（两个 crate 的发版）分开：两条流程
 各打各的 tag，也互不触发对方的 CI。
 
 版本号形如 `X.Y.Z`（例如 `0.1.0`），tag 形如 `docs-kit-v0.1.0`。只有**正式版本**才打 tag、
-才发 npm；`0.1.1-dev.0` 这类开发版本留在分支上。
+才送暂存；`0.1.1-dev.0` 这类开发版本留在分支上。
 
 | 步骤 | 命令 |
 | --- | --- |
 | 0. 前置检查 | `just release_kit_check` |
 | 1. 提升版本号 | `just release_kit_bump 0.1.1` |
-| 2. 提交并打 tag（这一步就触发了发布） | `git commit …` 后 `just release_kit_tag 0.1.1` |
-| 3. 看 CI 是否发布成功 | `just release_kit_ci` |
-| 4. 切开发版本 | `just release_kit_dev 0.1.2-dev.0` |
+| 2. 提交并打 tag（这一步就触发暂存） | `git commit …` 后 `just release_kit_tag 0.1.1` |
+| 3. 看 CI 是否把版本送进了暂存区 | `just release_kit_ci` |
+| 4. 批准暂存，让版本上线 | npmjs.com 的 Staged Packages 页，或 `npm stage approve <stage-id>` |
+| 5. 切开发版本 | `just release_kit_dev 0.1.2-dev.0` |
 
 ### 0. 前置检查
 
@@ -885,17 +888,18 @@ tag 不构建扩展，也就不会触发文档站（`DeployDocs.yml` 监听的�
 它触发的只有 `PublishDocsKit.yml` —— 所以 kit 发版不必等扩展流水线，文档站也仍然只在 crate
 发版时更新。
 
-### 3. 等 CI 发布到 npm
+### 3. 等 CI 把版本送进暂存区
 
 ```bash
 just release_kit_ci        # gh run list --workflow=PublishDocsKit.yml --limit 5
 ```
 
-流水线做四件事：校验 npm CLI ≥ 11.5.1（更老的 CLI 根本不会做 OIDC 握手，会退化成 token 鉴权
-并报 `ENEEDAUTH`，看起来像可信发布配错了）、`npm ci`、类型检查、确认 **tag 与
-`duckfn-docs-kit/package.json` 的版本一致**，然后 `npm publish -w duckfn-docs-kit`（`prepack`
-会先把 `dist/` 构建出来）。发布成功后自动带 provenance 证明 —— 走 OIDC 从公开仓库发布时 npm
-默认生成，所以命令里没有 `--provenance`。
+流水线做四件事：校验 npm CLI ≥ 11.15.0（`npm stage` 是 11.15.0 才有的命令；更老的 CLI 也根本
+不会做 OIDC 握手，会退化成 token 鉴权并报 `ENEEDAUTH`，看起来像可信发布配错了）、`npm ci`、
+类型检查、确认 **tag 与 `duckfn-docs-kit/package.json` 的版本一致**，然后
+`npm stage publish -w duckfn-docs-kit`（`prepack` 会先把 `dist/` 构建出来）。日志里会打印
+`staged with id <stage-id>`，运行摘要也写了下一步。命令里没有 `--provenance` —— 走 OIDC 从公开
+仓库发布时 npm 默认生成 provenance 声明。
 
 #### 可信发布的配置要求
 
@@ -903,22 +907,26 @@ npmjs.com → `duckfn-docs-kit` → Settings → Trusted publishing 里那条 Gi
 与本 workflow **逐字一致且区分大小写**：组织/用户 `shijianjs`、仓库 `duckfn`、workflow filename
 `PublishDocsKit.yml`（只填文件名，不带 `.github/workflows/` 前缀）。环境名留空。
 
-一个容易踩的点：2026-09-03 之后新建的配置**默认只允许 `npm stage publish`**（暂存发布，每次都要
-维护者用 2FA 批准才真正上线）。本仓库走的是直接发布，所以建配置时**必须把允许 `npm publish`
-那一项也勾上**。配置建好后这些字段不能改，只能删掉重建。
+**Allowed actions 保持默认** —— 可信发布方永远允许 `npm stage publish`；「直接 `npm publish` /
+管理 dist-tags」那一项**不要勾**，这是更强的设置：workflow 被攻破时也只能把版本送进暂存区等人
+批准，无法直接上线。本 workflow 跑的正是 `npm stage publish`，不需要那一项。2026-09-03 之后新建
+的配置默认就是这个状态；一旦勾错只能删掉重建（配置建好后字段不可改）。
 
 另外两条硬性限制：OIDC 只发给 GitHub 托管的 runner（自托管 runner 不支持），job 必须有
 `id-token: write` 权限。任何一边改坏了，症状都是 `ENEEDAUTH`。
 
 #### 回退：在本地发布
 
-本地路径还在，但只在 CI 不可用时才用得上 —— tag 一推 CI 就发布了，事后再跑本地发布只会撞上
-「该版本已存在」。
+本地路径还在，但只在 CI 不可用时才用得上 —— tag 一推 CI 就把版本送进暂存区了，事后再跑本地
+步骤只会撞上「该版本已在暂存区或已存在」。
 
 ```bash
 npm login                 # 只需一次；启用了 2FA 的话发布时会要 OTP
 just release_kit_publish  # 先跑 release_kit_guard，再 npm publish -w duckfn-docs-kit
 ```
+
+这条路径走的是传统 token + 2FA，不受可信发布那条 Allowed actions 限制。想跟 CI 保持一致的两步
+流程，就换成 `npm stage publish -w duckfn-docs-kit` + `npm stage approve <stage-id>`。
 
 `release_kit_guard` 在上传之前拦四种情况：版本号还是开发版本（npm 会把预发布版本也挂到
 `latest` 上）、工作区不干净、本地没有对应的 `docs-kit-v*` tag、该版本在 npm 上已存在
@@ -930,7 +938,23 @@ just release_kit_publish  # 先跑 release_kit_guard，再 npm publish -w duckfn
 npm view duckfn-docs-kit version
 ```
 
-### 4. 切到下一开发版本
+### 4. 批准暂存，让版本上线
+
+```bash
+npm stage list                     # 列出可批准的暂存版本
+npm stage view <stage-id>          # 看这一个版本的详情
+npm stage download <stage-id>      # 下载 tarball 检查
+npm stage approve <stage-id>       # 批准并发布到 registry（要 2FA）
+```
+
+也可以直接在 npmjs.com 的 **Staged Packages** 页点 **Approve**，同样会要 2FA。`npm stage reject`
+丢弃一个不该发的版本。
+
+**暂存不等于发布**：批准之前 registry 上读不到这个版本，`npm view duckfn-docs-kit version` 还是
+上一个版本。批准前先 `npm stage view` / `npm stage download` 看一眼内容（`package.json` 的
+`version`、tarball 文件清单），这正是这一层存在的意义 —— CI 只能「提议」，上线由人来点。
+
+### 5. 切到下一开发版本
 
 ```bash
 just release_kit_dev 0.1.2-dev.0

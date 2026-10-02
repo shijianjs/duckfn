@@ -1,24 +1,26 @@
 #
-# Publishes duckfn-docs-kit to npm via OpenID Connect — npm's "trusted publisher"
-# flow. Pushing a `docs-kit-v*` tag *is* the release: there is no npm token in this
-# repository, no `npm publish` on a laptop, and no OTP prompt. See
-# duckfn-docs-kit/CONVENTIONS.md ("发版流程（npm）") for the surrounding steps.
+# Stages duckfn-docs-kit on npm through OpenID Connect — npm's "trusted publisher"
+# flow, using staged publishing as the approval step. Pushing a `docs-kit-v*` tag is
+# what starts the release: there is no npm token in this repository, no `npm publish`
+# on a laptop, and no OTP prompt here. A maintainer still has to approve the staged
+# version with 2FA before it goes live; see duckfn-docs-kit/CONVENTIONS.md
+# ("发版流程（npm）") for the surrounding steps.
 #
 # Three things outside this file have to line up; all three are case-sensitive:
 #
 #   1. On npmjs.com -> duckfn-docs-kit -> Settings -> Trusted publishing, a GitHub
 #      Actions publisher for shijianjs/duckfn whose workflow filename is exactly
-#      `PublishDocsKit.yml`, with "Allowed actions" including direct publishing.
-#      Since Sep 03 2026 a new configuration allows `npm stage publish` (the staged
-#      flow, where a maintainer approves each release with 2FA) and only permits
-#      plain `npm publish` if that is ticked as well — which is what this workflow
-#      runs.
+#      `PublishDocsKit.yml`. Leave "Allowed actions" at its default: a trusted
+#      publisher may always run `npm stage publish`, and *not* ticking the direct
+#      `npm publish` box is the stronger setting — a compromised workflow can then
+#      only propose a version, never ship one. Nothing here needs that box, because
+#      the step below stages instead of publishing.
 #   2. The runner must be GitHub-hosted (OIDC is not issued to self-hosted runners).
 #   3. The job needs `id-token: write`, below — without it npm falls back to token
 #      auth and fails with ENEEDAUTH.
 #
-# Provenance attestations come for free: publishing through OIDC from a public
-# repository generates one automatically, so `--provenance` is deliberately absent.
+# Provenance attestations come for free: an OIDC publish from a public repository
+# generates one automatically, so `--provenance` is deliberately absent.
 name: Publish docs-kit
 
 on:
@@ -32,15 +34,15 @@ permissions:
   # Exchange the workflow's OIDC token for a short-lived publish credential.
   id-token: write
 
-# Two publishes of the same version cannot both succeed, but they can race; the
-# later one is the one that should wait.
+# Two runs for the same version cannot both succeed, but they can race; the later
+# one is the one that should wait.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Publish to npm
+    name: Stage on npm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -52,21 +54,22 @@ jobs:
           # Needs >= 22.14.0; npm ships the CLI that speaks OIDC, which is checked below.
           node-version: 24
           registry-url: https://registry.npmjs.org
-          # Never cache a release build: the artifact that gets published should not
+          # Never cache a release build: the artifact that gets staged should not
           # depend on whether the cache happened to survive.
           package-manager-cache: false
 
-      # An npm older than 11.5.1 does not do the OIDC handshake at all. It would fall
-      # back to token auth and fail with ENEEDAUTH, which reads like a broken trusted
-      # publisher configuration rather than an outdated CLI — so fail early, and say why.
-      - name: Check the npm CLI supports trusted publishing
+      # `npm stage` itself only exists from 11.15.0 on, and anything older than 11.5.1
+      # does not do the OIDC handshake at all. Such a CLI would fall back to token auth
+      # and fail with ENEEDAUTH, which reads like a broken trusted publisher
+      # configuration rather than an outdated CLI — so fail early, and say why.
+      - name: Check the npm CLI can stage-publish through a trusted publisher
         run: |
           set -euo pipefail
-          need=11.5.1
+          need=11.15.0
           have=$(npm --version)
           echo "node $(node --version), npm ${have} (need >= ${need})"
           if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -n1)" != "$need" ]; then
-            echo "::error::npm ${have} cannot publish through a trusted publisher (needs >= ${need})"
+            echo "::error::npm ${have} cannot stage-publish through a trusted publisher (needs >= ${need})"
             exit 1
           fi
 
@@ -78,8 +81,8 @@ jobs:
         run: npm run typecheck -w duckfn-docs-kit
 
       # The tag decides *that* a release happens, the manifest decides *what* is
-      # published. Letting them disagree would put a version on npm that its tag does
-      # not describe, and the version cannot be taken back.
+      # staged. Letting them disagree would put a version in the staging area that its
+      # tag does not describe.
       - name: Check the tag matches the package version
         env:
           TAG: ${{ github.ref_name }}
@@ -91,9 +94,27 @@ jobs:
             echo "::error::tag ${TAG} does not match ${expected} — run just release_kit_bump first"
             exit 1
           fi
-          echo "publishing duckfn-docs-kit@${version}"
+          echo "staging duckfn-docs-kit@${version}"
 
-      - name: Publish
+      - name: Stage the publish
         # `prepack` builds dist/ first, the same way the local flow does; the registry
-        # is the default public one, so no --registry and no token.
-        run: npm publish -w duckfn-docs-kit
+        # is the default public one, so no --registry and no token. npm prints
+        # "staged with id <stage-id>" here — approving that id is what ships it.
+        run: npm stage publish -w duckfn-docs-kit
+
+      # The run is green before the version is live, so the run page has to say so.
+      - name: What happens next
+        run: |
+          {
+            echo "### Staged on npm — approval still required"
+            echo
+            echo "\`npm stage publish\` does not put the version on the registry; it waits in the"
+            echo "staging area until a maintainer approves it with 2FA:"
+            echo
+            echo '```bash'
+            echo "npm stage list                 # list staged versions you can approve"
+            echo "npm stage approve <stage-id>   # approve and publish (needs 2FA)"
+            echo '```'
+            echo
+            echo "Or use the **Staged Packages** tab on npmjs.com."
+          } >> "$GITHUB_STEP_SUMMARY"
