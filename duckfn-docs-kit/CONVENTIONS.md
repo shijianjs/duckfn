@@ -827,9 +827,9 @@ React 19 的 SSR/hydration 不会把对象 prop 设到自定义元素上（对�
 
 ## 发版流程（npm）
 
-发布的是 `duckfn-docs-kit` 这一个包，流程比 Rust 侧短：**切版本 → 提交并打 tag →
-`npm publish` → 切下一开发版本**，没有远程流水线要等（`docs-kit-v*` 不匹配任何 workflow
-的 tag 过滤器，理由见第 2 步）。
+发布的是 `duckfn-docs-kit` 这一个包：**切版本 → 提交并打 tag → 切下一开发版本**。
+**推 tag 就是发布** —— `.github/workflows/PublishDocsKit.yml` 在 CI 里用 npm 的可信发布
+（trusted publishing，OIDC）执行 `npm publish`，仓库里不存任何 npm token，也不需要 OTP。
 
 命令都在根目录的 `Justfile` 里（`just --list` 可查），实现是
 `scripts/release-docs-kit.sh`。它与 `scripts/release.sh`（两个 crate 的发版）分开：两条流程
@@ -842,16 +842,17 @@ React 19 的 SSR/hydration 不会把对象 prop 设到自定义元素上（对�
 | --- | --- |
 | 0. 前置检查 | `just release_kit_check` |
 | 1. 提升版本号 | `just release_kit_bump 0.1.1` |
-| 2. 提交并打 tag | `git commit …` 后 `just release_kit_tag 0.1.1` |
-| 3. 发布 npm 包 | `just release_kit_publish`（先 `npm login`） |
+| 2. 提交并打 tag（这一步就触发了发布） | `git commit …` 后 `just release_kit_tag 0.1.1` |
+| 3. 看 CI 是否发布成功 | `just release_kit_ci` |
 | 4. 切开发版本 | `just release_kit_dev 0.1.2-dev.0` |
 
 ### 0. 前置检查
 
 ```bash
 just release_kit_check   # 构建 + 类型检查 + npm pack --dry-run
-npm whoami               # 没登录先 npm login
 ```
+
+发布本身在 CI 里用可信发布完成，不需要 `npm login`；只有走下面的本地回退路径时才要。
 
 `npm pack --dry-run` 打印 tarball 的文件清单，是发布前最值得看的一项：预期是 `dist/**` +
 `src/**` + `bin/**` + `AGENTS.md` + `README.md` + `LICENSE` + `package.json`（当前 75 个文件）。
@@ -876,14 +877,43 @@ registry 的 fetch（本机被 `EALLOWREMOTE` 拦下），结果是版本号改�
 ```bash
 git add -A
 git commit -m "chore(release-kit): 发布 duckfn-docs-kit v0.1.1"
-just release_kit_tag 0.1.1     # 打 docs-kit-v0.1.1，推送 main 与 tag
+just release_kit_tag 0.1.1     # 打 docs-kit-v0.1.1，推送 main 与 tag → 触发 PublishDocsKit.yml
 ```
 
-`docs-kit-v*` **故意**不匹配 `MainDistributionPipeline.yml` 的 tag 过滤器（只认 `v*.*.*`）：推这个
-tag 不构建扩展，也就不会触发文档站（`DeployDocs.yml` 现在监听的是那条流水线跑完，而不是 tag 本身）。
-所以 kit 发版不必等流水线，文档站也仍然只在 crate 发版时更新。
+`docs-kit-v*` 仍然不匹配 `MainDistributionPipeline.yml` 的 tag 过滤器（只认 `v*.*.*`）：推这个
+tag 不构建扩展，也就不会触发文档站（`DeployDocs.yml` 监听的是那条流水线跑完，而不是 tag 本身）。
+它触发的只有 `PublishDocsKit.yml` —— 所以 kit 发版不必等扩展流水线，文档站也仍然只在 crate
+发版时更新。
 
-### 3. 发布到 npm
+### 3. 等 CI 发布到 npm
+
+```bash
+just release_kit_ci        # gh run list --workflow=PublishDocsKit.yml --limit 5
+```
+
+流水线做四件事：校验 npm CLI ≥ 11.5.1（更老的 CLI 根本不会做 OIDC 握手，会退化成 token 鉴权
+并报 `ENEEDAUTH`，看起来像可信发布配错了）、`npm ci`、类型检查、确认 **tag 与
+`duckfn-docs-kit/package.json` 的版本一致**，然后 `npm publish -w duckfn-docs-kit`（`prepack`
+会先把 `dist/` 构建出来）。发布成功后自动带 provenance 证明 —— 走 OIDC 从公开仓库发布时 npm
+默认生成，所以命令里没有 `--provenance`。
+
+#### 可信发布的配置要求
+
+npmjs.com → `duckfn-docs-kit` → Settings → Trusted publishing 里那条 GitHub Actions 配置，必须
+与本 workflow **逐字一致且区分大小写**：组织/用户 `shijianjs`、仓库 `duckfn`、workflow filename
+`PublishDocsKit.yml`（只填文件名，不带 `.github/workflows/` 前缀）。环境名留空。
+
+一个容易踩的点：2026-09-03 之后新建的配置**默认只允许 `npm stage publish`**（暂存发布，每次都要
+维护者用 2FA 批准才真正上线）。本仓库走的是直接发布，所以建配置时**必须把允许 `npm publish`
+那一项也勾上**。配置建好后这些字段不能改，只能删掉重建。
+
+另外两条硬性限制：OIDC 只发给 GitHub 托管的 runner（自托管 runner 不支持），job 必须有
+`id-token: write` 权限。任何一边改坏了，症状都是 `ENEEDAUTH`。
+
+#### 回退：在本地发布
+
+本地路径还在，但只在 CI 不可用时才用得上 —— tag 一推 CI 就发布了，事后再跑本地发布只会撞上
+「该版本已存在」。
 
 ```bash
 npm login                 # 只需一次；启用了 2FA 的话发布时会要 OTP

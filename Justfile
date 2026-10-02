@@ -84,11 +84,13 @@ publish:
 # ==== 本仓库特有：duckfn-docs-kit（npm 包）发版 ====
 #
 # 与上面的 release_* 完全独立：那个发 crates.io 上的 crate、打 v*.*.* tag（会触发扩展构建与
-# 文档站部署），这个发 npm 包、打 docs-kit-v* tag（不触发任何 workflow）。
+# 文档站部署），这个发 npm 包、打 docs-kit-v* tag（触发 .github/workflows/PublishDocsKit.yml，
+# 由它在 CI 里用可信发布 —— trusted publishing / OIDC —— 发布到 npm，仓库里不存 npm token）。
 #
 # This is independent of the release_* recipes above: those publish the crates.io crates under a
 # v*.*.* tag (triggering the extension build and the docs deployment), while these publish the npm
-# package under a docs-kit-v* tag (no workflow runs).
+# package under a docs-kit-v* tag, which triggers .github/workflows/PublishDocsKit.yml — the CI job
+# that publishes through npm's trusted publishing (OIDC). No npm token is stored anywhere.
 
 # 发版前检查：构建 + 类型检查 + 预览 npm 包里会装进什么
 release_kit_check:
@@ -100,7 +102,7 @@ release_kit_check:
 release_kit_bump new_version:
     bash scripts/release-docs-kit.sh bump "{{new_version}}"
 
-# 打 docs-kit-v* tag 并推送，不触发任何 CI：just release_kit_tag X.Y.Z
+# 打 docs-kit-v* tag 并推送 —— 这一步就是发布：just release_kit_tag X.Y.Z
 release_kit_tag version:
     bash scripts/release-docs-kit.sh tag "{{version}}"
 
@@ -108,7 +110,11 @@ release_kit_tag version:
 release_kit_dev new_version:
     bash scripts/release-docs-kit.sh dev "{{new_version}}"
 
-# 发布到 npm（先 npm login）：just release_kit_publish
+# 查看最近一次 npm 发布流水线（PublishDocsKit.yml）的运行状态
+release_kit_ci:
+    gh run list --workflow=PublishDocsKit.yml --limit 5
+
+# 在本地发布到 npm（回退路径：正常流程由 PublishDocsKit.yml 在 CI 里发；先 npm login）
 release_kit_publish: release_kit_guard
     npm publish -w duckfn-docs-kit
 

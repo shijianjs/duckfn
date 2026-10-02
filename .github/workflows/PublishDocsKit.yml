@@ -1,0 +1,99 @@
+#
+# Publishes duckfn-docs-kit to npm via OpenID Connect — npm's "trusted publisher"
+# flow. Pushing a `docs-kit-v*` tag *is* the release: there is no npm token in this
+# repository, no `npm publish` on a laptop, and no OTP prompt. See
+# duckfn-docs-kit/CONVENTIONS.md ("发版流程（npm）") for the surrounding steps.
+#
+# Three things outside this file have to line up; all three are case-sensitive:
+#
+#   1. On npmjs.com -> duckfn-docs-kit -> Settings -> Trusted publishing, a GitHub
+#      Actions publisher for shijianjs/duckfn whose workflow filename is exactly
+#      `PublishDocsKit.yml`, with "Allowed actions" including direct publishing.
+#      Since Sep 03 2026 a new configuration allows `npm stage publish` (the staged
+#      flow, where a maintainer approves each release with 2FA) and only permits
+#      plain `npm publish` if that is ticked as well — which is what this workflow
+#      runs.
+#   2. The runner must be GitHub-hosted (OIDC is not issued to self-hosted runners).
+#   3. The job needs `id-token: write`, below — without it npm falls back to token
+#      auth and fails with ENEEDAUTH.
+#
+# Provenance attestations come for free: publishing through OIDC from a public
+# repository generates one automatically, so `--provenance` is deliberately absent.
+name: Publish docs-kit
+
+on:
+  push:
+    # Matches the tag `just release_kit_tag` pushes (`docs-kit-v*`, never `v*.*.*`),
+    # so the Rust pipeline's tag filter and this one cannot pick up each other's tags.
+    tags: ['docs-kit-v*']
+
+permissions:
+  contents: read
+  # Exchange the workflow's OIDC token for a short-lived publish credential.
+  id-token: write
+
+# Two publishes of the same version cannot both succeed, but they can race; the
+# later one is the one that should wait.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Needs >= 22.14.0; npm ships the CLI that speaks OIDC, which is checked below.
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # Never cache a release build: the artifact that gets published should not
+          # depend on whether the cache happened to survive.
+          package-manager-cache: false
+
+      # An npm older than 11.5.1 does not do the OIDC handshake at all. It would fall
+      # back to token auth and fail with ENEEDAUTH, which reads like a broken trusted
+      # publisher configuration rather than an outdated CLI — so fail early, and say why.
+      - name: Check the npm CLI supports trusted publishing
+        run: |
+          set -euo pipefail
+          need=11.5.1
+          have=$(npm --version)
+          echo "node $(node --version), npm ${have} (need >= ${need})"
+          if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -n1)" != "$need" ]; then
+            echo "::error::npm ${have} cannot publish through a trusted publisher (needs >= ${need})"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        # Installs the whole workspace from the root (docs + duckfn-docs-kit).
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck -w duckfn-docs-kit
+
+      # The tag decides *that* a release happens, the manifest decides *what* is
+      # published. Letting them disagree would put a version on npm that its tag does
+      # not describe, and the version cannot be taken back.
+      - name: Check the tag matches the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./duckfn-docs-kit/package.json').version")
+          expected="docs-kit-v${version}"
+          if [ "$TAG" != "$expected" ]; then
+            echo "::error::tag ${TAG} does not match ${expected} — run just release_kit_bump first"
+            exit 1
+          fi
+          echo "publishing duckfn-docs-kit@${version}"
+
+      - name: Publish
+        # `prepack` builds dist/ first, the same way the local flow does; the registry
+        # is the default public one, so no --registry and no token.
+        run: npm publish -w duckfn-docs-kit
