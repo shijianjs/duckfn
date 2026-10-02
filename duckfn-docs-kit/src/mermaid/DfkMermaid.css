@@ -54,6 +54,15 @@
   height: 100%;
 }
 
+/* The canvas is what the viewport's `height: 100%` resolves against, so the
+   fullscreen height has to pass *through* it. Left `auto`, the percentage above
+   has nothing to resolve against and collapses back to the diagram's own height —
+   the figure then looks the same in fullscreen, and the wheel/drag surface (and
+   the clip box) stays a strip as tall as the diagram. */
+:host(.dfk-mermaid-fullscreen) .dfk-mermaid-canvas {
+  height: 100%;
+}
+
 :host(.dfk-mermaid-fullscreen) .dfk-mermaid-viewport {
   height: 100%;
 }

@@ -486,6 +486,11 @@ src/
   打在 **host 自身**上的类，所以「全屏时填满高度」写成 `:host(.dfk-mermaid-fullscreen)`。两种都让
   背景用 `--ifm-background-surface-color`，理由同 SQL 结果区（站点可以把 `--ifm-background-color`
   声明成 `transparent`）。
+  **高度要一层层传下去，中间任何一层 `height: auto` 都会把百分比吃掉**：嵌入全屏这条链是
+  host → `.dfk-mermaid-canvas` → `.dfk-mermaid-viewport`，漏掉 canvas 那一环时上面的
+  `height: 100%` 无处解析、退回图自身高度 —— 外观看起来一模一样（画布没有边框、没有底色），
+  但可滚轮缩放、可拖拽平移、以及裁切用的盒子只剩图那么高的一条。独立全屏没有这个问题，
+  因为 canvas 自己就是那个 `position: fixed` 的容器。
 - **源码编辑对话框**用 `<dialog>` + 共享的 `source-dialog.ts` 与 `codemirror.ts`（无语言，mermaid
   没有一等公民语法高亮）。对话框**先 `showModal()` 再挂编辑器**：CodeMirror 构造时要量容器，
   `display: none` 量出来是 0；svg 结果用的是同一个类，只是 `sql.css` 里另有一份 `.dfk-source-dialog*`
@@ -747,10 +752,15 @@ CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其
 `<dfk-sql>` 是**混合**形态，分成两半：
 
 - **代码区在 shadow root 里** —— CodeMirror 编辑器与那簇悬浮图标按钮（编辑器不再 slot，
-  因为 style-mod 会把 `.cm-*` 基础主题以 `adoptedStyleSheets` 挂到 `getRoot()` 解析出的
-  根上：编辑器在 shadow 里，解析出的就是同一个 shadow root，样式正好落在用它的那棵树里；
-  反过来把编辑器放 light DOM、样式却落进 shadow root，就是第一阶段那个「编辑器没样式」的
-  bug）。
+  因为 style-mod 会把 `.cm-*` 基础主题挂到编辑器所在的**那棵树**上；反过来把编辑器放
+  light DOM、样式却落进 shadow root，编辑器就没有样式）。
+  **`mountCodeEditor` 因此必须自己传 `root: container.getRootNode()`，不能交给 CodeMirror
+  的 `getRoot()`**：`getRoot()` 先走 `assignedSlot` 再走 `parentNode`，于是**被 slot 出去
+  的 light DOM** 会被判成它被 slot **进**的那个 shadow root。结果区正是这种节点
+  （`#resultHost`，`slot="dfk-result"`），样式落进 shadow root 却要作用在 slot 之外的内容上，
+  表现是源码对话框里的编辑器整体塌成块级布局（`.cm-scroller` 不是 flex、行号被挤到代码上方、
+  文本溢出外框）。`getRootNode()` 停在容器真正所属的那棵树：slot 出去的 light DOM 得到
+  `document`，真正的 shadow 子节点（代码区、`<dfk-mermaid>` 的对话框）得到 shadow root。
 - **整个结果区在 light DOM**（`#resultHost`，`slot="dfk-result"`）—— 不只是 VTable 的
   表格容器：页签栏、每种预览、源码对话框、搜索框都在里面。起点是 VTable 往**文档级**注入
   样式表，shadow 边界挡得住它；但这块地方本来就满是三方部件（VTable、panzoom、

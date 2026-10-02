@@ -66,11 +66,20 @@ export async function mountCodeEditor(
       }),
     ],
     parent: container,
-    // `root` is left to CodeMirror's own `getRoot(container)`. The container sits
-    // in the component's shadow root, so style-mod mounts the base theme into
-    // that same shadow root — exactly where the `.cm-*` rules are needed.
-    // Pinning it to `document` would put them outside the editor's tree instead,
-    // where a shadow boundary stops them.
+    // The tree the container really belongs to — `getRootNode()`, not CodeMirror's
+    // own `getRoot()`. `getRoot()` follows `assignedSlot` before `parentNode`, so a
+    // container in a *slotted* subtree is reported as living in the shadow root it
+    // is slotted **into**. The SQL result area is exactly that (light DOM, slotted
+    // into `<dfk-sql>` through `slot="dfk-result"`), so style-mod mounted the base
+    // theme in a shadow root, where it cannot reach slotted nodes at all: the
+    // editor laid out as plain block boxes — `.cm-scroller` stacked instead of
+    // flex, gutter above the code.
+    //
+    // `getRootNode()` stops at the tree that owns the container: `document` for
+    // that slotted light DOM, the shadow root for a genuine shadow child (the
+    // code view, a diagram's dialog) — which is where the `.cm-*` rules are
+    // needed. Pinning it to `document` would break the shadow cases instead.
+    root: container.getRootNode() as Document | ShadowRoot,
   });
 
   return {
