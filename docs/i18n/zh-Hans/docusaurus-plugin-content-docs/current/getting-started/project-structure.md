@@ -94,8 +94,7 @@ mod extension;
 
 ## IDE 对 `src/wasm_lib.rs` 标红
 
-RustRover 或 rust-analyzer 给 `src/wasm_lib.rs` 标红，但 `make debug`、`just build`、
-`cargo duckdb-ext build` 都复现不出来。
+RustRover 或 rust-analyzer 给 `src/wasm_lib.rs` 标红，但 `make debug` / `just build` 都复现不出来。
 
 因为 IDE 默认检查**所有 target**（`cargo check --all-targets`），于是把这个 example 也按本地平台
 编译了一遍 —— 那并不是它被设计来编译的平台。给整个文件加架构门控即可，在其它 target 上它会被编译

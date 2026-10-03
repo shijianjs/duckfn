@@ -22,7 +22,7 @@ same ones every DuckDB extension uses:
 The repository wraps the common combinations in its `Justfile`:
 
 ```bash
-just build                  # cargo duckdb-ext build -- --features quack
+just build                  # make configure && make debug (official toolchain)
 just sql "SELECT double_it5(21);"          # build, then LOAD and run one statement
 just test                   # make configure debug test
 just doc                    # cargo doc -p duckfn

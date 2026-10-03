@@ -72,13 +72,9 @@ make debug       # -> build/debug/extension/my_ext/my_ext.duckdb_extension
 
 `make release` 是带优化的同一套流程。两者都来自本仓库引入的 DuckDB `extension-ci-tools` makefile。
 
-另一种方式是用 `cargo-duckdb-ext-tools` 插件直接从 Cargo 打包：
-
-```bash
-cargo duckdb-ext build   # -> target/debug/my_ext.duckdb_extension
-```
-
-本仓库用 `Justfile` 把两种流程都封装了，例如 `just sql "SELECT double_it(21);"`。
+这就是推荐的构建路径。本仓库用 `Justfile` 把它封装好了：`just build` 会跑
+`make configure && make debug`，`just sql "SELECT ..."` / `just repl` 加载它产出的
+`build/debug/my_ext.duckdb_extension`，所以日常命令与官方工具链就是同一条流程。
 
 ## 4. 加载并调用
 

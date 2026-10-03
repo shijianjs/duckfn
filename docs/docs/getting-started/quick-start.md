@@ -77,14 +77,10 @@ make debug       # -> build/debug/extension/my_ext/my_ext.duckdb_extension
 `make release` does the same with optimisations. Both come from DuckDB's `extension-ci-tools`
 makefiles, which the repository includes.
 
-Alternatively, the `cargo-duckdb-ext-tools` plugin packages the extension straight from Cargo:
-
-```bash
-cargo duckdb-ext build   # -> target/debug/my_ext.duckdb_extension
-```
-
-The repository wraps both flows in its `Justfile`, for example
-`just sql "SELECT double_it(21);"`.
+This is the recommended build path. The repository wraps it in its `Justfile` — `just build` runs
+`make configure && make debug`, and `just sql "SELECT ..."` / `just repl` load the resulting
+`build/debug/my_ext.duckdb_extension`, so the daily commands and the official toolchain are the same
+flow.
 
 ## 4. Load and call it
 

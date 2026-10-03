@@ -102,8 +102,8 @@ Adding a new crate root to the project means the same two lines, pointed at
 
 ## The IDE flags `src/wasm_lib.rs`
 
-RustRover or rust-analyzer marks up `src/wasm_lib.rs` with errors that `make debug`, `just build`
-or `cargo duckdb-ext build` never reproduce.
+RustRover or rust-analyzer marks up `src/wasm_lib.rs` with errors that `make debug` / `just build`
+never reproduce.
 
 An IDE checks *every* target by default (`cargo check --all-targets`), which compiles that example
 for your host platform as well — a configuration it was never written for. Gate the file on the

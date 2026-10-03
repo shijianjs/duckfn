@@ -14,7 +14,6 @@ description: Setting up the repository, the day-to-day commands, how the tests a
 | Python 3 + network | Only for `make configure`, which builds the sqllogictest runner's virtualenv. |
 | `make` | Drives the DuckDB `extension-ci-tools` makefiles. |
 | [`just`](https://github.com/casey/just) *(optional)* | The `Justfile` wraps the common commands. |
-| [`cargo-duckdb-ext-tools`](https://github.com/redraiment/cargo-duckdb-ext-tools) *(optional)* | `cargo install cargo-duckdb-ext-tools` gives you `cargo duckdb-ext build`, which needs neither `make` nor a submodule checkout. |
 | DuckDB CLI | For loading the extension by hand, and for debugging. |
 
 `extension-ci-tools/` is a git submodule and the `Makefile` includes makefiles from it, so after a
@@ -35,8 +34,9 @@ a POSIX shell. Anything `make` reports as missing can usually be installed with
 scoop install make python
 ```
 
-Cargo and `cargo duckdb-ext build` work in any shell, so Git Bash is only needed for the `make`
-targets — `make configure`, `make test`, and the CI-equivalent commands.
+Plain `cargo` commands (`cargo build`, `cargo clippy`, `cargo test`) work in any shell, so Git Bash
+is only needed for the `make` targets — `make configure`, `make test`, `make debug` — and the `just`
+recipes that call them (`just build`, `just sql`, `just repl`, `just test`).
 
 ## The workspace
 
@@ -114,7 +114,7 @@ The extension code runs **inside the `duckdb` process**, so attach the debugger 
 instead of launching something yourself:
 
 1. Build with debug symbols — `make debug`, or `just build` (which runs
-   `cargo duckdb-ext build -- --features quack`).
+   `make configure && make debug`).
 2. Start DuckDB and keep the session alive, for example `duckdb -unsigned`.
 3. `LOAD '/path/to/my_ext.duckdb_extension';` in that session.
 4. In the IDE, attach to the running `duckdb` process — in RustRover that is

@@ -38,12 +38,13 @@ _common_url := "https://raw.githubusercontent.com/" + duckfn_repo + "/" + duckfn
 # duckdb 命令行。不在 PATH 里时用 `just DUCKDB=/path/to/duckdb repl` 覆盖。
 duckdb := env_var_or_default("DUCKDB", "duckdb")
 
-# 扩展构建产物路径。`extension_name` 由各项目根 Justfile 定义 —— import 是同一个作用域，
-# 且 just 对顺序不敏感，所以导入文件引用导入方的变量没问题。
+# 扩展构建产物路径（官方 make 工具链的 debug 产物）。`extension_name` 由各项目根 Justfile 定义
+# —— import 是同一个作用域，且 just 对顺序不敏感，所以导入文件引用导入方的变量没问题。
 #
-# The extension artifact path. `extension_name` comes from the importing justfile: an import shares one
-# scope and just is order-insensitive, so forward references across files are fine.
-ext_path := "./target/debug/" + extension_name + ".duckdb_extension"
+# The extension artifact path (the official make toolchain's debug output). `extension_name` comes
+# from the importing justfile: an import shares one scope and just is order-insensitive, so forward
+# references across files are fine.
+ext_path := "./build/debug/" + extension_name + ".duckdb_extension"
 
 # ==== 共享内容的同步（改完共享文件后在各项目跑） ====
 
@@ -76,9 +77,12 @@ check-common:
 default:
     @just --list
 
-# 日常构建 -> target/debug/<extension_name>.duckdb_extension
-build:
-    cargo duckdb-ext build
+# 日常构建（官方 make 工具链）-> build/debug/<extension_name>.duckdb_extension
+#
+# 走官方 CI 工具链而不是 cargo-duckdb-ext：先 `make configure`（建 venv、把 platform.txt 复位成
+# 本机原生平台，顺带修掉被 wasm 构建留在 wasm_eh 的旧值），再 `make debug` 产出可直接 LOAD 的扩展。
+build: ci-init
+    make debug
 
 # 构建后跑一条 SQL 就退出：just sql "SELECT my_greet('world')"
 sql sql: build

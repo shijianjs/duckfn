@@ -11,7 +11,7 @@ use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::__private::TokenStream2;
-use syn::{Ident, ReturnType, Type};
+use syn::{Ident, ItemFn, ReturnType, Type, Visibility};
 
 /// `#[duck_aggregate_function(...)]` 支持的全部参数。
 ///
@@ -275,11 +275,19 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
     /// 生成「先收集后计算」聚合：宏自动产出收集状态（`Vec<T>` + `DuckLazySlot<T>`）、
     /// `combine` 与 `result`，在 finalize 时调用被标注函数（此时它是收尾函数，不是逐行回调）。
     ///
-    /// Generates a collect-then-compute aggregate: the macro emits the collecting state (`Vec<T>`
-    /// plus `DuckLazySlot<T>`), `combine` and `result`, and calls the annotated function at
-    /// finalize (where it is the finalize handler, not a row callback).
+    /// **实现方式：递归生成普通宏声明**。`auto_collect` 不自己重搭 `AggregateFunctionAdapter` /
+    /// builder / guard 那一整套（那是与逐行版重复、且容易各自踩坑的实现），而是把带 `auto_collect`
+    /// 的签名**改写成一个不带 `auto_collect` 的 `#[duck_aggregate_function]` 声明**（逐行 `push` /
+    /// `resolve` 的行处理器）+ 一个像 `aggregate_summary.rs` 那样的收集状态结构体（`Vec<T>` +
+    /// `DuckLazySlot<T>`、`simple_combine` 并入、`result` 调用收尾函数）。改写后的产物交给同一个宏再
+    /// 处理一次，于是逐行版所有已测试的逻辑（DuckArgsImpl、空值传播、builder、注册、文档提交）原样复用。
+    ///
+    /// Generates a collect-then-compute aggregate by RE-EMITTING a plain `#[duck_aggregate_function]`
+    /// declaration (a per-row `push`/`resolve` handler) plus a collecting state struct shaped exactly
+    /// like `aggregate_summary.rs`. The rewritten output runs through this same macro again, so every
+    /// piece of the tested per-row path (DuckArgsImpl, NULL propagation, builders, registration, doc
+    /// submission) is reused verbatim rather than duplicated.
     fn build_auto_collect_aggregate_function(&self) -> TokenStream2Result {
-        let sql_name = self.sql_name(self.overloads_name());
         let args = self.classify_auto_collect_args()?;
         if args.is_empty() {
             return Err(syn::Error::new_spanned(
@@ -289,9 +297,225 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
         }
         let (_, output) = self.scalar_return_type()?;
         let return_clause = self.build_scalar_return_clause()?;
-        let duck_args = self.build_auto_collect_duck_args(&args)?;
-        let duck_function_impl = self.build_auto_collect_impl(&args, output, &return_clause)?;
-        self.common_build_with_duck_args(duck_args, &sql_name, duck_function_impl)
+        let calc_fn = self.build_auto_collect_calc_fn();
+        let state_item = self.build_auto_collect_state(&args, output, &return_clause);
+        let row_handler = self.build_auto_collect_row_handler(&args);
+        Ok(quote! {
+            #calc_fn
+            #state_item
+            #row_handler
+        })
+    }
+
+    /// 把被标注函数原样留着作为**收尾计算函数**，只重命名（让出 SQL 函数名给行处理器）并取消可见性
+    /// （它只在生成的 `result()` 里被同模块私有访问）。签名保持用户写的 `Vec<T>` / `DuckFirst<T>`，
+    /// `DuckFirst` 是恒等别名，所以参数实际类型就是收集好的 `Vec<T>` 与解析后的 `T`。
+    ///
+    /// Keeps the annotated function as the finalize/compute function, only renaming it (so the SQL name
+    /// is free for the row handler) and dropping its visibility (it is reached from the generated
+    /// `result()` in the same module). The signature keeps the user's `Vec<T>` / `DuckFirst<T>`: because
+    /// `DuckFirst` is an identity alias, the parameters really are the collected `Vec<T>` and the
+    /// resolved `T`.
+    fn build_auto_collect_calc_fn(&self) -> ItemFn {
+        let mut func = self.item_fn.clone();
+        func.sig.ident = format_ident!("__duckfn_auto_collect_finalize_{}", self.name());
+        func.vis = Visibility::Inherited;
+        func
+    }
+
+    /// 生成收集状态结构体 + `DuckAggregateState`（与 `aggregate_summary.rs` 同形）：每个 `Vec<T>`
+    /// 参数是一个收集字段、每个 `DuckFirst<T>` 是一个 `DuckLazySlot`；`result()` 调用收尾函数。
+    ///
+    /// Builds the collecting state struct + its `DuckAggregateState` (the same shape as
+    /// `aggregate_summary.rs`): one field per `Vec<T>` parameter, one `DuckLazySlot` per `DuckFirst<T>`,
+    /// and a `result()` that calls the finalize function.
+    fn build_auto_collect_state(
+        &self,
+        args: &[AutoCollectArg],
+        output: &Type,
+        return_clause: &TokenStream2,
+    ) -> TokenStream2 {
+        let name = self.name();
+        let state_ident = format_ident!("__duckfn_auto_collect_state_{}", name);
+        let calc_ident = format_ident!("__duckfn_auto_collect_finalize_{}", name);
+        let fields = args.iter().map(|a| match a {
+            AutoCollectArg::Collect { name, row_ty } => quote! {
+                #name: Vec<#row_ty>,
+            },
+            AutoCollectArg::Lazy {
+                name, value_ty, ..
+            } => {
+                let slot = slot_ident(name);
+                quote! {
+                    #slot: ::duckfn::DuckLazySlot<#value_ty>,
+                }
+            }
+        });
+        let combine_ops = args.iter().map(|a| match a {
+            AutoCollectArg::Collect { name, .. } => quote! {
+                self.#name.extend(other.#name.iter().cloned());
+            },
+            AutoCollectArg::Lazy { name, .. } => {
+                let slot = slot_ident(name);
+                quote! {
+                    self.#slot.combine(&other.#slot);
+                }
+            }
+        });
+        let finalize_args = args.iter().map(|a| match a {
+            AutoCollectArg::Collect { name, .. } => quote! {
+                self.#name.clone()
+            },
+            AutoCollectArg::Lazy {
+                name,
+                optional: true,
+                ..
+            } => {
+                let slot = slot_ident(name);
+                quote! {
+                    self.#slot.get().map(|__duckfn_value| (*__duckfn_value).clone())
+                }
+            }
+            AutoCollectArg::Lazy {
+                name,
+                optional: false,
+                ..
+            } => {
+                let slot = slot_ident(name);
+                quote! {
+                    match self.#slot.get() {
+                        Some(__duckfn_value) => (*__duckfn_value).clone(),
+                        None => return Ok(None),
+                    }
+                }
+            }
+        });
+        quote! {
+            #[allow(non_camel_case_types)]
+            #[derive(Default, Debug, Clone)]
+            struct #state_ident {
+                #(#fields)*
+            }
+
+            #[allow(non_camel_case_types)]
+            impl ::duckfn::DuckAggregateState for #state_ident {
+                type Output = #output;
+
+                fn simple_combine(&mut self, other: &Self) {
+                    #(#combine_ops)*
+                }
+
+                fn result(&self) -> ::duckfn::DuckOptionResult<#output> {
+                    let result = #calc_ident(
+                        #(#finalize_args),*
+                    );
+                    #return_clause
+                }
+            }
+        }
+    }
+
+    /// 生成行处理器：`#[duck_aggregate_function(<转发参数>) ] fn <原名>(逐行参数..., state: &mut
+    /// <状态>) -> DuckResult<()>`，函数体只做 `push` / `resolve`。这个属性会被同一个宏再处理一次，
+    /// 于是逐行版逻辑全量复用。转发时**去掉 `auto_collect`**（否则无限递归）。
+    ///
+    /// Builds the row handler: `#[duck_aggregate_function(<forwarded args>)] fn <orig name>(per-row
+    /// params..., state: &mut <state>) -> DuckResult<()>` whose body only pushes / resolves. The
+    /// attribute is expanded again by this very macro, so the per-row logic is reused wholesale. The
+    /// forwarded arguments **drop `auto_collect`** (otherwise it would recurse forever).
+    fn build_auto_collect_row_handler(&self, args: &[AutoCollectArg]) -> TokenStream2 {
+        let name = self.name();
+        let state_ident = format_ident!("__duckfn_auto_collect_state_{}", name);
+        let attr = self.build_auto_collect_forwarded_attr();
+        let params = args.iter().map(|a| match a {
+            AutoCollectArg::Collect { name, row_ty } => quote! {
+                #name: #row_ty
+            },
+            AutoCollectArg::Lazy {
+                name,
+                value_ty,
+                optional: false,
+            } => quote! {
+                #name: ::duckfn::DuckLazy<#value_ty>
+            },
+            AutoCollectArg::Lazy {
+                name,
+                value_ty,
+                optional: true,
+            } => quote! {
+                #name: Option<::duckfn::DuckLazy<#value_ty>>
+            },
+        });
+        let ops = args.iter().map(|a| match a {
+            AutoCollectArg::Collect { name, .. } => quote! {
+                state.#name.push(#name);
+            },
+            AutoCollectArg::Lazy {
+                name,
+                optional: false,
+                ..
+            } => {
+                let slot = slot_ident(name);
+                quote! {
+                    state.#slot.resolve(&#name)?;
+                }
+            }
+            AutoCollectArg::Lazy {
+                name,
+                optional: true,
+                ..
+            } => {
+                let slot = slot_ident(name);
+                quote! {
+                    state.#slot.resolve_optional(#name.as_ref())?;
+                }
+            }
+        });
+        quote! {
+            #attr
+            fn #name(
+                #(#params,)*
+                state: &mut #state_ident,
+            ) -> ::duckfn::DuckResult<()> {
+                #(#ops)*
+                Ok(())
+            }
+        }
+    }
+
+    /// 重新拼出转发给行处理器的 `#[::duckfn::duck_aggregate_function(...)]`：保留 `auto_register` /
+    /// `special_null_handling` / `overloads_name` 与文档参数，唯独去掉 `auto_collect`。
+    ///
+    /// Rebuilds the forwarded `#[::duckfn::duck_aggregate_function(...)]`: keeps `auto_register` /
+    /// `special_null_handling` / `overloads_name` and the documentation arguments, dropping only
+    /// `auto_collect`.
+    fn build_auto_collect_forwarded_attr(&self) -> TokenStream2 {
+        let args = &self.args;
+        let mut parts: Vec<TokenStream2> = Vec::new();
+        if let Some(value) = args.auto_register {
+            parts.push(quote! { auto_register = #value });
+        }
+        if let Some(value) = args.special_null_handling {
+            parts.push(quote! { special_null_handling = #value });
+        }
+        if let Some(value) = &args.overloads_name {
+            parts.push(quote! { overloads_name = #value });
+        }
+        if let Some(value) = &args.doc.description {
+            parts.push(quote! { description = #value });
+        }
+        if let Some(value) = &args.doc.comment {
+            parts.push(quote! { comment = #value });
+        }
+        if let Some(value) = &args.doc.example {
+            parts.push(quote! { example = #value });
+        }
+        if let Some(lits) = &args.doc.examples {
+            parts.push(quote! { examples = [ #(#lits),* ] });
+        }
+        quote! {
+            #[::duckfn::duck_aggregate_function(#(#parts),*)]
+        }
     }
 
     /// 把每个参数归类成「收集列 `Vec<T>`」或「解析一次的标量 `DuckFirst<T>`」；
@@ -348,218 +572,8 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
         Ok(out)
     }
 
-    /// 生成逐行读取用的 `DuckArgsImpl`：收集列的字段是行类型 `T`，标量常量的字段是
-    /// `DuckLazy<T>` / `Option<DuckLazy<T>>`（而非签名里的 `Vec<T>` / `DuckFirst<T>`）。
-    ///
-    /// Builds the per-row `DuckArgsImpl`: a collected column becomes a field of the row type `T`,
-    /// and a resolve-once scalar becomes `DuckLazy<T>` / `Option<DuckLazy<T>>` (rather than the
-    /// `Vec<T>` / `DuckFirst<T>` written in the signature).
-    fn build_auto_collect_duck_args(&self, args: &[AutoCollectArg]) -> TokenStream2Result {
-        let fields: Vec<TokenStream2> = args
-            .iter()
-            .map(|a| match a {
-                AutoCollectArg::Collect { name, row_ty } => quote! {
-                    pub #name: #row_ty,
-                },
-                AutoCollectArg::Lazy {
-                    name,
-                    value_ty,
-                    optional: true,
-                } => quote! {
-                    pub #name: Option<duckfn::DuckLazy<#value_ty>>,
-                },
-                AutoCollectArg::Lazy {
-                    name,
-                    value_ty,
-                    optional: false,
-                } => quote! {
-                    pub #name: duckfn::DuckLazy<#value_ty>,
-                },
-            })
-            .collect();
-        Ok(quote! {
-            #[derive(duckfn::DuckStruct, Debug, Clone, Default)]
-            pub struct DuckArgsImpl {
-                #(#fields)*
-            }
-        })
-    }
-
-    /// 生成收集状态 + `DuckAggregateState`（`simple_combine` 并入、`result` 调用收尾函数）
-    /// + `AggregateFunctionAdapter`（`handle_row` 只做 `push` / `resolve`）+ 各种 builder + 自动注册。
-    ///
-    /// Builds the collecting state plus its `DuckAggregateState` (merge in `simple_combine`, call
-    /// the finalize handler in `result`) and the `AggregateFunctionAdapter` (whose `handle_row`
-    /// only pushes / resolves), the builders and the automatic registration.
-    fn build_auto_collect_impl(
-        &self,
-        args: &[AutoCollectArg],
-        output: &Type,
-        return_clause: &TokenStream2,
-    ) -> TokenStream2Result {
-        let name = self.name();
-        let state_fields: Vec<TokenStream2> = args
-            .iter()
-            .map(|a| match a {
-                AutoCollectArg::Collect { name, row_ty } => quote! {
-                    #name: Vec<#row_ty>,
-                },
-                AutoCollectArg::Lazy {
-                    name, value_ty, ..
-                } => {
-                    let slot = slot_ident(name);
-                    quote! {
-                        #slot: duckfn::DuckLazySlot<#value_ty>,
-                    }
-                }
-            })
-            .collect();
-        let row_ops: Vec<TokenStream2> = args
-            .iter()
-            .map(|a| match a {
-                AutoCollectArg::Collect { name, .. } => quote! {
-                    self.state.#name.push(args.#name);
-                },
-                AutoCollectArg::Lazy {
-                    name,
-                    optional: false,
-                    ..
-                } => {
-                    let slot = slot_ident(name);
-                    quote! {
-                        self.state.#slot.resolve(&args.#name)?;
-                    }
-                }
-                AutoCollectArg::Lazy {
-                    name,
-                    optional: true,
-                    ..
-                } => {
-                    let slot = slot_ident(name);
-                    quote! {
-                        self.state.#slot.resolve_optional(args.#name.as_ref())?;
-                    }
-                }
-            })
-            .collect();
-        let combine_ops: Vec<TokenStream2> = args
-            .iter()
-            .map(|a| match a {
-                AutoCollectArg::Collect { name, .. } => quote! {
-                    self.#name.extend(other.#name.iter().cloned());
-                },
-                AutoCollectArg::Lazy { name, .. } => {
-                    let slot = slot_ident(name);
-                    quote! {
-                        self.#slot.combine(&other.#slot);
-                    }
-                }
-            })
-            .collect();
-        let finalize_args: Vec<TokenStream2> = args
-            .iter()
-            .map(|a| match a {
-                AutoCollectArg::Collect { name, .. } => quote! {
-                    self.#name.clone()
-                },
-                AutoCollectArg::Lazy {
-                    name,
-                    optional: true,
-                    ..
-                } => {
-                    let slot = slot_ident(name);
-                    quote! {
-                        self.#slot.get().map(|__duckfn_value| (*__duckfn_value).clone())
-                    }
-                }
-                AutoCollectArg::Lazy {
-                    name,
-                    optional: false,
-                    ..
-                } => {
-                    let slot = slot_ident(name);
-                    quote! {
-                        match self.#slot.get() {
-                            Some(__duckfn_value) => (*__duckfn_value).clone(),
-                            None => return Ok(None),
-                        }
-                    }
-                }
-            })
-            .collect();
-        let function_register = self.aggregate_function_register()?;
-        let null_handling = null_handling_override(self.special_null_handling());
-
-        Ok(quote! {
-            #[derive(Default, Debug, Clone)]
-            struct AutoCollectState {
-                #(#state_fields)*
-            }
-
-            impl duckfn::DuckAggregateState for AutoCollectState {
-                type Output = #output;
-
-                fn simple_combine(&mut self, other: &Self) {
-                    #(#combine_ops)*
-                }
-
-                fn result(&self) -> duckfn::DuckOptionResult<#output> {
-                    let result = #name(
-                        #(#finalize_args),*
-                    );
-                    #return_clause
-                }
-            }
-
-            #[derive(Default, Debug, Clone)]
-            struct AggregateFunctionImpl {
-                state: AutoCollectState,
-            }
-
-            impl quack_rs::prelude::AggregateState for AggregateFunctionImpl {}
-
-            impl duckfn::AggregateFunctionAdapter for AggregateFunctionImpl {
-                const NAME: &'static str = stringify!(#name);
-                type Args = DuckArgsImpl;
-                type Output = <AutoCollectState as duckfn::DuckAggregateState>::Output;
-
-                #null_handling
-
-                fn handle_row(&mut self, args: Self::Args) -> duckfn::DuckResult<()> {
-                    #(#row_ops)*
-                    Ok(())
-                }
-
-                fn combine(&mut self, other: &Self) -> duckfn::DuckResult<()> {
-                    use duckfn::DuckAggregateState;
-                    self.state.combine(&other.state)
-                }
-
-                fn result(&self) -> duckfn::DuckOptionResult<Self::Output> {
-                    use duckfn::DuckAggregateState;
-                    self.state.result()
-                }
-            }
-
-            pub fn aggregate_function_builder() -> quack_rs::prelude::AggregateFunctionBuilder {
-                use duckfn::AggregateFunctionAdapter;
-                AggregateFunctionImpl::aggregate_function_builder()
-            }
-
-            pub fn aggregate_overload_builder(builder: quack_rs::aggregate::builder::OverloadBuilder) -> quack_rs::aggregate::builder::OverloadBuilder {
-                use duckfn::AggregateFunctionAdapter;
-                AggregateFunctionImpl::aggregate_overload_builder(builder)
-            }
-
-            pub fn aggregate_function_guard() -> duckfn::AggregateFunctionGuard {
-                use duckfn::AggregateFunctionAdapter;
-                AggregateFunctionImpl::aggregate_function_guard()
-            }
-
-            #function_register
-        })
-    }
 }
+
 
 /// `auto_collect` 归类出来的单个参数。
 ///

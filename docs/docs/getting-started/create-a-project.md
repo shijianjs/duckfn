@@ -1,7 +1,7 @@
 ---
 title: Create a project
 sidebar_position: 1
-description: Start from the duckfn extension template or DuckDB's official Rust extension template, write with duckfn and quack-rs, and build with cargo-duckdb-ext-tools.
+description: Start from the duckfn extension template or DuckDB's official Rust extension template, write with duckfn and quack-rs, and build with the official extension-ci-tools makefiles.
 ---
 
 # Create a project
@@ -109,45 +109,38 @@ list.
 [Same functions, two ways](../examples/side-by-side.md) takes four functions from the official
 template and the `quack-rs` example and writes each one both ways.
 
-## Build with cargo-duckdb-ext-tools
+## Build with the official toolchain
 
-For day-to-day work,
-[`redraiment/cargo-duckdb-ext-tools`](https://github.com/redraiment/cargo-duckdb-ext-tools) packages
-the extension straight from Cargo:
+For day-to-day work, use DuckDB's own `extension-ci-tools` makefiles — the same flow CI and the
+sqllogictest runner use:
 
 ```shell
-cargo install cargo-duckdb-ext-tools   # once
-cargo duckdb-ext build                 # -> target/debug/my_ext.duckdb_extension
+make configure   # once: creates the Python venv the test runner uses
+make debug       # -> build/debug/my_ext.duckdb_extension
 ```
 
-It is a global `cargo` subcommand, so it adds **no dependencies** to the project, and it does not
-need the template's `make` flow to be working:
+`make debug` builds the `cdylib`, appends the extension metadata and lays the result out where DuckDB
+expects it, so the file you load locally is the same artifact the test runner and CI consume:
 
 ```shell
 duckdb -unsigned -c "
-LOAD './target/debug/my_ext.duckdb_extension';
+LOAD './build/debug/my_ext.duckdb_extension';
 SELECT double_it(21);
 "
 ```
 
-The repository wraps both flows in its `Justfile`; see [Quick start](./quick-start.md#3-build-it).
+The [duckfn template](#the-duckfn-template) wraps this flow in a
+[`Justfile`](https://github.com/shijianjs/duckfn-extension-template/blob/main/Justfile): `just build`
+(which is `make configure` + `make debug`), `just sql "SELECT …"`, `just repl`, `just test`,
+`just ci-release`, plus the `docs_*` and release recipes. `just rename` has already set
+`extension_name` to whatever `duckfn_entrypoint!` declares. See
+[Quick start](./quick-start.md#3-build-it).
 
-The [duckfn template](#the-duckfn-template) wraps both flows in a
-[`Justfile`](https://github.com/shijianjs/duckfn-extension-template/blob/main/Justfile): `just build`,
-`just sql "SELECT …"`, `just repl`, `just test`, `just ci-release`, plus the `docs_*` and release
-recipes. `just rename` has already set `extension_name` to whatever `duckfn_entrypoint!` declares.
+## Running `make` on Windows
 
-## When the official flow is still needed
-
-Building with Cargo covers development, but two things expect `make`:
-
-- The sqllogictest suite (`make test`), which is the standard way to test a DuckDB extension, and
-  better suited to extension behaviour than a Rust test harness.
-- CI, which runs the same set of makefiles.
-
-The usual arrangement is therefore: get `make configure` working once, build with Cargo while
-iterating, and run `make test` before pushing. On Windows that means running `make` from Git Bash
-rather than PowerShell — see [Contributing](../development/contributing.md#windows).
+The make flow needs Git Bash on Windows: run `make` (and the `just` recipes that call it) from Git
+Bash rather than PowerShell — see
+[Contributing](../development/contributing.md#windows).
 
 ## Brief your coding agent
 

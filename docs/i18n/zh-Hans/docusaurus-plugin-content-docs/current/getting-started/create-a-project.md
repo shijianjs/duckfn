@@ -1,7 +1,7 @@
 ---
 title: 创建项目
 sidebar_position: 1
-description: 从 duckfn 扩展模板或 DuckDB 官方 Rust 扩展模板起步，用 duckfn、quack-rs 写逻辑，用 cargo-duckdb-ext-tools 构建。
+description: 从 duckfn 扩展模板或 DuckDB 官方 Rust 扩展模板起步，用 duckfn、quack-rs 写逻辑，用官方 extension-ci-tools makefile 构建。
 ---
 
 # 创建项目
@@ -98,41 +98,36 @@ duckdb = { version = "~1.10505.0", features = ["loadable-extension", "vscalar"] 
 [同样功能的两种写法](../examples/side-by-side.md) 把官方模板与 `quack-rs` 示例里的四个函数各写了两遍，
 可以直观看到差别。
 
-## 用 cargo-duckdb-ext-tools 构建
+## 用官方工具链构建
 
-日常开发用
-[`redraiment/cargo-duckdb-ext-tools`](https://github.com/redraiment/cargo-duckdb-ext-tools) 直接从 Cargo 打包：
+日常开发直接用 DuckDB 自带的 `extension-ci-tools` makefile —— 它们与 CI 和 sqllogictest
+运行器跑的是同一条流程：
 
 ```shell
-cargo install cargo-duckdb-ext-tools   # 只需安装一次
-cargo duckdb-ext build                 # -> target/debug/my_ext.duckdb_extension
+make configure   # 只需一次：创建测试运行器用的 Python venv
+make debug       # -> build/debug/my_ext.duckdb_extension
 ```
 
-它是一个全局 `cargo` 子命令，因此**不给项目增加任何依赖**，也不要求模板那条 `make` 流程先跑通：
+`make debug` 会构建 `cdylib`、追加扩展元数据，并把产物放到 DuckDB 期望的位置，所以你本地
+加载的文件与测试运行器、CI 用的是同一个产物：
 
 ```shell
 duckdb -unsigned -c "
-LOAD './target/debug/my_ext.duckdb_extension';
+LOAD './build/debug/my_ext.duckdb_extension';
 SELECT double_it(21);
 "
 ```
 
-本仓库用 `Justfile` 封装了两种流程，见[快速开始](./quick-start.md#3-构建)。
-
 [duckfn 模板](#duckfn-模板)用一份
-[`Justfile`](https://github.com/shijianjs/duckfn-extension-template/blob/main/Justfile) 把两种流程都
-包了一层：`just build`、`just sql "SELECT …"`、`just repl`、`just test`、`just ci-release`，以及文档站
-与发版相关的 recipe。`just rename` 已经把 `extension_name` 改成与 `duckfn_entrypoint!` 一致。
+[`Justfile`](https://github.com/shijianjs/duckfn-extension-template/blob/main/Justfile) 把这条流程
+包了一层：`just build`（即 `make configure` + `make debug`）、`just sql "SELECT …"`、`just repl`、
+`just test`、`just ci-release`，以及文档站与发版相关的 recipe。`just rename` 已经把
+`extension_name` 改成与 `duckfn_entrypoint!` 一致。见[快速开始](./quick-start.md#3-构建)。
 
-## 什么时候仍然需要官方流程
+## Windows 上运行 `make`
 
-用 Cargo 构建足以覆盖开发，但有两件事仍然依赖 `make`：
-
-- sqllogictest 套件（`make test`）—— 这是测试 DuckDB 扩展的标准方式，比 Rust 测试框架更贴合扩展行为。
-- CI，跑的是同一套 makefile。
-
-所以常见的搭配是：先让 `make configure` 跑通一次，迭代时用 Cargo 构建，推送前跑 `make test`。
-在 Windows 上，这意味着 `make` 要在 Git Bash 里运行，而不是 PowerShell —— 见[贡献指南](../development/contributing.md#windows)。
+make 流程在 Windows 上需要 Git Bash：`make`（以及调用它的 `just` recipe）要在 Git Bash 里运行，
+而不是 PowerShell —— 见[贡献指南](../development/contributing.md#windows)。
 
 ## 让 AI 助手写代码
 

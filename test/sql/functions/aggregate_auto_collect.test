@@ -83,7 +83,7 @@ SELECT dfn_agg_scaled(x, 2.0) FROM (VALUES (1.0), (2.0), (3.0)) t(x);
 12.0
 
 query R
-SELECT dfn_agg_scaled(x, 10.0) FROM range(0) t(x);
+SELECT dfn_agg_scaled(x::DOUBLE, 10.0::DOUBLE) FROM range(0) t(x);
 ----
 NULL
 
@@ -92,14 +92,15 @@ NULL
 # ============================================================================
 
 query R
-SELECT dfn_agg_affine(x, {'scale': 2.0, 'shift': 1.0})
+SELECT dfn_agg_affine(x, {'scale': 2.0::DOUBLE, 'shift': 1.0::DOUBLE})
 FROM (VALUES (1.0), (2.0), (3.0)) t(x);
 ----
 15.0
 
 # 配置为 NULL -> 单位变换 (scale 1, shift 0)：和为 6
 query R
-SELECT dfn_agg_affine(x, NULL) FROM (VALUES (1.0), (2.0), (3.0)) t(x);
+SELECT dfn_agg_affine(x, NULL::STRUCT(scale DOUBLE, shift DOUBLE))
+FROM (VALUES (1.0), (2.0), (3.0)) t(x);
 ----
 6.0
 

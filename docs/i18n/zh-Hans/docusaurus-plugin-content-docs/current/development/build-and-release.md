@@ -21,7 +21,7 @@ description: 本地构建与测试命令、WebAssembly 目标，以及 DuckDB �
 常用组合在 `Justfile` 里已经封装好：
 
 ```bash
-just build                  # cargo duckdb-ext build -- --features quack
+just build                  # make configure && make debug（官方工具链）
 just sql "SELECT double_it5(21);"          # 构建后 LOAD 并执行一条语句
 just test                   # make configure debug test
 just doc                    # cargo doc -p duckfn

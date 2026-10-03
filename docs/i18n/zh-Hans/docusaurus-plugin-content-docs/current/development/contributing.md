@@ -14,7 +14,6 @@ description: 环境准备、日常命令、测试组织方式，以及需要遵�
 | Python 3 + 网络 | 仅 `make configure` 需要，用于创建 sqllogictest 运行器的虚拟环境。 |
 | `make` | 驱动 DuckDB 的 `extension-ci-tools` makefile。 |
 | [`just`](https://github.com/casey/just) *（可选）* | `Justfile` 封装了常用命令。 |
-| [`cargo-duckdb-ext-tools`](https://github.com/redraiment/cargo-duckdb-ext-tools) *（可选）* | `cargo install cargo-duckdb-ext-tools` 后可用 `cargo duckdb-ext build`，既不需要 `make` 也不需要 checkout submodule。 |
 | DuckDB CLI | 手动加载扩展时使用，调试时也用得上。 |
 
 `extension-ci-tools/` 是一个 git submodule，而 `Makefile` 会 include 它的 makefile，因此新克隆之后需要：
@@ -33,8 +32,9 @@ make configure
 scoop install make python
 ```
 
-Cargo 与 `cargo duckdb-ext build` 在任何 shell 下都能用，所以只有 `make` 那几条目标（`make configure`、
-`make test` 以及 CI 等价命令）需要 Git Bash。
+纯 `cargo` 命令（`cargo build`、`cargo clippy`、`cargo test`）在任何 shell 下都能用，所以只有 `make`
+那几条目标（`make configure`、`make debug`、`make test`）以及调用它们的 `just` recipe
+（`just build`、`just sql`、`just repl`、`just test`）需要 Git Bash。
 
 ## workspace 结构
 
@@ -102,7 +102,7 @@ just doc                                 # 生成 duckfn 的 rustdoc
 扩展代码运行在 **`duckdb` 进程内**，所以调试器要附加到那个进程，而不是由 IDE 自己启动一个程序：
 
 1. 用带调试符号的方式构建 —— `make debug`，或 `just build`（即
-   `cargo duckdb-ext build -- --features quack`）。
+   `make configure && make debug`）。
 2. 启动 DuckDB 并保持会话存活，例如 `duckdb -unsigned`。
 3. 在该会话里执行 `LOAD '/path/to/my_ext.duckdb_extension';`。
 4. 在 IDE 里附加到正在运行的 `duckdb` 进程 —— RustRover 见

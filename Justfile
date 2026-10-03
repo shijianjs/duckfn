@@ -31,9 +31,9 @@ _quack := "--features quack"
 
 # ==== 覆盖共享 recipe ====
 
-# 日常构建 -> target/debug/duckfn.duckdb_extension
-build:
-    cargo duckdb-ext build -- {{_quack}}
+# 日常构建已不再覆盖：共享的 `build` 现在走官方 make 工具链（`make configure` + `make debug`），
+# 而根 Makefile 的 TARGET_INFO 已经带上了 `--example $(EXTENSION_NAME) --features quack`，示例与
+# quack feature 都由 make 负责，不必再用 cargo 单独覆盖一条 `build`。
 
 # 全量 release 构建
 release:

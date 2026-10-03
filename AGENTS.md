@@ -94,8 +94,11 @@ import 同一份（`Justfile` 里写明 `set allow-duplicate-recipes := true`，
 - 各项目根 `Justfile` 只留三类东西：机器相关的 `set windows-shell`、项目相关的 `extension_name`、
   以及本项目特有的 recipe（模板的 `rename`、本仓库的 `publish_*` / `release_kit_*` / `doc`）。
 - **覆盖共享 recipe 必须显式开 `set allow-duplicate-recipes := true`**：不开这个开关，重名 recipe 会让
-  just 在解析期直接报错，连 `just --list` 都跑不了。本仓库就是这么覆盖 `build` / `release` /
+  just 在解析期直接报错，连 `just --list` 都跑不了。本仓库就是这么覆盖 `release` /
   `build_wasm` / `lint` / `docs_csv` / `release_check` 的（示例与 CLI 挂在 `quack` feature 上）。
+  `build` 已不再覆盖：共享的 `build` 现在走官方 make 工具链（`make configure` + `make debug`），而根
+  `Makefile` 的 `TARGET_INFO` 已带 `--example $(EXTENSION_NAME) --features quack`，示例与 feature 都由
+  make 负责，无需再用 `cargo duckdb-ext`（该工具已不再推荐）单独覆盖一条 `build`。
 - 共享文件里**不写具体版本号**，用 `X.Y.Z` 占位：否则下游副本会被各自的 `scripts/release.sh`
   换个版本号，每次 `just sync-common` 都白白多出一行 diff。
 - 它也**不进 crate 包**：根 `Cargo.toml` 的 `include` 白名单里没有 `scripts/`。
