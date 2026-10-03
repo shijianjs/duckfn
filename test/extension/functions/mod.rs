@@ -1,4 +1,5 @@
 mod aggregate_function;
+mod aggregate_auto_collect;
 mod cast_function;
 mod chrono_bridge;
 mod copy_from_function;

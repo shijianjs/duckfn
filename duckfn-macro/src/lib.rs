@@ -272,6 +272,45 @@ pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream
 /// `aggregate_function_guard()`, plus the `SQL_NAME` constant holding the SQL name this signature is
 /// really registered under (the function-set name when `overloads_name` is set, the function name
 /// otherwise) — read it for error-message prefixes instead of copying the attribute literal.
+///
+/// # `auto_collect = true`：先收集整列、再一次性计算
+///
+/// 「收集整列 → finalize 算一个值」是聚合里常见却又样板最多的形态（手写状态结构体 +
+/// `DuckAggregateState` + 逐行 `push`）。开启 `auto_collect` 后被标注函数**不再是逐行回调**，
+/// 而是聚合的**收尾函数**，宏把收集样板全部封装掉：
+///
+/// - `Vec<T>` 参数 = 要收集的列：宏逐行读 `T` 收进内部状态，finalize 时把 `Vec<T>` 交给本函数；
+/// - `DuckFirst<T>` 参数 = 逐行不变的标量常量：宏用 `DuckLazy<T>` + `DuckLazySlot<T>` 只解析一次，
+///   finalize 时把解析出的 `T` 交给本函数（`DuckFirst<T>` 是恒等别名，函数里拿到的就是 `T`）；
+/// - 返回值即聚合结果，规则与标量函数一致（`-> T` / `-> Option<T>` / `-> DuckOptionResult<T>`）。
+///
+/// 空值传播与原写法完全一致：某行任一「非 `Option`」列为 NULL 时整行丢弃、不进收集，想保留
+/// NULL 就把该列写成 `Vec<Option<T>>`；标量常量同理，`DuckFirst<T>` 非可空、`DuckFirst<Option<T>>`
+/// 可空（整列为 NULL 得到 `None`）。一个非可空的 `DuckFirst<T>` 在空组时无从解析，此时结果为 NULL。
+/// 参数只能是这样两类之一，出现 `&mut State` 或普通标量会直接编译报错。该模式与 `overloads_name`、
+/// `auto_register` 等仍可组合。
+///
+/// ## `auto_collect = true`: collect the column, then compute once
+///
+/// "Collect a column, evaluate one value at finalize" is a common aggregate shape that otherwise
+/// costs the most boilerplate (a hand-written state struct + `DuckAggregateState` + a per-row
+/// `push`). With `auto_collect` the annotated function *is* the finalize handler rather than a row
+/// callback, and the macro hides the collection entirely:
+///
+/// - a `Vec<T>` parameter is a column to collect: rows are read as `T` into the generated state and
+///   the `Vec<T>` is handed to the function at finalize;
+/// - a `DuckFirst<T>` parameter is a per-query constant: it is resolved once through
+///   `DuckLazy<T>` + `DuckLazySlot<T>` and the `T` is passed in (`DuckFirst<T>` is an identity alias,
+///   so the function receives a plain `T`);
+/// - the return value is the aggregate result, following the same rules as scalar functions
+///   (`-> T`, `-> Option<T>` or `-> DuckOptionResult<T>`).
+///
+/// NULL propagation is unchanged: a NULL in any non-`Option` column drops the whole row from the
+/// collection — keep NULLs by writing `Vec<Option<T>>`. A scalar constant works the same way:
+/// `DuckFirst<T>` is non-nullable, `DuckFirst<Option<T>>` yields `None` when the whole column is
+/// NULL; a non-nullable `DuckFirst<T>` cannot resolve on an empty group, so the result is NULL. Only
+/// these two parameter kinds are allowed — a `&mut State` or a plain scalar is a compile error. The
+/// mode still combines with `overloads_name`, `auto_register` and the others.
 #[proc_macro_attribute]
 pub fn duck_aggregate_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     aggregate_function::build(attr, item)

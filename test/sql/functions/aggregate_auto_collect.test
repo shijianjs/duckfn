@@ -1,0 +1,118 @@
+# name: test/sql/functions/aggregate_auto_collect.test
+# description: duck_aggregate_function(auto_collect = true) 的「先收集整列、再一次性计算」形态：Vec<T> 收集列、DuckFirst<T> 解析一次的标量常量、Option/DuckOptionResult 返回、空值传播（非 Option 列 NULL 整行丢弃、Vec<Option<T>> 保留 NULL）
+# group: [functions]
+
+require duckfn
+
+# ============================================================================
+# 单列收集 + Option 返回（空组 -> NULL）
+# ============================================================================
+
+query R
+SELECT dfn_agg_range(x) FROM (VALUES (1.0), (5.0), (3.0)) t(x);
+----
+4.0
+
+query R
+SELECT dfn_agg_range(x) FROM (VALUES (NULL), (NULL)) t(x);
+----
+NULL
+
+# 每列非 NULL 的行被丢弃，剩余行继续参与收集
+query R
+SELECT dfn_agg_range(x) FROM (VALUES (1.0), (NULL), (5.0)) t(x);
+----
+4.0
+
+# GROUP BY：每个分组一份收集状态
+query IR rowsort
+SELECT g, dfn_agg_range(x) FROM (VALUES (1, 1.0), (1, 5.0), (2, 2.0), (2, 3.0)) t(g, x) GROUP BY 1;
+----
+1	4.0
+2	1.0
+
+# typeof：Option<f64> 的输出仍是 DOUBLE
+query T
+SELECT typeof(dfn_agg_range(x)) FROM (VALUES (1.0)) t(x);
+----
+DOUBLE
+
+# ============================================================================
+# 两列配对收集 + DuckOptionResult 返回（不足 2 行 -> NULL）
+# ============================================================================
+
+query R
+SELECT dfn_agg_covariance(x, y)
+FROM (VALUES (0.0, -5.0), (3.0, 4.0), (-2.0, 10.0)) t(x, y);
+----
+-5.5
+
+query R
+SELECT dfn_agg_covariance(x, y) FROM (VALUES (1.0, 2.0)) t(x, y);
+----
+NULL
+
+# 任一列为 NULL 的行整行不进收集（保持两列配对）：只有 (0,-5)、(3,4) 有效
+query R
+SELECT dfn_agg_covariance(x, y)
+FROM (VALUES (0.0, -5.0), (NULL, 100.0), (3.0, 4.0)) t(x, y);
+----
+13.5
+
+# ============================================================================
+# 加权平均（两列收集 + 权重和为 0 -> NULL）
+# ============================================================================
+
+query R
+SELECT dfn_agg_weighted_mean(v, w) FROM (VALUES (1.0, 1.0), (2.0, 3.0)) t(v, w);
+----
+1.75
+
+query R
+SELECT dfn_agg_weighted_mean(v, w) FROM (VALUES (1.0, 0.0), (2.0, 0.0)) t(v, w);
+----
+NULL
+
+# ============================================================================
+# DuckFirst：逐行不变的标量常量，只解析一次（非可空，空组时因子无从解析 -> NULL）
+# ============================================================================
+
+query R
+SELECT dfn_agg_scaled(x, 2.0) FROM (VALUES (1.0), (2.0), (3.0)) t(x);
+----
+12.0
+
+query R
+SELECT dfn_agg_scaled(x, 10.0) FROM range(0) t(x);
+----
+NULL
+
+# ============================================================================
+# DuckFirst<Option<STRUCT>>：复杂配置常量，缺省（NULL）时取单位变换
+# ============================================================================
+
+query R
+SELECT dfn_agg_affine(x, {'scale': 2.0, 'shift': 1.0})
+FROM (VALUES (1.0), (2.0), (3.0)) t(x);
+----
+15.0
+
+# 配置为 NULL -> 单位变换 (scale 1, shift 0)：和为 6
+query R
+SELECT dfn_agg_affine(x, NULL) FROM (VALUES (1.0), (2.0), (3.0)) t(x);
+----
+6.0
+
+# ============================================================================
+# Vec<Option<T>>：NULL 以 None 进入收集，函数自己数非 NULL 个数
+# ============================================================================
+
+query I
+SELECT dfn_agg_count_present(x) FROM (VALUES (1.0), (NULL), (3.0)) t(x);
+----
+2
+
+query I
+SELECT dfn_agg_count_present(x) FROM (VALUES (NULL), (NULL)) t(x);
+----
+0

@@ -59,6 +59,29 @@ use std::thread::{self, ThreadId};
 /// The write-path message: `DuckLazy<T>` is read-only.
 const READ_ONLY: &str = "DuckLazy<T> is read-only: it can only be read, never written back";
 
+/// `DuckFirst<T>`：`#[duck_aggregate_function(auto_collect = true)]` 里「每查询一个常量」参数的
+/// 书写标记 —— 它在类型位置上就是一个恒等别名（值类型就是 `T`），只用来让宏认出「这一列不是要
+/// 收集的整列，而是逐行不变、只需解析一次的标量配置」。
+///
+/// 语义与 [`DuckLazy<T>`] + [`DuckLazySlot<T>`](crate::DuckLazySlot) 完全等价：auto_collect 的聚合
+/// 会在第一行把它解析一次、存进内部状态，其余行只付 O(1) 的凭证构造成本，最终把解析出来的 `T`
+/// 原样传给用户的收尾函数。因此下游写 `options: DuckFirst<Option<Cfg>>` 时，函数里拿到的 `options`
+/// 就是 `Option<Cfg>` 本身 —— `DuckFirst` 不改变类型，只标记「解析一次」这个意图。
+///
+/// 空值传播与其它 auto_collect 参数一致：写 `DuckFirst<T>`（`T` 非 `Option`）时该列的 NULL 行
+/// 整行被丢弃；想让 NULL 进入函数体就写 `DuckFirst<Option<T>>`，此时整列为 NULL 会得到 `None`。
+///
+/// `DuckFirst<T>`: the *marker* a `#[duck_aggregate_function(auto_collect = true)]` argument uses to
+/// say "this column is a per-query constant, not a column to collect". It is an identity alias — the
+/// value type is simply `T` — and exists only so the macro recognises "read once" arguments.
+///
+/// The behaviour is exactly [`DuckLazy<T>`] plus [`DuckLazySlot<T>`](crate::DuckLazySlot): auto_collect
+/// parses it on the first row, keeps the result in the generated state and hands the resolved `T`
+/// straight to the user's finalize function, so `options: DuckFirst<Option<Cfg>>` receives an
+/// `Option<Cfg>`. NULL propagation matches the other auto_collect arguments: a `DuckFirst<T>`
+/// (non-`Option` `T`) drops NULL rows, while `DuckFirst<Option<T>>` lets them through as `None`.
+pub type DuckFirst<T> = T;
+
 /// bind/`Value` 路径的错误信息。
 ///
 /// The bind/`Value` path message.
