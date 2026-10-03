@@ -82,7 +82,7 @@ TARGET_DUCKDB_VERSION=v1.2.0
 ```toml
 # Cargo.toml —— ABI 上的关键是 `duckdb-1-5` 保持关闭（`cli` 只服务
 # `function_descriptions` 那个 bin，与 ABI 无关）。
-duckfn = { version = "0.0.17", features = ["cli"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli"] }
 ```
 
 ```yaml
@@ -111,7 +111,7 @@ DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 ```toml
 # Cargo.toml
-duckfn = { version = "0.0.17", features = ["duckdb-1-5"] }   # 要用 duckfn::duck_vfs 再加 "owned-connection"
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # 要用 duckfn::duck_vfs 再加 "owned-connection"
 ```
 
 ```yaml

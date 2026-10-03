@@ -15,7 +15,7 @@ import type {Plugin} from 'unified';
 export const DEFAULT_VERSION_PLACEHOLDER = '{{DUCKFN_VERSION}}';
 
 export interface VersionPlaceholderOptions {
-  /** The real version string to substitute in, e.g. `0.0.17`. */
+  /** The real version string to substitute in, e.g. `0.0.18`. */
   version: string;
   /** Override the token if a site uses a different one. */
   placeholder?: string;

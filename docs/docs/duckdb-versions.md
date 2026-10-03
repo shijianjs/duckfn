@@ -88,7 +88,7 @@ TARGET_DUCKDB_VERSION=v1.2.0
 ```toml
 # Cargo.toml — the ABI point is that `duckdb-1-5` stays off (`cli` is only for the
 # `function_descriptions` bin and has nothing to do with the ABI).
-duckfn = { version = "0.0.17", features = ["cli"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli"] }
 ```
 
 ```yaml
@@ -118,7 +118,7 @@ DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 ```toml
 # Cargo.toml
-duckfn = { version = "0.0.17", features = ["duckdb-1-5"] }   # + "owned-connection" for duckfn::duck_vfs
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" for duckfn::duck_vfs
 ```
 
 ```yaml
