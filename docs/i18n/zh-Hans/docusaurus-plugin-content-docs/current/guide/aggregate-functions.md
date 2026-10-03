@@ -1,7 +1,7 @@
 ---
 title: 聚合函数
 sidebar_position: 3
-description: 聚合函数的行处理函数、状态类型、空输入语义与并行聚合。
+description: 聚合函数的行处理函数、状态类型、空输入语义、并行聚合与「先收集后计算」的快捷写法（auto_collect）。
 ---
 
 # 聚合函数
@@ -254,6 +254,82 @@ fn result(&self) -> DuckOptionResult<f64> {
 配置 **1 次**，eager 的 `Config` 入参解析 **5000 次**，两者结果完全相同。同一个文件还覆盖了可空参数，以及
 `PRAGMA threads=4` 下合并局部状态的场景 —— 合并要把配置搬过去，既不能重新解析、也不能丢掉它。
 
+## 先收集、再一次性计算（`auto_collect`）
+
+「收集整列、最后算一个值」是最常见的聚合形态之一：状态唯一的职责就是把每行 `push` 进一个 `Vec`，
+finalize 时把切片交给一个纯函数。手写这一套（状态结构体 + `DuckAggregateState` + 一行行处理函数）
+全是样板。`auto_collect = true` 让被标注函数**直接就是收尾函数**，把收集样板全部藏掉：
+
+- `Vec<T>` 参数 = 要跨行收集的列；
+- `DuckFirst<T>` 参数 = 逐行不变、只解析一次的标量常量（就是上面那个昂贵参数，只是不用再手写
+  `DuckLazySlot`）；
+- 返回值即聚合结果，规则与标量函数一致（`-> T` / `-> Option<T>` / `-> DuckOptionResult<T>`）。
+
+**没有 `&mut State` 参数** —— 宏会替你把状态构建成与上文 `SummaryState` 完全一致的样子（每个收集列
+一个 `Vec<T>`，`simple_combine` 里并入、`result` 里求值）。其余一切原封不动地继续工作：并行 `combine`、
+空值传播、结构化输出类型与 `overloads_name`。
+
+```rust
+#[duck_aggregate_function(
+    auto_collect = true,
+    description = "Sample covariance of two DOUBLE columns (Bessel-corrected)",
+    comment = "A row with a NULL in either column is skipped, keeping the two columns paired",
+    example = "SELECT dfn_agg_covariance(x, y) FROM (VALUES (0.0,-5.0),(3.0,4.0),(-2.0,10.0)) t(x, y)"
+)]
+fn dfn_agg_covariance(x: Vec<f64>, y: Vec<f64>) -> DuckOptionResult<f64> {
+    let n = x.len();
+    if n < 2 {
+        return Ok(None);          // 配对的行不足 2 行 -> NULL
+    }
+    let nf = n as f64;
+    let mean_x = x.iter().sum::<f64>() / nf;
+    let mean_y = y.iter().sum::<f64>() / nf;
+    Ok(Some(
+        x.iter().zip(y.iter()).map(|(a, b)| (a - mean_x) * (b - mean_y)).sum::<f64>() / (nf - 1.0),
+    ))
+}
+```
+
+```sql {"type":"duckfn"}
+SELECT dfn_agg_covariance(x, y) FROM (VALUES (0.0,-5.0),(3.0,4.0),(-2.0,10.0)) t(x, y);   -- -5.5
+```
+
+空值传播与其它地方完全一致：任一「非 `Option`」列是 NULL 的行整行不进收集（这正是上面两列能保持
+配对的原因）。想把 NULL 保留在收集到的向量里，就声明 `Vec<Option<T>>`：
+
+```rust
+#[duck_aggregate_function(auto_collect = true)]
+fn dfn_agg_count_present(values: Vec<Option<f64>>) -> i64 {
+    values.iter().filter(|v| v.is_some()).count() as i64
+}
+```
+
+```sql {"type":"duckfn"}
+SELECT dfn_agg_count_present(x) FROM (VALUES (1.0), (NULL), (3.0)) t(x);   -- 2
+```
+
+`DuckFirst<T>` 就是逐行不变的标量常量，底层走 lazy 通路只读一次。它是恒等别名 —— 值类型就是 `T` ——
+所以函数收到的是普通值：`DuckFirst<f64>` 给 `f64`，可空常量写 `DuckFirst<Option<T>>`（整列为 NULL 时
+得到 `None`）。非可空的 `DuckFirst<T>` 在**空组**上没有值可解析，此时 `auto_collect` 把这组结果报成
+`NULL`，而不调用函数：
+
+```rust
+#[duck_aggregate_function(auto_collect = true)]
+fn dfn_agg_scaled(values: Vec<f64>, factor: DuckFirst<f64>) -> f64 {
+    values.iter().sum::<f64>() * factor
+}
+```
+
+```sql {"type":"duckfn"}
+SELECT dfn_agg_scaled(x, 2.0) FROM (VALUES (1.0), (2.0), (3.0)) t(x);   -- 12.0
+```
+
+`DuckFirst<Option<T>>` 不只限于标量 —— 一个在整个查询里都不变的 `#[derive(DuckStruct)]` 配置，正是它
+帮你省掉手写槽的典型场景。
+
+`auto_collect` 与其它每一个参数（`overloads_name`、`auto_register`、`special_null_handling`、文档键）
+都能组合：它就是你本来要手写的那个聚合，只不过改由收尾函数生成出来。
+
 ## 重载
 
 与标量函数相同，`overloads_name` 可以把多个聚合合并成一个函数集。当各重载需要**不同**返回类型时要注意：
@@ -268,7 +344,9 @@ fn result(&self) -> DuckOptionResult<f64> {
 ## 源码与测试
 
 - [`test/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/aggregate_function.rs) —— 示例聚合函数及其状态类型
+- [`test/extension/functions/aggregate_auto_collect.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/aggregate_auto_collect.rs) —— `auto_collect` 示例（`Vec<T>` 收集列、`DuckFirst<T>` 常量）
 - [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) —— 期望结果
+- [`test/sql/functions/aggregate_auto_collect.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_auto_collect.test) —— `auto_collect` 的期望结果
 - [`src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/aggregate_function_adapter.rs) —— 运行时侧
 - [`src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_lazy_slot.rs) —— 上面用到的 `DuckLazySlot<T>`（只解析一次的槽）
 

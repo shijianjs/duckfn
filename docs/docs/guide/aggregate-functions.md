@@ -1,7 +1,7 @@
 ---
 title: Aggregate functions
 sidebar_position: 3
-description: Aggregate row handlers, state types, empty input semantics and parallel aggregation.
+description: Aggregate row handlers, state types, empty input semantics, parallel aggregation and the collect-then-compute shortcut (auto_collect).
 ---
 
 # Aggregate functions
@@ -271,6 +271,89 @@ results. The same file also covers the nullable argument and a
 `PRAGMA threads=4` run, where merging the partial states must carry the configuration over rather than
 re-parse (or lose) it.
 
+## Collect first, compute once (`auto_collect`)
+
+"Collect a column, then evaluate a single value" is one of the most common aggregate shapes: the
+state's only job is to `push` every row into a `Vec`, and `finalize` hands the slice to a plain
+function. Writing that by hand — a state struct, a `DuckAggregateState` impl and a one-line row
+handler — is pure boilerplate. `auto_collect = true` turns the annotated function into the **finalize
+handler** and hides the collection entirely:
+
+- a `Vec<T>` parameter is a column to collect across rows;
+- a `DuckFirst<T>` parameter is a per-query constant resolved once (the lazy argument above, minus
+  the manual `DuckLazySlot`);
+- the return value is the aggregate result, following the same rules as scalar functions (`-> T`,
+  `-> Option<T>` or `-> DuckOptionResult<T>`).
+
+There is **no `&mut State` parameter** — the macro builds the state for you in exactly the
+`SummaryState` shape from further up (a `Vec<T>` per collected column, merged in `simple_combine`,
+evaluated in `result`). Everything else keeps working unchanged: parallel `combine`, NULL
+propagation, structured output types and `overloads_name`.
+
+```rust
+#[duck_aggregate_function(
+    auto_collect = true,
+    description = "Sample covariance of two DOUBLE columns (Bessel-corrected)",
+    comment = "A row with a NULL in either column is skipped, keeping the two columns paired",
+    example = "SELECT dfn_agg_covariance(x, y) FROM (VALUES (0.0,-5.0),(3.0,4.0),(-2.0,10.0)) t(x, y)"
+)]
+fn dfn_agg_covariance(x: Vec<f64>, y: Vec<f64>) -> DuckOptionResult<f64> {
+    let n = x.len();
+    if n < 2 {
+        return Ok(None);          // fewer than two paired rows -> NULL
+    }
+    let nf = n as f64;
+    let mean_x = x.iter().sum::<f64>() / nf;
+    let mean_y = y.iter().sum::<f64>() / nf;
+    Ok(Some(
+        x.iter().zip(y.iter()).map(|(a, b)| (a - mean_x) * (b - mean_y)).sum::<f64>() / (nf - 1.0),
+    ))
+}
+```
+
+```sql {"type":"duckfn"}
+SELECT dfn_agg_covariance(x, y) FROM (VALUES (0.0,-5.0),(3.0,4.0),(-2.0,10.0)) t(x, y);   -- -5.5
+```
+
+NULL propagation is the same rule as everywhere else: a NULL in any **non-`Option`** column drops the
+whole row from the collection (which is what keeps the two columns paired above). To keep the NULLs
+inside the collected vector instead, declare `Vec<Option<T>>`:
+
+```rust
+#[duck_aggregate_function(auto_collect = true)]
+fn dfn_agg_count_present(values: Vec<Option<f64>>) -> i64 {
+    values.iter().filter(|v| v.is_some()).count() as i64
+}
+```
+
+```sql {"type":"duckfn"}
+SELECT dfn_agg_count_present(x) FROM (VALUES (1.0), (NULL), (3.0)) t(x);   -- 2
+```
+
+`DuckFirst<T>` is the per-query constant, read once through the lazy machinery underneath. It is an
+identity alias — the value type is just `T` — so the function receives a plain value: `DuckFirst<f64>`
+gives an `f64`, and a nullable constant is written `DuckFirst<Option<T>>` (an all-`NULL` column then
+yields `None`). A non-nullable `DuckFirst<T>` on an **empty group** has no value to resolve, so
+`auto_collect` reports `NULL` for that group rather than calling the function:
+
+```rust
+#[duck_aggregate_function(auto_collect = true)]
+fn dfn_agg_scaled(values: Vec<f64>, factor: DuckFirst<f64>) -> f64 {
+    values.iter().sum::<f64>() * factor
+}
+```
+
+```sql {"type":"duckfn"}
+SELECT dfn_agg_scaled(x, 2.0) FROM (VALUES (1.0), (2.0), (3.0)) t(x);   -- 12.0
+```
+
+A `DuckFirst<Option<T>>` is not limited to scalars — a whole `#[derive(DuckStruct)]` configuration
+that stays constant across the query is exactly the case it saves you the manual slot for.
+
+`auto_collect` composes with every other argument (`overloads_name`, `auto_register`,
+`special_null_handling`, the documentation keys): it is the same aggregate you would have written by
+hand, just generated from the finalize function instead.
+
 ## Overloads
 
 As with scalar functions, `overloads_name` merges several aggregates into one function set. When the
@@ -287,7 +370,9 @@ attribute's string literal, which is exactly the copy that drifts.
 ## Source and tests
 
 - [`test/extension/functions/aggregate_function.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/aggregate_function.rs) — the example aggregates and their state types
+- [`test/extension/functions/aggregate_auto_collect.rs`](https://github.com/shijianjs/duckfn/blob/main/test/extension/functions/aggregate_auto_collect.rs) — the `auto_collect` examples (`Vec<T>` columns, `DuckFirst<T>` constants)
 - [`test/sql/functions/aggregate_function.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_function.test) — the expected results
+- [`test/sql/functions/aggregate_auto_collect.test`](https://github.com/shijianjs/duckfn/blob/main/test/sql/functions/aggregate_auto_collect.test) — the expected `auto_collect` results
 - [`src/functions/aggregate_function_adapter.rs`](https://github.com/shijianjs/duckfn/blob/main/src/functions/aggregate_function_adapter.rs) — the runtime side
 - [`src/value_types/duck_lazy_slot.rs`](https://github.com/shijianjs/duckfn/blob/main/src/value_types/duck_lazy_slot.rs) — `DuckLazySlot<T>`, the parse-once slot used above
 
