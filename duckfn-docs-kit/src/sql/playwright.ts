@@ -116,7 +116,11 @@ interface DocsWorkerFixtures {
 export const test = base.extend<{}, DocsWorkerFixtures>({
   dfkHarness: [
     async ({}, use) => {
-      const config = resolveDocsSiteConfig();
+      // `declareDocsTests()` runs in this worker before any test does, so the
+      // site root it resolved is authoritative — it must not depend on the
+      // process working directory, because an IDE can start the worker from the
+      // repository root while the config and spec live under `docs/`.
+      const config = resolveDocsSiteConfig(activeSiteDir ? {siteDir: activeSiteDir} : {});
       const extension = resolveExtension(config.siteDir, config.extension);
       const {enginePath, workerPath} = resolveEngineBundle(config.platform, config.engine);
       const harness = await startHarness(
@@ -131,6 +135,9 @@ export const test = base.extend<{}, DocsWorkerFixtures>({
     {scope: 'worker'},
   ],
 });
+
+/** The site root {@link declareDocsTests} resolved in this worker, once it ran. */
+let activeSiteDir: string | undefined;
 
 export interface DocsTestOptions {
   siteDir?: string;
@@ -149,6 +156,8 @@ export interface DocsTestOptions {
  */
 export function declareDocsTests(options: DocsTestOptions = {}): void {
   const config = resolveDocsSiteConfig(options);
+  // Hand the resolved root to the worker-scoped harness fixture in this worker.
+  activeSiteDir = config.siteDir;
   const blocks = collectRunnableSql({
     siteDir: config.siteDir,
     contentDirs: config.contentDirs,
@@ -178,11 +187,16 @@ export function declareDocsTests(options: DocsTestOptions = {}): void {
       });
 
       for (const block of fileBlocks) {
-        test(`line ${block.line}`, async () => {
+        test(`line ${block.line} · ${sqlSummary(block.sql)}`, async () => {
           const current = page;
           if (!current) {
             throw new Error('the page for this file is not open');
           }
+          // Make the block readable in the report: the full SQL as an
+          // annotation (visible on the test detail page) and a one-line
+          // summary in the title, so two blocks in the same file are still
+          // distinguishable without opening each one.
+          test.info().annotations.push({type: 'sql', description: block.sql});
           // Declared failures are expected failures; a declared failure that
           // starts succeeding becomes "Expected to fail, but passed".
           test.fail(expectsError(block.config), 'block declares "expect":"error"');
@@ -203,13 +217,28 @@ export function declareDocsTests(options: DocsTestOptions = {}): void {
           if (result?.error) {
             // Throwing is the failure signal: for an `expect: error` block
             // `test.fail()` turns it into a pass, for any other block it fails
-            // the test with the SQL error as the message.
-            throw new Error(firstLine(result.error));
+            // the test with the SQL error as the message. The block is echoed
+            // after it so a report names the query that broke, not just a line.
+            throw new Error(`${firstLine(result.error)}\n\nSQL:\n${block.sql}`);
           }
         });
       }
     });
   }
+}
+
+/**
+ * The first meaningful line of a block, squeezed onto one line and clipped, so
+ * a report title reads `line 77 · SELECT CAST(…)` instead of a bare line number.
+ */
+function sqlSummary(sql: string, max = 72): string {
+  const line =
+    sql
+      .split('\n')
+      .map((candidate) => candidate.trim())
+      .find((candidate) => candidate !== '' && !candidate.startsWith('--')) ?? '';
+  const oneLine = line.replace(/\s+/g, ' ');
+  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
 }
 
 function groupByFile(blocks: readonly RunnableSqlBlock[]): Map<string, RunnableSqlBlock[]> {

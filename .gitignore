@@ -22,4 +22,6 @@ test/sql/*.*
 
 /*.csv
 
-/.run
+# Playwright Test 产物（IDE 从仓库根运行时会落在根；docs/ 下的那份在 docs/.gitignore）
+/playwright-report/
+/test-results/
