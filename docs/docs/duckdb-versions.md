@@ -225,8 +225,14 @@ a different repository**:
 | The **emsdk / binaryen** (`3.1.71` → `wasm-opt` v120) | ci-tools' `setup-emsdk` step | which wasm features `emcc`'s post-link optimizer understands |
 | The **link flags** (`-O3` vs `-O0`) | **your `Makefile`** (`link_wasm_release` / `link_wasm_debug`) | whether that optimizer runs at all |
 
-The first two are pinned by the official pipeline and are effectively fixed: the emsdk version must
-match the engine inside the DuckDB-Wasm bundle, or the produced extension will not `LOAD`.
+The first two are pinned by the official pipeline. The emsdk pin is a **compatibility window, not an
+exact-match rule.** Measured against the pinned host `duckdb-wasm 1.33.1-dev65.0` (built with ~3.1.71):
+extensions linked with emsdk **3.1.74**, **4.0.23** and **5.0.7** all load and run fine (554 docs
+examples, 0 unexpected), but ones linked with **6.0.0** and **6.0.10** build yet fail at `LOAD` with
+`Could not load dynamic lib`. The cut-off is a clean emscripten **5 → 6** break: **5.0.7** (the last 5.x)
+loads, **6.0.0** (the first 6.x) does not. So a nearby or moderately-newer emsdk is tolerated; one across
+that boundary, whose side-module emscripten runtime imports no longer match the host's, is rejected. Pin to the CI's emsdk as the known-good choice and
+do not assume any newer emsdk will load.
 
 ### Two independent failure modes
 

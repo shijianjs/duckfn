@@ -208,8 +208,8 @@ ci-tools ref —— 见下一节。
 | **emsdk / binaryen**（`3.1.71` → `wasm-opt` v120） | ci-tools 的 `setup-emsdk` 步 | `emcc` 的后链接优化器认识哪些 wasm 特性 |
 | **链接旗标**（`-O3` vs `-O0`） | **你的 `Makefile`**（`link_wasm_release` / `link_wasm_debug`） | 那个优化器到底跑不跑 |
 
-前两个由官方流水线钉死、基本动不了：emsdk 版本必须与 DuckDB-Wasm 构建里的引擎一致，否则产出的扩展
-`LOAD` 不进来。
+前两个由官方流水线钉住。其中 emsdk 是**一个兼容窗口、不是「必须一模一样」**。针对被 pin 的宿主
+`duckdb-wasm 1.33.1-dev65.0`（用约 3.1.71 编）实测：用 emsdk **3.1.74**、**4.0.23**、**5.0.7** 链接的扩展都能正常载入并跑通（554 个文档示例、0 unexpected），而用 **6.0.0**、**6.0.10** 链接的能构建、却在 `LOAD` 阶段报 `Could not load dynamic lib`。分界是一条干脆的 emscripten **5→6 断裂**：**5.0.7**（5 线最后一版）能载入，**6.0.0**（6 线第一版）不能。所以邻近或略新的 emsdk 能容忍；越过这条界、side module 的 emscripten 运行时 import 与宿主对不上就会被拒。把 emsdk 钉在 CI 那版是 known-good 的选择，别假设任意更新的 emsdk 都能载入。
 
 ### 两个互相独立的失败点
 
