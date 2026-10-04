@@ -15,6 +15,7 @@ description: 环境准备、日常命令、测试组织方式，以及需要遵�
 | `make` | 驱动 DuckDB 的 `extension-ci-tools` makefile。 |
 | [`just`](https://github.com/casey/just) *（可选）* | `Justfile` 封装了常用命令。 |
 | DuckDB CLI | 手动加载扩展时使用，调试时也用得上。 |
+| emsdk *（仅 wasm）* | 只有 WebAssembly 构建才需要（`just build_wasm_eh` / `just test_wasm`）。必须是 CI 钉的那个版本 —— 目前 **3.1.71** —— 因为 DuckDB-Wasm 宿主只加载由兼容 emsdk 产出的 side module，而在这套工具链下模块必须以 `-O0` 链接（跳过 binaryen）。完整来龙去脉 —— Rust / emsdk / ci-tools 的版本耦合与确切的载入窗口 —— 见 [wasm 构建工具链](../duckdb-versions/wasm-toolchain.md)。 |
 
 `extension-ci-tools/` 是一个 git submodule，而 `Makefile` 会 include 它的 makefile，因此新克隆之后需要：
 

@@ -39,7 +39,7 @@ TARGET_INFO += --example $(EXTENSION_NAME) --features quack
 `USE_UNSTABLE_C_API=1` 决定了产出的扩展只能在兼容版本的 DuckDB 里、并加 `-unsigned` 才能加载。
 `TARGET_DUCKDB_VERSION` 指明写入元数据时针对的版本 —— 又因为 ABI 类型是 unstable，这个值被当作
 DuckDB 发行版本号来读，必须与引擎逐字相等。两种 ABI 类型的差别见
-[DuckDB 版本兼容性](../duckdb-versions.md)。`EXTENSION_NAME` 必须与
+[DuckDB 版本兼容性](../duckdb-versions/index.md)。`EXTENSION_NAME` 必须与
 `test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
 `TARGET_INFO` 里带 `--example $(EXTENSION_NAME)`：扩展产物来自 `[[example]] duckfn` 这个 target；
 再带上 `--features quack` 决定示例树会不会被编译（它挂在默认关闭的 `quack` feature 上）。

@@ -15,6 +15,7 @@ description: Setting up the repository, the day-to-day commands, how the tests a
 | `make` | Drives the DuckDB `extension-ci-tools` makefiles. |
 | [`just`](https://github.com/casey/just) *(optional)* | The `Justfile` wraps the common commands. |
 | DuckDB CLI | For loading the extension by hand, and for debugging. |
+| emsdk *(wasm only)* | Only for the WebAssembly build (`just build_wasm_eh` / `just test_wasm`). It must be the version the CI pins — currently **3.1.71** — because the DuckDB-Wasm host only loads a side module built by a compatible emsdk, and on that toolchain the module has to be linked `-O0` (skip binaryen). The whole story — the Rust / emsdk / ci-tools version coupling and the exact load window — is in [the wasm build toolchain](../duckdb-versions/wasm-toolchain.md). |
 
 `extension-ci-tools/` is a git submodule and the `Makefile` includes makefiles from it, so after a
 fresh clone:
