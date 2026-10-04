@@ -177,7 +177,7 @@ cd docs
 npm start                # http://localhost:3000
 npm start -- --locale zh-Hans
 npm run build            # must pass for both locales; broken links fail the build
-npm test                 # run every runnable SQL block in DuckDB-Wasm
+npm test                 # run every runnable SQL block as Playwright tests
 ```
 
 `npm test` is the docs' own test suite: it collects each runnable block and runs

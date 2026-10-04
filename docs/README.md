@@ -79,7 +79,7 @@ npm start -w docs -- --locale zh-Hans   # dev server, Chinese
 npm run build -w docs        # static site into docs/build/
 npm run serve -w docs        # preview the build
 npm run typecheck -w docs    # tsc
-npm test -w docs             # run every runnable SQL block in DuckDB-Wasm
+npm test -w docs             # run every runnable SQL block as Playwright tests
 ```
 
 `just test_wasm` is the local end-to-end check and wraps the whole path: build

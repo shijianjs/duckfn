@@ -21,3 +21,5 @@ test/sql/dfn_file_*
 test/sql/*.*
 
 /*.csv
+
+/.run

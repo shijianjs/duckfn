@@ -66,7 +66,7 @@ database 句柄，并由它打开一条 `OwnedConnection`，把结果存进进�
   `COPY … TO` 只能把查询结果按格式（CSV / JSON / parquet）导出 —— 能往返，但**存不了一个任意长
   字符串（如 HTML 报告）的原样字节**（CSV 会加引号/换行），所以浏览器上根本没有通用的文件写出
   路子。因此 **`duck_vfs` 已从 `all` feature 移除** —— native 下确需时再显式开 `owned-connection`。本站在
-  CI 里跑的可运行 SQL 是在**真实浏览器**里执行的（`duckfn-sql-verify`）。
+  CI 里跑的可运行 SQL 是在**真实浏览器**里执行的（[测试示例](../docs-kit/sql-test.md)）。
 
 ## 读一个文件
 

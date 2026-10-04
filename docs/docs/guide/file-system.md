@@ -77,7 +77,8 @@ Keeping that connection is not free, and the costs are worth weighing before tur
   string (e.g. an HTML report) as raw bytes** (CSV adds quoting/newlines), so there is no general
   file-write on the browser at all. `duck_vfs` is consequently **no longer part of the `all`
   feature** — enable `owned-connection` explicitly when you run natively. The SQL examples this site
-  runs in CI are executed in a real browser (`duckfn-sql-verify`).
+  runs in CI are executed in a real browser, as Playwright tests
+  ([Testing the examples](../docs-kit/sql-test.md)).
 
 ## Reading a file
 

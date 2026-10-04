@@ -50,6 +50,9 @@ export default defineConfig({
         // is emitted by the separate `vite.harness.config.ts` build, not here.
         'sql/collect': src('sql/collect.ts'),
         'sql/browserRunner': src('sql/browserRunner.ts'),
+        // The same verifier, framed as Playwright Test: the config preset and
+        // the `declareDocsTests` generator a site calls from its own spec.
+        'sql/playwright': src('sql/playwright.ts'),
         'sql/verify': src('sql/verify.ts'),
       },
       formats: ['es'],
@@ -75,6 +78,9 @@ export default defineConfig({
         // it stays external so the runner requires it from node_modules at run
         // time (and `playwright-core` never bundles into the browser harness).
         'playwright-core',
+        // `sql/playwright.ts` builds on the Playwright Test runner; the site
+        // provides it, so it is never bundled either.
+        '@playwright/test',
         // The browser entry of DuckDB-Wasm, kept external so the harness — not
         // the library build — owns how the engine is loaded.
         /^@duckdb\/duckdb-wasm/,

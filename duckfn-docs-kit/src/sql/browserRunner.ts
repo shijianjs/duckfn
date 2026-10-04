@@ -34,14 +34,25 @@
  * (`COPY … TO`, `dfn_file_write_*`) land in the instance's in-memory file
  * system, readable within the page and gone on reload — the faithful browser
  * behaviour, not a host-directory emulation.
+ *
+ * The loopback static server, the routes it serves and the browser detection
+ * live in `sql/harnessServer` so this class and the Playwright Test integration
+ * (`sql/playwright`) share one fixture; this file owns only the one-page-at-a-
+ * time lifecycle.
  */
-import {createServer, type Server} from 'node:http';
-import {createRequire} from 'node:module';
-import {existsSync, readFileSync} from 'node:fs';
-import {basename, dirname, join} from 'node:path';
 import {chromium, type Browser, type Page} from 'playwright-core';
 
-const require = createRequire(import.meta.url);
+import {
+  findBrowser,
+  harnessRoutes,
+  resolveEngineBundle,
+  startHarness,
+  type Harness,
+  type HarnessRoutes,
+  type WasmPlatform,
+} from './harnessServer';
+
+export type {WasmPlatform} from './harnessServer';
 
 /** The extension to `LOAD`: a local `.duckdb_extension.wasm` path or an http(s) URL. */
 export interface RunnerOptions {
@@ -54,18 +65,10 @@ export interface RunnerOptions {
   browser?: string;
 }
 
-export type WasmPlatform = 'eh' | 'mvp';
-
 export interface RunResult {
   rows: number;
   columns: number;
 }
-
-/** Per-platform file names inside `@duckdb/duckdb-wasm/dist`. */
-const PLATFORM_BUNDLES: Record<WasmPlatform, {wasm: string; worker: string}> = {
-  eh: {wasm: 'duckdb-eh.wasm', worker: 'duckdb-browser-eh.worker.js'},
-  mvp: {wasm: 'duckdb-mvp.wasm', worker: 'duckdb-browser-mvp.worker.js'},
-};
 
 /** The harness's `__dfkRun` return shape (see `harness.ts`). */
 interface HarnessResult {
@@ -83,54 +86,35 @@ export interface QueryResult {
 
 /**
  * One DuckDB-Wasm instance at a time, driven through a headless browser.
- * Mirrors the surface `verify.ts` used from `WasmSqlRunner`.
+ * Mirrors the surface `verify.ts` uses from `WasmSqlRunner`.
  */
 export class BrowserSqlRunner {
-  #server: Server | null = null;
+  #harness: Harness | null = null;
   #browser: Browser | null = null;
   #page: Page | null = null;
-  #harnessUrl = '';
   /** Set when the current page failed to initialise; every run then reports it. */
   #pageError: string | null = null;
 
-  readonly #extensionUrl: string;
-  readonly #enginePath: string;
-  readonly #workerPath: string;
+  readonly #routes: HarnessRoutes;
   readonly #browserExecutable: string;
-  readonly #allowUnsigned: boolean;
 
-  private constructor(options: {
-    extensionUrl: string;
-    enginePath: string;
-    workerPath: string;
-    browserExecutable: string;
-    allowUnsigned: boolean;
-  }) {
-    this.#extensionUrl = options.extensionUrl;
-    this.#enginePath = options.enginePath;
-    this.#workerPath = options.workerPath;
+  private constructor(options: {routes: HarnessRoutes; browserExecutable: string}) {
+    this.#routes = options.routes;
     this.#browserExecutable = options.browserExecutable;
-    this.#allowUnsigned = options.allowUnsigned;
   }
 
   static async create(options: RunnerOptions): Promise<BrowserSqlRunner> {
-    const platform = options.platform ?? 'eh';
-    const bundle = PLATFORM_BUNDLES[platform];
-    const distDir = dirname(require.resolve('@duckdb/duckdb-wasm/dist/duckdb-browser.mjs'));
-    const enginePath = options.engine ? resolveLocal(options.engine) : join(distDir, bundle.wasm);
-    const workerPath = join(distDir, bundle.worker);
-
-    const remote = /^https?:\/\//i.test(options.extension);
-    const extensionUrl = remote ? options.extension : resolveLocal(options.extension);
-
+    const {enginePath, workerPath} = resolveEngineBundle(options.platform ?? 'eh', options.engine);
     return new BrowserSqlRunner({
-      extensionUrl,
-      enginePath,
-      workerPath,
+      routes: harnessRoutes({
+        extension: options.extension,
+        enginePath,
+        workerPath,
+        // The runner is a trusted local loopback: an unsigned dev extension must
+        // load, exactly as the site's own config opts in.
+        allowUnsigned: true,
+      }),
       browserExecutable: findBrowser(options.browser),
-      // The runner is a trusted local loopback: an unsigned dev extension must
-      // load, exactly as the site's own config opts in.
-      allowUnsigned: true,
     });
   }
 
@@ -139,10 +123,7 @@ export class BrowserSqlRunner {
     if (this.#page) {
       return;
     }
-    this.#server = await startStaticServer(this.#routes());
-    const address = this.#server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    this.#harnessUrl = `http://127.0.0.1:${port}/harness.html`;
+    this.#harness = await startHarness(this.#routes);
 
     // `playwright-core` launches the executable we hand it and manages the
     // browser process and a throwaway profile for us.
@@ -153,25 +134,6 @@ export class BrowserSqlRunner {
     this.#page = await this.#browser.newPage();
   }
 
-  /** Maps the URL space the harness page needs to everything on disk. */
-  #routes(): Routes {
-    // A served extension keeps a `/ext/<name>.duckdb_extension.wasm` shape so
-    // its base name still names the entry symbol (`<name>_init_c_api`).
-    const ext = /^https?:\/\//i.test(this.#extensionUrl)
-      ? {remoteUrl: this.#extensionUrl}
-      : {localFile: this.#extensionUrl, baseName: basename(this.#extensionUrl)};
-    return {
-      // Resolved through the package's own `exports` wildcard
-      // (`./sql/harness` -> `dist/sql/harness.js`), so it finds the built harness
-      // whether the runner runs from the workspace symlink or an installed copy.
-      harnessScript: require.resolve('duckfn-docs-kit/sql/harness'),
-      engine: {file: this.#enginePath, name: basename(this.#enginePath)},
-      worker: {file: this.#workerPath, name: basename(this.#workerPath)},
-      extension: ext,
-      allowUnsigned: this.#allowUnsigned,
-    };
-  }
-
   /** Drops the current page state and opens a fresh one: new instance, new connection. */
   async newPage(): Promise<void> {
     await this.#ensureStarted();
@@ -180,7 +142,7 @@ export class BrowserSqlRunner {
       throw new Error('sql/browserRunner: browser is not running');
     }
     this.#pageError = null;
-    await page.goto(this.#harnessUrl, {waitUntil: 'load'});
+    await page.goto(this.#harnessUrl(), {waitUntil: 'load'});
     // `__dfkReady` resolves once the engine is up and the preloads have loaded;
     // Playwright awaits the promise and throws if it rejects.
     try {
@@ -244,154 +206,19 @@ export class BrowserSqlRunner {
       // Likewise the browser: closing twice or after a crash is not an error.
     }
     this.#browser = null;
-    if (this.#server) {
-      await new Promise<void>((resolve) => this.#server?.close(() => resolve()));
-      this.#server = null;
+    if (this.#harness) {
+      const server = this.#harness.server;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      this.#harness = null;
     }
   }
-}
 
-/** A path or `file:` URL to an absolute local path; leaves a remote URL alone. */
-function resolveLocal(value: string): string {
-  return /^file:\/\//i.test(value) ? new URL(value).pathname.replace(/^\/(\w:)/i, '$1') : value;
-}
-
-// ---------------------------------------------------------------------------
-// Static server
-// ---------------------------------------------------------------------------
-
-interface Routes {
-  harnessScript: string;
-  engine: {file: string; name: string};
-  worker: {file: string; name: string};
-  extension: {remoteUrl: string} | {localFile: string; baseName: string};
-  allowUnsigned: boolean;
-}
-
-/**
- * A loopback static server for the harness: `harness.html` (generated, wiring
- * the engine/extension URLs into the two contracts `harness.ts` reads),
- * `harness.js` (the bundled harness), `/vendor/*` (engine + worker), and
- * `/ext/*` (the served extension file). Nothing else is reachable; this is a
- * short-lived test fixture, not a web server.
- */
-async function startStaticServer(routes: Routes): Promise<Server> {
-  const harness = readFileSync(routes.harnessScript);
-  const engine = readFileSync(routes.engine.file);
-  const worker = readFileSync(routes.worker.file);
-  const extension =
-    'localFile' in routes.extension ? readFileSync(routes.extension.localFile) : null;
-  const extBaseName = 'baseName' in routes.extension ? routes.extension.baseName : '';
-
-  const extensionUrl =
-    'remoteUrl' in routes.extension
-      ? routes.extension.remoteUrl
-      : `ext/${routes.extension.baseName}`;
-
-  const html = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>duckfn sql harness</title>
-    <script>
-      window.DFK_HARNESS_BUNDLE = {
-        mainModule: '/vendor/${routes.engine.name}',
-        mainWorker: '/vendor/${routes.worker.name}',
-      };
-    </script>
-    <script id="dfk-sql-runtime" type="application/json">
-      {"allowUnsignedExtensions":${routes.allowUnsigned},"preload":[{"url":"${extensionUrl}"}]}
-    </script>
-  </head>
-  <body>
-    <script type="module" src="/harness.js"></script>
-  </body>
-</html>`;
-
-  const server = createServer((request, response) => {
-    const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-    if (path === '/harness.html') {
-      send(response, 'text/html; charset=utf-8', Buffer.from(html, 'utf8'));
-      return;
+  #harnessUrl(): string {
+    if (!this.#harness) {
+      throw new Error('sql/browserRunner: harness server is not running');
     }
-    if (path === '/harness.js') {
-      send(response, 'text/javascript; charset=utf-8', harness);
-      return;
-    }
-    if (path === `/vendor/${routes.engine.name}`) {
-      send(response, 'application/wasm', engine);
-      return;
-    }
-    if (path === `/vendor/${routes.worker.name}`) {
-      send(response, 'text/javascript; charset=utf-8', worker);
-      return;
-    }
-    if (extension && path === `/ext/${extBaseName}`) {
-      send(response, 'application/octet-stream', extension);
-      return;
-    }
-    response.writeHead(404, {'content-type': 'text/plain'});
-    response.end('not found');
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    // Port 0 lets the OS pick a free one; a browser has no reason for a fixed
-    // port (unlike the Node worker's staging path, which embedded it).
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  return server;
-}
-
-function send(response: import('node:http').ServerResponse, type: string, body: Buffer): void {
-  response.writeHead(200, {'content-type': type, 'content-length': body.length});
-  response.end(body);
-}
-
-// ---------------------------------------------------------------------------
-// Browser detection
-// ---------------------------------------------------------------------------
-
-/** A short list of well-known Chrome/Edge locations, overridable by DFK_BROWSER. */
-function findBrowser(explicit?: string): string {
-  const candidate = explicit ?? process.env.DFK_BROWSER;
-  if (candidate) {
-    return candidate;
+    return this.#harness.url;
   }
-  const paths: string[] = [];
-  if (process.platform === 'win32') {
-    const pf = process.env['PROGRAMFILES'] ?? 'C:\\Program Files';
-    const pf86 = process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)';
-    const local = process.env['LOCALAPPDATA'] ?? '';
-    paths.push(
-      join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-      join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-      join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-      join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-      local ? join(local, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
-    );
-  } else if (process.platform === 'darwin') {
-    paths.push(
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-    );
-  } else {
-    paths.push(
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/microsoft-edge',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-    );
-  }
-  for (const path of paths) {
-    if (path && existsSync(path)) {
-      return path;
-    }
-  }
-  throw new Error(
-    'sql/browserRunner: no Chrome/Edge found — pass --browser <path> or set DFK_BROWSER',
-  );
 }
 
 function messageOf(error: unknown): string {

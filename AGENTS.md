@@ -144,13 +144,20 @@ sed -i 's/\r$//' path/to/new-file.md path/to/new-script.sh
 
 ## 文档站可运行 SQL 的测试
 
-文档里的可运行块（````sql {"type":"duckfn"}````）由 `duckfn-docs-kit` 的 `duckfn-sql-verify`
-在 **真实浏览器里的 DuckDB-Wasm** 中真跑一遍（用 `playwright-core` 直驱系统 Chrome/Edge，不下载浏览器），
+文档里的可运行块（````sql {"type":"duckfn"}````）由 `duckfn-docs-kit` 的 `sql/playwright`
+经 **Playwright Test** 在 **真实浏览器里的 DuckDB-Wasm** 中真跑一遍（用系统 Chrome/Edge，不下载浏览器），
 本站已接成 `npm test`：
 
 ```bash
-npm test -w docs        # 等价于在 docs/ 下 npm test
+npm test -w docs                    # 等价于在 docs/ 下 npx playwright test
+cd docs && npx playwright test -g "types.md"   # 只跑匹配的块
+cd docs && npx playwright show-report          # 打开 HTML 报告（含失败块的 trace）
 ```
+
+每个可运行块是一条 test：报告（list/html/junit/github）、VS Code 测试树、trace 查看器都由
+Playwright 提供。接入点是 `docs/playwright.config.mts`（kit 的 `defineDuckfnDocsConfig()` preset）
+与 `docs/tests/docs.spec.mts`（`declareDocsTests()`）；用 `.mts` 是因为 kit 的 dist 是 ESM，
+CJS 项目里若被 Playwright 转译成 `require()` 会在 `import.meta` 上报错。
 
 它收集 `docs/docs/**` 与每个 `i18n/<locale>/…/current/**` 里的可运行块，用站点预加载的扩展
 （`docs/static/duckdb-extensions/duckfn.duckdb_extension.wasm`）执行，**每页一个新实例、页内共用
@@ -162,16 +169,18 @@ npm test -w docs        # 等价于在 docs/ 下 npm test
 跑不通或结果不对时，先看这几条（完整版见 `duckfn-docs-kit/CONVENTIONS.md`，下游向的用法说明见
 `duckfn-docs-kit/AGENTS.md`，面向读者的说明见 `docs/docs/docs-kit/sql-test.md`）：
 
-- **执行环境是真实浏览器**（DuckDB-Wasm，由 `playwright-core` 驱动），不再是 Node worker。这样才与读者点「Run」时
+- **执行环境是真实浏览器**（DuckDB-Wasm，由 Playwright 驱动），不再是 Node worker。这样才与读者点「Run」时
   的环境一致：浏览器能读远程 `http(s)` 数据（Node worker 读不了、一律 `IO Error: No files found`），
   扩展也按同源 http URL 正常 `LOAD`，没有旧方案的 80 端口 / `~/.duckdb` 暂存目录那套约束。
-- **全离线**：引擎（`duckdb-*.wasm` 与 worker 脚本）从 `node_modules/@duckdb/duckdb-wasm/dist` 本地
-  serve，扩展用 `docs/static/duckdb-extensions/` 里的副本；浏览器用 `playwright-core` 的 `executablePath`
-  拉系统已装的 Chrome/Edge（所以**不下载浏览器**）。找不到时用 `--browser <path>` 或环境变量 `DFK_BROWSER` 指定。
-  用 `playwright-core` 而非 `playwright`：前者不会自动下浏览器，恰好适配离线。
+- **全离线、不下载浏览器**：引擎（`duckdb-*.wasm` 与 worker 脚本）从 `node_modules/@duckdb/duckdb-wasm/dist`
+  本地 serve，扩展用 `docs/static/duckdb-extensions/` 里的副本；浏览器用 Playwright 的
+  `launchOptions.executablePath` 拉系统已装的 Chrome/Edge（所以运行期**不下载浏览器**）。
+  找不到时用环境变量 `DFK_BROWSER` 指定（CLI 也可 `--browser <path>`）。`@playwright/test` 是可选
+  peer 依赖，安装时想连它自带的下载也跳过就 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`。
 - **harness 复用站点运行时**：`sql/harness.ts` 直接调用 `sql/runtime.ts` 的 `DuckDBRuntime`，只是把
   引擎来源从 jsDelivr CDN 换成本地 serve（`init({bundle})`），所以校验走的代码路径与页面渲染一致。
-- 平台要配对：默认 `--platform eh` 对应站点预加载的 `duckfn-wasm_eh.duckdb_extension.wasm`。
+  配置解析（站点根 / 内容目录 / 扩展 / 平台 / 超时）在 `sql/site.ts`，两条入口共用。
+- 平台要配对：默认 `eh` 对应站点预加载的 `duckfn-wasm_eh.duckdb_extension.wasm`（`DFK_PLATFORM` 覆盖）。
 - `docs/.cache/`（已 git 忽略、不删）存着 DuckDB-Wasm 与扩展 wasm 的本地副本，便于离线排查。
 
 关于**文件系统类示例**：浏览器里 DuckDB-Wasm 的裸文件系统不忠实 —— 打开不存在的文件也「成功」、

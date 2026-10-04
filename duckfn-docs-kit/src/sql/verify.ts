@@ -15,11 +15,11 @@
  * on has to be data rather than a string match on a comment. Only blocks that
  * did not behave as declared make the command exit non-zero.
  */
-import {readdirSync, statSync, writeFileSync} from 'node:fs';
-import {join, resolve} from 'node:path';
+import {writeFileSync} from 'node:fs';
 
 import {collectRunnableSql, expectsError, type RunnableSqlBlock} from './collect';
 import {BrowserSqlRunner, type WasmPlatform} from './browserRunner';
+import {resolveDocsSiteConfig, resolveExtension, type DocsSiteConfig} from './site';
 
 export interface VerifyOptions {
   /** Docs site root; defaults to the working directory. */
@@ -72,28 +72,19 @@ export interface VerifyReport {
   unexpected: BlockResult[];
 }
 
-const DEFAULT_CONTENT = ['docs', 'i18n'] as const;
-const DEFAULT_TIMEOUT_MS = 30_000;
-
 /** Runs every runnable block of the site and returns the outcome of each. */
 export async function verifySqlDocs(options: VerifyOptions = {}): Promise<VerifyReport> {
-  const siteDir = resolve(options.siteDir ?? process.cwd());
+  const config = resolveDocsSiteConfig(options);
   const blocks = collectRunnableSql({
-    siteDir,
-    contentDirs: options.contentDirs ?? defaultContentDirs(siteDir),
+    siteDir: config.siteDir,
+    contentDirs: config.contentDirs,
   });
-  const requested = options.extension;
-  const extension = requested
-    ? /^https?:\/\//i.test(requested)
-      ? requested
-      : resolve(requested)
-    : defaultExtension(siteDir);
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const extension = resolveExtension(config.siteDir, config.extension);
 
   // No working directory: in a browser DuckDB's file system is the instance's
   // own memory, so `COPY … TO` / `dfn_file_write_*` never touch the docs tree —
   // they land in the page and vanish on the next `newPage()`.
-  const results = await runPages(blocks, extension, options, timeoutMs);
+  const results = await runPages(blocks, extension, config, config.timeoutMs);
 
   const report: VerifyReport = {
     blocks: results,
@@ -112,14 +103,14 @@ export async function verifySqlDocs(options: VerifyOptions = {}): Promise<Verify
 async function runPages(
   blocks: readonly RunnableSqlBlock[],
   extension: string,
-  options: VerifyOptions,
+  config: DocsSiteConfig,
   timeoutMs: number,
 ): Promise<BlockResult[]> {
   const runner = await BrowserSqlRunner.create({
     extension,
-    platform: options.platform,
-    engine: options.engine,
-    browser: options.browser,
+    platform: config.platform,
+    engine: config.engine,
+    browser: config.browser,
   });
   const results: BlockResult[] = [];
   try {
@@ -173,51 +164,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-/**
- * Where a Docusaurus site keeps its pages: the English sources in `docs/`, and
- * each translation under `i18n/<locale>/docusaurus-plugin-content-docs/current/`.
- */
-function defaultContentDirs(siteDir: string): string[] {
-  const dirs: string[] = [];
-  if (isDirectory(join(siteDir, DEFAULT_CONTENT[0]))) {
-    dirs.push(DEFAULT_CONTENT[0]);
-  }
-  const i18n = join(siteDir, DEFAULT_CONTENT[1]);
-  if (isDirectory(i18n)) {
-    for (const locale of readdirSync(i18n)) {
-      const translated = join(i18n, locale, 'docusaurus-plugin-content-docs', 'current');
-      if (isDirectory(translated)) {
-        dirs.push(join('i18n', locale, 'docusaurus-plugin-content-docs', 'current'));
-      }
-    }
-  }
-  return dirs.length > 0 ? dirs : ['.'];
-}
-
-/** The site's preloaded extension, as `dfkExtensions` places it under `static/`. */
-function defaultExtension(siteDir: string): string {
-  const dir = join(siteDir, 'static', 'duckdb-extensions');
-  const candidates = isDirectory(dir)
-    ? readdirSync(dir).filter((name) => name.endsWith('.duckdb_extension.wasm'))
-    : [];
-  if (candidates.length === 0) {
-    throw new Error(
-      `sql/verify: no extension found in ${dir} — pass --extension <file|url>, or let the site's ` +
-        `extension preload plugin fetch it first`,
-    );
-  }
-  if (candidates.length > 1) {
-    throw new Error(
-      `sql/verify: several extensions found in ${dir} (${candidates.join(', ')}) — ` +
-        `pass --extension to pick one`,
-    );
-  }
-  return join(dir, candidates[0] as string);
-}
-
-function isDirectory(path: string): boolean {
-  return statSync(path, {throwIfNoEntry: false})?.isDirectory() ?? false;
-}
 
 export interface CliOptions extends VerifyOptions {
   quiet?: boolean;

@@ -14,8 +14,9 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "test:sql": "node ../duckfn-docs-kit/bin/sql-verify.mjs --site .",
-    "test": "npm run test:sql"
+    "test:sql": "playwright test",
+    "test": "npm run test:sql",
+    "test:sql:report": "playwright show-report"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
@@ -34,6 +35,7 @@
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
+    "@playwright/test": "^1.63.0",
     "@types/react": "^19.3.0",
     "typescript": "~6.0.2"
   },

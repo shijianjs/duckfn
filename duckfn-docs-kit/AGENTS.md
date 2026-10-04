@@ -254,30 +254,44 @@ Constraints that bite:
 - **Unsigned third-party extensions need `allowUnsignedExtensions: true`** (the WebAssembly
   equivalent of `duckdb -unsigned`). Community extensions are signed and load without it.
 
-## Testing the blocks (`duckfn-sql-verify`)
+## Testing the blocks (Playwright Test)
 
 The kit runs every block in a **real browser**, on the same runtime the page uses, so what CI
-checks is what a reader gets:
+checks is what a reader gets — and it runs them as **Playwright tests**, so a failure arrives with
+the framework's report, trace viewer and editor integration. Wire it up in two files:
 
-```bash
-duckfn-sql-verify --site .            # or: npx duckfn-sql-verify --site .
+```ts
+// playwright.config.mts
+import {defineDuckfnDocsConfig} from 'duckfn-docs-kit/sql/playwright';
+export default defineDuckfnDocsConfig();
 ```
 
-It collects every runnable block (`docs/` plus each `i18n/<locale>/…/current/` by default), runs it
-in DuckDB-Wasm **in a headless browser** (driven with `playwright-core`, launching your system
-Chrome/Edge via `executablePath` — so no browser download) with the site's extension loaded, and
-fails the process when a block does not behave as it declares. It is fully offline: the engine and
-the extension are served from local files. Wire it into `package.json` as
-`"test": "duckfn-sql-verify --site ."`.
+```ts
+// tests/docs.spec.mts
+import {declareDocsTests} from 'duckfn-docs-kit/sql/playwright';
+declareDocsTests();
+```
 
+then run `npx playwright test` (or `"test": "playwright test"` in `package.json`). Use the `.mts`
+extension unless your project is `"type": "module"`: the kit ships ESM, and a CommonJS project would
+otherwise make Playwright transpile the imports to `require()` and choke on the kit's `import.meta`.
+
+- **One test per block**, one page per content file: blocks on a page share its DuckDB connection, so
+  a block may rely on a table or macro an earlier block on the **same page** created — pages stay
+  isolated. A file runs serially, different files in parallel workers.
 - **A block that demonstrates a failure must say so**: `{"type":"duckfn","expect":"error"}`. The
-  check is two-way — a block that declares `error` and starts succeeding is reported too — and a
-  `-- error:` comment in the SQL is *not* read; only the metadata counts.
-- Useful options: `--extension <path|url>`, `--platform eh|mvp`, `--content <dir>` (repeatable),
-  `--browser <path>` (the Chrome/Edge executable; otherwise a detected one or `DFK_BROWSER`),
-  `--timeout <ms>`, `--report <file>`, `--quiet`. It needs `playwright-core`, which the kit lists
-  as a dependency; unlike `playwright` it never downloads a browser.
+  check is two-way (`test.fail()` reports a block that declares `error` and starts succeeding too),
+  and a `-- error:` comment in the SQL is *not* read; only the metadata counts.
+- **Configuration** comes from the `DFK_*` environment variables — `DFK_SITE_DIR`, `DFK_CONTENT`,
+  `DFK_EXTENSION`, `DFK_PLATFORM`, `DFK_ENGINE`, `DFK_BROWSER`, `DFK_TIMEOUT`; unset, the site
+  layout is detected. The preset launches your **system Chrome/Edge** (detected, or `DFK_BROWSER`),
+  so no browser is downloaded at run time. `@playwright/test` is an optional peer dependency; if you
+  do not want Playwright's install-time download either, install it with
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`.
 - The default extension is the single file under `static/duckdb-extensions/`.
+- **The `duckfn-sql-verify` command still exists** for a framework-free run (`duckfn-sql-verify
+  --site .`), sharing the collector, the harness and the extension resolution with the Playwright
+  path. Prefer Playwright Test when you want reports and IDE support; the CLI is the fallback.
 - **File-system examples stay plain code blocks.** Under DuckDB-Wasm the raw file system is not
   POSIX-faithful: `dfn_file_exists` reads a missing file as "opened" (always `true`), writes/append
   byte order is wrong, and there is no existence primitive in DuckDB's C API to correct it. So keep
