@@ -209,7 +209,18 @@ ci-tools ref —— 见下一节。
 | **链接旗标**（`-O3` vs `-O0`） | **你的 `Makefile`**（`link_wasm_release` / `link_wasm_debug`） | 那个优化器到底跑不跑 |
 
 前两个由官方流水线钉住。其中 emsdk 是**一个兼容窗口、不是「必须一模一样」**。针对被 pin 的宿主
-`duckdb-wasm 1.33.1-dev65.0`（用约 3.1.71 编）实测：用 emsdk **3.1.74**、**4.0.23**、**5.0.7** 链接的扩展都能正常载入并跑通（554 个文档示例、0 unexpected），而用 **6.0.0**、**6.0.10** 链接的能构建、却在 `LOAD` 阶段报 `Could not load dynamic lib`。分界是一条干脆的 emscripten **5→6 断裂**：**5.0.7**（5 线最后一版）能载入，**6.0.0**（6 线第一版）不能。所以邻近或略新的 emsdk 能容忍；越过这条界、side module 的 emscripten 运行时 import 与宿主对不上就会被拒。把 emsdk 钉在 CI 那版是 known-good 的选择，别假设任意更新的 emsdk 都能载入。
+`duckdb-wasm 1.33.1-dev65.0`（约 3.1.71 编）、固定 `-O0` 实测：
+
+| 扩展用哪个 emsdk 链接 | 能构建 | 能载入宿主 |
+| --- | --- | --- |
+| emsdk 3.1.74 | ✓ | ✅ 554 块全过 |
+| emsdk 4.0.23 | ✓ | ✅ 554 全过 |
+| emsdk 5.0.7 | ✓ | ✅ 554 全过 |
+| emsdk 6.0.0 | ✓ | ❌ `Could not load dynamic lib` |
+| emsdk 6.0.10 | ✓ | ❌ `Could not load dynamic lib` |
+
+分界是一条干脆的 emscripten **5→6 断裂**。把 emsdk 钉在 CI 那版是 known-good 的选择；邻近或略新的能容忍，
+越过这条界、side module 的 emscripten 运行时 import 与宿主对不上就会被拒——别假设任意更新的 emsdk 都能载入。
 
 ### 两个互相独立的失败点
 
@@ -254,7 +265,16 @@ link_wasm_release:
 endif
 ```
 
-等被钉的 emsdk 里 binaryen 认得了这些特性（即 DuckDB 抬高了 wasm 的 emsdk），就该删掉这个覆盖退回 `-O3`。
+但**升 emsdk 本身并不等于可以退回 `-O3`**。同一宿主下、固定 emsdk 只翻优化档实测：
+
+| emsdk（兼容窗内） | `-O0`（跳过 binaryen） | `-O3`（binaryen 优化） |
+| --- | --- | --- |
+| 4.0.23 | ✅ 载入、全过 | ❌ `Could not load dynamic lib` |
+| 5.0.7 | ✅ 载入、全过 | ❌ `Could not load dynamic lib` |
+
+`-O3` 产物用新 binaryen 能链接成功（已认得那些 feature flag），却被宿主拒载；同一 emsdk 的 `-O0` 能载入。
+所以 `-O0` 对该宿主是**载入必需**，不只是绕开旧 binaryen 那串 flag 的权宜。要退回 `-O3`，得等**宿主侧**
+wasm 运行时也确认能接受 binaryen 优化过的 side module。
 
 ### CI 不读你的 `extension-ci-tools` 子模块
 

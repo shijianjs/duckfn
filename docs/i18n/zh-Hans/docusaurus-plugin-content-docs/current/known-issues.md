@@ -1,7 +1,7 @@
 ---
 title: 已知问题
 sidebar_position: 10
-description: 官方 CI 的 WebAssembly 构建对 Rust 1.86 的锁定（已解决）、会把全 NULL 列表字面量读坏的上游 bug，以及为什么 `panic!` 在 WebAssembly 上不可用。
+description: 官方 CI 的 WebAssembly 构建对 Rust 1.86 的锁定（已解决）、会把全 NULL 列表字面量读坏的上游 bug，以及 `panic!` 在 WebAssembly 上取决于 Rust 版本。
 ---
 
 # 已知问题
@@ -29,7 +29,9 @@ description: 官方 CI 的 WebAssembly 构建对 Rust 1.86 的锁定（已解决
 **仍需检查的一点。** 这次提升在含 #394 的 `extension-ci-tools` 版本里，所以仓库引用的 ref 要足够新：
 相应调高 `.github/workflows/MainDistributionPipeline.yml` 里的 `ci_tools_version`（以及 vendored 的
 `extension-ci-tools` 子模块）。早于修复的 ref 会保持旧行为 —— 比如本仓库当前钉的 `@v1.5-variegata`，
-其 vendored 工作流里 wasm 作业仍是 `dtolnay/rust-toolchain@1.86.0`，直到该 ref 往前推。
+其 vendored 工作流里 wasm 作业仍是 `dtolnay/rust-toolchain@1.86.0`，直到该 ref 往前推。一个不依赖上游
+推进的替代办法：在仓库根放 `rust-toolchain.toml`（优先级高于 dtolnay 设的 rustup default），它还会随
+注册表的 `override_ref` 一起生效 —— 详见[版本兼容](./duckdb-versions.md)的 wasm 工具链一节。
 
 ## 全 NULL 的列表字面量传入后是脏数据
 
@@ -68,47 +70,34 @@ SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 **规避办法。** 给至少一个**元素**标类型（`[NULL, NULL::INTEGER, NULL, NULL]`），而不是给列表标类型；
 或者不要直接传字面量，让值由查询产生。已确认影响 DuckDB v1.5.4 与 v1.5.5，上游仍未修复。
 
-## 函数里的 `panic!` 在 WebAssembly 上不可用
+## 函数里的 `panic!` 在 WebAssembly 上（取决于 Rust 版本）
 
-**现象。** 原生 CLI（以及 `just test`）里，一个 `panic!` 的函数会报出可读的 panic 消息；
-而**同一个调用**在浏览器（DuckDB-Wasm）里会失败成：
+**现象 —— 与工具链版本有关。** 原生 CLI（以及 `just test`）里，一个 `panic!` 的函数会报出可读的
+panic 消息；而**同一个调用**在浏览器（DuckDB-Wasm）里的表现**随 stable `rustc` 不同**。用两个探针
+（一个直接 `panic!`、一个在函数内自己 `catch_unwind` 包一个 `panic!`）在固定宿主
+`duckdb-wasm 1.33.1-dev65.0` / emsdk 3.1.71 上、只换工具链实测：
 
-```
-RangeError: Maximum call stack size exceeded
-```
+| stable rustc | 裸 `panic!` | `catch_unwind` |
+| --- | --- | --- |
+| **1.89** | `RangeError: Maximum call stack size exceeded`（abort） | **接不住** —— 没有可展开的运行时 |
+| **1.97.1** | 可读的 `Invalid Input Error: <消息>` | **能接住** |
 
-—— 完全看不到你写的 panic 消息。（扩展本身没被搞挂：同一连接上后面的调用仍正常；只有那一次调用
-会变成栈溢出的假错。）
+**原因。** DuckDB-Wasm 的 `eh` bundle 早就启用了 Wasm 层的异常处理（C++ 那层没问题）；缺的是 **Rust
+自己的展开**。rustup 给 `wasm32-unknown-emscripten` 的预编译 `std` 曾经是 `panic = "abort"` 构建、
+不含 `libpanic_unwind`，所以尽管 duckfn 与 quack-rs 把每个回调都包在 `std::panic::catch_unwind` 里，
+也没有展开运行时可跑：`panic!` 直接 abort，被 wasm 运行时呈现成那个栈溢出的 `RangeError`。
+**较新的 stable** 现在把该 target 的 `std` 连展开一起发了，于是这层安全网在浏览器里也真生效。
+`emcc -fwasm-exceptions` 不是解药（它救不回一个已被 Rust 编成 `abort` 的 `panic!`）；用 nightly
+`-Zbuild-std=std,panic_unwind` 自己重编 `std` 这一步，在当前 stable 上也不再需要。
 
-**原因 —— 卡在 Rust 的构建，不是 Emscripten。** 有两层必须对齐，而 duckfn 只能控其中一层：
-
-- **DuckDB-Wasm 的 `eh` bundle** 确实启用了 Wasm 层的异常处理（exception handling），所以
-  DuckDB/C++ 抛出的异常能被捕获。这一层没问题。
-- **Rust 那一层**需要的是 *Rust 自己的* 展开（unwinding），而该目标并没有把它编出来。rustup
-  为 `wasm32-unknown-emscripten` 提供的预编译 `std` 是以 `panic = "abort"` 构建的 —— 里面没有
-  `libpanic_unwind`。所以尽管 duckfn 与 quack-rs 把每个回调都包在 `std::panic::catch_unwind` 里、
-  并以 `panic = "unwind"` 构建，却没有可用的展开运行时：`panic!` 直接 abort，在 wasm 运行时里
-  就表现成 `RangeError: Maximum call stack size exceeded`，而不是你的消息。原生上展开是真实存在
-  的 —— 这正是为什么 `catch_unwind` 在 native 能把 panic 转成可读的 DuckDB 错误。
-
-要让 `catch_unwind` 在 wasm 上真正生效，得带展开地重编 `std`，而目前这一步需要 nightly：
-`RUSTFLAGS="-Cpanic=unwind" cargo +nightly build -Zbuild-std=std,panic_unwind …`（`-Zbuild-std`
-仍仅限 nightly）。而官方 `wasm_eh` 的 CI **并没有**这么做 —— 它用 stable
-`cargo build --target wasm32-unknown-emscripten` 编出 staticlib、最后才跑 `emcc`，而
-`emcc -fwasm-exceptions` 救不回一个已被 Rust 编成 `abort` 的 `panic!`。这就是“安全网在 native
-真、在 wasm 形同虚设”的全部原因。
-
-可恢复那条路径不受影响：返回 `Err(duck_error("..."))`（`DuckOptionResult`）根本不展开，所以在
-原生与 wasm 上都是干净可读的 `Invalid Input Error`。
-
-**处理办法 —— 不要用 `panic!` 来报错。** 凡是调用方能响应的情形，都返回 `Err(duck_error("..."))` /
-`DuckOptionResult`。`panic!` 只留给“这是必须中断的内部 bug”，并知道它在 WebAssembly 上对读者
-只会呈现为一个栈溢出，而不是一条消息。以上基于本地自建的 `wasm_eh` 扩展（emscripten 3.1.71）实测。
+可恢复那条路径仍是首选、且与工具链无关：返回 `Err(duck_error("..."))`（`DuckOptionResult`）根本不
+展开，在原生与 wasm 上都是干净可读的 `Invalid Input Error`。`panic!` 只留给「必须中断进程的真·内部
+bug」。以上基于本地自建 `wasm_eh` 扩展（emsdk 3.1.71）、只换 `rustc` 实测。
 
 ## 相关页面
 
 - [项目结构约定](./getting-started/project-structure.md) —— 几个 crate root、`error[E0583]`、IDE 对
   独立 wasm root 标红。
 - [常见问题](./faq.md) —— 写函数时实际踩到的那些报错。
-- [构建与发布](./development/build-and-release.md) —— 打 tag 时流水线做了什么。
+- [构建与发版](./development/build-and-release.md) —— 打 tag 时流水线做了什么。
 - [架构](./development/architecture.md) —— 注册与派发到底怎么运作。

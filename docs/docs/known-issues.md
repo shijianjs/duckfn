@@ -1,7 +1,7 @@
 ---
 title: Known issues
 sidebar_position: 10
-description: The (resolved) Rust 1.86 pin in the official CI's WebAssembly build, the upstream bug that corrupts all-NULL list literals, and why a `panic!` is unusable on WebAssembly.
+description: The (resolved) Rust 1.86 pin in the official CI's WebAssembly build, the upstream bug that corrupts all-NULL list literals, and how a `panic!` on WebAssembly depends on the Rust version.
 ---
 
 # Known issues
@@ -33,7 +33,10 @@ the ref your repository calls has to be new enough: bump `ci_tools_version` in
 `.github/workflows/MainDistributionPipeline.yml` (and the vendored `extension-ci-tools` submodule)
 accordingly. A ref that predates the fix keeps the old behaviour — for instance the `@v1.5-variegata`
 this repository currently pins still carries `dtolnay/rust-toolchain@1.86.0` for the wasm job in the
-vendored workflow, until that ref is moved forward.
+vendored workflow, until that ref is moved forward. A repository-side way to bypass that without waiting
+upstream: drop a root `rust-toolchain.toml` — it outranks the rustup *default* dtolnay sets, and travels
+with the registry's `override_ref` too. See the wasm toolchain section of
+[version compatibility](./duckdb-versions.md).
 
 ## All-NULL list literals arrive corrupted
 
@@ -74,45 +77,32 @@ buffer after the first element.
 list, or hand the function a value that comes from a query instead of a literal. Reported against
 DuckDB v1.5.4 and v1.5.5, still open upstream.
 
-## A `panic!` inside a function is unusable on WebAssembly
+## A `panic!` inside a function on WebAssembly (depends on the Rust version)
 
-**What you see.** On the native CLI (and in `just test`) a function that panics reports a readable
-message. The *same* call in the browser (DuckDB-Wasm) fails with:
+**What you see — it is toolchain-dependent.** On the native CLI (and in `just test`) a panicking
+function reports a readable message. The *same* call in the browser (DuckDB-Wasm) behaved differently
+by stable `rustc`. Measured with two probe functions — one that just `panic!`s, one that wraps a
+`panic!` in its own `catch_unwind` — on the pinned host `duckdb-wasm 1.33.1-dev65.0` / emsdk 3.1.71,
+changing only the toolchain:
 
-```
-RangeError: Maximum call stack size exceeded
-```
+| stable rustc | a bare `panic!` | `catch_unwind` |
+| --- | --- | --- |
+| **1.89** | `RangeError: Maximum call stack size exceeded` (aborts) | **no** — nothing to unwind |
+| **1.97.1** | a readable `Invalid Input Error: <message>` | **yes** — caught |
 
-— with no trace of your panic message at all. (The extension survives: a later call on the same
-connection still works; it is only that one call that comes back as a stack overflow.)
+**Why.** DuckDB-Wasm's `eh` bundle already turns on WebAssembly-level exception handling (the C++ layer
+is fine); the missing piece was *Rust's own* unwinding. rustup's precompiled `std` for
+`wasm32-unknown-emscripten` used to ship `panic = "abort"` with no `libpanic_unwind`, so duckfn and
+quack-rs's `catch_unwind` had no unwinder to run — the `panic!` aborted, and the wasm runtime surfaced
+that as the stack-overflow `RangeError`. A **recent stable** now builds that target's `std` **with**
+unwinding, so the guard works in the browser too. `emcc -fwasm-exceptions` is not the lever (it cannot
+revive a panic already compiled to `abort`), and hand-rebuilding `std` with
+`-Zbuild-std=std,panic_unwind` on nightly is no longer needed on current stable.
 
-**Why — it is Rust's build, not Emscripten's.** Two independent layers have to line up, and duckfn
-only controls one of them:
-
-- **DuckDB-Wasm's `eh` bundle** does enable WebAssembly-level exception handling, so a DuckDB/C++
-  throw is catchable. That layer is fine.
-- **The Rust side** needs *Rust* unwinding, and that is not built for this target. rustup ships a
-  precompiled `std` for `wasm32-unknown-emscripten` compiled with `panic = "abort"` — it carries no
-  `libpanic_unwind`. So even though duckfn and quack-rs wrap every callback in
-  `std::panic::catch_unwind` and build with `panic = "unwind"`, there is no unwinder to run: the
-  `panic!` aborts, and the wasm runtime surfaces that as `RangeError: Maximum call stack size
-  exceeded` instead of your message. On native, real unwinding exists — that is precisely why
-  `catch_unwind` there turns the panic into a readable DuckDB error.
-
-Making `catch_unwind` genuinely work on wasm means rebuilding `std` with unwinding, which today
-requires nightly: `RUSTFLAGS="-Cpanic=unwind" cargo +nightly build -Zbuild-std=std,panic_unwind …`
-(`-Zbuild-std` is still nightly-only). The official `wasm_eh` CI job does **not** do this — it builds
-the staticlib with stable `cargo build --target wasm32-unknown-emscripten` and only runs `emcc` at the
-end, and `emcc -fwasm-exceptions` cannot revive a `panic!` that Rust already compiled to `abort`. That
-is the whole reason the guard is real on native and a no-op on wasm.
-
-The recoverable path is unaffected: returning `Err(duck_error("..."))` (a `DuckOptionResult`) does not
-unwind at all, so it is a clean, readable `Invalid Input Error` on both native and wasm.
-
-**What to do — never `panic!` to signal an error.** Return `Err(duck_error("..."))` /
-`DuckOptionResult` for anything a caller can react to. Keep `panic!` only for "this is an internal bug
-that must abort", and know that on WebAssembly it will look like a stack overflow to a reader, not a
-message. Measured against a locally built `wasm_eh` extension on emscripten 3.1.71.
+The recoverable path is still the right one, and toolchain-independent: return
+`Err(duck_error("..."))` / `DuckOptionResult` for anything a caller can react to — it never unwinds and
+reads as a clean `Invalid Input Error` on both native and wasm. Keep `panic!` for genuine "must abort"
+internal bugs. Measured on a locally built `wasm_eh` extension (emsdk 3.1.71) by swapping only `rustc`.
 
 ## See also
 

@@ -225,14 +225,21 @@ a different repository**:
 | The **emsdk / binaryen** (`3.1.71` → `wasm-opt` v120) | ci-tools' `setup-emsdk` step | which wasm features `emcc`'s post-link optimizer understands |
 | The **link flags** (`-O3` vs `-O0`) | **your `Makefile`** (`link_wasm_release` / `link_wasm_debug`) | whether that optimizer runs at all |
 
-The first two are pinned by the official pipeline. The emsdk pin is a **compatibility window, not an
-exact-match rule.** Measured against the pinned host `duckdb-wasm 1.33.1-dev65.0` (built with ~3.1.71):
-extensions linked with emsdk **3.1.74**, **4.0.23** and **5.0.7** all load and run fine (554 docs
-examples, 0 unexpected), but ones linked with **6.0.0** and **6.0.10** build yet fail at `LOAD` with
-`Could not load dynamic lib`. The cut-off is a clean emscripten **5 → 6** break: **5.0.7** (the last 5.x)
-loads, **6.0.0** (the first 6.x) does not. So a nearby or moderately-newer emsdk is tolerated; one across
-that boundary, whose side-module emscripten runtime imports no longer match the host's, is rejected. Pin to the CI's emsdk as the known-good choice and
-do not assume any newer emsdk will load.
+The first two are pinned by the official pipeline, and the emsdk pin is a **compatibility window, not an
+exact-match rule.** Measured against the pinned host `duckdb-wasm 1.33.1-dev65.0` (built with ~3.1.71),
+at `-O0`:
+
+| extension linked with | builds? | loads in the host? |
+| --- | --- | --- |
+| emsdk 3.1.74 | ✓ | ✅ all 554 docs examples pass |
+| emsdk 4.0.23 | ✓ | ✅ all 554 pass |
+| emsdk 5.0.7 | ✓ | ✅ all 554 pass |
+| emsdk 6.0.0 | ✓ | ❌ `Could not load dynamic lib` |
+| emsdk 6.0.10 | ✓ | ❌ `Could not load dynamic lib` |
+
+The cut-off is a clean emscripten **5 → 6** break. Pin to the CI's emsdk as the known-good choice: a
+nearby or moderately-newer emsdk is tolerated, but one past that boundary — whose side-module emscripten
+runtime imports no longer match the host's — is rejected, so do not assume any newer emsdk will load.
 
 ### Two independent failure modes
 
@@ -282,8 +289,18 @@ link_wasm_release:
 endif
 ```
 
-Deleting this override (going back to `-O3`) is correct once the pinned emsdk's binaryen understands the
-features — i.e. when DuckDB bumps the wasm emsdk.
+Bumping the emsdk is **not** by itself a licence to go back to `-O3`. On the same host, holding the emsdk
+fixed and flipping only the optimization level:
+
+| emsdk (in the compatible window) | `-O0` (skip binaryen) | `-O3` (binaryen-optimized) |
+| --- | --- | --- |
+| 4.0.23 | ✅ loads, all examples pass | ❌ `Could not load dynamic lib` |
+| 5.0.7 | ✅ loads, all examples pass | ❌ `Could not load dynamic lib` |
+
+An `-O3` module links fine with the newer binaryen (it now accepts the feature flags) yet the host rejects
+it, while `-O0` from the same toolchain loads. So `-O0` is **load-critical**, not merely a workaround for
+the old flag list. Revisit `-O3` only once the **host's** wasm runtime (not just the extension's emsdk) is
+known to accept binaryen-optimized side modules.
 
 ### CI does not read your `extension-ci-tools` submodule
 
