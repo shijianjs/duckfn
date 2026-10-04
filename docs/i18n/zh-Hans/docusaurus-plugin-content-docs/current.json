@@ -26,5 +26,9 @@
   "sidebar.userGuide.category.Examples.link.generated-index.description": {
     "message": "本仓库的示例扩展，逐个功能配可运行的 SQL。",
     "description": "The generated-index page description for category 'Examples' in sidebar 'userGuide'"
+  },
+  "sidebar.userGuide.category.DuckDB version compatibility": {
+    "message": "DuckDB 版本兼容性",
+    "description": "The label for category 'DuckDB version compatibility' in sidebar 'userGuide'"
   }
 }

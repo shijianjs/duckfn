@@ -6,7 +6,7 @@ description: Why building the wasm_* artifacts couples three versions across thr
 
 # The wasm build toolchain
 
-[Version compatibility](./index.md) is about which **DuckDB** a binary targets. Producing the `wasm_*`
+[Version numbers and the ABI](./c-api-and-abi.md) is about which **DuckDB** a binary targets. Producing the `wasm_*`
 artifacts is a different, nastier version problem: three knobs have to line up, **each set in a
 different repository**, and a mismatch fails at one of three distinct stages. This page records the
 whole investigation — the failure modes, the measured compatibility windows, and the levers — so nobody
@@ -208,7 +208,7 @@ registry too.)
 
 Note the wasm build does **not** depend on DuckDB 2.0 being out: it still targets DuckDB 1.5.x. And a
 *stable* build of this extension already loads and runs on a DuckDB **2.0** pre-release engine (see
-[Version compatibility](./index.md#what-a-stable-build-actually-covers)) — load-compatible is not the
+[Version numbers and the ABI](./c-api-and-abi.md#what-a-stable-build-actually-covers)) — load-compatible is not the
 same as build-target, though.
 
 Separately, the **`panic!` / `catch_unwind` behaviour on wasm is also Rust-version-dependent** — measured

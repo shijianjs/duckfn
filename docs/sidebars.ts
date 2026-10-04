@@ -53,6 +53,7 @@ const sidebars: SidebarsConfig = {
       label: 'DuckDB version compatibility',
       link: {type: 'doc', id: 'duckdb-versions/index'},
       items: [
+        'duckdb-versions/c-api-and-abi',
         'duckdb-versions/wasm-toolchain',
         'duckdb-versions/rust-wasm-unwinding',
       ],

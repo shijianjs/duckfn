@@ -1,10 +1,10 @@
 ---
-title: WebAssembly 上的 Rust 展开
+title: wasm 下的 panic 处理
 sidebar_position: 3
 description: panic! 在 DuckDB-Wasm 上是被 catch_unwind 接住、还是 abort，取决于 Rust 版本 —— 探针实验、两层成因、以及该怎么做。
 ---
 
-# WebAssembly 上的 Rust 展开
+# wasm 下的 panic 处理
 
 duckfn 与 quack-rs 把每个回调都包在 `std::panic::catch_unwind` 里，于是你函数里的 `panic!` 会变成一条可读
 的 DuckDB 错误、而不是把进程搞崩。但这张安全网在 WebAssembly 上到底是不是「真的」，取决于 `rustc` 版本。

@@ -10,7 +10,7 @@ description: 会渗进扩展构建里的 DuckDB 上游 bug —— 目前是经 C
 的问题 —— 官方 CI 的 wasm 构建过去把 Rust 钉在 1.86，以及为什么 `panic!` 在 WebAssembly 上随 Rust 版本表现
 不同 —— 已移到 [DuckDB 版本兼容性](./duckdb-versions/index.md) 下：见
 [wasm 构建工具链](./duckdb-versions/wasm-toolchain.md) 与
-[WebAssembly 上的 Rust 展开](./duckdb-versions/rust-wasm-unwinding.md)。用法层面的疑问（函数为什么没注册上、
+[Wasm 下的 panic 处理](./duckdb-versions/rust-wasm-unwinding.md)。用法层面的疑问（函数为什么没注册上、
 为什么必须加 `-unsigned`）见[常见问题](./faq.md)。
 
 与**目录结构**有关的那些 —— 几个 crate root、`error[E0583]`、IDE 对独立 wasm root 标红 —— 搬到了
@@ -56,7 +56,7 @@ SELECT dfn_echo_map_varchar_integer_n(map(['a', 'b'], [NULL, NULL]));
 ## 另见
 
 - [wasm 构建工具链](./duckdb-versions/wasm-toolchain.md) 与
-  [WebAssembly 上的 Rust 展开](./duckdb-versions/rust-wasm-unwinding.md) —— 那两个版本问题，现归于
+  [Wasm 下的 panic 处理](./duckdb-versions/rust-wasm-unwinding.md) —— 那两个版本问题，现归于
   DuckDB 版本兼容性之下。
 - [常见问题](./faq.md) —— 写函数时实际踩到的那些报错。
 - [构建与发版](./development/build-and-release.md) —— 打 tag 时流水线做了什么。
