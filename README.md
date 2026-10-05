@@ -57,11 +57,11 @@ packages a subdirectory that contains its own `Cargo.toml`.
 
 ```toml
 [dependencies]
-duckfn = "0.0.18"
+duckfn = "0.0.19"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
-quack-rs = "0.16.0"
+quack-rs = "0.18.0"
 # `loadable-extension` dispatches through DuckDB's API table instead of linking
 # libduckdb, which is what keeps a local DuckDB build unnecessary.
 # (headers only — no linked library)
@@ -85,7 +85,7 @@ converts `DuckDecimal<W, S>` to and from [`rust_decimal`](https://crates.io/crat
 the epoch / 128-bit / scaled-integer arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.0.18", features = ["duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.0.19", features = ["duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"] }
 ```
 
 `all` is the aggregate switch — every optional feature **except `owned-connection`**. duckfn normally

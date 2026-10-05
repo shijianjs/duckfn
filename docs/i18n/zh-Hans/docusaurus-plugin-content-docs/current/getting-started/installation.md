@@ -14,7 +14,7 @@ duckfn = "{{DUCKFN_VERSION}}"
 
 # duckfn 基于这两个 crate 构建。只要你直接书写它们的类型或 builder ——
 # 例如 SqlMacro、Connection、LogicalType、Value —— 就需要显式添加。
-quack-rs = "0.16.0"
+quack-rs = "0.18.0"
 # `loadable-extension` 通过 DuckDB 的 API table 分发，而不是链接 libduckdb，
 # 这正是无需本地编译 DuckDB 的原因。只用到头文件。
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }

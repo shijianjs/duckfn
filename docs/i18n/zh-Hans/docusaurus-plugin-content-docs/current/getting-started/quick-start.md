@@ -34,7 +34,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 duckfn = "{{DUCKFN_VERSION}}"
-quack-rs = "0.16.0"
+quack-rs = "0.18.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
 

@@ -14,7 +14,7 @@ duckfn = "{{DUCKFN_VERSION}}"
 
 # duckfn is built on these two crates. Add them explicitly as soon as you name
 # their types or builders yourself — SqlMacro, Connection, LogicalType, Value, …
-quack-rs = "0.16.0"
+quack-rs = "0.18.0"
 # `loadable-extension` dispatches through DuckDB's API table instead of linking
 # libduckdb, which is what keeps a local DuckDB build unnecessary. Only the
 # headers are used.
