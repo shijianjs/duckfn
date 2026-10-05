@@ -164,18 +164,18 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     /// 不会缓存或复用相同参数的调用结果，每一行都会重新求值（`random()` 这类函数需要它）。
     /// 不开启时 DuckDB 可能把常量参数的调用折叠成只执行一次。
     ///
-    /// 该开关走 quack-rs 的 `ScalarFunctionBuilder::volatile`，只有在 duckfn 打开
-    /// `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API）时才真正生效；未开启时本方法被忽略。
-    /// 函数集重载（[`Self::scalar_overload_builder`]）不支持该开关。
+    /// 该开关走 quack-rs 的 `ScalarFunctionBuilder::volatile` / `ScalarOverloadBuilder::volatile`，
+    /// 是 DuckDB 1.2.0 起的稳定 C API，不需要 `duckdb-1-5` feature；函数集重载
+    /// （[`Self::scalar_overload_builder`]）同样支持 —— 每个重载各自标记。
     ///
     /// Whether to mark the function volatile; defaults to `false`. Returning `true` makes the
     /// registration call DuckDB's `duckdb_scalar_function_set_volatile`, so DuckDB neither caches
     /// nor reuses the result of a call with the same arguments — every row is re-evaluated, which
     /// is what functions like `random()` need. Without it DuckDB may fold constant-argument calls
     /// into a single execution. The switch goes through quack-rs' `ScalarFunctionBuilder::volatile`
-    /// and only takes effect when duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API) is
-    /// enabled; otherwise it is ignored. Function-set overloads ([`Self::scalar_overload_builder`])
-    /// do not support it.
+    /// / `ScalarOverloadBuilder::volatile`, part of the stable C API since DuckDB 1.2.0 and thus
+    /// requiring no `duckdb-1-5` feature; function-set overloads
+    /// ([`Self::scalar_overload_builder`]) support it as well, per overload.
     fn volatile() -> bool {
         false
     }
@@ -190,19 +190,20 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     /// 元素可以是任意 [`DuckValueType`]，包括 `Option<T>`（元素可为 NULL）与 `Vec<T>`
     /// （即「可变参数本身是 LIST」，对应 `varargs_logical(LogicalType::list(...))`）。
     ///
-    /// 该能力只在 duckfn 打开 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API）时真正生效；
-    /// 函数集重载（[`Self::scalar_overload_builder`]）不支持它。宏 `#[duck_scalar_function(varargs = true)]`
-    /// 会从函数签名最后一个参数 `Vec<T>` 推断出 `T`。
+    /// 该能力走 quack-rs 的 `ScalarFunctionBuilder::varargs_logical` /
+    /// `ScalarOverloadBuilder::varargs_logical`，是 DuckDB 1.2.0 起的稳定 C API，不需要
+    /// `duckdb-1-5` feature；函数集重载（[`Self::scalar_overload_builder`]）同样支持。宏
+    /// `#[duck_scalar_function(varargs = true)]` 会从函数签名最后一个参数 `Vec<T>` 推断出 `T`。
     ///
     /// Variadic-argument element logical type; `None` (the default) means the function has no
     /// variadic arguments. `Some(lt)` makes registration call DuckDB's
-    /// `duckdb_scalar_function_set_varargs` (quack-rs' `ScalarFunctionBuilder::varargs_logical`)
-    /// and, at call time, reads every column after the fixed ones as one element of type `lt`
-    /// handed to [`Self::apply_varargs`]. The element may be any [`DuckValueType`], `Option<T>`
-    /// (nullable element) and `Vec<T>` (i.e. the variadic argument is itself a LIST, matching
-    /// `varargs_logical(LogicalType::list(...))`) included. The capability only takes effect with
-    /// duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API) and is not supported for function-set
-    /// overloads ([`Self::scalar_overload_builder`]). The macro
+    /// `duckdb_scalar_function_set_varargs` (quack-rs' `ScalarFunctionBuilder::varargs_logical` /
+    /// `ScalarOverloadBuilder::varargs_logical`) and, at call time, reads every column after the
+    /// fixed ones as one element of type `lt` handed to [`Self::apply_varargs`]. The element may be
+    /// any [`DuckValueType`], `Option<T>` (nullable element) and `Vec<T>` (i.e. the variadic
+    /// argument is itself a LIST, matching `varargs_logical(LogicalType::list(...))`) included. It
+    /// is part of the stable C API since DuckDB 1.2.0 and thus requires no `duckdb-1-5` feature, and
+    /// function-set overloads ([`Self::scalar_overload_builder`]) support it too. The macro
     /// `#[duck_scalar_function(varargs = true)]` infers the element type `T` from the last
     /// parameter `Vec<T>` of the signature.
     fn varargs_element_type() -> Option<LogicalType> {
@@ -312,10 +313,10 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
             .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types());
         if Self::volatile() {
-            builder = set_volatile(builder);
+            builder = builder.volatile();
         }
         if let Some(varargs_type) = Self::varargs_element_type() {
-            builder = set_varargs(builder, varargs_type);
+            builder = builder.varargs_logical(varargs_type);
         }
         if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
             // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；函数对象交给 DuckDB 后
@@ -330,19 +331,25 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
 
     /// 构造「函数集重载」用的 builder（不带函数名，由函数集决定）。
     ///
-    /// 注意：quack-rs 的 [`ScalarOverloadBuilder`] 没有暴露 volatile / varargs 开关，因此
-    /// [`Self::volatile`] 与 [`Self::varargs_element_type`] 对重载无效；需要它们时请注册成独立函数。
+    /// [`Self::volatile`] 与 [`Self::varargs_element_type`] 同样对重载生效：quack-rs 的
+    /// [`ScalarOverloadBuilder`] 各自暴露了 `volatile` / `varargs_logical`，每个重载独立标记。
     ///
-    /// Builds the builder for a function-set overload (no name; the set provides it). Note that
-    /// quack-rs' [`ScalarOverloadBuilder`] exposes neither a volatile nor a varargs switch, so
-    /// [`Self::volatile`] and [`Self::varargs_element_type`] have no effect on overloads; register
-    /// the function standalone when they are required.
+    /// Builds the builder for a function-set overload (no name; the set provides it).
+    /// [`Self::volatile`] and [`Self::varargs_element_type`] apply to overloads too: quack-rs'
+    /// [`ScalarOverloadBuilder`] exposes `volatile` / `varargs_logical` per overload, so each one is
+    /// marked independently.
     fn scalar_overload_builder() -> ScalarOverloadBuilder {
         let mut builder = ScalarOverloadBuilder::new()
             .function(Self::scalar_function_wrapper)
             .null_handling(Self::null_handling())
             .returns_logical(Self::Output::logical_type())
             .with_params(Self::Args::column_types());
+        if Self::volatile() {
+            builder = builder.volatile();
+        }
+        if let Some(varargs_type) = Self::varargs_element_type() {
+            builder = builder.varargs_logical(varargs_type);
+        }
         if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
             // SAFETY: 同上；重载句柄最终由函数集持有，析构时机由 DuckDB 决定。
             //
@@ -381,13 +388,13 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     ///
     /// 数据在函数对象销毁时由 DuckDB 调用析构回调释放，因此类型必须是 `Send + Sync + 'static`
     /// （函数对象可能被多线程、多查询共享，且应视为只读）。需要「每次查询一份」的状态请改用表函数的
-    /// `with_state` 或 quack-rs 的 bind data。
+    /// `init_state` 或 quack-rs 的 bind data。
     ///
     /// Function-level data attached at registration time (DuckDB's `extra_info`); nothing is
     /// attached by default. DuckDB frees it through the destructor when the function object is
     /// dropped, so the type must be `Send + Sync + 'static` (the function object may be shared
     /// across threads and queries, and must be treated as read-only). For per-query state use a
-    /// table function's `with_state` or quack-rs' bind data instead.
+    /// table function's `init_state` or quack-rs' bind data instead.
     fn extra_info() -> Option<DuckExtraInfo> {
         None
     }
@@ -441,45 +448,4 @@ pub trait ScalarFunctionAdapter: Sized + 'static {
     /// generated by `#[duck_scalar_function(varargs = true)]` therefore only carries a placeholder
     /// body.
     fn apply(args: Self::Args) -> DuckOptionResult<Self::Output>;
-}
-
-/// 把标量函数标记为 volatile（[`ScalarFunctionAdapter::volatile`] 的实现细节）。
-///
-/// `ScalarFunctionBuilder::volatile` 只在 quack-rs 的 `duckdb-1-5` feature 下存在，因此没有该
-/// feature 时这里原样返回 builder：开关被忽略，而不是让整个扩展编译失败。
-///
-/// Marks a scalar function volatile (the implementation detail behind
-/// [`ScalarFunctionAdapter::volatile`]). `ScalarFunctionBuilder::volatile` only exists under
-/// quack-rs' `duckdb-1-5` feature, so without it the builder is returned unchanged: the switch is
-/// ignored rather than failing the whole extension build.
-fn set_volatile(builder: ScalarFunctionBuilder) -> ScalarFunctionBuilder {
-    #[cfg(feature = "duckdb-1-5")]
-    {
-        builder.volatile()
-    }
-    #[cfg(not(feature = "duckdb-1-5"))]
-    {
-        builder
-    }
-}
-
-/// 给标量函数设置可变参数类型（[`ScalarFunctionAdapter::varargs_element_type`] 的实现细节）。
-///
-/// `ScalarFunctionBuilder::varargs_logical` 只在 quack-rs 的 `duckdb-1-5` feature 下存在，因此
-/// 没有该 feature 时这里原样返回 builder：可变参数被忽略，而不是让整个扩展编译失败。
-///
-/// Sets the variadic-argument type (the implementation detail behind
-/// [`ScalarFunctionAdapter::varargs_element_type`]). `ScalarFunctionBuilder::varargs_logical`
-/// only exists under quack-rs' `duckdb-1-5` feature, so without it the builder is returned
-/// unchanged: varargs are ignored rather than failing the whole extension build.
-fn set_varargs(builder: ScalarFunctionBuilder, varargs_type: LogicalType) -> ScalarFunctionBuilder {
-    #[cfg(feature = "duckdb-1-5")]
-    {
-        builder.varargs_logical(varargs_type)
-    }
-    #[cfg(not(feature = "duckdb-1-5"))]
-    {
-        let _ = varargs_type;
-        builder
-    }
 }

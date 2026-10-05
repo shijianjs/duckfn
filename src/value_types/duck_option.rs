@@ -121,8 +121,4 @@ impl<T: DuckValueType> DuckValueType for Option<T> {
     fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
         Ok(Some(T::read_by_duck_value_valid(value)?))
     }
-
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        Some(T::read_by_duck_value_valid_simple(value))
-    }
 }

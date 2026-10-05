@@ -1,8 +1,11 @@
 use duckfn::{
-    duck_aggregate_function, duck_custom_register, duck_error, DuckAggregateState,
-    DuckfnAggregateFunctionSetBuilder, DuckOptionResult, DuckResult,
+    duck_aggregate_function, duck_custom_register, duck_error, DuckAggregateState, DuckOptionResult,
+    DuckResult,
 };
-use quack_rs::prelude::{AggregateFunctionSetBuilder, Connection, LogicalType, Registrar, TypeId};
+use quack_rs::prelude::{
+    AggregateFunctionSetBuilder, AggregateOverloadBuilder, Connection, LogicalType, Registrar,
+    TypeId,
+};
 
 // ============================================================================
 // duck_aggregate_function：参数与状态的拆分
@@ -366,7 +369,7 @@ impl DuckAggregateState for ListState {
 //
 // auto_register = false 时宏生成：
 //   aggregate_function_builder() -> quack_rs::AggregateFunctionBuilder（单签名注册）
-//   aggregate_overload_builder(builder) -> OverloadBuilder（挂进函数集做重载）
+//   aggregate_overload_builder(builder) -> AggregateOverloadBuilder（挂进函数集做重载）
 // ============================================================================
 
 /// auto_register = false 且不手动注册：SQL 层没有这个名字
@@ -438,22 +441,23 @@ fn dfn_agg_set_over_varchar(input: String, state: &mut TextState) {
     state.text.push_str(&format!("str({input});"));
 }
 
-/// 用 duckfn::DuckfnAggregateFunctionSetBuilder + aggregate_function_guard() 注册
-/// 同名重载：每个重载是独立的 duckdb_aggregate_function，返回类型各取各的 Output，
-/// 因此同一个函数集里可以有不同返回类型（quack_rs 的 AggregateFunctionSetBuilder
-/// 只能在函数集上设一个统一的 returns_logical，见上面的 dfn_agg_reg_overload）
+/// 手写 `#[duck_custom_register]` + quack-rs 的 `AggregateFunctionSetBuilder` 注册同名重载：
+/// 每个重载各有一个 `AggregateOverloadBuilder`，返回类型由宏生成的
+/// `aggregate_overload_builder()` 按各自的 `Output` 设置，因此同一个函数集里可以有不同返回类型。
+///
+/// Manual `#[duck_custom_register]` + quack-rs' `AggregateFunctionSetBuilder`: each overload gets
+/// its own `AggregateOverloadBuilder`, and the macro-generated `aggregate_overload_builder()` sets
+/// each return type from its own `Output`, so one set may contain different return types.
 #[duck_custom_register]
 fn dfn_agg_set_over_register(c: &Connection) -> DuckResult<()> {
-    unsafe {
-        DuckfnAggregateFunctionSetBuilder::new(
-            "dfn_agg_set_overload",
-            vec![
-                dfn_agg_set_over_int::aggregate_function_guard(),
-                dfn_agg_set_over_varchar::aggregate_function_guard(),
-            ],
-        )
-        .register(c.as_raw_connection())
-    }
+    let builder = AggregateFunctionSetBuilder::new("dfn_agg_set_overload")
+        .overload(dfn_agg_set_over_int::aggregate_overload_builder(
+            AggregateOverloadBuilder::new(),
+        ))
+        .overload(dfn_agg_set_over_varchar::aggregate_overload_builder(
+            AggregateOverloadBuilder::new(),
+        ));
+    unsafe { c.register_aggregate_set(builder) }
 }
 
 // ============================================================================
@@ -463,7 +467,7 @@ fn dfn_agg_set_over_register(c: &Connection) -> DuckResult<()> {
 //     - 不注册自身的函数名；
 //     - 宏把本签名提交成 duckfn::DuckAggregateOverloadItem，
 //       register_all_duckfn -> register_all_aggregate_overload 把同名（函数集名相同）
-//       的重载分组，用 DuckfnAggregateFunctionSetBuilder 注册成一个函数集；
+//       的重载分组，用 quack-rs 的 AggregateFunctionSetBuilder 注册成一个函数集；
 //     - 每个重载的返回类型各取各的 Output，因此同一函数集里可以有不同返回类型。
 //   仍受 auto_register 控制：auto_register = false 时完全不提交。
 // ============================================================================

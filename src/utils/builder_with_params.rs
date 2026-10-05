@@ -3,8 +3,7 @@
 //! Builder extension trait: gives the different function builders one shared "set the
 //! parameter list in bulk" API.
 
-use quack_rs::aggregate::AggregateFunctionBuilder;
-use quack_rs::aggregate::builder::OverloadBuilder;
+use quack_rs::aggregate::{AggregateFunctionBuilder, AggregateOverloadBuilder};
 use quack_rs::prelude::{LogicalType, ScalarFunctionBuilder, ScalarOverloadBuilder};
 
 /// 为各类函数 builder 提供统一的「追加一个参数」与「批量设置参数」能力。
@@ -66,7 +65,7 @@ impl BuilderWithParams for AggregateFunctionBuilder {
 // 为「聚合函数集重载」builder 实现参数追加。
 //
 // Parameter appending for the aggregate-overload builder.
-impl BuilderWithParams for OverloadBuilder {
+impl BuilderWithParams for AggregateOverloadBuilder {
     fn builder_param_logical(self, logical_type: LogicalType) -> Self {
         self.param_logical(logical_type)
     }

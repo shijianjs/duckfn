@@ -57,46 +57,51 @@ pub type DuckFullIteratorResult<T> = DuckResult<DuckFullIterator<T>>;
 
 /// 把「参数结构体 -> 行迭代器」的纯 Rust 函数注册成 DuckDB 表函数。
 ///
-/// 表函数的生命周期分两段：
+/// 表函数的生命周期分三段：
 ///
-/// 1. **bind**（[`Self::with_state`]）：声明输出列、解析参数，返回扫描状态（即行迭代器）；
-/// 2. **scan**（[`Self::scan`]）：从状态里取一批行（至多 `vector_size()` 行）写入输出
+/// 1. **bind**（[`Self::bind_state`]）：声明输出列、解析参数，返回每次执行共用的 bind data（参数）；
+/// 2. **init**（[`Self::init_state`]）：每次执行都从 bind data 重建扫描状态（行迭代器）；
+/// 3. **scan**（[`Self::scan`]）：从状态里取一批行（至多 `vector_size()` 行）写入输出
 ///    chunk，并设置本批行数。
 ///
 /// 一般不用手写这个 impl，直接用 `#[duck_table_function]` 作用在返回迭代器的函数上即可。
 ///
 /// Registers a plain Rust function `Args -> row iterator` as a DuckDB table function. Its
-/// life cycle has two phases: (1) **bind** ([`Self::with_state`]), which declares the output
-/// columns, parses the parameters and returns the scan state (the row iterator); and
-/// (2) **scan** ([`Self::scan`]), which pulls a batch of at most `vector_size()` rows from the
-/// state, writes them into the output chunk and sets the batch size. Usually you do not
-/// implement this manually: annotate a function returning an iterator with
-/// `#[duck_table_function]`.
+/// life cycle has three phases: (1) **bind** ([`Self::bind_state`]), which declares the output
+/// columns, parses the parameters and returns the bind data (the arguments) shared by every
+/// execution; (2) **init** ([`Self::init_state`]), which rebuilds the scan state (the row iterator)
+/// from that bind data for every execution; and (3) **scan** ([`Self::scan`]), which pulls a batch
+/// of at most `vector_size()` rows from the state, writes them into the output chunk and sets the
+/// batch size. Usually you do not implement this manually: annotate a function returning an iterator
+/// with `#[duck_table_function]`.
 ///
 /// 这里**没有** `extra_info` 钩子：本适配层走 quack-rs 的 typed 表函数 builder，而该 builder 把
 /// `extra_info` 槽位用来存它自己的 bind/scan 闭包了。表函数本来就以 per-query 状态传数据
-/// （[`Self::with_state`] 返回的迭代器），需要跨查询共享的只读数据用标准库的
+/// （[`Self::init_state`] 返回的迭代器），需要跨查询共享的只读数据用标准库的
 /// `OnceLock` / `LazyLock` 即可。需要读 `extra_info` 又愿意自己接管注册的话，可以重写
 /// [`Self::table_function_builder`]。
 ///
 /// There is **no** `extra_info` hook here: this adapter goes through quack-rs' typed table-function
 /// builder, which uses the `extra_info` slot for its own bind/scan closures. Table functions already
-/// pass their data as per-query state (the iterator returned by [`Self::with_state`]); use the
+/// pass their data as per-query state (the iterator returned by [`Self::init_state`]); use the
 /// standard library's `OnceLock` / `LazyLock` for read-only data shared across queries. If you need
 /// `extra_info` and are willing to own the registration, override
 /// [`Self::table_function_builder`].
-pub trait TableFunctionAdapter: Sized + 'static {
-    /// 构造表函数 builder，并挂上 bind/scan 两个闭包。
+pub trait TableFunctionAdapter: Sized + 'static
+where
+    Self::Args: Clone + Send + Sync + 'static,
+{
+    /// 构造表函数 builder，并挂上 bind/init/scan 三个闭包。
     ///
-    /// Builds the table-function builder and attaches the bind/scan closures.
+    /// Builds the table-function builder and attaches the bind/init/scan closures.
     fn table_function_builder() -> DuckResult<TableFunctionBuilder> {
         let mut builder = TableFunctionBuilder::new(Self::NAME);
         builder = Self::config_params(builder);
-        // 1. bind closure: declare the output schema, read parameters,
-        //    return the initial scan state.
+        // 1. bind closure: declare the output schema, read parameters, return the bind data.
+        // 2. init closure: rebuild the per-execution scan state from the bind data.
         builder
-            .with_state(Self::with_state)
-            // 2. scan closure: mutate state, write rows, set chunk size.
+            .with_bind_init(Self::bind_state, Self::init_state)
+            // 3. scan closure: mutate state, write rows, set chunk size.
             // .scan(|state, chunk| Self::scan(state, chunk))
             .scan(Self::scan)
             .build()
@@ -109,23 +114,41 @@ pub trait TableFunctionAdapter: Sized + 'static {
         config_bind_params::<Self::Args>(builder)
     }
 
-    /// bind 阶段：解析参数、声明输出列，并构造初始扫描状态（行迭代器）。
+    /// bind 阶段：解析参数、声明输出列，并把参数作为 bind data 返回。
     ///
+    /// 这里用 `with_bind_init` 而非 `with_state`：扫描状态是行迭代器，不可克隆，无法当作「每次执行
+    /// 克隆一份」的模板；改为把参数存成 bind data，执行时在 [`Self::init_state`] 里重建迭代器。
     /// bind 用 `catch_unwind` 包住，panic 会被转成查询错误而不会跨 FFI 展开。
     ///
-    /// Bind phase: parses the parameters, declares the result columns and builds the initial
-    /// scan state (the row iterator). The body is wrapped in `catch_unwind`, so a panic
-    /// becomes a query error instead of unwinding across the FFI boundary.
-    fn with_state(
-        bind: &BindInfo,
-    ) -> DuckFullIteratorResult<Self::Output> {
+    /// Bind phase: parses the parameters, declares the result columns and returns the parameters as
+    /// the bind data. `with_bind_init` is used rather than `with_state`: the scan state is a row
+    /// iterator, which cannot be cloned and thus cannot be the "clone once per execution" template;
+    /// the parameters are stored as bind data instead, and the iterator is rebuilt in
+    /// [`Self::init_state`] per execution. The body is wrapped in `catch_unwind`, so a panic becomes
+    /// a query error instead of unwinding across the FFI boundary.
+    fn bind_state(bind: &BindInfo) -> DuckResult<Self::Args> {
         catch_unwind(|| {
             let args: Self::Args = Self::read_args(bind)?;
             Self::config_result_columns(bind, &args);
-            let x: DuckFullIterator<Self::Output> =
-                Box::new(Self::init_data_iterator(args)?);
-            Ok(x)
+            Ok(args)
         })
+        .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
+    }
+
+    /// init 阶段：从 bind data（参数）重建本次执行的行迭代器。
+    ///
+    /// 每次执行都会调用一次，所以 prepared statement 重复 `EXECUTE`、递归 CTE 里的重复扫描都从头
+    /// 开始；同样用 `catch_unwind` 兜住 panic。
+    ///
+    /// Init phase: rebuilds this execution's row iterator from the bind data (the parameters). It runs
+    /// once per execution, so repeated `EXECUTE` of a prepared statement and re-scans inside a
+    /// recursive CTE start from the beginning; `catch_unwind` guards a panic as above.
+    fn init_state(args: &Self::Args) -> DuckFullIteratorResult<Self::Output> {
+        catch_unwind(AssertUnwindSafe(|| {
+            let x: DuckFullIterator<Self::Output> =
+                Box::new(Self::init_data_iterator(args.clone())?);
+            Ok(x)
+        }))
         .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
     }
 
@@ -228,10 +251,12 @@ pub trait DuckBindArgs: Sized {
 /// iterator.
 ///
 /// 两个字段都满足 `Send + 'static`（schema 走 [`DuckResultSchema`]，不含 `LogicalType` 句柄），
-/// 因此可以直接作为 `with_state::<S, _>` 的状态类型。
+/// 因此可以直接作为 `with_bind_init` 的 `init` 返回的状态类型；迭代器不可克隆，所以不能走
+/// `with_state`。
 ///
 /// Both fields are `Send + 'static` (the schema is a [`DuckResultSchema`], holding no
-/// `LogicalType` handle), so this works directly as the `with_state::<S, _>` state type.
+/// `LogicalType` handle), so this works directly as the state type returned by `with_bind_init`'s
+/// `init` closure; the iterator cannot be cloned, so `with_state` is not an option.
 pub struct DuckDynamicState {
     /// 输出列定义（bind 阶段读外部元数据得出）。
     ///
@@ -255,24 +280,27 @@ pub struct DuckDynamicState {
 ///   列名与列类型都可以来自文件头、字典表、远端 schema 等外部信息。
 ///
 /// 生命周期与静态版一致：bind 解析参数、调用 [`Self::bind`] 得到 `schema + 迭代器`，并按 schema
-/// 调 `add_result_column_with_type` 声明结果列；scan 每批从迭代器取至多 `vector_size()` 行，
-/// 按 schema 写进输出 chunk。bind 与 scan 都用 `catch_unwind` 包住，panic 会变成查询错误。
+/// 调 `add_result_column_with_type` 声明结果列；每次执行再由 `init` 调一次 [`Self::bind`] 重建一份
+/// 迭代器；scan 每批从迭代器取至多 `vector_size()` 行，按 schema 写进输出 chunk。各阶段都用
+/// `catch_unwind` 包住，panic 会变成查询错误。
 ///
 /// The life cycle matches the static flavour: bind parses the arguments, calls [`Self::bind`] to get
 /// a `schema + iterator` pair, and declares the result columns through
-/// `add_result_column_with_type`; scan then pulls at most `vector_size()` rows per batch from the
-/// iterator and writes them out according to the schema. Both phases are wrapped in `catch_unwind`,
-/// so a panic becomes a query error.
+/// `add_result_column_with_type`; for every execution `init` calls [`Self::bind`] once more to rebuild
+/// the iterator; scan then pulls at most `vector_size()` rows per batch from the iterator and writes
+/// them out according to the schema. Every phase is wrapped in `catch_unwind`, so a panic becomes a
+/// query error.
 ///
-/// 一般不需要手写 `table_function_builder()` / `with_state` / `scan`，只实现 [`Self::bind`] 即可：
+/// 一般不需要手写 `table_function_builder()` / `bind_state` / `init_state` / `scan`，只实现
+/// [`Self::bind`] 即可：
 ///
 /// 这里**没有** `extra_info` 钩子，原因同 [`TableFunctionAdapter`]（typed builder 占用了该槽位）。
 ///
 /// There is **no** `extra_info` hook here, for the same reason as [`TableFunctionAdapter`] (the
 /// typed builder occupies that slot).
 ///
-/// Usually only [`Self::bind`] has to be implemented; `table_function_builder()` / `with_state` /
-/// `scan` come with defaults:
+/// Usually only [`Self::bind`] has to be implemented; `table_function_builder()` / `bind_state` /
+/// `init_state` / `scan` come with defaults:
 ///
 /// ```ignore
 /// struct MyDynamic;
@@ -296,19 +324,22 @@ pub struct DuckDynamicState {
 ///     }
 /// }
 /// ```
-pub trait DynamicTableFunctionAdapter: Sized + 'static {
-    /// 构造表函数 builder，并挂上 bind/scan 两个闭包（默认实现，通常不用改）。
+pub trait DynamicTableFunctionAdapter: Sized + 'static
+where
+    Self::Args: Clone + Send + Sync + 'static,
+{
+    /// 构造表函数 builder，并挂上 bind/init/scan 三个闭包（默认实现，通常不用改）。
     ///
-    /// Builds the table-function builder and attaches the bind/scan closures (default
+    /// Builds the table-function builder and attaches the bind/init/scan closures (default
     /// implementation; usually left untouched).
     fn table_function_builder() -> DuckResult<TableFunctionBuilder> {
         let mut builder = TableFunctionBuilder::new(Self::NAME);
         builder = config_bind_params::<Self::Args>(builder);
-        // 1. bind closure: declare the dynamic schema, read parameters,
-        //    return the schema + row iterator as scan state.
+        // 1. bind closure: declare the dynamic schema, read parameters, return the arguments.
+        // 2. init closure: rebuild the per-execution scan state (schema + fresh row iterator).
         builder
-            .with_state(Self::with_state)
-            // 2. scan closure: pull rows, write them by schema, set chunk size.
+            .with_bind_init(Self::bind_state, Self::init_state)
+            // 3. scan closure: pull rows, write them by schema, set chunk size.
             .scan(Self::scan)
             .build()
     }
@@ -321,17 +352,40 @@ pub trait DynamicTableFunctionAdapter: Sized + 'static {
         config_bind_params::<Self::Args>(builder)
     }
 
-    /// bind 阶段：解析参数、按返回的动态结果集声明输出列，并构造 scan 状态。
+    /// bind 阶段：解析参数、按 [`Self::bind`] 返回的动态结果集声明输出列，并把参数作为 bind data
+    /// 返回。
     ///
-    /// Bind phase: parses the arguments, declares the result columns from the returned dynamic
-    /// table and builds the scan state.
-    fn with_state(bind: &BindInfo) -> DuckResult<DuckDynamicState> {
+    /// `Self::bind` 同时产出 schema 与迭代器；这里取 schema 声明结果列、丢弃迭代器（迭代器不可
+    /// 克隆），scan 状态改由 [`Self::init_state`] 在每次执行时重建。
+    ///
+    /// Bind phase: parses the arguments, declares the result columns from the dynamic table returned
+    /// by [`Self::bind`] and returns the arguments as the bind data. `Self::bind` yields both the
+    /// schema and the iterator; the schema is used to declare the result columns and the iterator is
+    /// dropped (it cannot be cloned), while the scan state is rebuilt by [`Self::init_state`] per
+    /// execution.
+    fn bind_state(bind: &BindInfo) -> DuckResult<Self::Args> {
         catch_unwind(|| {
             let args: Self::Args = Self::read_args(bind)?;
-            let (schema, rows) = Self::bind(args)?.into_parts();
+            let (schema, _rows) = Self::bind(args.clone())?.into_parts();
             schema.declare(bind);
-            Ok(DuckDynamicState { schema, rows })
+            Ok(args)
         })
+        .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
+    }
+
+    /// init 阶段：调 [`Self::bind`] 重建本次执行的动态结果集，拆成 scan 状态。
+    ///
+    /// 每次执行都会调用一次，所以 prepared statement 重复 `EXECUTE`、递归 CTE 里的重复扫描都从头
+    /// 开始。
+    ///
+    /// Init phase: calls [`Self::bind`] again to rebuild this execution's dynamic result table and
+    /// splits it into the scan state. It runs once per execution, so repeated `EXECUTE` of a prepared
+    /// statement and re-scans inside a recursive CTE start from the beginning.
+    fn init_state(args: &Self::Args) -> DuckResult<DuckDynamicState> {
+        catch_unwind(AssertUnwindSafe(|| {
+            let (schema, rows) = Self::bind(args.clone())?.into_parts();
+            Ok(DuckDynamicState { schema, rows })
+        }))
         .map_err(panic_to_duck_error)? // 不用flatten以兼容1.86
     }
 

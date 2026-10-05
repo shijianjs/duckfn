@@ -267,33 +267,127 @@ impl DuckDynamicValue {
             return Ok(None);
         }
         let dynamic = match desc {
-            DuckTypeDesc::Scalar(TypeId::Boolean) => Self::Boolean(value.as_bool()),
-            DuckTypeDesc::Scalar(TypeId::TinyInt) => Self::TinyInt(value.as_i8()),
-            DuckTypeDesc::Scalar(TypeId::SmallInt) => Self::SmallInt(value.as_i16()),
-            DuckTypeDesc::Scalar(TypeId::Integer) => Self::Integer(value.as_i32()),
-            DuckTypeDesc::Scalar(TypeId::BigInt) => Self::BigInt(value.as_i64()),
-            DuckTypeDesc::Scalar(TypeId::HugeInt) => Self::HugeInt(value.as_i128()),
-            DuckTypeDesc::Scalar(TypeId::UTinyInt) => Self::UTinyInt(value.as_u8()),
-            DuckTypeDesc::Scalar(TypeId::USmallInt) => Self::USmallInt(value.as_u16()),
-            DuckTypeDesc::Scalar(TypeId::UInteger) => Self::UInteger(value.as_u32()),
-            DuckTypeDesc::Scalar(TypeId::UBigInt) => Self::UBigInt(value.as_u64()),
-            DuckTypeDesc::Scalar(TypeId::UHugeInt) => Self::UHugeInt(value.as_u128()),
-            DuckTypeDesc::Scalar(TypeId::Float) => Self::Float(value.as_f32()),
-            DuckTypeDesc::Scalar(TypeId::Double) => Self::Double(value.as_f64()),
+            DuckTypeDesc::Scalar(TypeId::Boolean) => Self::Boolean(
+                value
+                    .as_bool()
+                    .ok_or_else(|| duck_error("dynamic column: value is not BOOLEAN"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::TinyInt) => Self::TinyInt(
+                value
+                    .as_i8()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TINYINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::SmallInt) => Self::SmallInt(
+                value
+                    .as_i16()
+                    .ok_or_else(|| duck_error("dynamic column: value is not SMALLINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Integer) => Self::Integer(
+                value
+                    .as_i32()
+                    .ok_or_else(|| duck_error("dynamic column: value is not INTEGER"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::BigInt) => Self::BigInt(
+                value
+                    .as_i64()
+                    .ok_or_else(|| duck_error("dynamic column: value is not BIGINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::HugeInt) => Self::HugeInt(
+                value
+                    .as_i128()
+                    .ok_or_else(|| duck_error("dynamic column: value is not HUGEINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::UTinyInt) => Self::UTinyInt(
+                value
+                    .as_u8()
+                    .ok_or_else(|| duck_error("dynamic column: value is not UTINYINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::USmallInt) => Self::USmallInt(
+                value
+                    .as_u16()
+                    .ok_or_else(|| duck_error("dynamic column: value is not USMALLINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::UInteger) => Self::UInteger(
+                value
+                    .as_u32()
+                    .ok_or_else(|| duck_error("dynamic column: value is not UINTEGER"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::UBigInt) => Self::UBigInt(
+                value
+                    .as_u64()
+                    .ok_or_else(|| duck_error("dynamic column: value is not UBIGINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::UHugeInt) => Self::UHugeInt(
+                value
+                    .as_u128()
+                    .ok_or_else(|| duck_error("dynamic column: value is not UHUGEINT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Float) => Self::Float(
+                value
+                    .as_f32()
+                    .ok_or_else(|| duck_error("dynamic column: value is not FLOAT"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Double) => Self::Double(
+                value
+                    .as_f64()
+                    .ok_or_else(|| duck_error("dynamic column: value is not DOUBLE"))?,
+            ),
             DuckTypeDesc::Scalar(TypeId::Varchar) => Self::Varchar(value.as_str()?),
             DuckTypeDesc::Scalar(TypeId::Blob) => Self::Blob(value.as_blob()?),
-            DuckTypeDesc::Scalar(TypeId::Date) => Self::Date(value.as_date()),
-            DuckTypeDesc::Scalar(TypeId::Time) => Self::Time(value.as_time()),
-            DuckTypeDesc::Scalar(TypeId::TimeTz) => Self::TimeTz(value.as_time_tz()),
-            DuckTypeDesc::Scalar(TypeId::Timestamp) => Self::Timestamp(value.as_timestamp()),
-            DuckTypeDesc::Scalar(TypeId::TimestampTz) => Self::TimestampTz(value.as_timestamp_tz()),
-            DuckTypeDesc::Scalar(TypeId::TimestampS) => Self::TimestampS(value.as_timestamp_s()),
-            DuckTypeDesc::Scalar(TypeId::TimestampMs) => Self::TimestampMs(value.as_timestamp_ms()),
-            DuckTypeDesc::Scalar(TypeId::TimestampNs) => Self::TimestampNs(value.as_timestamp_ns()),
-            DuckTypeDesc::Scalar(TypeId::Uuid) => Self::Uuid(value.as_uuid()),
-            DuckTypeDesc::Scalar(TypeId::Interval) => Self::Interval(value.as_interval()),
+            DuckTypeDesc::Scalar(TypeId::Date) => Self::Date(
+                value
+                    .as_date()
+                    .ok_or_else(|| duck_error("dynamic column: value is not DATE"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Time) => Self::Time(
+                value
+                    .as_time()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIME"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::TimeTz) => Self::TimeTz(
+                value
+                    .as_time_tz()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIMETZ"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Timestamp) => Self::Timestamp(
+                value
+                    .as_timestamp()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIMESTAMP"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::TimestampTz) => Self::TimestampTz(
+                value
+                    .as_timestamp_tz()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIMESTAMPTZ"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::TimestampS) => Self::TimestampS(
+                value
+                    .as_timestamp_s()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIMESTAMP_S"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::TimestampMs) => Self::TimestampMs(
+                value
+                    .as_timestamp_ms()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIMESTAMP_MS"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::TimestampNs) => Self::TimestampNs(
+                value
+                    .as_timestamp_ns()
+                    .ok_or_else(|| duck_error("dynamic column: value is not TIMESTAMP_NS"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Uuid) => Self::Uuid(
+                value
+                    .as_uuid()
+                    .ok_or_else(|| duck_error("dynamic column: value is not UUID"))?,
+            ),
+            DuckTypeDesc::Scalar(TypeId::Interval) => Self::Interval(
+                value
+                    .as_interval()
+                    .ok_or_else(|| duck_error("dynamic column: value is not INTERVAL"))?,
+            ),
             DuckTypeDesc::Decimal { .. } => {
-                let decimal = value.as_decimal();
+                let decimal = value
+                    .as_decimal()
+                    .ok_or_else(|| duck_error("dynamic column: value is not DECIMAL"))?;
                 Self::Decimal {
                     width: decimal.width,
                     scale: decimal.scale,

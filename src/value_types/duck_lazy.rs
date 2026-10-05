@@ -295,12 +295,4 @@ impl<T: DuckValueType> DuckValueType for DuckLazy<T> {
     fn read_by_duck_value_valid(_value: &Value) -> DuckResult<Self> {
         Err(duck_error(NO_BIND_PATH))
     }
-
-    /// 同 [`Self::read_by_duck_value_valid`]，永远不会被默认路径调用到（已直接拒绝）。
-    ///
-    /// Same as [`Self::read_by_duck_value_valid`]; the default path never reaches it because that
-    /// one is rejected directly.
-    fn read_by_duck_value_valid_simple(_value: &Value) -> Self {
-        panic!("{NO_BIND_PATH}");
-    }
 }

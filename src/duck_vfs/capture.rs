@@ -123,6 +123,7 @@
 //! - Requires DuckDB 1.5.0+ and this crate's `owned-connection` feature (which itself needs
 //!   `duckdb-1-5`); without them the whole module is absent.
 
+use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
@@ -197,7 +198,7 @@ pub(crate) fn capture(connection: &Connection) {
 ///
 /// Returns a readable error when the extension has not finished registering yet, or when capturing
 /// failed.
-pub fn file_system() -> DuckResult<DuckFileSystem> {
+pub fn file_system() -> DuckResult<DuckFileSystem<'static>> {
     let connection = take_connection()?;
     // SAFETY: 连接由静态变量持有且永不析构（见模块文档），因此在 guard 存续期间有效。
     //
@@ -206,6 +207,31 @@ pub fn file_system() -> DuckResult<DuckFileSystem> {
     let context = unsafe { ClientContext::from_connection(connection.as_raw()) }?;
     let fs = FileSystem::from_client_context(&context)
         .ok_or_else(|| duck_error("duckfn: DuckDB did not provide a file system"))?;
+
+    // quack-rs 0.18 起 `FileSystem<'ctx>` 借用它的 `ClientContext`，而这里 `context` 要跟 `fs` 一起
+    // 放进**同一个结构体**——那是 Rust 表达不了的自引用。绕过办法：`FileSystem` 包装的只是裸
+    // 句柄，句柄本身的存活由下面这个 `'static` 的 guard 保证，于是把裸句柄取出来、用 `from_raw`
+    // 重新包一层并选定 `'static`（连接由静态变量保活，见模块文档）。
+    // `ManuallyDrop` 让这个借用的临时包装在离开作用域时**不析构**（否则会 destroy 掉句柄）；重新
+    // 包装出来的 `FileSystem` 持有同一个句柄，析构时恰好释放一次。
+    //
+    // Since quack-rs 0.18 `FileSystem<'ctx>` borrows its `ClientContext`, but here `context` must be
+    // stored *together with* `fs` in one struct — a self-reference Rust cannot express. The way
+    // around it: the `FileSystem` wrapper only holds the raw handle, whose validity is guaranteed by
+    // the `'static` guard below, so take that handle out and re-wrap it with `from_raw`, choosing
+    // `'static` (the connection is kept alive by a static; see the module docs). `ManuallyDrop` stops
+    // the borrowed temporary wrapper from destroying the handle when it goes out of scope; the
+    // re-wrapped `FileSystem` owns the same handle and releases it exactly once on drop.
+    let fs = ManuallyDrop::new(fs);
+    // SAFETY: `fs.as_raw()` is the valid, non-null handle DuckDB just handed out, and it is no longer
+    // managed by the `ManuallyDrop` wrapper above. The connection it belongs to stays open as long as
+    // `_connection` (a `'static` `MutexGuard`) lives, which is exactly the `'static` chosen here.
+    //
+    // SAFETY: `fs.as_raw()` is the valid, non-null handle DuckDB just handed out, and the
+    // `ManuallyDrop` wrapper above no longer manages it. Its connection stays open for as long as
+    // `_connection` (a `'static` `MutexGuard`) lives — exactly the `'static` picked here.
+    let fs = unsafe { FileSystem::from_raw(fs.as_raw()) };
+
     Ok(DuckFileSystem {
         fs,
         context,
@@ -274,8 +300,8 @@ pub fn client_context() -> DuckResult<DuckClientContext> {
 /// first, then the client-context wrapper, then the lock. The type is automatically
 /// `!Send + !Sync` (it holds two reference-semantic handles), so misuse across threads is a compile
 /// error.
-pub struct DuckFileSystem {
-    fs: FileSystem,
+pub struct DuckFileSystem<'ctx> {
+    fs: FileSystem<'ctx>,
     context: ClientContext,
     // 仅为持有而存在（名字带下划线是给 dead_code lint 看的）：它保住连接锁，从而保证
     // 上面两个引用语义的句柄在其存续期间有效。析构顺序即声明顺序。
@@ -286,7 +312,7 @@ pub struct DuckFileSystem {
     _connection: MutexGuard<'static, OwnedConnection>,
 }
 
-impl DuckFileSystem {
+impl DuckFileSystem<'_> {
     /// 返回底层连接在 DuckDB 里的连接 ID，便于日志里区分。
     ///
     /// Returns the connection ID of the underlying connection, handy for logs.
@@ -305,15 +331,15 @@ impl DuckFileSystem {
     }
 }
 
-impl Deref for DuckFileSystem {
-    type Target = FileSystem;
+impl<'ctx> Deref for DuckFileSystem<'ctx> {
+    type Target = FileSystem<'ctx>;
 
     fn deref(&self) -> &Self::Target {
         &self.fs
     }
 }
 
-impl std::fmt::Debug for DuckFileSystem {
+impl std::fmt::Debug for DuckFileSystem<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // 底层句柄的 Debug 只打印指针，这里附上连接 ID 更有用。
         //

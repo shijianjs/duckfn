@@ -38,15 +38,15 @@ pub(crate) struct DuckScalarFunctionArgs {
     ///
     /// 是否把标量函数标记为 volatile，默认 `false`。开启后注册期会调用
     /// `duckdb_scalar_function_set_volatile`：DuckDB 不缓存、不复用相同参数的调用结果，每一行都
-    /// 重新求值（`random()` 这类函数需要它）。需要 duckfn 打开 `duckdb-1-5` feature，且不能与
-    /// `overloads_name` 同用。
+    /// 重新求值（`random()` 这类函数需要它）。这是 DuckDB 1.2.0 起的稳定 C API，不需要
+    /// `duckdb-1-5`；独立函数与 `overloads_name` 重载都支持。
     pub(crate) volatile: Option<bool>,
 
     /// `#[duck_scalar_function(varargs = true)]`
     ///
     /// 是否开启可变参数（variadic arguments），默认 `false`。开启后函数签名的最后一个参数必须是
-    /// `Vec<T>`，宏把 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。需要 duckfn 打开
-    /// `duckdb-1-5` feature，且不能与 `overloads_name` 同用。
+    /// `Vec<T>`，宏把 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。这是 DuckDB 1.2.0
+    /// 起的稳定 C API，不需要 `duckdb-1-5`；独立函数与 `overloads_name` 重载都支持。
     pub(crate) varargs: Option<bool>,
 
     /// `#[duck_scalar_function(overloads_name = "my_overloads")]`
@@ -546,24 +546,15 @@ impl ItemFnWrapper<DuckScalarFunctionArgs> {
 
     /// 生成 `volatile()` 覆盖：只有显式开启时才覆盖适配层默认值。
     ///
-    /// `volatile = true` 与 `overloads_name` 互斥：quack-rs 的 `ScalarOverloadBuilder` 没有暴露
-    /// volatile 开关，同时写上只会让开关静默失效，因此在编译期直接报错。
+    /// quack-rs 0.18 起 `ScalarOverloadBuilder` 也暴露了 volatile 开关，因此 `volatile = true`
+    /// 与 `overloads_name` 可以组合 —— 该重载会被标记为 volatile。
     ///
-    /// Emits a `volatile()` override, and only when explicitly enabled. `volatile = true` and
-    /// `overloads_name` are mutually exclusive: quack-rs' `ScalarOverloadBuilder` exposes no
-    /// volatile switch, so combining them would silently drop the flag, and is rejected at compile
-    /// time instead.
+    /// Emits a `volatile()` override, and only when explicitly enabled. Since quack-rs 0.18
+    /// `ScalarOverloadBuilder` exposes a volatile switch too, so `volatile = true` may be combined
+    /// with `overloads_name`: that overload is marked volatile.
     fn volatile_override(&self) -> TokenStream2Result {
         if !self.volatile() {
             return Ok(quote! {});
-        }
-        if self.overloads_name().is_some() {
-            return Err(syn::Error::new_spanned(
-                self.name(),
-                "`volatile = true` cannot be combined with `overloads_name`: quack-rs' \
-                 `ScalarOverloadBuilder` exposes no volatile switch, so the flag would be \
-                 dropped silently. Register the function under its own name instead.",
-            ));
         }
         Ok(quote! {
             fn volatile() -> bool {
@@ -584,26 +575,18 @@ impl ItemFnWrapper<DuckScalarFunctionArgs> {
     /// 把参数拆成「固定参数 + 可变参数元素类型」。
     ///
     /// `varargs = false` 时原样返回全部参数与 `None`；`varargs = true` 时最后一个参数必须是
-    /// `Vec<T>`，这里返回除它以外的参数与元素类型 `T`。同时拒绝与 `overloads_name` 组合
-    /// （quack-rs 的重载 builder 没有暴露 varargs 开关，组合只会让开关静默失效）。
+    /// `Vec<T>`，这里返回除它以外的参数与元素类型 `T`。quack-rs 0.18 起 `ScalarOverloadBuilder`
+    /// 也暴露了 varargs 开关，因此与 `overloads_name` 可以组合。
     ///
     /// Splits the parameters into "fixed arguments + variadic element type". With `varargs =
     /// false` every parameter is returned unchanged together with `None`; with `varargs = true`
     /// the last parameter must be `Vec<T>` and everything before it is returned along with the
-    /// element type `T`. Combining the flag with `overloads_name` is rejected (quack-rs' overload
-    /// builder exposes no varargs switch, so the combination would silently drop the flag).
+    /// element type `T`. Since quack-rs 0.18 `ScalarOverloadBuilder` exposes a varargs switch too,
+    /// so the flag may be combined with `overloads_name`.
     fn split_varargs(&self) -> syn::Result<(Vec<FnArgWrapper>, Option<Type>)> {
         let args = self.args();
         if !self.varargs() {
             return Ok((args, None));
-        }
-        if self.overloads_name().is_some() {
-            return Err(syn::Error::new_spanned(
-                self.name(),
-                "`varargs = true` cannot be combined with `overloads_name`: quack-rs' \
-                 `ScalarOverloadBuilder` exposes no varargs switch, so the flag would be dropped \
-                 silently. Register the function under its own name instead.",
-            ));
         }
         let Some((last, fixed)) = args.split_last() else {
             return Err(syn::Error::new_spanned(

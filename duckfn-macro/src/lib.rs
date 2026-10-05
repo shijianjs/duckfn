@@ -194,12 +194,13 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// - 函数体里的 panic 会被捕获并转成查询错误（仅原生；wasm/浏览器上 panic 接不住，会变成栈溢出）；
 /// - `volatile = true` 把函数标记为 volatile：注册时调用
 ///   `duckdb_scalar_function_set_volatile`，DuckDB 不缓存也不复用相同参数的调用结果，每一行
-///   都重新求值（`random()` 这类函数需要它）。需要 duckfn 打开 `duckdb-1-5` feature
-///   （DuckDB 1.5.0+ 的 C API），且不能与 `overloads_name` 同用；
+///   都重新求值（`random()` 这类函数需要它）。这是 DuckDB 1.2.0 起的稳定 C API，不需要
+///   `duckdb-1-5`；独立函数与 `overloads_name` 重载都支持；
 /// - `varargs = true` 开启可变参数：函数签名的最后一个参数必须是 `Vec<T>`（可变参数集合），
 ///   `T` 的逻辑类型会交给 DuckDB 的 `duckdb_scalar_function_set_varargs`，调用时固定参数之后的
 ///   每一列都按 `T` 读出来、组成 `Vec<T>` 传给函数体。比如
-///   `fn my_sum(values: Vec<i64>) -> i64`。同样需要 `duckdb-1-5`，也不能与 `overloads_name` 同用。
+///   `fn my_sum(values: Vec<i64>) -> i64`。同样不需要 `duckdb-1-5`，独立函数与 `overloads_name`
+///   重载都支持。
 /// - `batch = true` 开启批量模式：适配层本来就把整块数据读成一批行、再由默认实现逐行调用函数体，
 ///   这个开关把那层遍历也交给用户 —— 唯一的参数是整批行、返回值是整批结果。行类型由用户用
 ///   `#[derive(DuckStruct)]` 定义并直接充当参数类型（宏不再生成 `DuckArgsImpl` 结构体）：
@@ -229,8 +230,9 @@ pub fn duck_enum_derive(input: TokenStream) -> TokenStream {
 /// arguments: the last parameter must then be `Vec<T>` (the variadic collection) and `T`'s logical
 /// type goes to DuckDB's `duckdb_scalar_function_set_varargs`, so at call time every column after
 /// the fixed ones is read as a `T` and collected into the `Vec<T>` passed to the body — e.g.
-/// `fn my_sum(values: Vec<i64>) -> i64`. Both switches require duckfn's `duckdb-1-5` feature (the
-/// DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`. `batch = true` enables batch
+/// `fn my_sum(values: Vec<i64>) -> i64`. Both switches are part of the stable C API since DuckDB
+/// 1.2.0, so they need no `duckdb-1-5` feature, and both work on standalone functions and
+/// `overloads_name` overloads alike. `batch = true` enables batch
 /// mode: the adapter already reads a whole chunk as a batch of rows and its default implementation
 /// walks them one by one, and this switch hands that walk over to you — the single parameter is the
 /// whole batch of rows and the return value is the whole batch of results. The row type is a
@@ -258,8 +260,8 @@ pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream
 /// `duckfn::DuckAggregateState`，其 `Output` 即聚合的返回类型）；其余参数是每行的输入。
 /// 返回值规则与标量函数一致，通常直接返回 `()`。
 ///
-/// 宏生成同名模块并导出 `aggregate_function_builder()` / `aggregate_overload_builder()` /
-/// `aggregate_function_guard()`，以及常量 `SQL_NAME` —— 该签名注册到 DuckDB 时真正使用的 SQL 名字
+/// 宏生成同名模块并导出 `aggregate_function_builder()` / `aggregate_overload_builder()`，
+/// 以及常量 `SQL_NAME` —— 该签名注册到 DuckDB 时真正使用的 SQL 名字
 /// （设了 `overloads_name` 时是函数集名，否则是函数名）；写错误信息前缀时读它，不必再手抄一遍属性
 /// 字面量。
 ///
@@ -268,10 +270,10 @@ pub fn duck_scalar_function(attr: TokenStream, item: TokenStream) -> TokenStream
 /// `duckfn::DuckAggregateState`, whose `Output` is the aggregate's return type); the remaining
 /// parameters are the per-row inputs. Return-type rules match scalar functions, though in
 /// practice `()` is returned. A module named after the function is generated, exporting
-/// `aggregate_function_builder()`, `aggregate_overload_builder()` and
-/// `aggregate_function_guard()`, plus the `SQL_NAME` constant holding the SQL name this signature is
-/// really registered under (the function-set name when `overloads_name` is set, the function name
-/// otherwise) — read it for error-message prefixes instead of copying the attribute literal.
+/// `aggregate_function_builder()` and `aggregate_overload_builder()`, plus the `SQL_NAME` constant
+/// holding the SQL name this signature is really registered under (the function-set name when
+/// `overloads_name` is set, the function name otherwise) — read it for error-message prefixes
+/// instead of copying the attribute literal.
 ///
 /// # `auto_collect = true`：先收集整列、再一次性计算
 ///

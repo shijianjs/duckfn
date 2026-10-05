@@ -145,9 +145,10 @@ flowchart LR
 
 `null_handling()` 默认返回 `DefaultNullHandling`，`special_null_handling = true` 时被覆盖为
 `SpecialNullHandling`。类似地，`volatile()` 默认返回 `false`，`volatile = true` 时被覆盖为 `true`，
-注册期随之调用 `duckdb_scalar_function_set_volatile`（DuckDB 1.5+）。`varargs_element_type()` 默认返回
+注册期随之调用 `duckdb_scalar_function_set_volatile`（DuckDB 1.2.0 起的稳定 C API，`quack-rs`
+逐重载暴露）。`varargs_element_type()` 默认返回
 `None`；`varargs = true` 时返回签名最后一个 `Vec<T>` 的元素类型，注册期调用
-`duckdb_scalar_function_set_varargs`（DuckDB 1.5+），回调则改走 `apply_varargs` 而不是 `apply`
+`duckdb_scalar_function_set_varargs`（DuckDB 1.2.0 起的稳定 C API），回调则改走 `apply_varargs` 而不是 `apply`
 （可变参数没有稳定的行结构，因此从不成批物化）。
 
 ### 聚合函数
@@ -162,14 +163,16 @@ DuckDB 的六个回调都实现在状态类型上：
 | `c_finalize` | 对每个状态调用 `result()` 并写 vector；`offset` 非 0 会被拒绝。 |
 | `c_state_destroy` | 释放状态。 |
 
-聚合函数与函数集都用 RAII 守卫包裹（`AggregateFunctionGuard`、`AggregateFunctionSetGuard`），
-即使注册中途失败也能释放 DuckDB 对象。`duckfn::DuckfnAggregateFunctionSetBuilder` 的存在是因为
-`quack-rs` 的函数集 builder 只能为整个函数集设一个返回类型，而 duckfn 的每个重载都有自己的 `Output`。
+聚合函数与函数集直接用 `quack-rs` 的 `AggregateFunctionBuilder` / `AggregateFunctionSetBuilder`，
+不再自建 RAII 守卫与 duckfn 专属的函数集 builder：0.18 起每个 `AggregateOverloadBuilder` 各自带
+`returns` / `returns_logical`，函数集 builder 不再强制整个函数集共用一个返回类型。
 
 ### 表函数
 
-`with_state` 是 bind 阶段：读取参数、通过 `config_result_columns` 决定输出列，并返回行迭代器。
-`scan` 每个 chunk 从该迭代器拉一次数据。两者都包在 `catch_unwind` 里，因此任一处 panic 都会变成查询错误。
+`bind_state` 是 bind 阶段：读取参数、通过 `config_result_columns` 决定输出列，并返回参数作为
+bind data。`init_state` 每次执行从 bind data 重建行迭代器 —— 迭代器不是 `Clone`，因此用不了
+`quack-rs` 的 `with_state`。`scan` 每个 chunk 从该迭代器拉一次数据。各阶段都包在 `catch_unwind` 里，
+因此任一处 panic 都会变成查询错误。
 迭代器类型是 `DuckFullIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>`。
 
 ### COPY 函数

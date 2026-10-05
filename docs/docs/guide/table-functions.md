@@ -316,8 +316,8 @@ never from the data.
 ### Low level
 
 `DuckDynamicTable` can also be produced by hand: implement `DynamicTableFunctionAdapter` (only
-`NAME`, `Args` and `bind` are required — the builder, `with_state` and `scan` have defaults) and
-register it yourself.
+`NAME`, `Args` and `bind` are required — the builder, `bind_state`/`init_state` and `scan` have
+defaults) and register it yourself.
 
 ```rust
 struct MyDynamic;

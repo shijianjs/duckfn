@@ -378,7 +378,7 @@ pub fn exists(path: &str) -> bool {
 ///
 /// Opens the file with the given options and writes `bytes` in one go.
 fn write_through(
-    file_system: &DuckFileSystem,
+    file_system: &DuckFileSystem<'_>,
     c_path: &CString,
     path: &str,
     bytes: &[u8],
@@ -400,7 +400,11 @@ fn write_through(
 ///
 /// The existing file's length, or 0 when it cannot be opened (a real failure surfaces when the
 /// write handle is opened afterwards).
-fn existing_len(file_system: &DuckFileSystem, c_path: &CString, path: &str) -> DuckResult<u64> {
+fn existing_len(
+    file_system: &DuckFileSystem<'_>,
+    c_path: &CString,
+    path: &str,
+) -> DuckResult<u64> {
     match file_system.open(c_path, &FileOpenOptions::read_only()) {
         Ok(handle) => handle
             .size()
@@ -420,7 +424,7 @@ fn existing_len(file_system: &DuckFileSystem, c_path: &CString, path: &str) -> D
 /// `COPY ... TO` takes DuckDB's own write path (`OverwriteExistingFile` → POSIX `O_CREAT|O_TRUNC`
 /// / Windows `CREATE_ALWAYS`) and replaces the target after writing a temporary file, so writing
 /// the contents afterwards yields exactly the contents' length.
-fn zero_file(file_system: &DuckFileSystem, path: &str) -> DuckResult<()> {
+fn zero_file(file_system: &DuckFileSystem<'_>, path: &str) -> DuckResult<()> {
     let explanation = || {
         format!(
             "duckfn::duck_vfs: cannot replace '{path}': the file already exists and is longer than the \

@@ -159,11 +159,11 @@ fn dfn_table_dynamic_empty(source: String) -> DuckResult<DuckDynamicTable> {
 // 底层：手写 `DynamicTableFunctionAdapter`
 //
 // 不想用宏、或者要在 bind 里做更复杂的事情时，直接实现这个 trait 即可：
-// 只写 `NAME` / `Args` / `bind`，builder、with_state、scan 都有默认实现。
+// 只写 `NAME` / `Args` / `bind`，builder、bind_state/init_state、scan 都有默认实现。
 //
 // Low level: a hand-written `DynamicTableFunctionAdapter`. When the macro does not fit, or bind has
 // to do something more involved, implement the trait directly: only `NAME` / `Args` / `bind` are
-// required; the builder, with_state and scan all have defaults.
+// required; the builder, bind_state/init_state and scan all have defaults.
 // ============================================================================
 
 /// 底层示例的参数：`start` 之前是位置参数，`label` 是命名参数（可空，缺省为 `n`）。

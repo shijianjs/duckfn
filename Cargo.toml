@@ -263,7 +263,7 @@ quack = ["all", "owned-connection"]
 all = ["cli", "duckdb-1-5", "chrono", "uuid", "rust_decimal"]
 
 [dependencies]
-quack-rs = "0.16.0"
+quack-rs = "0.18.0"
 
 # `cli` feature 用的命令行解析（derive 风格：一个结构体 + 一个枚举就是一个 CLI）。
 #

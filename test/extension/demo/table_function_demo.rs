@@ -8,6 +8,7 @@ use quack_rs::vector::vector_size;
 use indexmap::IndexMap;
 
 
+#[derive(Clone)]
 struct State {
     remaining: u64,
 }
@@ -78,6 +79,7 @@ fn count_down_it() -> Result<TableFunctionBuilder, ExtensionError> {
 // First, the struct:
 
 /// An iterator which counts from one to five
+#[derive(Clone)]
 struct Counter {
     count: usize,
 }

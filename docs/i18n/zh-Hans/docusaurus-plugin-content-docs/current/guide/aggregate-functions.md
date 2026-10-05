@@ -332,10 +332,10 @@ SELECT dfn_agg_scaled(x, 2.0) FROM (VALUES (1.0), (2.0), (3.0)) t(x);   -- 12.0
 
 ## 重载
 
-与标量函数相同，`overloads_name` 可以把多个聚合合并成一个函数集。当各重载需要**不同**返回类型时要注意：
-`quack-rs` 的 `AggregateFunctionSetBuilder` 只能在整个函数集上设一个返回类型 —— 此时应改用
-`duckfn::DuckfnAggregateFunctionSetBuilder` 配合宏生成的 `aggregate_function_guard()`，它把每个重载注册成
-独立的 DuckDB 函数，因此各自保留自己的 `Output`。
+与标量函数相同，`overloads_name` 可以把多个聚合合并成一个函数集。用 `quack-rs` 的
+`AggregateFunctionSetBuilder` 配合每个重载各自的 `AggregateOverloadBuilder` 来构建：宏生成的
+`aggregate_overload_builder(builder)` 返回一个重载，且从 `quack-rs` 0.18 起每个重载都自带返回类型，
+因此同一个函数集里可以容纳 `Output` 各不相同的重载。
 
 宏生成的模块还会导出常量 `SQL_NAME`：设了 `overloads_name` 时它是**函数集名**，否则是函数名。给用户看的
 错误信息前缀应该读它（`format!("{}: ...", duckfn_agg_html::SQL_NAME)`），而不是自己再抄一份属性里的字符串

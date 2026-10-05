@@ -201,9 +201,9 @@ SELECT dfn_scalar_volatile_random(1) FROM range(3); -- 每一行都重新求值
 SELECT dfn_scalar_volatile_special(NULL::INTEGER);  -- -1（常量 NULL 未被折叠）
 ```
 
-该开关需要 duckfn 的 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API），未开启时会被忽略。它只适用于独立注册的
-标量函数 —— quack-rs 的 `ScalarOverloadBuilder` 没有暴露 volatile 开关，因此 `volatile = true` 与
-`overloads_name` 同时出现会在编译期直接报错。上面的函数是确定性的，取值不随开关变化，变的是 DuckDB 调用它的次数。
+该开关走稳定的 C API（`duckdb_scalar_function_set_volatile`，DuckDB 1.2.0 起可用），不需要任何
+feature，独立注册的标量函数与 `overloads_name` 重载都适用。上面的函数是确定性的，取值不随开关变化，
+变的是 DuckDB 调用它的次数。
 
 ### 可变参数
 
@@ -261,9 +261,8 @@ SELECT typeof(dfn_scalar_varargs_merge([1]));     -- BIGINT[]
   `varargs_logical(LogicalType::list(TypeId::BigInt))`。
 
 任一非可空参数或元素为 `NULL` 时整行短路成 `NULL`，与固定的非 `Option` 参数一致；零个可变参数也是
-合法的。该开关需要 duckfn 的 `duckdb-1-5` feature（DuckDB 1.5.0+ 的 C API），且不能与
-`overloads_name` 同用（quack-rs 的 `ScalarOverloadBuilder` 没有暴露 varargs 开关），宏会在编译期
-拒绝这种组合。
+合法的。该开关走稳定的 C API（`duckdb_scalar_function_set_varargs`，DuckDB 1.2.0 起可用），不需要
+任何 feature，独立注册的标量函数与 `overloads_name` 重载都适用。
 
 ## 批量模式
 

@@ -6,14 +6,14 @@
 //! `duckdb_<kind>_function_set_extra_info` 挂上，回调里用
 //! `duckdb_<kind>_function_get_extra_info` 取回，函数对象销毁时 DuckDB 调用我们注册的析构回调
 //! 释放它。它属于**函数对象**（跨查询共享、应视为只读），不是「每次查询一份」的状态 —— 后者请用
-//! 表函数的 [`with_state`](crate::TableFunctionAdapter::with_state) 或 quack-rs 的 bind data。
+//! 表函数的 [`init_state`](crate::TableFunctionAdapter::init_state) 或 quack-rs 的 bind data。
 //!
 //! Every DuckDB function object can carry one erased pointer: it is attached at registration time
 //! through `duckdb_<kind>_function_set_extra_info`, retrieved inside callbacks through
 //! `duckdb_<kind>_function_get_extra_info`, and freed by the destructor we registered when DuckDB
 //! drops the function object. It belongs to the **function object** (shared across queries and to be
 //! treated as read-only), not to a single query — for per-query state use a table function's
-//! [`with_state`](crate::TableFunctionAdapter::with_state) or quack-rs' bind data.
+//! [`init_state`](crate::TableFunctionAdapter::init_state) or quack-rs' bind data.
 //!
 //! 哪些适配层暴露了这个钩子（宏不涉及 `extra_info`，只有手写适配器会用）：
 //!
@@ -24,7 +24,7 @@
 //! | --- | --- | --- |
 //! | [`ScalarFunctionAdapter`](crate::ScalarFunctionAdapter) | [`ScalarFunctionAdapter::extra_info`] | 独立函数与函数集重载都支持 / both standalone and set overloads |
 //! | [`CastFunctionAdapter`](crate::CastFunctionAdapter) | [`CastFunctionAdapter::extra_info`] | |
-//! | [`AggregateFunctionAdapter`](crate::AggregateFunctionAdapter) | [`AggregateFunctionAdapter::extra_info`] | 独立函数与 duckfn 自建的聚合函数集 / standalone and duckfn's own aggregate set |
+//! | [`AggregateFunctionAdapter`](crate::AggregateFunctionAdapter) | [`AggregateFunctionAdapter::extra_info`] | 独立函数与函数集重载都支持 / both standalone and set overloads |
 //! | [`ReplacementScanAdapter`](crate::ReplacementScanAdapter) | [`ReplacementScanAdapter::extra_info`] | 走注册参数 `extra_data` / through the `extra_data` registration argument |
 //! | `CopyFromFunctionAdapter` | `extra_info` | 挂在 reader 表函数上（需要 `duckdb-1-5`）/ attached to the reader table function (`duckdb-1-5`) |
 //! | 表函数 / `COPY TO` | 无 / none | 见下 / see below |

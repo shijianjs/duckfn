@@ -356,11 +356,10 @@ hand, just generated from the finalize function instead.
 
 ## Overloads
 
-As with scalar functions, `overloads_name` merges several aggregates into one function set. When the
-overloads need *different* return types, note that the `quack-rs` `AggregateFunctionSetBuilder` can
-only set one return type for the whole set — use `duckfn::DuckfnAggregateFunctionSetBuilder` with the
-generated `aggregate_function_guard()` instead, which registers each overload as a standalone DuckDB
-function and therefore keeps each `Output`.
+As with scalar functions, `overloads_name` merges several aggregates into one function set. Build it
+with `quack-rs`'s `AggregateFunctionSetBuilder` and per-overload `AggregateOverloadBuilder`s: each
+macro-generated `aggregate_overload_builder(builder)` returns one overload, and since `quack-rs` 0.18
+every overload carries its own return type, so one set may hold overloads with *different* `Output`s.
 
 Each generated module also exports `SQL_NAME`: with `overloads_name` set it is the **function-set
 name**, otherwise the function name. Error messages that a user sees should be prefixed with it —

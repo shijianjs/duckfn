@@ -207,11 +207,10 @@ SELECT dfn_scalar_volatile_random(1) FROM range(3); -- re-evaluated for every ro
 SELECT dfn_scalar_volatile_special(NULL::INTEGER);  -- -1 (the constant NULL is not folded)
 ```
 
-The switch requires duckfn's `duckdb-1-5` feature (the DuckDB 1.5.0+ C API); without it the flag is
-ignored. It applies to standalone scalar functions only — quack-rs' `ScalarOverloadBuilder` exposes
-no volatile switch, so combining `volatile = true` with `overloads_name` is rejected at compile
-time. The functions above are deterministic, so their values do not depend on the flag; what
-changes is how often DuckDB calls them.
+The switch uses the stable C API (`duckdb_scalar_function_set_volatile`, available since DuckDB
+1.2.0), so it needs no feature and applies to standalone scalar functions and `overloads_name`
+overloads alike. The functions above are deterministic, so their values do not depend on the flag;
+what changes is how often DuckDB calls them.
 
 ### Variadic arguments
 
@@ -269,10 +268,9 @@ SELECT typeof(dfn_scalar_varargs_merge([1]));     -- BIGINT[]
   `varargs_logical(LogicalType::list(TypeId::BigInt))` does by hand in quack-rs.
 
 A `NULL` in a non-nullable argument or element short-circuits the whole row to `NULL`, just like a
-fixed non-`Option` argument. Zero variadic arguments are allowed. The switch requires duckfn's
-`duckdb-1-5` feature (the DuckDB 1.5.0+ C API) and cannot be combined with `overloads_name`
-(quack-rs' `ScalarOverloadBuilder` exposes no varargs switch); the macro rejects that combination
-at compile time.
+fixed non-`Option` argument. Zero variadic arguments are allowed. The switch uses the stable C API
+(`duckdb_scalar_function_set_varargs`, available since DuckDB 1.2.0), so it needs no feature and
+applies to standalone scalar functions and `overloads_name` overloads alike.
 
 ## Batch mode
 

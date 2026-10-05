@@ -244,19 +244,14 @@ pub trait DuckValueType: Clone + Debug + Sized + Send + Sync + 'static {
             Ok(Some(Self::read_by_duck_value_valid(value)?))
         }
     }
-    /// 从一个确定非 NULL 的 [`Value`] 读出值；默认转发给
-    /// [`Self::read_by_duck_value_valid_simple`]。
+    /// 从一个确定非 NULL 的 [`Value`] 读出值（子类实现）。
     ///
-    /// Reads a value from a non-NULL [`Value`]; by default it forwards to
-    /// [`Self::read_by_duck_value_valid_simple`].
-    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
-        Ok(Self::read_by_duck_value_valid_simple(value))
-    }
-    /// 从非 NULL 的 [`Value`] 直接取值（子类实现，不涉及 NULL 判定）。
+    /// 标量取值现在返回 `Option`，类型不匹配时应返回 `Err` 而不是 panic。
     ///
-    /// Extracts the value from a non-NULL [`Value`] (implemented by subclasses; no NULL check).
-    fn read_by_duck_value_valid_simple(_value: &Value) -> Self {
-        todo!("subclass must implement read_by_duck_value_valid_simple")
+    /// Reads a value from a non-NULL [`Value`] (implemented by subclasses). Scalar accessors now
+    /// return `Option`, so a type mismatch should yield `Err` rather than panic.
+    fn read_by_duck_value_valid(_value: &Value) -> DuckResult<Self> {
+        todo!("subclass must implement read_by_duck_value_valid")
     }
 }
 

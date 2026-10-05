@@ -306,7 +306,7 @@ SELECT id, len(tags), info.host FROM dfn_table_dynamic('sales', 6);
 ### 底层用法
 
 `DuckDynamicTable` 也可以手写产出：实现 `DynamicTableFunctionAdapter`（只要求 `NAME` / `Args` /
-`bind`，builder、`with_state`、`scan` 都有默认实现），再自行注册。
+`bind`，builder、`bind_state`/`init_state`、`scan` 都有默认实现），再自行注册。
 
 ```rust
 struct MyDynamic;

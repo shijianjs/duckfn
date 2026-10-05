@@ -359,10 +359,6 @@ pub(crate) fn duck_enum_derive(input: DeriveInput) -> TokenStream2Result {
                     ))
                 })
             }
-
-            fn read_by_duck_value_valid_simple(value: &::duckfn::Value) -> Self {
-                Self::read_by_duck_value_valid(value).unwrap_or_else(|err| panic!("{}", err.as_str()))
-            }
         }
 
         #submit

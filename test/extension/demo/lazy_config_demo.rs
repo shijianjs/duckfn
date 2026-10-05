@@ -100,8 +100,8 @@ impl DuckValueType for LazyDemoConfig {
         LazyDemoConfigInner::write_finish(writer);
     }
 
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        Self(LazyDemoConfigInner::read_by_duck_value_valid_simple(value))
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(Self(LazyDemoConfigInner::read_by_duck_value_valid(value)?))
     }
 }
 

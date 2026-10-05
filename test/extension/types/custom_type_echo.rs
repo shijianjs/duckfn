@@ -1,6 +1,6 @@
 use duckfn::duck_scalar_function;
 use duckfn::duck_table_function;
-use duckfn::{DuckStruct, DuckValueReader, DuckValueType, DuckValueWriter};
+use duckfn::{DuckResult, DuckStruct, DuckValueReader, DuckValueType, DuckValueWriter, duck_error};
 use libduckdb_sys::{duckdb_vector, duckdb_vector_get_data};
 use quack_rs::prelude::{LogicalType, TypeId, Value, VectorReader, VectorWriter};
 
@@ -17,7 +17,7 @@ use super::table_echo_util::echo_rows;
 //   read_valid_by_vector_reader()    从输入向量读一个有效值
 //   write_valid_to_vector_writer()   把一个有效值写进输出向量
 // 想让这个类型还能用在表函数参数 / 结构体字段上，再补一个：
-//   read_by_duck_value_valid_simple()  从 bind 阶段的 duckdb_value 读取
+//   read_by_duck_value_valid()  从 bind 阶段的 duckdb_value 读取（返回 DuckResult）
 // NULL 处理、批量读写等其余方法都由 trait 的默认实现给出。
 //
 // 另外两点约束：
@@ -50,8 +50,8 @@ impl DuckValueType for Celsius {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_f64(idx, v.0) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        Self(value.as_f64())
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        Ok(Self(value.as_f64().ok_or_else(|| duck_error("expected a DOUBLE value"))?))
     }
 }
 
@@ -240,12 +240,18 @@ impl DuckValueType for Color {
     ///
     /// The bind path: the `duckdb_value` holds the label text.
     ///
-    /// 标签一定来自同一个字典（DuckDB 已经校验过），取不到就退回默认变体。
+    /// 标签一定来自同一个字典（DuckDB 已经校验过），取不到就报错。
     ///
-    /// The label always comes from the same dictionary (DuckDB validated it), so a miss falls back
-    /// to the default variant.
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        Self::from_label(&value.as_str().unwrap_or_default()).unwrap_or_default()
+    /// The label always comes from the same dictionary (DuckDB validated it), so a miss is an error.
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        let label = value.as_str()?;
+        Self::from_label(&label).ok_or_else(|| {
+            duck_error(format!(
+                "ENUM value {:?} is not a member of the `Color` dictionary {:?}",
+                label,
+                Self::MEMBERS,
+            ))
+        })
     }
 }
 

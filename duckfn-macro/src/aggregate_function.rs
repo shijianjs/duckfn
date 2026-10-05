@@ -147,20 +147,9 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
                 AggregateFunctionImpl::aggregate_function_builder()
             }
             
-            pub fn aggregate_overload_builder(builder: quack_rs::aggregate::builder::OverloadBuilder) -> quack_rs::aggregate::builder::OverloadBuilder {
+            pub fn aggregate_overload_builder(builder: quack_rs::prelude::AggregateOverloadBuilder) -> quack_rs::prelude::AggregateOverloadBuilder {
                 use duckfn::AggregateFunctionAdapter;
                 AggregateFunctionImpl::aggregate_overload_builder(builder)
-            }
-
-            /// 创建可挂进 DuckfnAggregateFunctionSetBuilder 的重载句柄，
-            /// 返回类型由本签名的 Output 决定，因此函数集内各重载可有不同返回类型
-            ///
-            /// Creates an overload handle attachable to `DuckfnAggregateFunctionSetBuilder`.
-            /// The return type comes from this signature's `Output`, so overloads in one set may
-            /// have different return types.
-            pub fn aggregate_function_guard() -> duckfn::AggregateFunctionGuard {
-                use duckfn::AggregateFunctionAdapter;
-                AggregateFunctionImpl::aggregate_function_guard()
             }
 
             #function_register
@@ -196,9 +185,11 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
             duckfn::inventory_submit! {
                 duckfn::DuckAggregateOverloadItem{
                     name: #set_name,
-                    register_fn:|name: &std::ffi::CString| -> duckfn::AggregateFunctionGuard {
+                    register_fn:|| -> quack_rs::prelude::AggregateOverloadBuilder {
                         use duckfn::AggregateFunctionAdapter;
-                        AggregateFunctionImpl::create_aggregate_function_guard(name)
+                        AggregateFunctionImpl::aggregate_overload_builder(
+                            quack_rs::prelude::AggregateOverloadBuilder::new(),
+                        )
                     }
                 }
             }
@@ -276,7 +267,7 @@ impl ItemFnWrapper<DuckAggregateFunctionArgs> {
     /// `combine` 与 `result`，在 finalize 时调用被标注函数（此时它是收尾函数，不是逐行回调）。
     ///
     /// **实现方式：递归生成普通宏声明**。`auto_collect` 不自己重搭 `AggregateFunctionAdapter` /
-    /// builder / guard 那一整套（那是与逐行版重复、且容易各自踩坑的实现），而是把带 `auto_collect`
+    /// builder / 注册那一整套（那是与逐行版重复、且容易各自踩坑的实现），而是把带 `auto_collect`
     /// 的签名**改写成一个不带 `auto_collect` 的 `#[duck_aggregate_function]` 声明**（逐行 `push` /
     /// `resolve` 的行处理器）+ 一个像 `aggregate_summary.rs` 那样的收集状态结构体（`Vec<T>` +
     /// `DuckLazySlot<T>`、`simple_combine` 并入、`result` 调用收尾函数）。改写后的产物交给同一个宏再

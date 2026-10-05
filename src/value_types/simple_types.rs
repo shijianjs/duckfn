@@ -4,7 +4,7 @@
 
 use crate::value_types::duck_value_type::DuckValueType;
 use quack_rs::prelude::{TypeId, Value, VectorReader, VectorWriter};
-use crate::DuckResult;
+use crate::{DuckResult, duck_error};
 
 /// `bool` ↔ `BOOLEAN`。
 ///
@@ -21,10 +21,11 @@ impl DuckValueType for bool {
         unsafe { writer.write_bool(idx, *v) }
     }
 
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_bool()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_bool()
+            .ok_or_else(|| duck_error("expected a BOOLEAN value"))
     }
-    
 }
 
 /// `i8` ↔ `TINYINT`。
@@ -41,8 +42,10 @@ impl DuckValueType for i8 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_i8(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i8()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_i8()
+            .ok_or_else(|| duck_error("expected a TINYINT value"))
     }
 }
 
@@ -61,8 +64,10 @@ impl DuckValueType for i16 {
         unsafe { writer.write_i16(idx, *v) }
 
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i16()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_i16()
+            .ok_or_else(|| duck_error("expected a SMALLINT value"))
     }
 }
 
@@ -80,8 +85,10 @@ impl DuckValueType for i32 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_i32(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i32()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_i32()
+            .ok_or_else(|| duck_error("expected an INTEGER value"))
     }
 }
 
@@ -98,8 +105,10 @@ impl DuckValueType for i64 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_i64(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i64()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_i64()
+            .ok_or_else(|| duck_error("expected a BIGINT value"))
     }
 }
 
@@ -116,8 +125,10 @@ impl DuckValueType for i128 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_i128(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_i128()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_i128()
+            .ok_or_else(|| duck_error("expected a HUGEINT value"))
     }
 }
 
@@ -135,8 +146,10 @@ impl DuckValueType for u8 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_u8(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_u8()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_u8()
+            .ok_or_else(|| duck_error("expected a UTINYINT value"))
     }
 }
 
@@ -154,8 +167,10 @@ impl DuckValueType for u16 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_u16(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_u16()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_u16()
+            .ok_or_else(|| duck_error("expected a USMALLINT value"))
     }
 }
 
@@ -172,8 +187,10 @@ impl DuckValueType for u32 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_u32(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_u32()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_u32()
+            .ok_or_else(|| duck_error("expected a UINTEGER value"))
     }
 }
 
@@ -191,8 +208,10 @@ impl DuckValueType for u64 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_u64(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_u64()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_u64()
+            .ok_or_else(|| duck_error("expected a UBIGINT value"))
     }
 }
 
@@ -213,8 +232,10 @@ impl DuckValueType for u128 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_u128(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_u128()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_u128()
+            .ok_or_else(|| duck_error("expected a UHUGEINT value"))
     }
 }
 
@@ -232,8 +253,10 @@ impl DuckValueType for f32 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_f32(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_f32()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_f32()
+            .ok_or_else(|| duck_error("expected a FLOAT value"))
     }
 }
 
@@ -251,8 +274,10 @@ impl DuckValueType for f64 {
     fn write_valid_to_vector_writer(writer: &mut VectorWriter, idx: usize, v: &Self) {
         unsafe { writer.write_f64(idx, *v) }
     }
-    fn read_by_duck_value_valid_simple(value: &Value) -> Self {
-        value.as_f64()
+    fn read_by_duck_value_valid(value: &Value) -> DuckResult<Self> {
+        value
+            .as_f64()
+            .ok_or_else(|| duck_error("expected a DOUBLE value"))
     }
 }
 

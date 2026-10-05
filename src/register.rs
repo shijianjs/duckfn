@@ -3,12 +3,12 @@
 //! Registration collector: gathers the entries submitted by the procedural macros through
 //! `inventory` and registers them all when the extension is initialised.
 
-use crate::{AggregateFunctionGuard, DuckResult, DuckfnAggregateFunctionSetBuilder};
+use crate::DuckResult;
 use itertools::Itertools;
+use quack_rs::aggregate::{AggregateFunctionSetBuilder, AggregateOverloadBuilder};
 use quack_rs::connection::Connection;
 use quack_rs::prelude::{Registrar, ScalarFunctionSetBuilder, ScalarOverloadBuilder};
 use std::collections::HashMap;
-use std::ffi::CString;
 
 /// 注册回调的函数指针类型：接收一个 DuckDB 连接，返回可能失败的结果。
 ///
@@ -109,13 +109,14 @@ fn register_collected_items(connection: &Connection) -> DuckResult<()> {
 /// `#[duck_aggregate_function(overloads_name = "xxx")]` is used.
 ///
 /// - `name`：函数集名字，同名（overloads_name 相同）的重载会被合并成一个函数集；
-/// - `register_fn`：用函数集名字造出本签名的重载句柄，返回类型取各自的 Output，
-///   所以同一函数集里可以有不同返回类型。
+/// - `register_fn`：生成本签名对应的 [`AggregateOverloadBuilder`]，返回类型取自各自的
+///   `Output`（由适配层设置），所以同一函数集里可以有不同返回类型。
 ///
 /// - `name`: the function-set name; overloads sharing the same `overloads_name` are merged
 ///   into one set.
-/// - `register_fn`: builds the overload handle for this signature with the set name; each
-///   overload keeps its own output type, so one set may contain different return types.
+/// - `register_fn`: produces the [`AggregateOverloadBuilder`] of this signature; each
+///   overload's return type comes from its own `Output` (set by the adapter), so one set may
+///   contain different return types.
 ///
 /// `name` 用 `&'static str` 而不是 `String`：`inventory::submit!` 会把值放进
 /// `static` 初始化表达式（const 上下文），`String` 在那里无法构造。
@@ -127,10 +128,10 @@ pub struct DuckAggregateOverloadItem {
     ///
     /// Name of the aggregate function set.
     pub name: &'static str,
-    /// 用函数集名字生成该签名对应的重载句柄。
+    /// 生成本签名对应的聚合函数重载 builder。
     ///
-    /// Builds the overload handle of this signature using the function-set name.
-    pub register_fn: fn(name: &CString) -> AggregateFunctionGuard,
+    /// Produces the aggregate overload builder of this signature.
+    pub register_fn: fn() -> AggregateOverloadBuilder,
 }
 
 // 把 `DuckAggregateOverloadItem` 登记进 inventory，供分组注册时遍历。
@@ -140,12 +141,14 @@ inventory::collect!(DuckAggregateOverloadItem);
 
 /// 按 `name` 分组注册所有聚合函数集重载。
 ///
-/// 同名（`overloads_name` 相同）的重载会被合并进同一个 `DuckfnAggregateFunctionSetBuilder`，
-/// 然后一次性注册到 DuckDB；每个重载保留自己的返回类型。
+/// 同名（`overloads_name` 相同）的重载会被合并进同一个 quack-rs [`AggregateFunctionSetBuilder`]，
+/// 然后一次性注册到 DuckDB；每个重载保留自己的返回类型（由适配层在
+/// [`AggregateOverloadBuilder`] 上逐重载设置）。
 ///
 /// Registers every aggregate overload set, grouped by `name`. Overloads sharing the same
-/// `overloads_name` are merged into one `DuckfnAggregateFunctionSetBuilder` and registered
-/// to DuckDB in one shot, each overload keeping its own return type.
+/// `overloads_name` are merged into one quack-rs [`AggregateFunctionSetBuilder`] and registered
+/// to DuckDB in one shot, each overload keeping its own return type (set per overload on the
+/// [`AggregateOverloadBuilder`] by the adapter).
 ///
 /// # Errors
 ///
@@ -158,13 +161,11 @@ pub fn register_all_aggregate_overload(connection: &Connection) -> DuckResult<()
             .into_grouping_map_by(|item| item.name)
             .collect();
     for (name, items) in map {
-        let c_name = CString::new(name).expect("function name must not contain null bytes");
-        let map1: Vec<AggregateFunctionGuard> = items
-            .iter()
-            .map(|item| (item.register_fn)(&c_name))
-            .collect();
-        let builder = DuckfnAggregateFunctionSetBuilder::new(name, map1);
-        unsafe { builder.register(connection.as_raw_connection()) }?;
+        let mut builder = AggregateFunctionSetBuilder::new(name);
+        for item in items {
+            builder = builder.overload((item.register_fn)());
+        }
+        unsafe { connection.register_aggregate_set(builder) }?;
     }
     Ok(())
 }

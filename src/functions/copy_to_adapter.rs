@@ -313,7 +313,12 @@ pub trait CopyToFunctionAdapter: Sized + 'static {
         handle(
             AssertUnwindSafe(|| {
                 // SAFETY: 回调期间有效；DuckDB 负责释放它自己的缓冲区。
-                let path = unsafe { info.get_file_path() };
+                // 路径不是合法 UTF-8 时 `get_file_path` 返回 `Err`，交给 `handle` 走 `set_error`。
+                //
+                // SAFETY: valid for the callback; DuckDB frees its own buffer. `get_file_path`
+                // returns `Err` when the path is not valid UTF-8, which `handle` reports via
+                // `set_error`.
+                let path = unsafe { info.get_file_path() }?;
                 let bind = bind_data_of(&info)?;
                 let writer = Self::Writer::open(&path, &bind.schema, &bind.options)?;
                 let boxed = Box::new(writer);
@@ -401,7 +406,18 @@ pub trait CopyToFunctionAdapter: Sized + 'static {
         let mut columns = Vec::with_capacity(count as usize);
         for index in 0..count {
             // SAFETY: index < column_count()；返回的 LogicalType 由我们持有并在本轮结束时释放。
-            let logical_type = unsafe { info.column_type(index) };
+            //
+            // SAFETY: index < column_count(); the returned LogicalType is owned by us and released at
+            // the end of this iteration.
+            let Some(logical_type) = (unsafe { info.column_type(index) }) else {
+                // 越界或 DuckDB 返回空句柄时 `column_type` 给 `None`：报错而非 panic。
+                //
+                // `column_type` yields `None` when the index is out of range or DuckDB returns a
+                // null handle: report an error rather than panic.
+                return Err(duck_error(format!(
+                    "copy function: column {index} has no logical type"
+                )));
+            };
             columns.push((
                 format!("column_{index}"),
                 DuckTypeDesc::from_logical_type(&logical_type)?,

@@ -154,10 +154,11 @@ batch is `NULL`, and the returned length must match the batch size.
 
 `null_handling()` defaults to `DefaultNullHandling` and is overridden to `SpecialNullHandling` by
 `special_null_handling = true`. Likewise `volatile()` defaults to `false` and is overridden to `true`
-by `volatile = true`, which makes registration call `duckdb_scalar_function_set_volatile`
-(DuckDB 1.5+). `varargs_element_type()` defaults to `None`; with `varargs = true` it returns the
+by `volatile = true`, which makes registration call `duckdb_scalar_function_set_volatile` (part of
+the stable C API since DuckDB 1.2.0, and exposed per overload by `quack-rs`). `varargs_element_type()`
+defaults to `None`; with `varargs = true` it returns the
 element type of the signature's last `Vec<T>` and registration calls
-`duckdb_scalar_function_set_varargs` (DuckDB 1.5+), while the callback streams the extra columns
+`duckdb_scalar_function_set_varargs` (stable C API since DuckDB 1.2.0), while the callback streams the extra columns
 through `apply_varargs` instead of `apply` (variadic arguments have no stable row structure, so they
 are never materialised into a batch).
 
@@ -173,16 +174,18 @@ DuckDB's six callbacks are implemented on the state type:
 | `c_finalize` | Call `result()` per state and write the vector. A non-zero `offset` is rejected. |
 | `c_state_destroy` | Drop the states. |
 
-Aggregate functions and sets are wrapped in RAII guards (`AggregateFunctionGuard`,
-`AggregateFunctionSetGuard`) so the DuckDB objects are destroyed even when registration fails midway.
-`duckfn::DuckfnAggregateFunctionSetBuilder` exists because `quack-rs`'s set builder can only set one
-return type per set, while each duckfn overload has its own `Output`.
+Aggregate functions and sets go straight through `quack-rs`'s `AggregateFunctionBuilder` /
+`AggregateFunctionSetBuilder` — no hand-written RAII guards and no duckfn-specific set builder: since
+0.18 each `AggregateOverloadBuilder` carries its own `returns` / `returns_logical`, so the set builder
+no longer forces one return type for the whole set.
 
 ### Table
 
-`with_state` is the bind step: it reads arguments, decides the result columns through
-`config_result_columns`, and returns the row iterator. `scan` pulls from that iterator once per chunk.
-Both are wrapped in `catch_unwind`, so a panic in either becomes a query error. The iterator type is
+`bind_state` is the bind step: it reads arguments, decides the result columns through
+`config_result_columns`, and returns the arguments as the bind data. `init_state` rebuilds the row
+iterator from that bind data once per execution — the iterator is not `Clone`, so `quack-rs`'s
+`with_state` cannot be used. `scan` pulls from that iterator once per chunk. Every phase is wrapped in
+`catch_unwind`, so a panic in any of them becomes a query error. The iterator type is
 `DuckFullIterator<T> = Box<dyn Iterator<Item = DuckOptionResult<T>> + Send>`.
 
 ### Copy

@@ -243,11 +243,10 @@ SELECT dfn_agg_reg_overload(1.5);
 No function matches
 
 # ============================================================================
-# 新版函数集重载：DuckfnAggregateFunctionSetBuilder
+# 新版函数集重载：quack-rs 的 AggregateFunctionSetBuilder
 #
-# 每个重载是独立的 duckdb_aggregate_function，返回类型取各自签名的 Output，
-# 因此同一函数集里可以有不同返回类型（旧版 AggregateFunctionSetBuilder 只能
-# 在函数集上设一个统一的 returns_logical）。
+# 每个重载由宏生成的 aggregate_overload_builder() 构造，各自携带签名里的
+# Output 作为返回类型，因此同一函数集里可以有不同返回类型。
 # ============================================================================
 
 # INTEGER 分支：求和，返回 BIGINT
