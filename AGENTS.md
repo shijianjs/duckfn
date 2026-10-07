@@ -252,7 +252,8 @@ just release_bump 0.0.5
 （应当为空）以及 `git diff --stat`。
 
 > 示例扩展（`test/extension/**`、`test/sql/**`）与本 crate 同属一个包，没有独立版本号，
-> 发版脚本自然会把它们一起带上；`Cargo.lock`、`docs/package-lock.json` 与本文件被排除在替换之外。
+> 发版脚本自然会把它们一起带上；`Cargo.lock`、根目录的 `package-lock.json`（npm workspace 的锁文件，
+> 里面是依赖自己的版本号）与本文件被排除在替换之外。
 
 ### 2. 提交并打 tag
 

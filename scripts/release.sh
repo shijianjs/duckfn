@@ -14,11 +14,15 @@
 set -euo pipefail
 
 # 核对「旧版本号残留」时跳过的文件：
-# Cargo.lock 由 cargo update 负责；package-lock.json 与本项目版本号无关；
-# AGENTS.md 是流程说明，里面的版本号只是示例。
+# Cargo.lock 由 cargo update 负责；package-lock.json 里是 npm 依赖自己的版本号，
+# 与 duckfn 的版本号无关；AGENTS.md 是流程说明，里面的版本号只是示例。
+#
+# 这里的 package-lock.json 指的是**根上那一份**：本仓是 npm workspace
+# （根 package.json + 根 package-lock.json，见 .gitignore 的说明），
+# 锁文件只有一个、在根上，docs/ 下不存在 —— 排除路径要写对，否则等于没排除。
 CHECK_EXCLUDES=(
     ':(exclude)Cargo.lock'
-    ':(exclude)docs/package-lock.json'
+    ':(exclude)package-lock.json'
     ':(exclude)AGENTS.md'
 )
 
