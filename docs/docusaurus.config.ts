@@ -158,6 +158,10 @@ const config: Config = {
         // browser). Without it the Chinese pages would be indexed as unsegmentable runs of
         // characters.
         language: ['en', 'zh'],
+        // Opening a result highlights the searched terms on the page it lands on (mark.js), which
+        // is what makes a hit usable when the match sits in a long page rather than in the page
+        // title.
+        highlightSearchTermsOnTargetPage: true,
         // `filename` puts the index hash in the file name rather than in a `?_=` query string, so
         // a redeployed site cannot serve a stale index out of the browser or the Pages cache.
         hashed: 'filename',
