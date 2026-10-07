@@ -17,12 +17,6 @@ import type {UrlPreloadEntry} from 'duckfn-docs-kit/sql/runtimeConfig';
 const url = process.env.DOCS_URL ?? 'http://localhost:3000';
 const baseUrl = process.env.DOCS_BASE_URL ?? '/';
 
-// The Algolia index is crawled from the GitHub Pages deployment, so every record's URL carries the
-// Pages sub-path: https://shijianjs.github.io/duckfn/zh-Hans/docs/intro/. A deployment served from
-// a domain root (`npm start`, or a mirror on its own domain) has to drop it again — see the
-// `replaceSearchResultPathname` comment below.
-const algoliaIndexBaseUrl = '/duckfn/';
-
 // The duckfn extension the runnable SQL blocks preload. The file name keeps `duckfn` before its
 // first dot — that base is the entry symbol DuckDB looks up, which is why the release asset (which
 // carries the wasm platform suffix) is renamed on the way in.
@@ -59,9 +53,10 @@ const config: Config = {
 
   // GitHub Pages serves `<path>/index.html` at `<path>/`, and 301-redirects `<path>` to `<path>/`.
   // Keeping the slash in Docusaurus' own output means the sitemap, the canonical tags and every
-  // internal link advertise the URL that answers 200 instead of a redirect hop — which is also what
-  // crawlers (Algolia DocSearch) index. It only changes how URLs are written; the files on disk and
-  // the client-side router behave the same, and slash-less links keep working through the redirect.
+  // internal link advertise the URL that answers 200 instead of a redirect hop — which is also the
+  // URL the search index records for a page, so a hit lands directly instead of going through a
+  // redirect. It only changes how URLs are written; the files on disk and the client-side router
+  // behave the same, and slash-less links keep working through the redirect.
   trailingSlash: true,
 
   // Client-side enhancements live in the kit's plugins (see the `plugins`
@@ -86,7 +81,7 @@ const config: Config = {
     },
   },
 
-  // The classic preset already registers the search UI (see the note below), and
+  // The classic preset registers the search UI (see the `themes` note below) and
   // says nothing about mermaid: ```mermaid fences are turned into `<dfk-mermaid>`
   // elements by the kit's `remarkMermaid` (in the docs `remarkPlugins` below),
   // which is this site's whole mermaid integration. No `@docusaurus/theme-mermaid`
@@ -147,10 +142,32 @@ const config: Config = {
     dfkTocToggle(),
   ],
 
-  // No `themes` entry for the search UI: the classic preset already registers
-  // `docusaurus-theme-search-algolia`, and it turns itself on as soon as `themeConfig.algolia`
-  // below is filled in. Listing it again fails the build with
-  // `Plugin "docusaurus-theme-search-algolia" is used 2 times with ID "default"`.
+  // Search is built into the site: `@easyops-cn/docusaurus-search-local` indexes the pages at
+  // build time (its `postBuild`, once per locale) into a lunr index served from this deployment, so
+  // there is no Algolia crawler, no account and no API key, and the index is always the one that
+  // matches the site it was built from. Listing it under `themes` — not `plugins` — is what makes
+  // its `SearchBar` / `SearchPage` win: site themes are loaded after the classic preset's, whose
+  // own `docusaurus-theme-search-algolia` stays inert without a `themeConfig.algolia` block, which
+  // is why there is no `algolia` key there either.
+  themes: [
+    [
+      '@easyops-cn/docusaurus-search-local',
+      {
+        // Every published locale has to be listed here: the index is built per locale, and `zh` is
+        // what turns on CJK tokenisation (jieba while indexing, the lunr `zh` pipeline in the
+        // browser). Without it the Chinese pages would be indexed as unsegmentable runs of
+        // characters.
+        language: ['en', 'zh'],
+        // `filename` puts the index hash in the file name rather than in a `?_=` query string, so
+        // a redeployed site cannot serve a stale index out of the browser or the Pages cache.
+        hashed: 'filename',
+        // The site has no blog (see `blog: false` above); without this the plugin looks for
+        // `docs/blog/` and warns that it does not exist, once per locale.
+        indexBlog: false,
+      },
+    ],
+  ],
+
   themeConfig: {
     // Readers can collapse the docs sidebar away; the toggle button appears next to it.
     docs: {
@@ -294,59 +311,6 @@ const config: Config = {
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['bash', 'rust', 'sql', 'toml'],
     },
-    algolia: {
-      // import docsearch from '@docsearch/js';
-      // import '@docsearch/css';
-      //
-      // docsearch({
-      //   container: '#docsearch',
-      //   appId: 'J72GU161MT',
-      //   indexName: 'duckfn-doc',
-      //   apiKey: 'ed529cc7365e034dee6c1359a3ecddda'
-      // });
-      // The application ID provided by Algolia
-      appId: 'J72GU161MT',
-
-      // Public API key: it is safe to commit it
-      apiKey: 'ed529cc7365e034dee6c1359a3ecddda',
-
-      indexName: 'duckfn-doc',
-
-      // Optional: see doc section below
-      // contextualSearch: true,
-
-      // Optional: Specify domains where the navigation should occur through window.location instead on history.push. Useful when our Algolia config crawls multiple documentation sites and we want to navigate with window.location.href to them.
-      // externalUrlRegex: 'external\\.com|domain\\.com',
-
-      // Replace parts of the item URLs from Algolia: the index is crawled from GitHub Pages, so
-      // every hit carries `algoliaIndexBaseUrl` (e.g. /duckfn/zh-Hans/docs/intro/), while this
-      // deployment may be served from a domain root (`npm start`).
-      // Docusaurus strips it here and re-adds *this* build's baseUrl right afterwards, so the same
-      // index serves both: GitHub Pages gets /duckfn/zh-Hans/docs/intro/ back, a root-served
-      // deployment gets /zh-Hans/docs/intro/. Without it, a root-served deployment links to
-      // /zh-Hans/duckfn/zh-Hans/docs/intro/.
-      replaceSearchResultPathname: {
-        // `from` is the source of a regular expression (Docusaurus builds it with `new RegExp`),
-        // anchored so only the leading Pages sub-path is dropped.
-        from: `^${algoliaIndexBaseUrl}`,
-        to: '/',
-      },
-
-      // Optional: Algolia search parameters
-      // searchParameters: {},
-
-      // Optional: path for search page that enabled by default (`false` to disable it)
-      // searchPagePath: 'search',
-
-      // Optional: whether the insights feature is enabled or not on Docsearch (`false` by default)
-      // insights: false,
-
-      // Optional: whether you want to use the new Ask AI feature (undefined by default)
-      // askAi: 'YOUR_ALGOLIA_ASK_AI_ASSISTANT_ID',
-
-      //... other Algolia params
-    },
-
   } satisfies Preset.ThemeConfig,
 };
 
