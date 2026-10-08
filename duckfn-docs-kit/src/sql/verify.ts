@@ -19,7 +19,12 @@ import {writeFileSync} from 'node:fs';
 
 import {collectRunnableSql, expectsError, type RunnableSqlBlock} from './collect';
 import {BrowserSqlRunner, type WasmPlatform} from './browserRunner';
-import {resolveDocsSiteConfig, resolveExtension, type DocsSiteConfig} from './site';
+import {
+  resolveDocsSiteConfig,
+  resolveExtension,
+  type DocsSiteConfig,
+  type StaticAssetMount,
+} from './site';
 
 export interface VerifyOptions {
   /** Docs site root; defaults to the working directory. */
@@ -42,6 +47,12 @@ export interface VerifyOptions {
    * Chrome/Edge; the `DFK_BROWSER` environment variable is the same override.
    */
   browser?: string;
+  /**
+   * Local directories served over HTTP while the blocks run, so SQL can
+   * `read_csv_auto('{{DFK_ORIGIN}}<prefix>/x.tsv')` the site's own data (see
+   * `sql/site`).
+   */
+  assets?: readonly StaticAssetMount[];
   /** Write the full result list here as JSON. */
   reportFile?: string;
 }
@@ -111,6 +122,7 @@ async function runPages(
     platform: config.platform,
     engine: config.engine,
     browser: config.browser,
+    assets: config.assets,
   });
   const results: BlockResult[] = [];
   try {
@@ -215,6 +227,9 @@ Runs every runnable SQL block of a duckfn docs site in a headless browser
   --extension <path>    The extension to preload: a .duckdb_extension.wasm path,
                         or an absolute http(s) URL (default: the single file under
                         static/duckdb-extensions/)
+  --asset <url=dir>     Serve a local directory over HTTP at a URL prefix while the
+                        blocks run, so SQL can read_csv_auto the site's own data
+                        (repeatable; e.g. --asset /my-site/data=static/data)
   --platform <eh|mvp>   DuckDB-Wasm bundle, which must match the extension build
                         (default: eh)
   --engine <path>       Engine wasm override
@@ -233,6 +248,7 @@ interface ParsedArgs extends CliOptions {
 function parseArgs(argv: readonly string[]): ParsedArgs {
   const options: ParsedArgs = {};
   const content: string[] = [];
+  const assets: StaticAssetMount[] = [];
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
     const next = (): string => {
@@ -251,6 +267,9 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
         break;
       case '--extension':
         options.extension = next();
+        break;
+      case '--asset':
+        assets.push(parseAsset(next()));
         break;
       case '--platform':
         options.platform = next() as WasmPlatform;
@@ -281,5 +300,17 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   if (content.length > 0) {
     options.contentDirs = content;
   }
+  if (assets.length > 0) {
+    options.assets = assets;
+  }
   return options;
+}
+
+/** `--asset <url=dir>`: the URL prefix and the directory are both required. */
+function parseAsset(value: string): StaticAssetMount {
+  const equals = value.indexOf('=');
+  if (equals <= 0 || equals === value.length - 1) {
+    throw new Error(`sql/verify: --asset expects "url=dir" (got ${JSON.stringify(value)})`);
+  }
+  return {url: value.slice(0, equals), dir: value.slice(equals + 1)};
 }

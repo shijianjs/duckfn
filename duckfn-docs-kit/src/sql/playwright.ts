@@ -23,8 +23,8 @@
  * ```
  *
  * Configuration (site root, content directories, extension, platform, browser,
- * timeout) comes from `sql/site` — explicit options first, then `DFK_*`
- * environment variables, then the detected site layout.
+ * timeout, asset mounts) comes from `sql/site` — explicit options first, then
+ * `DFK_*` environment variables, then the detected site layout.
  *
  * Why `test.fail()` matters here
  * ------------------------------
@@ -59,6 +59,7 @@ import {
   resolveDocsSiteConfig,
   resolveExtension,
   type DocsSiteOverrides,
+  type StaticAssetMount,
 } from './site';
 
 /**
@@ -120,11 +121,14 @@ export const test = base.extend<{}, DocsWorkerFixtures>({
       // site root it resolved is authoritative — it must not depend on the
       // process working directory, because an IDE can start the worker from the
       // repository root while the config and spec live under `docs/`.
-      const config = resolveDocsSiteConfig(activeSiteDir ? {siteDir: activeSiteDir} : {});
+      const config = resolveDocsSiteConfig({
+        siteDir: activeSiteDir,
+        assets: activeAssets,
+      });
       const extension = resolveExtension(config.siteDir, config.extension);
       const {enginePath, workerPath} = resolveEngineBundle(config.platform, config.engine);
       const harness = await startHarness(
-        harnessRoutes({extension, enginePath, workerPath, allowUnsigned: true}),
+        harnessRoutes({extension, enginePath, workerPath, allowUnsigned: true, assets: config.assets}),
       );
       try {
         await use(harness);
@@ -139,10 +143,15 @@ export const test = base.extend<{}, DocsWorkerFixtures>({
 /** The site root {@link declareDocsTests} resolved in this worker, once it ran. */
 let activeSiteDir: string | undefined;
 
-export interface DocsTestOptions {
-  siteDir?: string;
-  contentDirs?: readonly string[];
-}
+/** The asset mounts {@link declareDocsTests} resolved, handed to the harness fixture. */
+let activeAssets: StaticAssetMount[] | undefined;
+
+/**
+ * Options for {@link declareDocsTests}: the shared docs-site options
+ * (site root, content directories, extension, asset mounts, …). Anything not
+ * given falls back to the `DFK_*` environment variables and the detected layout.
+ */
+export type DocsTestOptions = DocsSiteOverrides;
 
 /**
  * Registers one Playwright test per runnable block, grouped by content file.
@@ -156,8 +165,9 @@ export interface DocsTestOptions {
  */
 export function declareDocsTests(options: DocsTestOptions = {}): void {
   const config = resolveDocsSiteConfig(options);
-  // Hand the resolved root to the worker-scoped harness fixture in this worker.
+  // Hand the resolved root and asset mounts to the worker-scoped harness fixture.
   activeSiteDir = config.siteDir;
+  activeAssets = config.assets;
   const blocks = collectRunnableSql({
     siteDir: config.siteDir,
     contentDirs: config.contentDirs,

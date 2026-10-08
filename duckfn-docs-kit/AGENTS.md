@@ -283,11 +283,36 @@ otherwise make Playwright transpile the imports to `require()` and choke on the 
   check is two-way (`test.fail()` reports a block that declares `error` and starts succeeding too),
   and a `-- error:` comment in the SQL is *not* read; only the metadata counts.
 - **Configuration** comes from the `DFK_*` environment variables — `DFK_SITE_DIR`, `DFK_CONTENT`,
-  `DFK_EXTENSION`, `DFK_PLATFORM`, `DFK_ENGINE`, `DFK_BROWSER`, `DFK_TIMEOUT`; unset, the site
-  layout is detected. The preset launches your **system Chrome/Edge** (detected, or `DFK_BROWSER`),
-  so no browser is downloaded at run time. `@playwright/test` is an optional peer dependency; if you
-  do not want Playwright's install-time download either, install it with
+  `DFK_EXTENSION`, `DFK_ASSETS`, `DFK_PLATFORM`, `DFK_ENGINE`, `DFK_BROWSER`, `DFK_TIMEOUT`; unset,
+  the site layout is detected. The preset launches your **system Chrome/Edge** (detected, or
+  `DFK_BROWSER`), so no browser is downloaded at run time. `@playwright/test` is an optional peer
+  dependency; if you do not want Playwright's install-time download either, install it with
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`.
+- **A block that reads the site's own data files needs an asset mount, and an absolute URL.** The test
+  server is otherwise closed (`harness.html` / `harness.js` / `/vendor/*` / `/ext/*` only), so a
+  `read_csv_auto('{{DFK_ORIGIN}}/my-site/data/x.tsv')` would 404. Declare the directories the blocks read:
+
+  ```ts
+  // tests/docs.spec.mts
+  declareDocsTests({
+    siteDir: fileURLToPath(new URL('..', import.meta.url)),
+    assets: [{url: '/my-site/data', dir: 'static/data'}],
+  });
+  ```
+
+  `url` is the **root-relative** prefix the files are reachable at — the site's `baseUrl` plus the
+  directory name, exactly the path the deployed site serves. `dir` is relative to the site root. The CLI
+  takes the same thing as `--asset /my-site/data=static/data` (repeatable), and `DFK_ASSETS` as a
+  comma-separated `url=dir` list. `siteDir` is still needed alongside `assets` unless it is already
+  detected or set in the environment, because `dir` is resolved against it.
+- **`{{DFK_ORIGIN}}` is how a block names the page origin** (`sql/placeholders`). DuckDB-Wasm runs in a
+  Worker based at a `blob:` URL and resolves nothing relative to the page: `'data/x.tsv'` *and*
+  `'/data/x.tsv'` are both looked up in the instance's in-memory filesystem and fail with
+  `IO Error: No files found that match the pattern`. Only an absolute `http(s)` URL reaches HTTPFS, and
+  the origin is the one thing no build-time substitution can know, so `DuckDBRuntime.execute()` expands
+  the token to `window.location.origin` right before the SQL reaches DuckDB — one chokepoint shared by
+  the site and the harness. The `baseUrl` part stays literal in the SQL, so changing a site's `baseUrl`
+  means changing it in the blocks and in the asset mounts together.
 - The default extension is the single file under `static/duckdb-extensions/`.
 - **The `duckfn-sql-verify` command still exists** for a framework-free run (`duckfn-sql-verify
   --site .`), sharing the collector, the harness and the extension resolution with the Playwright

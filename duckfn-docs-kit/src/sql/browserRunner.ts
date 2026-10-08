@@ -51,6 +51,7 @@ import {
   type HarnessRoutes,
   type WasmPlatform,
 } from './harnessServer';
+import type {StaticAssetMount} from './site';
 
 export type {WasmPlatform} from './harnessServer';
 
@@ -63,6 +64,8 @@ export interface RunnerOptions {
   engine?: string;
   /** Browser executable; defaults to a detected Chrome/Edge (`DFK_BROWSER` wins). */
   browser?: string;
+  /** Local directories served over HTTP so blocks can read them (see `sql/site`). */
+  assets?: readonly StaticAssetMount[];
 }
 
 export interface RunResult {
@@ -113,6 +116,7 @@ export class BrowserSqlRunner {
         // The runner is a trusted local loopback: an unsigned dev extension must
         // load, exactly as the site's own config opts in.
         allowUnsigned: true,
+        assets: options.assets,
       }),
       browserExecutable: findBrowser(options.browser),
     });

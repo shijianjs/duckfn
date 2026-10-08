@@ -1,3 +1,4 @@
+import {expandSqlPlaceholdersHere} from './placeholders';
 import type * as DuckdbWasm from '@duckdb/duckdb-wasm';
 import {
   DFK_SQL_RUNTIME_TAG_ID,
@@ -30,7 +31,9 @@ import {
  *   again.
  * - `execute()` hands the whole string to DuckDB. Multi-statement queries
  *   return the result of the **last** statement, which is exactly the
- *   documented behaviour for runnable blocks.
+ *   documented behaviour for runnable blocks. It is also the one place where
+ *   a block's `{{DFK_ORIGIN}}` placeholders are expanded (see `sql/placeholders`),
+ *   so the site and the verifier cannot disagree on them.
  * - Extensions get into the shared instance two ways, both through the same
  *   memoised loader: the **site preload list** (the ordered `preload` array of
  *   the JSON `<script>` tag the build-time plugin injects, loaded right after
@@ -240,7 +243,7 @@ export class DuckDBRuntime {
       return {columns: [], rows: [], error: this.#message || 'DuckDB unavailable'};
     }
     try {
-      const table = await conn.query(sql);
+      const table = await conn.query(expandSqlPlaceholdersHere(sql));
       return {
         columns: table.schema.fields.map((field) => field.name),
         rows: table.toArray() as Record<string, unknown>[],

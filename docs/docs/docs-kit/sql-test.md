@@ -77,6 +77,7 @@ environment variables, then the detected site layout.
 | `DFK_SITE_DIR` | Docs site root (default: the working directory). |
 | `DFK_CONTENT` | Comma-separated content directories relative to the site root. Defaults to `docs/` plus every `i18n/<locale>/docusaurus-plugin-content-docs/current/`. |
 | `DFK_EXTENSION` | The extension to preload: a `.duckdb_extension.wasm` path, or an absolute `http(s)` URL. Defaults to the single file under `static/duckdb-extensions/`. |
+| `DFK_ASSETS` | Comma-separated `url=dir` pairs: local directories served over HTTP while the blocks run (see the next section). |
 | `DFK_PLATFORM` | DuckDB-Wasm bundle, which has to match the extension build (default: `eh`). |
 | `DFK_ENGINE` | Engine wasm override, for pinning a specific DuckDB-Wasm build. |
 | `DFK_BROWSER` | The Chrome/Edge executable to drive. Defaults to a detected system Chrome/Edge. Playwright launches it directly — no browser download. |
@@ -86,6 +87,66 @@ environment variables, then the detected site layout.
 …}`) plus a `config` field merged last, so anything the preset sets can be
 overridden from your own `playwright.config.mts`.
 
+## Reading the site's own data files (asset mounts)
+
+The harness serves the page, the engine, the worker and the extension from a
+short-lived loopback server — nothing else. A block that reads a data file the
+site itself ships (a `.tsv` under `static/`, say) would therefore 404. Declare
+each directory the blocks read, and the server serves it too:
+
+```ts
+// tests/docs.spec.mts
+import {fileURLToPath} from 'node:url';
+import {declareDocsTests} from 'duckfn-docs-kit/sql/playwright';
+
+declareDocsTests({
+  siteDir: fileURLToPath(new URL('..', import.meta.url)),
+  assets: [{url: '/my-site/data', dir: 'static/data'}],
+});
+```
+
+- `url` is the **root-relative** prefix the files become reachable at: the
+  site's `baseUrl` plus the directory name — the same path the deployed site
+  serves. It has to be a prefix the page origin can be put in front of, because
+  DuckDB-Wasm reads nothing relative (see `{{DFK_ORIGIN}}` below):
+
+  ```sql
+  SELECT count(*) AS n FROM read_csv_auto('{{DFK_ORIGIN}}/my-site/data/samples.tsv');
+  ```
+
+- `dir` is relative to the site root (`siteDir`), which is why `siteDir` is
+  still needed alongside `assets`.
+- Paths are confined to `dir`: a `..` in the URL never reaches outside it, and
+  only regular files are served.
+
+The Playwright option, the CLI and the environment variable are the same thing:
+`--asset /my-site/data=static/data` on `duckfn-sql-verify` (repeatable), or
+`DFK_ASSETS=/my-site/data=static/data`.
+
+## `{{DFK_ORIGIN}}`: why a data URL needs a placeholder
+
+DuckDB-Wasm runs in a Worker whose base URL is a `blob:`, so it resolves
+**nothing** relative to the page. Both of these fail, with the same
+`IO Error: No files found that match the pattern`:
+
+```sql
+SELECT * FROM read_csv_auto('data/samples.tsv');    -- looked up in memory
+SELECT * FROM read_csv_auto('/data/samples.tsv');   -- ditto: a path, not a URL
+```
+
+Only an absolute `http(s)` URL reaches the HTTP filesystem — and the origin is
+the one part no build-time substitution can know (GitHub Pages,
+`docusaurus serve` and the harness' random loopback port all differ). So a block
+names it as `{{DFK_ORIGIN}}` and `sql/runtime` expands it to `window.location.origin`
+in `execute()`, immediately before the SQL reaches DuckDB. The site and the
+harness share that one chokepoint, so a block verified in CI is byte for byte the
+block a reader runs.
+
+`baseUrl` stays literal in the SQL (`'{{DFK_ORIGIN}}/my-site/data/samples.tsv'`):
+the site knows it at build time, and the verifier is configured with the same
+prefix through its asset mounts. Changing a site's `baseUrl` therefore means
+changing it in the blocks and in `assets` too.
+
 ## The command-line fallback
 
 For a framework-free run the kit still ships `duckfn-sql-verify`, which shares
@@ -93,7 +154,7 @@ the collector, the harness and the configuration resolution with the Playwright
 path:
 
 ```bash
-duckfn-sql-verify --site .
+duckfn-sql-verify --site . --asset /my-site/data=static/data
 ```
 
 It needs `playwright-core` (a kit dependency) and exits non-zero when a block

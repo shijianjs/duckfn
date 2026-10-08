@@ -62,6 +62,7 @@ SELECT CAST('abc' AS INTEGER);  -- 报错：not an integer: "abc"
 | `DFK_SITE_DIR` | 文档站根目录（默认：当前工作目录）。 |
 | `DFK_CONTENT` | 逗号分隔的内容目录，相对站点根。默认 `docs/` 加上每个 `i18n/<locale>/docusaurus-plugin-content-docs/current/`。 |
 | `DFK_EXTENSION` | 要预加载的扩展：`.duckdb_extension.wasm` 路径，或绝对 `http(s)` URL。默认取 `static/duckdb-extensions/` 下的那一个文件。 |
+| `DFK_ASSETS` | 逗号分隔的 `url=dir`：运行块时额外通过 HTTP 供出的本地目录（见下一节）。 |
 | `DFK_PLATFORM` | DuckDB-Wasm bundle，必须与扩展的构建平台一致（默认 `eh`）。 |
 | `DFK_ENGINE` | 覆盖引擎 wasm，用来钉住某个 duckdb-wasm 构建。 |
 | `DFK_BROWSER` | 要驱动的 Chrome/Edge 可执行文件。默认探测系统里的 Chrome/Edge，Playwright 直接拉起它，不下载浏览器。 |
@@ -70,12 +71,61 @@ SELECT CAST('abc' AS INTEGER);  -- 报错：not an integer: "abc"
 `defineDuckfnDocsConfig()` 也接受这些选项（`{siteDir, contentDirs, …}`）外加一个最后合并的 `config`
 字段，因此 preset 设的任何东西都能在自己的 `playwright.config.mts` 里覆盖。
 
+## 读取站点自带的示例数据（静态资源映射）
+
+harness 从一个短命的 loopback 服务里供出页面、引擎、worker 与扩展——除此之外什么都没有。因此，一个
+读取站点自带数据文件（比如 `static/` 下的 `.tsv`）的块会拿到 404。把每个块要读的目录声明出来，服务就
+一并供出：
+
+```ts
+// tests/docs.spec.mts
+import {fileURLToPath} from 'node:url';
+import {declareDocsTests} from 'duckfn-docs-kit/sql/playwright';
+
+declareDocsTests({
+  siteDir: fileURLToPath(new URL('..', import.meta.url)),
+  assets: [{url: '/my-site/data', dir: 'static/data'}],
+});
+```
+
+- `url` 是文件可被访问的**根相对**前缀：站点的 `baseUrl` 加上目录名，也就是部署后站点真正提供的
+  路径。它必须是一个能前面接上页面 origin 的前缀，因为 DuckDB-Wasm 什么都不按相对路径解析（见下面的
+  `{{DFK_ORIGIN}}`）：
+
+  ```sql
+  SELECT count(*) AS n FROM read_csv_auto('{{DFK_ORIGIN}}/my-site/data/samples.tsv');
+  ```
+
+- `dir` 相对站点根（`siteDir`），这也是为什么 `assets` 旁仍要 `siteDir`。
+- 路径被限制在 `dir` 之内：URL 里的 `..` 永远到不了外层，且只会供出普通文件。
+
+Playwright 选项、CLI 与环境变量表达的是同一件事：`duckfn-sql-verify` 上写
+`--asset /my-site/data=static/data`（可重复），或 `DFK_ASSETS=/my-site/data=static/data`。
+
+## `{{DFK_ORIGIN}}`：数据 URL 为什么需要占位符
+
+DuckDB-Wasm 跑在一个 base URL 为 `blob:` 的 Worker 里，因此**任何**相对路径都不会拿页面当基准去解析。
+下面两种写法都会以同一个 `IO Error: No files found that match the pattern` 失败：
+
+```sql
+SELECT * FROM read_csv_auto('data/samples.tsv');    -- 在内存文件系统里找
+SELECT * FROM read_csv_auto('/data/samples.tsv');   -- 同样是路径，不是 URL
+```
+
+只有绝对的 `http(s)` URL 才会走 HTTP 文件系统，而 origin 恰恰是构建期替换无法知道的那一部分（GitHub Pages、
+`docusaurus serve`、harness 的随机 loopback 端口各不相同）。所以块里把它写成 `{{DFK_ORIGIN}}`，由
+`sql/runtime` 在 `execute()` 里、SQL 交给 DuckDB 之前展开成 `window.location.origin`。站点与 harness 共用
+这一个入口，所以在 CI 里验证过的块与读者跑的是同一个块。
+
+SQL 里 `baseUrl` 仍是字面量（`'{{DFK_ORIGIN}}/my-site/data/samples.tsv'`）：站点在构建期就知道它，验证侧则通过
+静态资源映射配了同一个前缀。所以改站点的 `baseUrl` 时，块里的路径与 `assets` 要一起改。
+
 ## 命令行回退
 
 需要无框架运行时，kit 仍提供 `duckfn-sql-verify`，它与 Playwright 路径共用收集器、harness 与配置解析：
 
 ```bash
-duckfn-sql-verify --site .
+duckfn-sql-verify --site . --asset /my-site/data=static/data
 ```
 
 它依赖 `playwright-core`（kit 的依赖），块行为与声明不符时返回非零退出码。想要报告与 IDE 支持时，

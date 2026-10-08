@@ -10,10 +10,12 @@
  * means the two entry points cannot drift: a block verified through the CLI and
  * a block verified through Playwright Test run against byte-identical fixtures.
  */
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, statSync} from 'node:fs';
 import {createServer, type Server} from 'node:http';
 import {createRequire} from 'node:module';
-import {basename, dirname, join} from 'node:path';
+import {basename, dirname, extname, join, resolve, sep} from 'node:path';
+
+import type {StaticAssetMount} from './site';
 
 const require = createRequire(import.meta.url);
 
@@ -52,6 +54,8 @@ export interface HarnessRoutes {
   worker: {file: string; name: string};
   extension: {remoteUrl: string} | {localFile: string; baseName: string};
   allowUnsigned: boolean;
+  /** Local directories served over HTTP so blocks can `read_csv_auto` them. */
+  assets: StaticAssetMount[];
 }
 
 export interface HarnessRoutesOptions {
@@ -64,6 +68,8 @@ export interface HarnessRoutesOptions {
    * trusted local harness, exactly as the site's own config opts in.
    */
   allowUnsigned?: boolean;
+  /** Local directories served over HTTP, keyed by URL prefix (see `sql/site`). */
+  assets?: readonly StaticAssetMount[];
 }
 
 /** Maps the URL space the harness page needs to everything on disk. */
@@ -83,6 +89,7 @@ export function harnessRoutes(options: HarnessRoutesOptions): HarnessRoutes {
       ? {remoteUrl: options.extension}
       : {localFile, baseName: basename(localFile)},
     allowUnsigned: options.allowUnsigned ?? true,
+    assets: [...(options.assets ?? [])],
   };
 }
 
@@ -103,9 +110,10 @@ export async function startHarness(routes: HarnessRoutes): Promise<Harness> {
 /**
  * A loopback static server for the harness: `harness.html` (generated, wiring
  * the engine/extension URLs into the two contracts `harness.ts` reads),
- * `harness.js` (the bundled harness), `/vendor/*` (engine + worker), and
- * `/ext/*` (the served extension file). Nothing else is reachable; this is a
- * short-lived test fixture, not a web server.
+ * `harness.js` (the bundled harness), `/vendor/*` (engine + worker), `/ext/*`
+ * (the served extension file), plus any {@link StaticAssetMount} the site
+ * declared (so a block can `read_csv_auto` the site's own data). Nothing else is
+ * reachable; this is a short-lived test fixture, not a web server.
  */
 export async function startStaticServer(routes: HarnessRoutes): Promise<Server> {
   const harness = readFileSync(routes.harnessScript);
@@ -160,6 +168,11 @@ export async function startStaticServer(routes: HarnessRoutes): Promise<Server> 
       send(response, 'application/octet-stream', extension);
       return;
     }
+    const asset = mountedFile(routes.assets ?? [], path);
+    if (asset) {
+      send(response, contentTypeFor(asset), readFileSync(asset));
+      return;
+    }
     response.writeHead(404, {'content-type': 'text/plain'});
     response.end('not found');
   });
@@ -176,6 +189,50 @@ export async function startStaticServer(routes: HarnessRoutes): Promise<Server> 
 function send(response: import('node:http').ServerResponse, type: string, body: Buffer): void {
   response.writeHead(200, {'content-type': type, 'content-length': body.length});
   response.end(body);
+}
+
+/**
+ * The on-disk file a URL maps to through the asset mounts, or `null` when no
+ * mount owns the path, the file is missing, or the path escapes the mount
+ * (a `..` segment). Only regular files are served — no directory listings.
+ */
+function mountedFile(mounts: readonly StaticAssetMount[], path: string): string | null {
+  for (const mount of mounts) {
+    const prefix = mount.url === '/' ? '' : mount.url;
+    if (prefix !== '' && path !== prefix && !path.startsWith(`${prefix}/`)) {
+      continue;
+    }
+    const relative = path.slice(prefix.length).replace(/^\/+/, '');
+    const file = resolve(mount.dir, decodeURIComponent(relative));
+    // `resolve` collapses `..`, so a file outside the mount never passes this.
+    if (file !== mount.dir && !file.startsWith(mount.dir + sep)) {
+      continue;
+    }
+    if (statSync(file, {throwIfNoEntry: false})?.isFile()) {
+      return file;
+    }
+  }
+  return null;
+}
+
+/** A content type for a served asset, keyed off its extension. */
+function contentTypeFor(file: string): string {
+  switch (extname(file).toLowerCase()) {
+    case '.tsv':
+      return 'text/tab-separated-values; charset=utf-8';
+    case '.csv':
+      return 'text/csv; charset=utf-8';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.parquet':
+      return 'application/vnd.apache.parquet';
+    case '.wasm':
+      return 'application/wasm';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -384,7 +384,11 @@ src/
   不保留 shebang，而 npm 只需要一个带 shebang 且有执行位的文件。
 - **`sql/site.ts`**：两种入口共享的配置解析 —— 默认 `docs/` + 每个 `i18n/<locale>/…/current/`，
   默认取 `static/duckdb-extensions/` 下唯一的 `.duckdb_extension.wasm`；可用 `DFK_SITE_DIR` /
-  `DFK_CONTENT` / `DFK_EXTENSION` / `DFK_PLATFORM` / `DFK_ENGINE` / `DFK_BROWSER` / `DFK_TIMEOUT` 覆盖。
+  `DFK_CONTENT` / `DFK_EXTENSION` / `DFK_ASSETS` / `DFK_PLATFORM` / `DFK_ENGINE` / `DFK_BROWSER` /
+  `DFK_TIMEOUT` 覆盖。`assets`（`StaticAssetMount {url, dir}`）是**静态资源目录映射**：harness 服务
+  在固定路由之外按 `url` 前缀供出 `dir` 下的文件，块才能 `read_csv_auto` 站点自带的数据；`url` 必须是
+  根相对（通常是站点 `baseUrl` 前缀），`dir` 相对 `siteDir` 解析。Playwright 走 `declareDocsTests({assets})`、
+  CLI 走可重复的 `--asset url=dir`、环境变量走逗号分隔的 `DFK_ASSETS`。
 - 收集与渲染共用一份 meta 解析（`sql/remark.ts` 导出的 `parseRunnableSqlMeta`）：站点上不是
   可运行块的，测试也不会跑。围栏按 CommonMark 收口（闭合围栏同字符、不短于开启围栏、无 info string），
   这样 ````md 包着的 ```sql 示例不会被当成块。

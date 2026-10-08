@@ -17,6 +17,23 @@ import type {WasmPlatform} from './harnessServer';
 export const DEFAULT_CONTENT = ['docs', 'i18n'] as const;
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * A local directory served at a URL prefix while the blocks run, so SQL can read
+ * data files the site also ships (`read_csv_auto('{{DFK_ORIGIN}}/my-site/data/x.tsv')`).
+ *
+ * The tests run against a short-lived loopback server, so the `url` must be an
+ * absolute path — normally the deployed `baseUrl` prefix, e.g. `/my-site/data`:
+ * blocks put the page origin in front of it (DuckDB-Wasm reads nothing relative,
+ * see `sql/placeholders`), which makes the identical path correct on the
+ * harness's random port and on GitHub Pages' sub-path.
+ */
+export interface StaticAssetMount {
+  /** URL prefix the files are reachable at; must start with `/`. */
+  url: string;
+  /** Directory to serve, relative to the site root (or absolute). */
+  dir: string;
+}
+
 export interface DocsSiteConfig {
   /** Absolute site root. */
   siteDir: string;
@@ -31,6 +48,8 @@ export interface DocsSiteConfig {
   browser?: string;
   /** Per-block timeout in milliseconds. */
   timeoutMs: number;
+  /** Local directories served over HTTP for the blocks, keyed by URL prefix. */
+  assets: StaticAssetMount[];
 }
 
 export interface DocsSiteOverrides {
@@ -41,6 +60,7 @@ export interface DocsSiteOverrides {
   engine?: string;
   browser?: string;
   timeoutMs?: number;
+  assets?: readonly StaticAssetMount[];
 }
 
 /**
@@ -51,6 +71,7 @@ export interface DocsSiteOverrides {
 export function resolveDocsSiteConfig(overrides: DocsSiteOverrides = {}): DocsSiteConfig {
   const siteDir = resolve(overrides.siteDir ?? process.env.DFK_SITE_DIR ?? process.cwd());
   const content = overrides.contentDirs ?? contentDirsFromEnv() ?? defaultContentDirs(siteDir);
+  const assets = overrides.assets ?? assetsFromEnv() ?? [];
   return {
     siteDir,
     contentDirs: [...content],
@@ -62,7 +83,25 @@ export function resolveDocsSiteConfig(overrides: DocsSiteOverrides = {}): DocsSi
     engine: overrides.engine ?? process.env.DFK_ENGINE,
     browser: overrides.browser ?? process.env.DFK_BROWSER,
     timeoutMs: overrides.timeoutMs ?? numberFromEnv('DFK_TIMEOUT') ?? DEFAULT_TIMEOUT_MS,
+    assets: assets.map((mount) => normalizeMount(siteDir, mount)),
   };
+}
+
+/**
+ * Normalises one mount: the URL prefix is absolute and slash-free at the end
+ * (`/a/b/` -> `/a/b`), the directory relative to the site root becomes an
+ * absolute one. Throws on a relative URL, which could never be resolved against
+ * the page origin.
+ */
+function normalizeMount(siteDir: string, mount: StaticAssetMount): StaticAssetMount {
+  if (!mount.url.startsWith('/')) {
+    throw new Error(
+      `sql/site: asset mount URL must start with "/" (got ${JSON.stringify(mount.url)}) — ` +
+        `blocks read root-relative paths, so it is usually the site's baseUrl prefix`,
+    );
+  }
+  const url = mount.url.replace(/\/+$/, '') || '/';
+  return {url, dir: resolve(siteDir, mount.dir)};
 }
 
 /**
@@ -133,6 +172,31 @@ function contentDirsFromEnv(): string[] | null {
     .map((dir) => dir.trim())
     .filter(Boolean);
   return dirs.length > 0 ? dirs : null;
+}
+
+/**
+ * `DFK_ASSETS` as a comma-separated `url=dir` list, or `null` when unset/empty.
+ * The directories stay as written — {@link resolveDocsSiteConfig} resolves them
+ * against the site root once it knows it.
+ */
+function assetsFromEnv(): StaticAssetMount[] | null {
+  const raw = process.env.DFK_ASSETS;
+  if (!raw) {
+    return null;
+  }
+  const mounts: StaticAssetMount[] = [];
+  for (const entry of raw.split(',')) {
+    const text = entry.trim();
+    if (!text) {
+      continue;
+    }
+    const equals = text.indexOf('=');
+    if (equals <= 0 || equals === text.length - 1) {
+      throw new Error(`sql/site: DFK_ASSETS entry ${JSON.stringify(text)} is not "url=dir"`);
+    }
+    mounts.push({url: text.slice(0, equals).trim(), dir: text.slice(equals + 1).trim()});
+  }
+  return mounts.length > 0 ? mounts : null;
 }
 
 function asPlatform(value: string | undefined): WasmPlatform | null {
