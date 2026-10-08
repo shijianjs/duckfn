@@ -80,6 +80,16 @@ jobs:
       - name: Typecheck
         run: npm run typecheck -w duckfn-docs-kit
 
+      # The tests run against dist/ (they are Node-side and this package has no TS
+      # loader), so build first — `npm stage publish` builds again through `prepack`,
+      # which is cheap next to the alternative of not testing at all. `release_kit_check`
+      # runs the same two steps locally before a tag is pushed.
+      - name: Build
+        run: npm run build -w duckfn-docs-kit
+
+      - name: Test
+        run: npm test -w duckfn-docs-kit
+
       # The tag decides *that* a release happens, the manifest decides *what* is
       # staged. Letting them disagree would put a version in the staging area that its
       # tag does not describe.
