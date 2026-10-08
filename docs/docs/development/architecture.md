@@ -202,14 +202,16 @@ stores the writer as global state; `sink` reads each chunk into `Vec<DuckDynamic
 `DuckCopyToWriter::finish`.
 
 `COPY ... FROM` is not a copy-function callback at all: it is an ordinary table function whose scan
-*produces* the rows, wired to the format with `duckdb_copy_function_set_copy_from_function`. quack-rs
-0.16 has no `copy_from` helper and does not expose the raw table-function handle, so the adapter builds
-that table function directly through `libduckdb_sys` while reusing quack-rs' `FfiBindData` /
-`FfiInitData` for the bind → init → scan state hand-off. `bind` parses `Args` and reads the **target
-table's** schema with `duckdb_table_function_bind_get_result_column_*` (a COPY FROM reader declares no
-result columns); `scan` calls the annotated batch function and writes the rows through
-`DuckDynamicRow::write_batch`; the reader's `finish` runs from the init-data destructor, because a table
-function has no finalize callback.
+*produces* the rows, attached to the format. Both halves go through quack-rs:
+`TableFunctionBuilder::build_handle` builds the **unregistered** reader table function (which also
+enforces the "exactly one `VARCHAR` positional parameter" contract DuckDB itself never checks), and
+`CopyFunctionBuilder::copy_from` attaches it to the format before `register` registers it. `bind`
+parses `Args` and reads the **target table's** schema with
+`duckdb_table_function_bind_get_result_column_*` (a COPY FROM reader declares no result columns);
+`scan` calls the annotated batch function and writes the rows through `DuckDynamicRow::write_batch`;
+the reader's `finish` runs from the init-data destructor, because a table function has no finalize
+callback. The bind → init → scan state hand-off still reuses quack-rs' `FfiBindData` /
+`FfiInitData`.
 
 Bind data and global state are `Box`ed and handed to DuckDB with a destructor callback that drops them,
 and every callback is wrapped in `catch_unwind` with errors reported through `set_error`. This API comes
@@ -220,9 +222,8 @@ Two ownership traps are worth remembering when touching this code. The strings r
 `duckdb_table_function_bind_get_result_column_name` and the value returned by
 `duckdb_copy_function_bind_get_options` are **owned by DuckDB** and must not be freed — doing so
 corrupts the heap (`0xC0000374`) — so the adapter only borrows them. The reader table-function handle
-handed to `duckdb_copy_function_set_copy_from_function` is deliberately **not** destroyed: whether
-DuckDB copies or takes it over is undocumented, and a double free would be fatal while a per-`LOAD`
-leak is harmless.
+is owned by quack-rs' `TableFunctionHandle`, which destroys it on drop: DuckDB copies the table
+function when `copy_from` attaches it, so releasing our handle afterwards is correct.
 
 ### Cast
 

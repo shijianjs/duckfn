@@ -19,27 +19,30 @@
 //! [`DuckCopyFromReader`]. The target table's schema comes from **DuckDB** (the reader declares no
 //! result columns), so nested columns (`LIST` / `STRUCT` / `MAP`) load as well.
 //!
-//! 为什么这里不用 `quack-rs` 的 `TableFunctionBuilder`？因为 COPY FROM 需要把 reader 表函数的**原始
-//! 句柄**交给 `duckdb_copy_function_set_copy_from_function`，而 quack-rs 0.16 的 builder 只在
-//! `register` 内部创建并销毁句柄、不外泄。所以这里直接用 `libduckdb_sys` 建表函数，但复用
-//! quack-rs 的 `FfiBindData` / `FfiInitData` 完成 bind → init → scan 的状态传递。
+//! reader 表函数与格式注册都走 quack-rs：`TableFunctionBuilder::build_handle` 建出一个**尚未注册**
+//! 的表函数句柄，`CopyFunctionBuilder::copy_from` 把它挂到格式上（顺带替我们校验了「恰好一个
+//! `VARCHAR` 位置参数」这条 DuckDB 自己从不检查的硬约束），最后 `register` 完成注册。
+//! bind → init → scan 的状态传递仍复用 quack-rs 的 `FfiBindData` / `FfiInitData`。
 //!
-//! Why not `quack-rs`'s `TableFunctionBuilder`? Because COPY FROM has to hand the reader table
-//! function's **raw handle** to `duckdb_copy_function_set_copy_from_function`, and the 0.16 builder
-//! creates and destroys that handle inside `register` without exposing it. So the table function is
-//! built straight through `libduckdb_sys`, while the bind → init → scan state hand-off reuses
-//! quack-rs' `FfiBindData` / `FfiInitData`.
+//! Both the reader table function and the format registration go through quack-rs:
+//! `TableFunctionBuilder::build_handle` produces an **unregistered** table-function handle,
+//! `CopyFunctionBuilder::copy_from` attaches it to the format — it also enforces the "exactly one
+//! `VARCHAR` positional parameter" contract that DuckDB itself never checks — and `register` does
+//! the registration. The bind → init → scan state hand-off still reuses quack-rs' `FfiBindData` /
+//! `FfiInitData`.
 //!
 //! 三条 DuckDB 侧的硬约束（都由本适配层负责）：
 //!
-//! 1. reader 的位置参数必须**恰好一个**（文件路径，`VARCHAR`），bind 时会校验；
+//! 1. reader 的位置参数必须**恰好一个**（文件路径，`VARCHAR`）；本适配层只登记这一个，多声明的位置
+//!    参数会被 quack-rs 在**注册期**挡下来；
 //! 2. bind 阶段**不能声明结果列** —— schema 已由目标表固定，改为读 `duckdb_table_function_bind_get_result_column_*`；
 //! 3. `COPY ... FROM 'f' (FORMAT x, SKIP_ROWS 1)` 里的额外选项以**命名参数**到达（大小写不敏感），
 //!    由 [`DuckCopyFromReader::Args`] 声明；未声明的选项 DuckDB 会在 bind 之前报错，且报错信息指向
 //!    表函数名 —— 所以表函数与格式同名。
 //!
 //! Three hard constraints on the DuckDB side, all handled here: the reader takes **exactly one**
-//! positional parameter (the file path, `VARCHAR`), checked during bind; bind must **not** declare
+//! positional parameter (the file path, `VARCHAR`) — this adapter declares just that one, and quack-rs
+//! refuses a reader declaring more at **registration** time; bind must **not** declare
 //! result columns (the schema is fixed by the target table, so it reads
 //! `duckdb_table_function_bind_get_result_column_*` instead); and the extra
 //! `COPY ... FROM 'f' (FORMAT x, SKIP_ROWS 1)` options arrive as **named parameters**
@@ -57,24 +60,22 @@ use crate::{
     duck_error, panic_to_string, raw_extra_info,
 };
 use libduckdb_sys::{
-    DuckDBSuccess, duckdb_bind_info, duckdb_copy_function, duckdb_copy_function_set_copy_from_function,
-    duckdb_copy_function_set_name, duckdb_create_copy_function, duckdb_create_table_function,
-    duckdb_data_chunk, duckdb_data_chunk_set_size, duckdb_destroy_copy_function,
-    duckdb_destroy_table_function, duckdb_function_info, duckdb_init_info,
-    duckdb_init_set_init_data, duckdb_register_copy_function, duckdb_table_function,
-    duckdb_table_function_add_named_parameter, duckdb_table_function_add_parameter,
+    duckdb_bind_info, duckdb_data_chunk, duckdb_data_chunk_set_size, duckdb_function_info,
+    duckdb_init_info, duckdb_init_set_init_data,
     duckdb_table_function_bind_get_result_column_count,
     duckdb_table_function_bind_get_result_column_name,
-    duckdb_table_function_bind_get_result_column_type, duckdb_table_function_set_bind,
-    duckdb_table_function_set_extra_info, duckdb_table_function_set_function,
-    duckdb_table_function_set_init, duckdb_table_function_set_name,
+    duckdb_table_function_bind_get_result_column_type,
 };
 use quack_rs::connection::Connection;
+use quack_rs::copy_function::CopyFunctionBuilder;
 use quack_rs::data_chunk::DataChunk;
 use quack_rs::prelude::{LogicalType, TypeId};
-use quack_rs::table::{BindInfo, FfiBindData, FfiInitData, FunctionInfo, InitInfo};
+use quack_rs::table::{
+    BindInfo, FfiBindData, FfiInitData, FunctionInfo, InitInfo, TableFunctionBuilder,
+    TableFunctionHandle,
+};
 use quack_rs::vector::vector_size;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Mutex;
@@ -148,12 +149,12 @@ pub trait DuckCopyFromReader: Sized + Send + 'static {
 ///
 /// Wires a [`DuckCopyFromReader`] into a DuckDB copy-from format.
 ///
-/// 除了 [`Self::next_batch`]（由宏转调被标注的函数），其余全是提供好的实现：手搓 reader 表函数、
-/// bind/init/scan 三个回调、以及注册。
+/// 除了 [`Self::next_batch`]（由宏转调被标注的函数），其余全是提供好的实现：reader 表函数由
+/// quack-rs 的 builder 建出并挂到格式上，bind/init/scan 三个回调接好，注册也一并完成。
 ///
 /// Apart from [`Self::next_batch`] (which the macro forwards to the annotated function) every
-/// method has a default: the reader table function is built by hand, the three callbacks are wired,
-/// and registration is provided.
+/// method has a default: the reader table function is built by quack-rs' builder and attached to
+/// the format, the three callbacks are wired, and registration is provided.
 pub trait CopyFromFunctionAdapter: Sized + 'static {
     /// 格式名，同时也是 reader 表函数的名字。
     ///
@@ -208,7 +209,6 @@ pub trait CopyFromFunctionAdapter: Sized + 'static {
         let info = unsafe { BindInfo::new(raw) };
         handle(
             AssertUnwindSafe(|| {
-                ensure_single_path_parameter::<Self>()?;
                 let args = <Self::Reader as DuckCopyFromReader>::Args::read_bind_args(&info)?;
                 // SAFETY: raw 在回调期间有效。
                 let schema = unsafe { read_target_schema(raw)? };
@@ -338,82 +338,56 @@ pub trait CopyFromFunctionAdapter: Sized + 'static {
         }
     }
 
-    /// 建出 reader 表函数（含参数声明与三个回调）。
+    /// 建出 reader 表函数（含参数声明与三个回调），但**不注册**。
     ///
-    /// Builds the reader table function (parameter declaration plus the three callbacks).
-    ///
-    /// # Safety
-    ///
-    /// 返回的句柄由调用方负责：交给 `duckdb_copy_function_set_copy_from_function` 后**不要**再销毁
-    /// （见 [`Self::register`] 的说明）。
-    ///
-    /// The returned handle is the caller's responsibility: after handing it to
-    /// `duckdb_copy_function_set_copy_from_function`, do **not** destroy it (see [`Self::register`]).
+    /// Builds the reader table function (parameter declaration plus the three callbacks) without
+    /// registering it.
     ///
     /// # Errors
     ///
-    /// 名字含 NUL 字节、或 DuckDB 创建 / 设置表函数失败时返回错误。
+    /// 格式名不合法（空、含 NUL 字节、含非法字符），或 DuckDB 创建 / 设置表函数失败时返回错误。
+    /// 另外 quack-rs 的 builder 会替你检查「恰好一个 `VARCHAR` 位置参数」这条 DuckDB 自己从不检查
+    /// 的约束：[`Self::reader_table_function`] 只登记一个 `VARCHAR` 位置参数（文件路径），其余位置
+    /// 参数一律忽略，所以多声明的 reader 在注册期就会被挡下来。
     ///
-    /// Returns an error when a name contains a NUL byte, or when DuckDB fails to create / configure
-    /// the table function.
-    unsafe fn reader_table_function() -> DuckResult<duckdb_table_function> {
-        let name = CString::new(Self::NAME)
-            .map_err(|_| duck_error(format!("{}: format name contains a NUL byte", Self::NAME)))?;
-        // 先把命名参数的 C 字符串全部备好，避免创建句柄后再出错、留下未释放的表函数。
-        //
-        // Prepare every named parameter's C string first, so a later failure cannot leave an
-        // unreleased table function behind.
-        let mut named = Vec::new();
-        for (param_name, logical_type) in
-            <Self::Reader as DuckCopyFromReader>::Args::bind_param_logical()
-        {
-            if let Some(param_name) = param_name {
-                let c_name = CString::new(param_name.as_str()).map_err(|_| {
-                    duck_error(format!(
-                        "{}: COPY option name contains a NUL byte",
-                        Self::NAME
-                    ))
-                })?;
-                named.push((c_name, logical_type));
-            }
-        }
-
-        // SAFETY: 以下调用都只依赖刚创建 / 已校验的句柄，DuckDB 会拷贝类型信息。
-        let function = unsafe { duckdb_create_table_function() };
-        if function.is_null() {
-            return Err(duck_error(format!(
-                "{}: duckdb_create_table_function returned null",
-                Self::NAME
-            )));
-        }
-        unsafe {
-            duckdb_table_function_set_name(function, name.as_ptr());
-            // 位置参数：恰好一个文件路径。
+    /// Returns an error when the format name is invalid (empty, containing a NUL byte or an illegal
+    /// character), or when DuckDB fails to create / configure the table function. quack-rs' builder
+    /// also enforces the "exactly one `VARCHAR` positional parameter" contract that DuckDB itself
+    /// never checks: [`Self::reader_table_function`] declares exactly one `VARCHAR` positional
+    /// parameter (the file path) and ignores any others, so a reader declaring more is refused at
+    /// registration time.
+    ///
+    /// # Safety
+    ///
+    /// 需要 DuckDB 的 C API 分发表已初始化（在扩展里始终成立）。
+    ///
+    /// The DuckDB C API dispatch table must be initialised (it always is inside an extension).
+    unsafe fn reader_table_function() -> DuckResult<TableFunctionHandle> {
+        let mut builder = TableFunctionBuilder::try_new(Self::NAME)?
+            // 位置参数：恰好一个文件路径；COPY 选项全部以命名参数到达（见模块文档第 3 条）。
             //
-            // Positional parameter: exactly one file path.
-            let path_type = LogicalType::new(TypeId::Varchar);
-            duckdb_table_function_add_parameter(function, path_type.as_raw());
-            for (c_name, logical_type) in &named {
-                duckdb_table_function_add_named_parameter(
-                    function,
-                    c_name.as_ptr(),
-                    logical_type.as_raw(),
-                );
-            }
-            duckdb_table_function_set_bind(function, Some(Self::c_bind));
-            duckdb_table_function_set_init(function, Some(Self::c_init));
-            duckdb_table_function_set_function(function, Some(Self::c_scan));
-            if let Some((ptr, destroy)) = raw_extra_info(Self::extra_info()) {
-                // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对；reader 表函数句柄
-                // 交给 DuckDB 后由 DuckDB 在销毁它时调用 destroy。
-                //
-                // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it; once
-                // the reader table-function handle is handed to DuckDB, DuckDB calls `destroy` when
-                // it destroys it.
-                duckdb_table_function_set_extra_info(function, ptr, destroy);
+            // Positional parameter: exactly one file path; every COPY option arrives as a named
+            // parameter (see constraint 3 in the module docs).
+            .param(TypeId::Varchar)
+            .bind(Self::c_bind)
+            .init(Self::c_init)
+            .scan(Self::c_scan);
+        for (name, logical_type) in <Self::Reader as DuckCopyFromReader>::Args::bind_param_logical() {
+            if let Some(name) = name {
+                builder = builder.named_param_logical(&name, logical_type);
             }
         }
-        Ok(function)
+        if let Some((ptr, Some(destroy))) = raw_extra_info(Self::extra_info()) {
+            // SAFETY: ptr 由 `DuckExtraInfo::into_raw` 产生，destroy 与它配对（析构回调内部兜了
+            // panic）；`build_handle` 之后所有权交给 DuckDB，销毁 reader 表函数时它会被调用。
+            //
+            // SAFETY: `ptr` comes from `DuckExtraInfo::into_raw` and `destroy` matches it (that
+            // destructor catches panics); `build_handle` hands ownership to DuckDB, which calls it
+            // when it destroys the reader table function.
+            builder = unsafe { builder.extra_info(ptr, destroy) };
+        }
+        // SAFETY: 由本方法的契约保证 DuckDB 的 C API 分发表已初始化。
+        unsafe { builder.build_handle() }
     }
 
     /// 注册成 `COPY ... FROM 'f' (FORMAT <NAME>)` 可用的格式。
@@ -428,65 +402,26 @@ pub trait CopyFromFunctionAdapter: Sized + 'static {
     ///
     /// # Errors
     ///
-    /// DuckDB 注册失败时返回错误。
+    /// 表函数建不出来、reader 不满足 quack-rs 的参数契约（位置参数不是一个 `VARCHAR`），或 DuckDB
+    /// 注册失败（含格式名已被占用）时返回错误。
     ///
-    /// Returns an error when DuckDB rejects the registration.
-    ///
-    /// # 内存说明 / Memory note
-    ///
-    /// reader 表函数的句柄被 `set_copy_from_function` 接收后**不再由我们销毁**：DuckDB 是拷贝它还是
-    /// 接管它没有权威文档，而「自己销毁 + 对方接管」是 double free（致命），「不销毁 + 对方拷贝」只是
-    /// 每次 `LOAD` 泄漏一个句柄（无害），因此这里选后者。
-    ///
-    /// The reader table function handle is **not** destroyed by us once
-    /// `set_copy_from_function` has accepted it: there is no authoritative documentation on whether
-    /// DuckDB copies or takes it over, and "we destroy + DuckDB took it" is a fatal double free while
-    /// "we do not destroy + DuckDB copied it" only leaks one handle per `LOAD` (harmless), so the
-    /// latter is chosen.
+    /// Returns an error when the table function cannot be built, when the reader violates quack-rs'
+    /// parameter contract (its positional parameter is not a `VARCHAR`), or when DuckDB rejects the
+    /// registration (including a format name that is already taken).
     unsafe fn register(c: &Connection) -> DuckResult<()> {
-        // SAFETY: 由调用方保证连接有效。
         let reader = unsafe { Self::reader_table_function()? };
-        // SAFETY: reader 是刚创建的、尚未交给任何人的表函数句柄。
-        let copy_function = unsafe { duckdb_create_copy_function() };
-        if copy_function.is_null() {
-            // reader 还没有交给谁，这里可以安全地释放。
-            //
-            // The reader has not been handed to anyone yet, so it can be released safely.
-            let mut reader = reader;
-            unsafe { duckdb_destroy_table_function(&raw mut reader) };
-            return Err(duck_error(format!(
-                "{}: duckdb_create_copy_function returned null",
-                Self::NAME
-            )));
-        }
-
-        let name = CString::new(Self::NAME)
-            .map_err(|_| duck_error(format!("{}: format name contains a NUL byte", Self::NAME)))?;
-        // SAFETY: 两个句柄都在上面校验过非空；reader 的所有权随 set_copy_from_function 交出。
+        // SAFETY: 由调用方保证连接有效；`copy_from` 按值把 reader 拷进 copy function（随后 quack-rs
+        // 释放我们这份句柄），并校验了它的参数契约。
         //
-        // SAFETY: both handles were checked non-null; ownership of `reader` goes with
-        // `set_copy_from_function`.
+        // SAFETY: the caller guarantees a valid connection; `copy_from` copies the reader into the
+        // copy function by value (quack-rs then releases our handle) and has checked its parameter
+        // contract.
         unsafe {
-            duckdb_copy_function_set_name(copy_function, name.as_ptr());
-            duckdb_copy_function_set_copy_from_function(copy_function, reader);
-        }
-        // SAFETY: copy_function 已配置好 reader；register 成功与否都要由我们销毁它（DuckDB 会拷贝
-        // 它需要的内容）。
-        //
-        // SAFETY: `copy_function` carries the reader; either way we destroy it (DuckDB copies what
-        // it needs).
-        let result = unsafe { duckdb_register_copy_function(c.as_raw_connection(), copy_function) };
-        let mut copy_function: duckdb_copy_function = copy_function;
-        unsafe { duckdb_destroy_copy_function(&raw mut copy_function) };
-
-        if result == DuckDBSuccess {
-            Ok(())
-        } else {
-            Err(duck_error(format!(
-                "{}: duckdb_register_copy_function failed",
-                Self::NAME
-            )))
-        }
+            CopyFunctionBuilder::try_new(Self::NAME)?
+                .copy_from(reader)?
+                .register(c.as_raw_connection())?
+        };
+        Ok(())
     }
 }
 
@@ -502,38 +437,6 @@ struct CopyFromState<R: DuckCopyFromReader> {
     ///
     /// The user reader.
     reader: R,
-}
-
-/// 校验 reader 恰好声明一个位置参数（文件路径）。
-///
-/// Validates that the reader declares exactly one positional parameter (the file path).
-///
-/// DuckDB 自己不校验这一点（`copy_from` 侧才校验），所以这里自己查：多一个位置参数会让 COPY 的
-/// 实际调用与 reader 的预期不一致，早报错比读错数据好。
-///
-/// DuckDB does not check this itself (the `copy_from` side does), so it is checked here: an extra
-/// positional parameter would make the actual COPY call disagree with the reader's expectations, and
-/// failing early beats reading wrong data.
-///
-/// # Errors
-///
-/// 位置参数个数不为 1 时返回错误（含具体个数）。
-///
-/// Returns an error (with the actual count) unless exactly one positional parameter is declared.
-fn ensure_single_path_parameter<A: CopyFromFunctionAdapter>() -> DuckResult<()> {
-    let positional =
-        <<A as CopyFromFunctionAdapter>::Reader as DuckCopyFromReader>::Args::bind_param_logical()
-            .iter()
-            .filter(|(name, _)| name.is_none())
-            .count();
-    if positional == 1 {
-        return Ok(());
-    }
-    Err(duck_error(format!(
-        "{}: a COPY FROM reader must declare exactly one positional parameter (the file path), but \
-         its arguments declare {positional}",
-        A::NAME
-    )))
 }
 
 /// 读出目标表的 schema（列名 + 列类型）。
