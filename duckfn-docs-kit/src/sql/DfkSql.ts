@@ -301,7 +301,12 @@ export class DfkSql extends HTMLElementBase {
         // Malformed config: fall back to the default `table` view.
       }
     }
-    this.#originalSql = this.getAttribute('sql') ?? '';
+    // Placeholders are resolved *before* the editor is filled, so what the
+    // reader reads (and copies, and edits) is the URL that will actually be
+    // fetched — `read_csv_auto('https://…/data/x.tsv')` rather than a token.
+    // `execute()` resolves them again, which is what covers a reset, a
+    // hand-edited doc and the headless harness.
+    this.#originalSql = DuckDBRuntime.getInstance().expand(this.getAttribute('sql') ?? '');
     this.#currentSql = this.#originalSql;
     this.#applyLabels();
   }

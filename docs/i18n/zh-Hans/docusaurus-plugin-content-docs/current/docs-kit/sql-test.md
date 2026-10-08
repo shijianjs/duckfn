@@ -84,25 +84,29 @@ import {declareDocsTests} from 'duckfn-docs-kit/sql/playwright';
 
 declareDocsTests({
   siteDir: fileURLToPath(new URL('..', import.meta.url)),
+  baseUrl: '/my-site/',
   assets: [{url: '/my-site/data', dir: 'static/data'}],
 });
 ```
 
 - `url` 是文件可被访问的**根相对**前缀：站点的 `baseUrl` 加上目录名，也就是部署后站点真正提供的
-  路径。它必须是一个能前面接上页面 origin 的前缀，因为 DuckDB-Wasm 什么都不按相对路径解析（见下面的
-  `{{DFK_ORIGIN}}`）：
+  路径。它必须是一个能前面接上页面 URL 的前缀，因为 DuckDB-Wasm 什么都不按相对路径解析（见下面的
+  占位符）：
 
   ```sql
-  SELECT count(*) AS n FROM read_csv_auto('{{DFK_ORIGIN}}/my-site/data/samples.tsv');
+  SELECT count(*) AS n FROM read_csv_auto('{{DFK_BASE_URL}}data/samples.tsv');
   ```
 
 - `dir` 相对站点根（`siteDir`），这也是为什么 `assets` 旁仍要 `siteDir`。
+- `baseUrl` 是 `{{DFK_BASE_URL}}` 展开成的值，必须与上面那些前缀一致。harness 没有 locale，
+  所以一个前缀要同时服务所有语言的块。
 - 路径被限制在 `dir` 之内：URL 里的 `..` 永远到不了外层，且只会供出普通文件。
 
-Playwright 选项、CLI 与环境变量表达的是同一件事：`duckfn-sql-verify` 上写
-`--asset /my-site/data=static/data`（可重复），或 `DFK_ASSETS=/my-site/data=static/data`。
+Playwright 选项、CLI 参数与环境变量表达的是同一件事：`duckfn-sql-verify` 上写
+`--asset /my-site/data=static/data`（可重复）加 `--base-url /my-site/`，或
+`DFK_ASSETS=/my-site/data=static/data` 与 `DFK_BASE_URL=/my-site/`。
 
-## `{{DFK_ORIGIN}}`：数据 URL 为什么需要占位符
+## `{{DFK_BASE_URL}}`：数据 URL 为什么需要占位符
 
 DuckDB-Wasm 跑在一个 base URL 为 `blob:` 的 Worker 里，因此**任何**相对路径都不会拿页面当基准去解析。
 下面两种写法都会以同一个 `IO Error: No files found that match the pattern` 失败：
@@ -112,13 +116,23 @@ SELECT * FROM read_csv_auto('data/samples.tsv');    -- 在内存文件系统里�
 SELECT * FROM read_csv_auto('/data/samples.tsv');   -- 同样是路径，不是 URL
 ```
 
-只有绝对的 `http(s)` URL 才会走 HTTP 文件系统，而 origin 恰恰是构建期替换无法知道的那一部分（GitHub Pages、
-`docusaurus serve`、harness 的随机 loopback 端口各不相同）。所以块里把它写成 `{{DFK_ORIGIN}}`，由
-`sql/runtime` 在 `execute()` 里、SQL 交给 DuckDB 之前展开成 `window.location.origin`。站点与 harness 共用
-这一个入口，所以在 CI 里验证过的块与读者跑的是同一个块。
+只有绝对的 `http(s)` URL 才会走 HTTP 文件系统，而部署前缀恰恰是构建期替换无法知道的那一部分（GitHub Pages、
+`docusaurus serve`、harness 的随机 loopback 端口各不相同）。所以有两个占位符，由 `sql/runtime` 在
+`execute()` 里、SQL 交给 DuckDB 之前展开：
 
-SQL 里 `baseUrl` 仍是字面量（`'{{DFK_ORIGIN}}/my-site/data/samples.tsv'`）：站点在构建期就知道它，验证侧则通过
-静态资源映射配了同一个前缀。所以改站点的 `baseUrl` 时，块里的路径与 `assets` 要一起改。
+| 占位符 | 展开成 | 用来写 |
+| --- | --- | --- |
+| `{{DFK_ORIGIN}}` | `https://example.github.io` | 不在站点 baseUrl 下的 URL（外部数据集）。 |
+| `{{DFK_BASE_URL}}` | `https://example.github.io/my-site/` —— origin 加上**当前页面**的 baseUrl | 站点自己的文件，即 `static/` 下的东西。 |
+
+站点自己的文件一律用 `{{DFK_BASE_URL}}`，**绝不把前缀写死在块里**：Docusaurus 会把 `static/` 复制进
+*每个 locale* 的输出，于是同一个 `data/samples.tsv` 在英文页是 `/my-site/data/samples.tsv`、在中文页是
+`/my-site/zh-Hans/data/samples.tsv` —— 写死前缀的块在一个语言下能跑、另一个语言下 404。baseUrl 由
+`dfkExtensions` 注入的配置标签带进浏览器（按 locale 本地化），harness 侧则来自 `baseUrl` /
+`DFK_BASE_URL` / `--base-url`。
+
+站点与 harness 共用 `execute()` 这一个入口，所以在 CI 里验证过的块与读者跑的是同一个块。`<dfk-sql>`
+在填编辑器时也解析这两个占位符，所以读者看到（并可以复制）的是真正会去抓的那个 URL，而不是占位符。
 
 ## 命令行回退
 

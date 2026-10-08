@@ -54,6 +54,8 @@ export interface HarnessRoutes {
   worker: {file: string; name: string};
   extension: {remoteUrl: string} | {localFile: string; baseName: string};
   allowUnsigned: boolean;
+  /** The base URL `{{DFK_BASE_URL}}` expands to; `/` when the site has none. */
+  baseUrl: string;
   /** Local directories served over HTTP so blocks can `read_csv_auto` them. */
   assets: StaticAssetMount[];
 }
@@ -68,6 +70,13 @@ export interface HarnessRoutesOptions {
    * trusted local harness, exactly as the site's own config opts in.
    */
   allowUnsigned?: boolean;
+  /**
+   * The site's base URL, as an absolute path (`/my-site/`). It goes into the
+   * harness' runtime config so a block's `{{DFK_BASE_URL}}` resolves to the same
+   * prefix the asset mounts are published under — the harness has no locale, so
+   * one prefix serves every locale's blocks. Defaults to `/`.
+   */
+  baseUrl?: string;
   /** Local directories served over HTTP, keyed by URL prefix (see `sql/site`). */
   assets?: readonly StaticAssetMount[];
 }
@@ -89,8 +98,15 @@ export function harnessRoutes(options: HarnessRoutesOptions): HarnessRoutes {
       ? {remoteUrl: options.extension}
       : {localFile, baseName: basename(localFile)},
     allowUnsigned: options.allowUnsigned ?? true,
+    baseUrl: normalizeBaseUrl(options.baseUrl),
     assets: [...(options.assets ?? [])],
   };
+}
+
+/** `/my-site` and `/my-site/` both mean `/my-site/`; empty means the root. */
+function normalizeBaseUrl(baseUrl: string | undefined): string {
+  const trimmed = (baseUrl ?? '').replace(/^\/+|\/+$/g, '');
+  return trimmed === '' ? '/' : `/${trimmed}/`;
 }
 
 export interface Harness {
@@ -138,7 +154,7 @@ export async function startStaticServer(routes: HarnessRoutes): Promise<Server> 
       };
     </script>
     <script id="dfk-sql-runtime" type="application/json">
-      {"allowUnsignedExtensions":${routes.allowUnsigned},"preload":[{"url":"${extensionUrl}"}]}
+      {"allowUnsignedExtensions":${routes.allowUnsigned},"baseUrl":"${routes.baseUrl}","preload":[{"url":"${extensionUrl}"}]}
     </script>
   </head>
   <body>

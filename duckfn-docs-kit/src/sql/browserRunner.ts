@@ -64,6 +64,8 @@ export interface RunnerOptions {
   engine?: string;
   /** Browser executable; defaults to a detected Chrome/Edge (`DFK_BROWSER` wins). */
   browser?: string;
+  /** The site's base URL, the value `{{DFK_BASE_URL}}` expands to (see `sql/site`). */
+  baseUrl?: string;
   /** Local directories served over HTTP so blocks can read them (see `sql/site`). */
   assets?: readonly StaticAssetMount[];
 }
@@ -116,6 +118,7 @@ export class BrowserSqlRunner {
         // The runner is a trusted local loopback: an unsigned dev extension must
         // load, exactly as the site's own config opts in.
         allowUnsigned: true,
+        baseUrl: options.baseUrl,
         assets: options.assets,
       }),
       browserExecutable: findBrowser(options.browser),

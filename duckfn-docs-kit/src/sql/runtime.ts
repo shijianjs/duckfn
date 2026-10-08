@@ -1,4 +1,4 @@
-import {expandSqlPlaceholdersHere} from './placeholders';
+import {expandSqlPlaceholders} from './placeholders';
 import type * as DuckdbWasm from '@duckdb/duckdb-wasm';
 import {
   DFK_SQL_RUNTIME_TAG_ID,
@@ -31,9 +31,10 @@ import {
  *   again.
  * - `execute()` hands the whole string to DuckDB. Multi-statement queries
  *   return the result of the **last** statement, which is exactly the
- *   documented behaviour for runnable blocks. It is also the one place where
- *   a block's `{{DFK_ORIGIN}}` placeholders are expanded (see `sql/placeholders`),
- *   so the site and the verifier cannot disagree on them.
+ *   documented behaviour for runnable blocks. It is also the one place where a
+ *   block's `{{DFK_ORIGIN}}` / `{{DFK_BASE_URL}}` placeholders are resolved
+ *   ({@link DuckDBRuntime.expand}), so the site and the verifier cannot disagree
+ *   on them.
  * - Extensions get into the shared instance two ways, both through the same
  *   memoised loader: the **site preload list** (the ordered `preload` array of
  *   the JSON `<script>` tag the build-time plugin injects, loaded right after
@@ -134,6 +135,20 @@ export class DuckDBRuntime {
   /** The last init failure's message, for the UI to display. */
   get message(): string {
     return this.#message;
+  }
+
+  /**
+   * Resolves a block's `{{DFK_ORIGIN}}` / `{{DFK_BASE_URL}}` placeholders against
+   * the current page — the page origin plus the `baseUrl` the build injected for
+   * *this* locale (see `sql/placeholders`).
+   *
+   * Public because it is also what fills the editor: a reader should see the URL
+   * that will actually be fetched, not the token. `execute()` runs every
+   * statement through this too, so an edited or hand-written SQL still works.
+   */
+  expand(sql: string): string {
+    const origin = typeof window === 'undefined' ? '' : window.location.origin;
+    return expandSqlPlaceholders(sql, origin, this.#siteConfig().baseUrl ?? '');
   }
 
   /**
@@ -243,7 +258,7 @@ export class DuckDBRuntime {
       return {columns: [], rows: [], error: this.#message || 'DuckDB unavailable'};
     }
     try {
-      const table = await conn.query(expandSqlPlaceholdersHere(sql));
+      const table = await conn.query(this.expand(sql));
       return {
         columns: table.schema.fields.map((field) => field.name),
         rows: table.toArray() as Record<string, unknown>[],

@@ -93,9 +93,10 @@ boundary cannot host (the TOC toggle). The `dfk-*` components carry their own
 styles inside the JS bundle, so they need nothing here.
 
 A runnable block that reads a file the site ships writes it as
-`'{{DFK_ORIGIN}}<baseUrl>/data/x.tsv'`: DuckDB-Wasm resolves nothing relative to the
-page, and the runtime expands `{{DFK_ORIGIN}}` to `window.location.origin` just before
-the SQL runs — see `sql/placeholders` and the asset-mount section of the guide.
+`'{{DFK_BASE_URL}}data/x.tsv'` (`{{DFK_ORIGIN}}` is the page origin on its own):
+DuckDB-Wasm resolves nothing relative to the page, and the runtime resolves both
+tokens — the baseUrl per locale — just before the SQL runs. See `sql/placeholders`
+and the asset-mount section of the guide.
 
 ## Requirements
 

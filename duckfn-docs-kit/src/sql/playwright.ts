@@ -123,12 +123,20 @@ export const test = base.extend<{}, DocsWorkerFixtures>({
       // repository root while the config and spec live under `docs/`.
       const config = resolveDocsSiteConfig({
         siteDir: activeSiteDir,
+        baseUrl: activeBaseUrl,
         assets: activeAssets,
       });
       const extension = resolveExtension(config.siteDir, config.extension);
       const {enginePath, workerPath} = resolveEngineBundle(config.platform, config.engine);
       const harness = await startHarness(
-        harnessRoutes({extension, enginePath, workerPath, allowUnsigned: true, assets: config.assets}),
+        harnessRoutes({
+          extension,
+          enginePath,
+          workerPath,
+          allowUnsigned: true,
+          baseUrl: config.baseUrl,
+          assets: config.assets,
+        }),
       );
       try {
         await use(harness);
@@ -145,6 +153,9 @@ let activeSiteDir: string | undefined;
 
 /** The asset mounts {@link declareDocsTests} resolved, handed to the harness fixture. */
 let activeAssets: StaticAssetMount[] | undefined;
+
+/** The site base URL {@link declareDocsTests} resolved, for `{{DFK_BASE_URL}}`. */
+let activeBaseUrl: string | undefined;
 
 /**
  * Options for {@link declareDocsTests}: the shared docs-site options
@@ -168,6 +179,7 @@ export function declareDocsTests(options: DocsTestOptions = {}): void {
   // Hand the resolved root and asset mounts to the worker-scoped harness fixture.
   activeSiteDir = config.siteDir;
   activeAssets = config.assets;
+  activeBaseUrl = config.baseUrl;
   const blocks = collectRunnableSql({
     siteDir: config.siteDir,
     contentDirs: config.contentDirs,

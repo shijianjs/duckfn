@@ -66,6 +66,13 @@ export type PreloadEntry = string | NamedPreloadEntry | UrlPreloadEntry;
 export interface SiteRuntimeConfig {
   /** Let `LOAD` accept extensions without a valid signature; a site-wide opt-in. */
   allowUnsignedExtensions?: boolean;
+  /**
+   * The base URL **this page** is served under, as an absolute path with both a
+   * leading and a trailing slash (`/`, `/my-site/`, `/my-site/zh-Hans/`). Docusaurus
+   * localises it per locale, and it is what `{{DFK_BASE_URL}}` expands to — see
+   * `sql/placeholders`.
+   */
+  baseUrl?: string;
   /** Ordered: every entry loads, one after another, before the instance is `ready`. */
   preload: PreloadEntry[];
 }
@@ -127,11 +134,12 @@ export function parseSiteRuntimeConfig(value: unknown): SiteRuntimeConfig {
     throw new Error(`Expected an object: ${describe(value)}`);
   }
   const record = value as Record<string, unknown>;
-  requireOnlyKeys(record, ['allowUnsignedExtensions', 'preload'], 'The config');
+  requireOnlyKeys(record, ['allowUnsignedExtensions', 'baseUrl', 'preload'], 'The config');
   const {allowUnsignedExtensions} = record;
   if (allowUnsignedExtensions !== undefined && typeof allowUnsignedExtensions !== 'boolean') {
     throw new Error(`\`allowUnsignedExtensions\` must be a boolean: ${describe(allowUnsignedExtensions)}`);
   }
+  const baseUrl = normalizeBaseUrl(record.baseUrl);
   const raw = record.preload ?? [];
   if (!Array.isArray(raw)) {
     throw new Error(`\`preload\` must be an array: ${describe(raw)}`);
@@ -143,7 +151,30 @@ export function parseSiteRuntimeConfig(value: unknown): SiteRuntimeConfig {
       throw new Error(`preload[${index}]: ${errorMessage(error)}`);
     }
   });
-  return allowUnsignedExtensions === undefined ? {preload} : {allowUnsignedExtensions, preload};
+  return {
+    ...(allowUnsignedExtensions === undefined ? {} : {allowUnsignedExtensions}),
+    ...(baseUrl === undefined ? {} : {baseUrl}),
+    preload,
+  };
+}
+
+/**
+ * `baseUrl` is joined onto a URL a block wrote, so it is normalised to exactly
+ * one leading and one trailing slash — a block can write
+ * `'{{DFK_BASE_URL}}data/x.tsv'` and get a well-formed URL whatever the site
+ * configured. Absent means "no baseUrl", i.e. the site root.
+ */
+function normalizeBaseUrl(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || /[?#]/.test(value)) {
+    throw new Error(`\`baseUrl\` must be an absolute path such as /my-site/: ${describe(value)}`);
+  }
+  if (value.includes('//')) {
+    throw new Error(`\`baseUrl\` must not be protocol-relative or contain empty segments: ${describe(value)}`);
+  }
+  return `/${value.replace(/^\/+|\/+$/g, '')}/`;
 }
 
 function normalizeNamedEntry(record: Record<string, unknown>): NamedPreloadEntry {

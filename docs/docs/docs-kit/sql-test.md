@@ -101,29 +101,33 @@ import {declareDocsTests} from 'duckfn-docs-kit/sql/playwright';
 
 declareDocsTests({
   siteDir: fileURLToPath(new URL('..', import.meta.url)),
+  baseUrl: '/my-site/',
   assets: [{url: '/my-site/data', dir: 'static/data'}],
 });
 ```
 
 - `url` is the **root-relative** prefix the files become reachable at: the
   site's `baseUrl` plus the directory name — the same path the deployed site
-  serves. It has to be a prefix the page origin can be put in front of, because
-  DuckDB-Wasm reads nothing relative (see `{{DFK_ORIGIN}}` below):
+  serves. It has to be a prefix the page URL can be put in front of, because
+  DuckDB-Wasm reads nothing relative (see the placeholders below):
 
   ```sql
-  SELECT count(*) AS n FROM read_csv_auto('{{DFK_ORIGIN}}/my-site/data/samples.tsv');
+  SELECT count(*) AS n FROM read_csv_auto('{{DFK_BASE_URL}}data/samples.tsv');
   ```
 
 - `dir` is relative to the site root (`siteDir`), which is why `siteDir` is
   still needed alongside `assets`.
+- `baseUrl` is what `{{DFK_BASE_URL}}` expands to and has to agree with those
+  prefixes. The harness has no locale, so one prefix serves every locale's blocks.
 - Paths are confined to `dir`: a `..` in the URL never reaches outside it, and
   only regular files are served.
 
-The Playwright option, the CLI and the environment variable are the same thing:
-`--asset /my-site/data=static/data` on `duckfn-sql-verify` (repeatable), or
-`DFK_ASSETS=/my-site/data=static/data`.
+The Playwright options, the CLI flags and the environment variables are the same
+thing: `--asset /my-site/data=static/data` (repeatable) plus `--base-url /my-site/`
+on `duckfn-sql-verify`, or `DFK_ASSETS=/my-site/data=static/data` and
+`DFK_BASE_URL=/my-site/`.
 
-## `{{DFK_ORIGIN}}`: why a data URL needs a placeholder
+## `{{DFK_BASE_URL}}`: why a data URL needs a placeholder
 
 DuckDB-Wasm runs in a Worker whose base URL is a `blob:`, so it resolves
 **nothing** relative to the page. Both of these fail, with the same
@@ -134,18 +138,29 @@ SELECT * FROM read_csv_auto('data/samples.tsv');    -- looked up in memory
 SELECT * FROM read_csv_auto('/data/samples.tsv');   -- ditto: a path, not a URL
 ```
 
-Only an absolute `http(s)` URL reaches the HTTP filesystem — and the origin is
-the one part no build-time substitution can know (GitHub Pages,
-`docusaurus serve` and the harness' random loopback port all differ). So a block
-names it as `{{DFK_ORIGIN}}` and `sql/runtime` expands it to `window.location.origin`
-in `execute()`, immediately before the SQL reaches DuckDB. The site and the
-harness share that one chokepoint, so a block verified in CI is byte for byte the
-block a reader runs.
+Only an absolute `http(s)` URL reaches the HTTP filesystem, and no build-time
+substitution can know the deployed prefix (GitHub Pages, `docusaurus serve` and
+the harness' random loopback port all differ). So there are two tokens, and
+`sql/runtime` expands them in `execute()`, immediately before the SQL reaches
+DuckDB:
 
-`baseUrl` stays literal in the SQL (`'{{DFK_ORIGIN}}/my-site/data/samples.tsv'`):
-the site knows it at build time, and the verifier is configured with the same
-prefix through its asset mounts. Changing a site's `baseUrl` therefore means
-changing it in the blocks and in `assets` too.
+| Token | Expands to | Use it for |
+| --- | --- | --- |
+| `{{DFK_ORIGIN}}` | `https://example.github.io` | URLs that do *not* live under the site's baseUrl (an external dataset). |
+| `{{DFK_BASE_URL}}` | `https://example.github.io/my-site/` — the origin plus **this page's** baseUrl | The site's own files, i.e. everything under `static/`. |
+
+Prefer `{{DFK_BASE_URL}}` for the site's own files, and **never hard-code the
+prefix in a block**: Docusaurus copies `static/` into *every locale's* output, so
+`data/samples.tsv` is `/my-site/data/samples.tsv` on the English pages and
+`/my-site/zh-Hans/data/samples.tsv` on the Chinese ones — a block that writes the
+prefix out works in one locale and 404s in the other. The baseUrl reaches the
+browser through the config tag `dfkExtensions` injects (localised per locale), and
+the harness through `baseUrl` / `DFK_BASE_URL` / `--base-url`.
+
+The site and the harness share the one `execute()` chokepoint, so a block verified
+in CI is byte for byte the block a reader runs. `<dfk-sql>` resolves the same
+tokens when it fills the editor, so a reader sees — and can copy — the URL that
+will actually be fetched, never a token.
 
 ## The command-line fallback
 

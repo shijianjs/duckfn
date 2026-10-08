@@ -19,13 +19,13 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * A local directory served at a URL prefix while the blocks run, so SQL can read
- * data files the site also ships (`read_csv_auto('{{DFK_ORIGIN}}/my-site/data/x.tsv')`).
+ * data files the site also ships (`read_csv_auto('{{DFK_BASE_URL}}data/x.tsv')`).
  *
  * The tests run against a short-lived loopback server, so the `url` must be an
  * absolute path — normally the deployed `baseUrl` prefix, e.g. `/my-site/data`:
- * blocks put the page origin in front of it (DuckDB-Wasm reads nothing relative,
- * see `sql/placeholders`), which makes the identical path correct on the
- * harness's random port and on GitHub Pages' sub-path.
+ * blocks put the page URL in front of it (DuckDB-Wasm reads nothing relative, see
+ * `sql/placeholders`), which makes the identical path correct on the harness's
+ * random port and on GitHub Pages' sub-path.
  */
 export interface StaticAssetMount {
   /** URL prefix the files are reachable at; must start with `/`. */
@@ -41,6 +41,12 @@ export interface DocsSiteConfig {
   contentDirs: string[];
   /** The extension to `LOAD`: a path or an absolute `http(s)` URL; `undefined` auto-detects. */
   extension?: string;
+  /**
+   * The site's base URL as an absolute path (`/my-site/`), the value
+   * `{{DFK_BASE_URL}}` expands to. `undefined` means the site root; the asset
+   * mounts are what a block's URL actually has to match.
+   */
+  baseUrl?: string;
   platform: WasmPlatform;
   /** Engine wasm override, for pinning a specific DuckDB-Wasm build. */
   engine?: string;
@@ -56,6 +62,7 @@ export interface DocsSiteOverrides {
   siteDir?: string;
   contentDirs?: readonly string[];
   extension?: string;
+  baseUrl?: string;
   platform?: WasmPlatform;
   engine?: string;
   browser?: string;
@@ -76,6 +83,7 @@ export function resolveDocsSiteConfig(overrides: DocsSiteOverrides = {}): DocsSi
     siteDir,
     contentDirs: [...content],
     extension: overrides.extension ?? process.env.DFK_EXTENSION,
+    baseUrl: overrides.baseUrl ?? process.env.DFK_BASE_URL,
     platform:
       overrides.platform ??
       asPlatform(process.env.DFK_PLATFORM) ??

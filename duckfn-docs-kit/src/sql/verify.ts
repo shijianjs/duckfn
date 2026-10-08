@@ -48,8 +48,13 @@ export interface VerifyOptions {
    */
   browser?: string;
   /**
+   * The site's base URL as an absolute path (`/my-site/`): what a block's
+   * `{{DFK_BASE_URL}}` expands to, so it has to match the asset mounts.
+   */
+  baseUrl?: string;
+  /**
    * Local directories served over HTTP while the blocks run, so SQL can
-   * `read_csv_auto('{{DFK_ORIGIN}}<prefix>/x.tsv')` the site's own data (see
+   * `read_csv_auto('{{DFK_BASE_URL}}data/x.tsv')` the site's own data (see
    * `sql/site`).
    */
   assets?: readonly StaticAssetMount[];
@@ -122,6 +127,7 @@ async function runPages(
     platform: config.platform,
     engine: config.engine,
     browser: config.browser,
+    baseUrl: config.baseUrl,
     assets: config.assets,
   });
   const results: BlockResult[] = [];
@@ -230,6 +236,9 @@ Runs every runnable SQL block of a duckfn docs site in a headless browser
   --asset <url=dir>     Serve a local directory over HTTP at a URL prefix while the
                         blocks run, so SQL can read_csv_auto the site's own data
                         (repeatable; e.g. --asset /my-site/data=static/data)
+  --base-url <path>     The site's base URL, which is what a block's
+                        {{DFK_BASE_URL}} expands to (default: /; keep it in sync
+                        with the --asset prefixes)
   --platform <eh|mvp>   DuckDB-Wasm bundle, which must match the extension build
                         (default: eh)
   --engine <path>       Engine wasm override
@@ -270,6 +279,9 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
         break;
       case '--asset':
         assets.push(parseAsset(next()));
+        break;
+      case '--base-url':
+        options.baseUrl = next();
         break;
       case '--platform':
         options.platform = next() as WasmPlatform;

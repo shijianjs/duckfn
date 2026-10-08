@@ -290,29 +290,41 @@ otherwise make Playwright transpile the imports to `require()` and choke on the 
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`.
 - **A block that reads the site's own data files needs an asset mount, and an absolute URL.** The test
   server is otherwise closed (`harness.html` / `harness.js` / `/vendor/*` / `/ext/*` only), so a
-  `read_csv_auto('{{DFK_ORIGIN}}/my-site/data/x.tsv')` would 404. Declare the directories the blocks read:
+  `read_csv_auto('{{DFK_BASE_URL}}data/x.tsv')` would 404. Declare the directories the blocks read and
+  the base URL they sit under:
 
   ```ts
   // tests/docs.spec.mts
   declareDocsTests({
     siteDir: fileURLToPath(new URL('..', import.meta.url)),
+    baseUrl: '/my-site/',
     assets: [{url: '/my-site/data', dir: 'static/data'}],
   });
   ```
 
   `url` is the **root-relative** prefix the files are reachable at — the site's `baseUrl` plus the
-  directory name, exactly the path the deployed site serves. `dir` is relative to the site root. The CLI
-  takes the same thing as `--asset /my-site/data=static/data` (repeatable), and `DFK_ASSETS` as a
-  comma-separated `url=dir` list. `siteDir` is still needed alongside `assets` unless it is already
-  detected or set in the environment, because `dir` is resolved against it.
-- **`{{DFK_ORIGIN}}` is how a block names the page origin** (`sql/placeholders`). DuckDB-Wasm runs in a
-  Worker based at a `blob:` URL and resolves nothing relative to the page: `'data/x.tsv'` *and*
-  `'/data/x.tsv'` are both looked up in the instance's in-memory filesystem and fail with
-  `IO Error: No files found that match the pattern`. Only an absolute `http(s)` URL reaches HTTPFS, and
-  the origin is the one thing no build-time substitution can know, so `DuckDBRuntime.execute()` expands
-  the token to `window.location.origin` right before the SQL reaches DuckDB — one chokepoint shared by
-  the site and the harness. The `baseUrl` part stays literal in the SQL, so changing a site's `baseUrl`
-  means changing it in the blocks and in the asset mounts together.
+  directory name, exactly the path the deployed site serves. `dir` is relative to the site root. `baseUrl`
+  is what `{{DFK_BASE_URL}}` expands to and must agree with those prefixes; it exists because the harness
+  has no locale, so one prefix has to serve every locale's blocks. The CLI takes the same thing as
+  `--asset /my-site/data=static/data` (repeatable) plus `--base-url /my-site/`, and `DFK_ASSETS` /
+  `DFK_BASE_URL` as the environment equivalents. `siteDir` is still needed alongside `assets` unless it is
+  already detected or set in the environment, because `dir` is resolved against it.
+- **Two placeholders, resolved at run time** (`sql/placeholders`): `{{DFK_ORIGIN}}` → the page origin,
+  `{{DFK_BASE_URL}}` → the origin plus **this page's** baseUrl. DuckDB-Wasm runs in a Worker based at a
+  `blob:` URL and resolves nothing relative to the page: `'data/x.tsv'` *and* `'/data/x.tsv'` are both
+  looked up in the instance's in-memory filesystem and fail with `IO Error: No files found that match the
+  pattern`. Only an absolute `http(s)` URL reaches HTTPFS, and no build-time substitution knows the origin
+  — so `DuckDBRuntime.execute()` expands both tokens right before the SQL reaches DuckDB, one chokepoint
+  shared by the site and the harness.
+- **Prefer `{{DFK_BASE_URL}}` for the site's own files, and never hard-code the baseUrl in a block.**
+  Docusaurus copies `static/` into *every locale's* output, so the same `data/x.tsv` is `/my-site/data/…`
+  on the English pages and `/my-site/zh-Hans/data/…` on the Chinese ones: a block that writes the prefix
+  out works in one locale and 404s in the other. The baseUrl reaches the browser through the config tag
+  `dfkExtensions` injects (per-locale), and the harness through `baseUrl` / `DFK_BASE_URL` / `--base-url`.
+- **The editor shows the resolved SQL, not the token.** `DfkSql` expands the placeholders when it fills
+  the editor (`DuckDBRuntime.expand()`), so a reader reads — and copies, and edits — the URL that will
+  actually be fetched. `execute()` expands again, which is what covers Reset, a hand-edited document and
+  the headless harness.
 - The default extension is the single file under `static/duckdb-extensions/`.
 - **The `duckfn-sql-verify` command still exists** for a framework-free run (`duckfn-sql-verify
   --site .`), sharing the collector, the harness and the extension resolution with the Playwright

@@ -38,7 +38,8 @@ import {
  * `<siteDir>/static/duckdb-extensions/duckfn.duckdb_extension.wasm` and is
  * preloaded from `/duckfn/duckdb-extensions/duckfn.duckdb_extension.wasm`.
  * (Docusaurus serves `static/` under each locale's baseUrl, so the localized
- * value from the plugin context is the right prefix for every build.)
+ * value from the plugin context is the right prefix for every build — which is
+ * also why it is injected as `baseUrl` for the `{{DFK_BASE_URL}}` placeholder.)
  *
  * This is Node-side build code: it must not import any browser module, and
  * the browser side must not import this file (the shared contract lives in
@@ -184,11 +185,11 @@ export function dfkExtensions(options: DfkExtensionsOptions = {}): DfkExtensions
 
     injectHtmlTags() {
       const config = prepare();
-      if (!config.allowUnsignedExtensions && config.preload.length === 0) {
-        return {headTags: []};
-      }
+      // The tag always goes in, even for a site that preloads nothing: it also
+      // carries `baseUrl`, which is what `{{DFK_BASE_URL}}` expands to.
       const resolved: SiteRuntimeConfig = {
         ...config,
+        baseUrl: context.siteConfig.baseUrl,
         preload: config.preload.map((entry) => resolveForSite(entry, context.siteConfig.baseUrl)),
       };
       return {
