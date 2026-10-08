@@ -85,9 +85,24 @@ interface RawBlock {
   sql: string;
 }
 
+/**
+ * Every line ending a document may use, split on before scanning.
+ *
+ * This has to be done first, and it has to include `\r`: a CRLF line ends with a
+ * carriage return, and `.` never matches `\r` (it is a JavaScript line
+ * terminator), so `/^(`{3,}|~{3,})(.*)$/` simply does not match a fence line
+ * that ends with one. The fence then looks like ordinary text, nothing opens,
+ * and the whole file yields **no blocks at all** — a CRLF-checked-out document
+ * silently runs zero examples instead of failing loudly.
+ *
+ * Splitting here also normalises the collected SQL back to `\n` (the body is
+ * re-joined with it), which is what CommonMark does before parsing anyway.
+ */
+const LINE_BREAK = /\r\n|\r|\n/;
+
 /** The runnable blocks of one markdown document. */
 function blocksOf(text: string): RawBlock[] {
-  const lines = text.split('\n');
+  const lines = text.split(LINE_BREAK);
   const out: RawBlock[] = [];
   let open: {marker: string; info: string; line: number} | null = null;
   let body: string[] = [];

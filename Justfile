@@ -100,10 +100,11 @@ publish:
 # that stages the version on npm through trusted publishing (OIDC), leaving a maintainer to approve
 # it with 2FA. No npm token is stored anywhere.
 
-# 发版前检查：构建 + 类型检查 + 预览 npm 包里会装进什么
+# 发版前检查：构建 + 类型检查 + 测试 + 预览 npm 包里会装进什么
 release_kit_check:
     npm run build -w duckfn-docs-kit
     npm run typecheck -w duckfn-docs-kit
+    npm test -w duckfn-docs-kit
     npm pack -w duckfn-docs-kit --dry-run
 
 # 提升版本号（只动 duckfn-docs-kit/package.json 与根 package-lock.json）：just release_kit_bump X.Y.Z

@@ -392,6 +392,11 @@ src/
 - 收集与渲染共用一份 meta 解析（`sql/remark.ts` 导出的 `parseRunnableSqlMeta`）：站点上不是
   可运行块的，测试也不会跑。围栏按 CommonMark 收口（闭合围栏同字符、不短于开启围栏、无 info string），
   这样 ````md 包着的 ```sql 示例不会被当成块。
+- **扫描前先按 `\r\n|\r|\n` 切行**（`collect.ts` 的 `LINE_BREAK`）：`.`
+  不匹配 `\r`（它是 JS 的行终止符），行尾带 `\r` 的围栏会让 `/^(`{3,})(.*)$/` **整行不匹配** ——
+  文件一个块都收不到，还不会报错，只是静默一个都不跑。开启 `core.autocrlf` 的仓库（含本仓库）正是
+  会踩到的场合；`test/collect.test.mjs` 就是钉这条的回归测试。切行顺带把收集到的 SQL 归一成 LF，
+  与 CommonMark 在建 AST 前做的事一致。
 - **执行环境是真实浏览器里的 DuckDB-Wasm**。`sql/harnessServer.ts` 提供两入口共享的 fixture：
   loopback 静态服务 + 浏览器探测 + engine bundle 解析 + harness 路由。`sql/harness.ts` 是给浏览器
   加载的极简单页，直接 import `sql/runtime.ts` 的 `DuckDBRuntime`，只是经 `init({bundle})` 把引擎来源
