@@ -34,7 +34,9 @@ import. Everything below assumes that is already done.
 ### The shape
 
 A fenced block whose info string is a JSON config. The block itself becomes a CodeMirror editor
-with a Run button; nothing executes until the reader clicks it.
+with a Run button; nothing executes until the reader clicks it. A second button, **Run all**, runs
+every runnable block on the page in document order, one at a time — it is there for pages that stack
+a dozen figure-drawing blocks.
 
 ````md
 ```sql {"type":"duckfn"}

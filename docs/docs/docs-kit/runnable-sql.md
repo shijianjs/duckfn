@@ -8,11 +8,15 @@ description: SQL blocks that run in your browser — the dfk-sql block format, p
 
 A fenced SQL block whose info string carries a JSON config turns the code block
 into a runnable example: the block itself is a CodeMirror editor, and nothing
-executes until you click **Run**. The buttons (Run, Format, Reset, line
+executes until you click **Run**. The buttons (Run, Run all, Format, Reset, line
 wrapping, Copy) appear in the block's top-right corner when you hover it or tab
 into it; **Format** re-lays-out the SQL in place — whitespace only, your keyword
 casing is kept. The query runs in your browser against a single shared
 DuckDB-Wasm instance, and the result renders below the block.
+
+**Run all** runs every runnable block on the page, in page order and one at a
+time — useful on a page that draws a figure from a stack of blocks, where
+clicking Run on each of them is busywork.
 
 DuckDB itself starts initialising in the background as soon as a page with a
 block opens, so the first **Run** click does not wait for the download.

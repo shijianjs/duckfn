@@ -10,10 +10,10 @@ import {el, HTMLElementBase} from '../dom';
  * `<dfk-sql>` — a runnable SQL example produced by `remarkRunnableSql`.
  *
  * A code block, a row of icon buttons floating in its top-right corner on
- * hover (run / format / reset / wrap / copy — the same idiom as Docusaurus' own
- * code blocks), and a result area that appears only once something has run. The
- * CodeMirror editor *is* the code view: there is no read-only preview and no
- * edit mode to enter.
+ * hover (run / run all / format / reset / wrap / copy — the same idiom as
+ * Docusaurus' own code blocks), and a result area that appears only once
+ * something has run. The CodeMirror editor *is* the code view: there is no
+ * read-only preview and no edit mode to enter.
  *
  * Everything but the result is in the shadow root. The result is a slotted
  * light-DOM sibling because VTable injects a *document-level* stylesheet that a
@@ -42,6 +42,8 @@ import {el, HTMLElementBase} from '../dom';
 // too, because a renderer resolves everything through the labels it is handed.
 type SqlLabels = {
   run: string;
+  /** Tooltip for the button that runs every block on the page. */
+  runAll: string;
   format: string;
   reset: string;
   /** Tooltip for the wrap toggle while wrapping is *off* (i.e. "turn it on"). */
@@ -88,6 +90,7 @@ type SqlLabels = {
 const LABELS: Record<string, SqlLabels> = {
   en: {
     run: 'Run',
+    runAll: 'Run all blocks on this page',
     format: 'Format SQL',
     reset: 'Reset',
     wrapOn: 'Wrap long lines',
@@ -126,6 +129,7 @@ const LABELS: Record<string, SqlLabels> = {
   },
   'zh-hans': {
     run: '执行',
+    runAll: '执行本页全部块',
     format: '格式化',
     reset: '重置',
     wrapOn: '折行显示',
@@ -195,6 +199,7 @@ export class DfkSql extends HTMLElementBase {
   readonly #actions = el('div', {class: 'dfk-sql-actions'});
   readonly #status = el('span', {class: 'dfk-sql-status', attrs: {'aria-live': 'polite'}});
   readonly #runBtn: IconButton;
+  readonly #runAllBtn: IconButton;
   readonly #formatBtn: IconButton;
   readonly #resetBtn: IconButton;
   readonly #wrapBtn: IconButton;
@@ -208,6 +213,8 @@ export class DfkSql extends HTMLElementBase {
   /** Long SQL lines are the norm in a docs example, so wrapping starts on. */
   #wrapped = true;
   #running = false;
+  /** True while this block is driving the page-wide "run all" sweep. */
+  #runningAll = false;
   /** True while `sql-formatter` is loading or laying the SQL out. */
   #formatting = false;
   #seeded = false;
@@ -236,7 +243,8 @@ export class DfkSql extends HTMLElementBase {
 
   constructor() {
     super();
-    this.#runBtn = new IconButton('lucide:play', () => void this.#onRun());
+    this.#runBtn = new IconButton('lucide:play', () => void this.run());
+    this.#runAllBtn = new IconButton('lucide:fast-forward', () => void this.#onRunAll());
     this.#formatBtn = new IconButton('lucide:wand-sparkles', () => void this.#onFormat());
     this.#resetBtn = new IconButton('lucide:rotate-ccw', () => this.#onReset());
     this.#wrapBtn = new IconButton('lucide:wrap-text', () => this.#onToggleWrap());
@@ -250,6 +258,7 @@ export class DfkSql extends HTMLElementBase {
     this.#actions.append(
       this.#status,
       this.#runBtn.root,
+      this.#runAllBtn.root,
       this.#formatBtn.root,
       this.#resetBtn.root,
       this.#wrapBtn.root,
@@ -313,6 +322,7 @@ export class DfkSql extends HTMLElementBase {
 
   #applyLabels(): void {
     this.#runBtn.setLabel(this.#labels.run);
+    this.#runAllBtn.setLabel(this.#labels.runAll);
     this.#formatBtn.setLabel(this.#labels.format);
     this.#resetBtn.setLabel(this.#labels.reset);
     this.#wrapBtn.setLabel(this.#wrapped ? this.#labels.wrapOff : this.#labels.wrapOn);
@@ -508,7 +518,12 @@ export class DfkSql extends HTMLElementBase {
       .catch(() => undefined);
   }
 
-  async #onRun(): Promise<void> {
+  /**
+   * Runs this block's current SQL — what the Run button does, and what the
+   * page-wide "run all" sweep drives every block through. Public so that sweep
+   * needs no access to another element's internals.
+   */
+  async run(): Promise<void> {
     if (this.#running) {
       return; // Guard against double-clicks running the same example twice.
     }
@@ -553,8 +568,46 @@ export class DfkSql extends HTMLElementBase {
     }
   }
 
+  /**
+   * Runs every runnable block on the page, in document order and one at a
+   * time. Sequential on purpose: the blocks share a single DuckDB-Wasm
+   * connection, and a page that draws a figure from each block (the case this
+   * exists for) is far easier to read when the results land in page order.
+   *
+   * The blocks' own `run()` guards make a concurrent sweep harmless: a block
+   * that is already running ignores the second request.
+   */
+  async #onRunAll(): Promise<void> {
+    if (this.#runningAll) {
+      return;
+    }
+    this.#runningAll = true;
+    this.#syncRunAllDisabled();
+    try {
+      for (const block of this.ownerDocument.querySelectorAll('dfk-sql')) {
+        if (block instanceof DfkSql) {
+          await block.run();
+        }
+      }
+    } finally {
+      this.#runningAll = false;
+      this.#syncRunAllDisabled();
+    }
+  }
+
+  /**
+   * Run-all stays disabled for as long as *either* this block or the sweep it
+   * started is busy: the block's own run clears `#running` halfway through a
+   * sweep, and the button must not look clickable again while the rest of the
+   * page is still queued.
+   */
+  #syncRunAllDisabled(): void {
+    this.#runAllBtn.setDisabled(this.#running || this.#runningAll);
+  }
+
   #setBusy(busy: boolean): void {
     this.#runBtn.setDisabled(busy);
+    this.#syncRunAllDisabled();
     this.#formatBtn.setDisabled(busy);
     this.#resetBtn.setDisabled(busy);
     // A run started from a click keeps the cluster on screen, so the progress

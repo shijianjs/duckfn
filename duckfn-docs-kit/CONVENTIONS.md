@@ -209,7 +209,7 @@ src/
   只在全屏里缩放的图（`svg` / `mermaid`）把它转发给自己的 `PanZoomView.setActive`，
   `PreviewTabs.setFullscreen` 只转给**当前**页签（切页签时在 `#select` 里重放一次当前值）。
   退订由渲染器的 disposer 负责 —— 订阅早了或漏退订，元素就多一个永远不会变的监听者。
-- 代码块那五个按钮（执行 / 格式化 / 重置 / 折行 / 复制）是紧凑的图标按钮，悬浮在代码区右上角
+- 代码块那六个按钮（执行 / 全部执行 / 格式化 / 重置 / 折行 / 复制）是紧凑的图标按钮，悬浮在代码区右上角
   （`.dfk-sql-code:hover / :focus-within` 时才 `opacity: 1` + `pointer-events: auto`，
   隐藏时不可点）；提示用 `data-tip` + `::after`。这套图标按钮与 tooltip 规则**每个 shadow 树
   各写一份**：`DfkSql.css`（代码区）、`sql.css`（结果区的 light DOM，含 tab 栏里的下载与
