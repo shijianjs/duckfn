@@ -96,7 +96,13 @@ Two facts worth knowing before you pick one:
   origin — that is what makes charts work, and it is also why the parent page cannot read
   `iframe.contentDocument` (it is `null` by design).
 - `svg` shares the page, so anything that could execute or navigate — `script`, `foreignObject`,
-  `on*` handlers, `javascript:` links — is stripped before insertion.
+  `on*` handlers, `javascript:` links — is stripped before insertion. A figure that is wider than
+  the result panel is **scaled down to fit the panel's width**, with the panel's height following
+  its aspect ratio (and a figure that already fits keeps its natural size — nothing is upscaled).
+  Markup whose root declares only a `width`/`height` and no `viewBox` — what most plotting
+  libraries emit — is given `viewBox="0 0 <width> <height>"` on the way in, because without a
+  `viewBox` an SVG does not scale at all: it would keep its own size and be cut off at the panel's
+  edge. Only a pixel size can be turned into a coordinate system; `width="100%"` is left alone.
 
 ### The strip at the right of the tabs
 

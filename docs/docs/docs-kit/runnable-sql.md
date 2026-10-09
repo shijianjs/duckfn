@@ -126,6 +126,16 @@ page, anything that could execute or navigate (scripts, `foreignObject`,
 figure itself behaves like a diagram: zoom and pan switch on in fullscreen, and
 **Edit source** opens the markup in a dialog to apply and re-render.
 
+**A figure wider than the column is scaled down to fit it, and the panel's
+height follows the figure's aspect ratio** — a figure that already fits keeps
+its natural size, nothing is enlarged. That relies on the markup carrying a
+`viewBox`, which is what makes an SVG scalable at all; a root that declares only
+a `width` and `height` (what most plotting libraries emit) is given
+`viewBox="0 0 <width> <height>"` on the way in. Without a `viewBox` the drawing
+would keep its own size however narrow the box got, and its right-hand side
+would simply be cut off. `width="100%"` cannot be turned into a `viewBox` and is
+left as written.
+
 ```sql {"type":"duckfn","show":"svg","option":{"height":"140px"}}
 SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260" height="100"><circle cx="50" cy="50" r="40" fill="#14459b"/><circle cx="120" cy="50" r="30" fill="#3d7bd6"/><text x="170" y="56" font-family="system-ui" font-size="16" fill="#181818">from SVG</text></svg>';
 ```

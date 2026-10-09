@@ -422,6 +422,13 @@ dfk-sql:not(:defined) {
   overflow: hidden;
 }
 
+/* Shrink-to-fit, never upscale: a figure keeps its natural size until it is
+   wider than the panel, and then it scales down with the panel's height
+   following the aspect ratio. Both declarations only mean anything for a figure
+   that has a `viewBox` — without one, user units *are* pixels and the drawing
+   would just be cut off at the narrower box. `SvgViewer`'s `ensureViewBox()`
+   writes one for the roots that declare only a width/height (kuva's output),
+   so that case scales here like every other. */
 .dfk-sql-svg-content > svg {
   display: block;
   margin: 0 auto;

@@ -120,6 +120,9 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
  * so the caller can degrade to text. Script-bearing and event-handler content
  * is stripped — inline SVG is *not* isolated (use the `iframe` renderer for
  * untrusted markup).
+ *
+ * The result is *sized* by `sql.css` (`max-width: 100%` + `height: auto`), which
+ * needs a `viewBox` to mean anything: see {@link ensureViewBox}.
  */
 export function parseSvgMarkup(document: Document, markup: string): SVGElement | null {
   if (!markup.trim()) {
@@ -131,7 +134,54 @@ export function parseSvgMarkup(document: Document, markup: string): SVGElement |
     return null;
   }
   stripActiveContent(root);
+  ensureViewBox(root);
   return document.importNode(root, true) as unknown as SVGElement;
+}
+
+/** An SVG `width` / `height` attribute as a positive number of px, or `null`. */
+const PX_LENGTH = /^\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*(?:px)?\s*$/i;
+
+function pxLength(value: string | null): number | null {
+  const match = value === null ? null : PX_LENGTH.exec(value);
+  if (!match) {
+    return null;
+  }
+  const parsed = Number.parseFloat(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+/**
+ * Gives a `viewBox`-less root the coordinate system it needs to be *scalable*.
+ *
+ * An SVG with no `viewBox` does not scale at all: one user unit **is** one CSS
+ * pixel, so a stylesheet can narrow the element's box but the drawing keeps its
+ * own size and is simply cut off at the root's viewport. That is what a plotter
+ * which writes a fixed size and no viewBox produces — kuva's SVG backend emits
+ * exactly `<svg width="800" height="600">` — and it shows up as a figure wider
+ * than the result panel losing its right-hand side instead of getting smaller.
+ *
+ * Declaring that same rectangle as the viewBox turns the attributes into the
+ * figure's *natural* size, which is what `sql.css` needs: `max-width: 100%`
+ * shrinks the whole drawing, `height: auto` follows the aspect ratio, and the
+ * panel grows to the scaled height. The attributes are left in place — they are
+ * the figure's intrinsic size, and the downloaded / re-edited file should still
+ * open at it.
+ *
+ * Only a pixel length can be turned into a coordinate system (`800`, `800px`).
+ * A percentage (`width="100%"`) says nothing about the drawing's own extent, and
+ * without a size there is nothing to infer from; those roots keep whatever the
+ * markup declared.
+ */
+function ensureViewBox(root: Element): void {
+  if (root.hasAttribute('viewBox')) {
+    return;
+  }
+  const width = pxLength(root.getAttribute('width'));
+  const height = pxLength(root.getAttribute('height'));
+  if (width === null || height === null) {
+    return;
+  }
+  root.setAttribute('viewBox', `0 0 ${width} ${height}`);
 }
 
 /** Removes the parts of an SVG document that could execute or navigate. */

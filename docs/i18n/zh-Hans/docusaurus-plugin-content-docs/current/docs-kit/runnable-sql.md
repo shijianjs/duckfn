@@ -109,6 +109,12 @@ SVG 与页面共享同一个文档，所有可能执行或导航的内容（scri
 器、`javascript:` 链接）都会在插入前被剥掉。这张图的行为与图表一致：缩放与拖拽在全屏里才
 打开，**编辑源码**会弹出对话框，改完应用即重新渲染。
 
+**比正文栏更宽的图会被缩到栏宽，面板高度按图形比例跟着长**；本来就装得下的图保持原始大小，
+不会被放大。这依赖标记里带 `viewBox`——SVG 能缩放全靠它；只写了 `width` 和 `height` 的根
+节点（多数绘图库的输出就是这样）会在插入前补上 `viewBox="0 0 <width> <height>"`。没有
+`viewBox` 时，盒子无论被改多窄，画的内容都按自己的尺寸来，右侧那一块会被直接裁掉。
+`width="100%"` 推不出坐标系，保持原样。
+
 ```sql {"type":"duckfn","show":"svg","option":{"height":"140px"}}
 SELECT '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" width="260" height="100"><circle cx="50" cy="50" r="40" fill="#14459b"/><circle cx="120" cy="50" r="30" fill="#3d7bd6"/><text x="170" y="56" font-family="system-ui" font-size="16" fill="#181818">from SVG</text></svg>';
 ```

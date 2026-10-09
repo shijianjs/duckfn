@@ -158,6 +158,15 @@ src/
   `href`/`xlink:href`）；解析失败退化为 `pre` 文本，绝不把裸标记塞进 DOM。解析函数
   （`parseSvgMarkup`）住在 `SvgViewer.ts`（`renderers.ts` 单向依赖它，反过来会把两个模块
   绕成循环），编辑对话框改完源码也走同一条路：重新解析、重新 `setContent`，失败同样降级。
+- **`viewBox` 是要补的**：`sql.css` 对 svg 用的是 `max-width: 100%` + `height: auto`
+  （缩小以适配、不放大），而**没有 `viewBox` 的 SVG 根本不缩放** —— 一个用户单位就是一 CSS px，
+  样式只能把盒子改窄，画的内容仍按自己的尺寸画、在根视口处被裁掉。绘图库正是这么输出的
+  （kuva 的 SVG 后端只写 `width` / `height`），表现就是图比面板宽时右边（和底部）整块消失、
+  面板高度也不跟着内容走。所以 `parseSvgMarkup` 在插入前调 `ensureViewBox()`：根节点缺
+  `viewBox` 且 `width` / `height` 是像素长度时，补一个 `viewBox="0 0 <width> <height>"`
+  （长度属性**保留**：它是图形的固有尺寸，下载/再编辑后的文件还要按它打开）。百分比尺寸或
+  完全没尺寸的根推不出坐标系，保持原样 —— 别为此去量 `getBBox()`：那要求节点已经渲染，
+  会把「解析」和「挂载」耦在一起。
 - 预览尺寸用 CSS 自定义属性表达（`--dfk-sql-preview-width` / `-height`、
   `--dfk-sql-table-height`），靠选择器特异性覆盖，不写 `!important`。`svg` 的视口与 iframe
   的 frame 都用 `-width` / `-height`，所以 `option.height` 对两者是同一个开关。
