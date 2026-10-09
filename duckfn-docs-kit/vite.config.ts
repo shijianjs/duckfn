@@ -41,6 +41,12 @@ export default defineConfig({
         remark: src('remark.ts'),
         'color-swatch/rehype': src('color-swatch/rehype.ts'),
         'sql/remark': src('sql/remark.ts'),
+        // The ANSI parser behind the `terminal` renderer. An entry purely so the
+        // Node test suite can pin its behaviour (`test/ansi.test.mjs`): it is the
+        // one piece of a result renderer that is pure logic and has no DOM access
+        // to lean on, and the sanitising it does (escape sequences and control
+        // characters must never reach the DOM) is exactly what a test should hold.
+        'sql/ansi': src('sql/ansi.ts'),
         'mermaid/remark': src('mermaid/remark.ts'),
         'sql/client': src('sql/client.ts'),
         'sql/extensions': src('sql/extensions.ts'),
@@ -104,6 +110,10 @@ export default defineConfig({
         '@codemirror/commands',
         '@codemirror/state',
         'sql-formatter',
+        // The ANSI parser behind the `terminal` renderer. Statically imported by
+        // `sql/terminal.ts` (it is small, like `filenamify` and `colord` below) and
+        // external like the rest: the kit never bundles a runtime dependency.
+        'anser',
         // Colour parsing, contrast and normalisation for `color-swatch/remark`:
         // the plugin is Node build code, and the site's own copy is what
         // resolves it (`colord/plugins/a11y` is the same package, so the regex

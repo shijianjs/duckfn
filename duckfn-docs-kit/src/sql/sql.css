@@ -410,6 +410,39 @@ dfk-sql:not(:defined) {
   background: #fff;
 }
 
+/* A captured terminal frame (`show: "terminal"`). Three things make it read as a
+   terminal rather than as another code block:
+
+   - **never wrapped**: `white-space: pre` on the screen, so a character grid
+     keeps its shape and a wide frame scrolls sideways instead. A wrapped frame is
+     a lie — the columns no longer line up.
+   - **`line-height: 1`**, so rows tile and the box-drawing / braille characters
+     connect across rows. That is what makes a plot drawn from U+2800 braille
+     cells (or full blocks) read as one image instead of as stripes.
+   - **a dark surface of its own**, in both site themes: the output was written
+     for a terminal (kuva's own fallback text colour is #d2d2d2, "so an unstyled
+     Scene still looks reasonable on dark terminals"), and a frame is a picture of
+     a terminal rather than a part of the page — so the two values are plain
+     `var(…, default)` hooks instead of theme tokens. */
+.dfk-sql-terminal {
+  width: var(--dfk-sql-preview-width, 100%);
+  height: var(--dfk-sql-preview-height, auto);
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: var(--ifm-global-radius, 0.3rem);
+  background: var(--duckfn-terminal-bg, #1b1b1d);
+  color: var(--duckfn-terminal-fg, #d2d2d2);
+  font-family: var(--ifm-font-family-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--ifm-code-font-size, 95%);
+  line-height: 1;
+  /* A terminal's tab stop is 8 columns; the runs keep their tabs. */
+  tab-size: 8;
+}
+
+.dfk-sql-terminal-screen {
+  white-space: pre;
+}
+
 /* The `svg` result is a pan/zoom viewport (the shared `PanZoomView`), with the
    SVG in its content box. It draws no frame: the result panel is the frame, and
    stacking a second one behind the tab strip is what made a two-box look. The
@@ -486,6 +519,12 @@ dfk-sql:not(:defined) {
 /* An inline `<svg>` gets the same treatment as the frame and the table so the
    panel is one full-height scroll area rather than a strip. */
 .dfk-sql-result-expanded .dfk-sql-svg {
+  height: 100%;
+}
+
+/* A terminal frame has no height of its own, so expanding the result is what
+   gives it one — and the panel scrolls it like the table's. */
+.dfk-sql-result-expanded .dfk-sql-terminal {
   height: 100%;
 }
 

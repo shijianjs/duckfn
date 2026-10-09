@@ -4,6 +4,7 @@ import type {QueryResult} from './runtime';
 import type {RunnableSqlConfig} from './remark';
 import {PreviewTabs, type PreviewTabItem} from './PreviewTabs';
 import {SvgViewer, parseSvgMarkup, type FigureLabels} from './SvgViewer';
+import {TerminalView} from './terminal';
 import {el} from '../dom';
 import {sectionFileName, type DownloadPayload} from '../download';
 import {IconButton} from '../IconButton';
@@ -1022,7 +1023,7 @@ function applyPreviewSize(node: HTMLElement, config: RunnableSqlConfig): void {
 }
 
 /** What a preview tab shows for one row of the result. */
-type PreviewKind = 'iframe' | 'svg' | 'mermaid';
+type PreviewKind = 'iframe' | 'svg' | 'mermaid' | 'terminal';
 
 /** A result cell as markup: `NULL` means there is nothing to show. */
 function markupOf(value: unknown): string {
@@ -1032,14 +1033,15 @@ function markupOf(value: unknown): string {
 /**
  * Builds one figure tab: the row's markup, shown the way its `kind` calls for.
  *
- * All three kinds are built *before* the tab is shown, because the tab strip
+ * All four kinds are built *before* the tab is shown, because the tab strip
  * needs their `actions` (svg / mermaid) in its own constructor; `mount` only
  * appends a node that already exists. That is what lets `svg` and `mermaid` sit
  * inside the result panel with no frame of their own — the panel is the frame —
  * and hand their controls to the strip rather than floating them over the
  * content, which is also why the file travels out as a payload instead of a
  * button. An embedded `<dfk-mermaid>` is driven from the outside through
- * `setFullscreen`; an `iframe` has no viewer and so no fullscreen interest.
+ * `setFullscreen`; an `iframe` has no viewer and so no fullscreen interest, and
+ * neither has a terminal frame — it is text that is already the size it wants.
  */
 function createFigure(
   kind: PreviewKind,
@@ -1098,6 +1100,23 @@ function createFigure(
     };
   }
 
+  if (kind === 'terminal') {
+    // A captured terminal frame. It brings no controls, so the strip's right end
+    // is left to the download button and the fullscreen toggle alone, and it has
+    // nothing to zoom — which is also why it does not subscribe to the fullscreen
+    // state below.
+    const view = new TerminalView('terminal');
+    applyPreviewSize(view.root, config);
+    return {
+      label,
+      mount: async (panel) => {
+        panel.appendChild(view.root);
+        await view.render(markup);
+      },
+      download: () => view.downloadPayload(),
+    };
+  }
+
   const viewer = new SvgViewer(parseSvgMarkup(host.ownerDocument, markup), markup, figureLabels, 'figure');
   applyPreviewSize(viewer.root, config);
   return {
@@ -1148,7 +1167,10 @@ function previewRenderer(kind: PreviewKind): Renderer {
     items.push(tableItem(result, labels, host));
 
     const tabs = new PreviewTabs(host, items, labels.download ?? 'Download', fullscreenButton);
-    const unsubscribe = kind === 'iframe' ? null : onFullscreenChange((value) => tabs.setFullscreen(value));
+    // Only the kinds that *zoom inside* the result area care about its fullscreen
+    // state; an `iframe` and a terminal frame have nothing to switch.
+    const zooms = kind === 'svg' || kind === 'mermaid';
+    const unsubscribe = zooms ? onFullscreenChange((value) => tabs.setFullscreen(value)) : null;
     return () => {
       unsubscribe?.();
       tabs.dispose();
@@ -1174,6 +1196,7 @@ const registry: Record<string, Renderer> = {
   html: previewRenderer('iframe'),
   svg: previewRenderer('svg'),
   mermaid: previewRenderer('mermaid'),
+  terminal: previewRenderer('terminal'),
 };
 
 /**

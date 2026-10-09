@@ -163,6 +163,47 @@ SELECT 'flowchart LR' || chr(10)
   || '  B --> C["a diagram"]' AS diagram;
 ```
 
+## Terminal output (`show: "terminal"`)
+
+`terminal` draws the column the way a terminal would: SGR colours and
+decorations, box-drawing and braille characters, monospace, on its own dark
+surface, never wrapped. It is meant for **what a CLI would have printed** — a
+plot drawn out of block or braille characters, a coloured diff, a progress bar —
+where `text` can only show the words and `table` shows the raw cell. So a query
+that returns what a terminal *would* print can be previewed right here, without a
+terminal in the picture:
+
+```sql {"type":"duckfn","show":"terminal","tab_name":"frame","option":{"height":"180px"}}
+WITH bars(name, value, r, g, b) AS (
+  VALUES ('north', 18, 20, 69, 155), ('south', 11, 61, 143, 232), ('east', 6, 142, 180, 248)
+)
+SELECT chr(27) || '[1mquarterly units' || chr(27) || '[0m' || chr(10)
+  || string_agg(
+       rpad(name, 7, ' ') || repeat(' ', 20 - value)
+       || chr(27) || '[38;2;' || r || ';' || g || ';' || b || 'm'
+       || repeat('█', value) || chr(27) || '[0m',
+       chr(10) ORDER BY value DESC
+     ) AS frame
+FROM bars;
+```
+
+- The colours are the ones in the string: the basic and bright palettes
+  (`30`–`37` / `90`–`97`), 256-colour (`38;5;n`) and 24-bit (`38;2;r;g;b`), plus
+  **bold**, dim, italic, underline, strikethrough, hidden and reverse video —
+  which arrives with its colours already swapped.
+- **A frame is never wrapped.** A character grid that wraps no longer lines up, so
+  the panel scrolls sideways instead; `option.width` / `option.height` size it, and
+  the height otherwise follows the frame (set one to cap a long dump).
+- The surface is dark in **both** site themes — a frame is a picture of a terminal,
+  not a part of the page — and `--duckfn-terminal-bg` / `--duckfn-terminal-fg`
+  are the two values to override.
+- Escape sequences and control characters are stripped before anything reaches the
+  page: an OSC window title or a stray escape byte inside a label cannot become
+  visible text, and nothing here is ever built from markup — the styled runs
+  become text nodes and `<span>`s.
+- **Download** saves the raw text with its escapes, ready to be piped back into a
+  terminal. A frame has nothing to zoom, so its tab carries no buttons of its own.
+
 ## Loading extensions
 
 The extension this site documents is preloaded on every page, so the examples
@@ -193,7 +234,7 @@ they appear and disappear with it:
 | --- | --- |
 | `Table` | Search, Copy table, column-width mode, Reset view, Unfreeze columns |
 | `svg` / `mermaid` | Reset zoom (fullscreen only), Edit source |
-| `html` / `iframe` / `text` | — |
+| `html` / `iframe` / `text` / `terminal` | — |
 
 The table's controls are the whole-table half of its right-click menu, kept where
 they cannot cover a cell; the menu itself still has the per-cell entries (copy this
@@ -239,7 +280,7 @@ FROM range(20) t(i);
 | Field | Meaning |
 | --- | --- |
 | `type` | `"duckfn"` — marks the block as runnable. Required. |
-| `show` | `table` (default), `text`, `html`, `iframe`, `svg`, `mermaid`. |
+| `show` | `table` (default), `text`, `html`, `iframe`, `svg`, `mermaid`, `terminal`. |
 | `expect` | `ok` (default) or `error` — what the docs' [SQL test](./sql-test.md) requires of this block; `error` marks one that demonstrates a failure. |
 | `field` | Column holding the markup, for `html` / `iframe` / `svg` / `mermaid`. |
 | `tab_name` | Column labelling each preview tab. |

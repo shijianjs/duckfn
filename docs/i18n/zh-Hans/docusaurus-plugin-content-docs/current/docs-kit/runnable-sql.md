@@ -136,6 +136,41 @@ SELECT 'flowchart LR' || chr(10)
   || '  B --> C["一张图"]' AS diagram;
 ```
 
+## 终端输出（`show: "terminal"`）
+
+`terminal` 按终端的方式画这一列：SGR 颜色与装饰、框线与盲文点阵字符、等宽字体、
+自带一块深色底、**从不折行**。它是为「**CLI 本来会打印的东西**」准备的——用方块或
+盲文点阵字符画出来的图、带颜色的 diff、进度条——`text` 只能显示文字，`table` 则是
+原始单元格。所以一条查询只要返回了终端「本来会打印」的内容，就能直接在这里预览，
+不需要真有一个终端：
+
+```sql {"type":"duckfn","show":"terminal","tab_name":"frame","option":{"height":"180px"}}
+WITH bars(name, value, r, g, b) AS (
+  VALUES ('north', 18, 20, 69, 155), ('south', 11, 61, 143, 232), ('east', 6, 142, 180, 248)
+)
+SELECT chr(27) || '[1mquarterly units' || chr(27) || '[0m' || chr(10)
+  || string_agg(
+       rpad(name, 7, ' ') || repeat(' ', 20 - value)
+       || chr(27) || '[38;2;' || r || ';' || g || ';' || b || 'm'
+       || repeat('█', value) || chr(27) || '[0m',
+       chr(10) ORDER BY value DESC
+     ) AS frame
+FROM bars;
+```
+
+- 颜色就是字符串里写的那些：基础与高亮调色板（`30`–`37` / `90`–`97`）、256 色
+  （`38;5;n`）、24 位真彩（`38;2;r;g;b`），以及**粗体**、淡、斜体、下划线、删除线、
+  隐藏与反显——反显到这里时颜色已经换好了。
+- **画面绝不折行**：字符网格一旦折行就不再对齐，所以改成横向滚动；`option.width` /
+  `option.height` 决定大小，高度默认跟着画面走（想给长输出封顶就设一个）。
+- 深色底在**两种**站点主题下都一样——画面是终端的图像，不是页面的一部分——要改就改
+  `--duckfn-terminal-bg` / `--duckfn-terminal-fg` 这两个值。
+- 转义序列与控制字符在任何东西进页面前就被剥掉了：OSC 窗口标题、标签里混进的
+  转义字节都不会变成可见文本，而且这里**从不拼 HTML 字符串**——着色后的片段只会变成
+  文本节点与 `<span>`。
+- **下载**保存带转义的原始文本，可以直接管回终端。画面没有可缩放的东西，所以它那个
+  页签自带零按钮。
+
 ## 加载扩展
 
 本站文档化的扩展在每一页预加载，所以这里的示例直接调用即可——预加载列表见
@@ -160,7 +195,7 @@ SELECT '127.0.0.1'::INET::VARCHAR AS ip, '10.0.0.0/8'::INET::VARCHAR AS network;
 | --- | --- |
 | `Table` | 搜索、复制整表、列宽模式、重置视图、取消冻结 |
 | `svg` / `mermaid` | 还原缩放（仅全屏）、编辑源码 |
-| `html` / `iframe` / `text` | 无 |
+| `html` / `iframe` / `text` / `terminal` | 无 |
 
 表格这些按钮就是它右键菜单里「整表」的那一半，放在压不到单元格的地方；右键菜单本身仍保留
 按单元格的项（复制此单元格、此行/列折行、冻结到此列）。**取消冻结**只在真的冻结过列之后
@@ -196,7 +231,7 @@ FROM range(20) t(i);
 | 字段 | 含义 |
 | --- | --- |
 | `type` | `"duckfn"`——标记该块可运行。必填。 |
-| `show` | `table`（默认）、`text`、`html`、`iframe`、`svg`、`mermaid`。 |
+| `show` | `table`（默认）、`text`、`html`、`iframe`、`svg`、`mermaid`、`terminal`。 |
 | `expect` | `ok`（默认）或 `error`——文档站的 [SQL 测试](./sql-test.md) 对本块的要求；`error` 表示这是一个演示失败的块。 |
 | `field` | 放着标记的列，用于 `html` / `iframe` / `svg` / `mermaid`。 |
 | `tab_name` | 标注每个预览页签的列。 |

@@ -45,6 +45,8 @@ src/
 │                    #   + runtime.ts（DuckDB-Wasm 单例）+ renderers.ts
 │                    #   + PreviewTabs.ts（预览页签，右端 [页签按钮][下载][全屏]）
 │                    #   + SvgViewer.ts（svg 结果的缩放视口 + 源码编辑）
+│                    #   + ansi.ts（terminal 结果的 ANSI 分词，纯逻辑、为 Node 测试单开
+│                    #     entry）+ terminal.ts（把着色片段画成 DOM 的那一层）
 │                    #   + remark.ts
 │                    #   + extensions.ts（Node：扩展预加载插件）+ runtimeConfig.ts
 │                    #     （两侧共享的注入配置契约，见「扩展预加载」）
@@ -147,7 +149,13 @@ src/
   渲染器签名统一是 `(context, result) => Promise<void | (() => void)>` —— **一律
   异步**，返回的 disposer 由 `DfkSql` 在重跑 / 断开时调用，调用方只处理一种形态。
 - `html` 与 `iframe` 是**同一个渲染器**（都写 `srcdoc`）；`svg` 是另一个（内联进页面，
-  见 `SvgViewer.ts`：缩放视口 + 源码编辑，与 mermaid 共用 `PanZoomView` / `SourceDialog`）。
+  见 `SvgViewer.ts`：缩放视口 + 源码编辑，与 mermaid 共用 `PanZoomView` / `SourceDialog`）；
+  `terminal` 又一个（见下面「终端画面」）。
+- **`terminal` 的分词交给 `anser`，DOM 仍然自己建**。选它而不是 `ansi_up` /
+  `ansi-to-html` 的唯一理由：它给的是**结构化片段**（`ansiToJson`，含 `fg`/`bg`/
+  `decorations`），而那两家只出 HTML 字符串 —— 要用它们就只能 `innerHTML`，那是第 1 条
+  明令禁止的。`ansi.ts` 因此是纯逻辑（无 DOM），并**为测试单开一个 entry**
+  （`vite.config.ts` 的 `sql/ansi`）：净化行为必须钉住，用 Node 跑比在浏览器里断言便宜得多。
 - iframe 默认 `sandbox="allow-scripts"` 且**不含 `allow-same-origin`**：报告里的
   JavaScript 照跑，但 frame 持有 opaque origin，与文档站主体隔离。**父文档因此读不到
   `iframe.contentDocument`（为 `null`）——这是设计，不是 bug**，验证时别拿它当失败。
@@ -180,6 +188,23 @@ src/
 - **结果面底色一律用 `--ifm-background-surface-color`，不要用
   `--ifm-background-color`**：后者可以被站点声明成 `transparent`（本仓库文档站
   正是如此，页面底色另有来源），全屏 overlay 会因此变成透明、内容直接透出。
+
+**终端画面（`terminal` 渲染器）**
+
+- `ansi.ts` 只做「字符串 → 着色片段」，并且**先把不该进 DOM 的东西剥掉**：解析**前**删掉
+  终端字符串序列（OSC 窗口标题、DCS/APC/PM 负载 —— `anser` 只认 SGR，放过就会把
+  `]0;title` 当正文印出来），解析**后**删掉剩下的 CSI 与所有控制字符。`\n` 与 `\t` 保留
+  （制表位交给 CSS 的 `tab-size: 8`）。相邻同样式的片段会合并 —— 按格子上色的输出会
+  反复「重置 + 再声明同一个颜色」，不合并就是一堆多余的 `<span>`。
+- 装饰是**累加**的（终端语义）：开了粗体再开斜体，两个都在，所以别把 `decorations`
+  当成「最后一个生效」。
+- `reverse` 走到 `TerminalView` 时颜色已经换好（`anser` 干的），视图不要再换一次。
+- `hidden` 走 `visibility: hidden` 而不是 `opacity: 0` —— 格子要留在原位，网格才不会错位；
+  `blink` 在静止画面里没有意义，丢掉。
+- 面板 CSS 在 `sql.css`：深色底两个主题都一样（画面是终端的图像，不是页面的一部分）、
+  `line-height: 1` 让行与行贴紧（盲文点阵／方块字符要连成一张图）、`white-space: pre`
+  绝不折行（折行后字符网格就不再对齐，只能横向滚动）。
+- 下载给的是**带转义的原始文本**（可以管回终端），不是渲染后的 HTML。
 
 **界面契约（`DfkSql.ts` + `PreviewTabs.ts`）**
 

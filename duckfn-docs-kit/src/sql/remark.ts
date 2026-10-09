@@ -41,8 +41,12 @@ export interface RunnableSqlConfig {
    * `<dfk-mermaid>` (the same element a ```mermaid fence produces), so the result
    * gets the element's zoom, fullscreen, source editing and SVG download for
    * free.
+   *
+   * `terminal` draws the column the way a terminal would: SGR colours and
+   * decorations, box-drawing and braille characters, unwrapped and monospace.
+   * Use it for what a CLI *would have printed* — `text` can only show it flat.
    */
-  show?: 'table' | 'html' | 'iframe' | 'svg' | 'text' | 'mermaid';
+  show?: 'table' | 'html' | 'iframe' | 'svg' | 'text' | 'mermaid' | 'terminal';
   /**
    * What this block is expected to do when the docs' own SQL test suite runs it
    * (`duckfn-docs-kit/sql/verify`). Defaults to `'ok'`; `'error'` marks a block

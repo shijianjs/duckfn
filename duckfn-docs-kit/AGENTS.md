@@ -52,8 +52,8 @@ is compiled.
 | Field | Meaning |
 | --- | --- |
 | `type` | `"duckfn"`. Required — this is what makes the block runnable. |
-| `show` | `table` (default), `text`, `html`, `iframe`, `svg`, `mermaid`. See *Result renderers*. |
-| `field` | The column holding the markup, for `html` / `iframe` / `svg` / `mermaid`. Required when the result has more than one column. |
+| `show` | `table` (default), `text`, `html`, `iframe`, `svg`, `mermaid`, `terminal`. See *Result renderers*. |
+| `field` | The column holding the markup, for `html` / `iframe` / `svg` / `mermaid` / `terminal`. Required when the result has more than one column. |
 | `tab_name` | The column whose value labels each preview tab. Defaults to `Row N`. |
 | `option.width` · `option.height` | CSS lengths for the preview box (`"100%"`, `"640px"`). |
 | `option.code_max_height` | A ceiling for the **code editor** (`"16rem"`, `"40vh"`): past it the block stops growing and the code area scrolls inside itself. What keeps the result in reach when an example runs to a hundred lines. |
@@ -89,6 +89,7 @@ is compiled.
 | `html` / `iframe` | One tab per row; the markup goes into a sandboxed `iframe` (`srcdoc`), with a trailing `Table` tab that is always last. | `field` (unless the result has exactly one column). `tab_name` to label tabs. |
 | `svg` | The markup is spliced **into the page** (one tab per row, trailing `Table` tab). Zoom and pan open in fullscreen, where the tab strip also offers **reset zoom** / **edit source**. | Same as above. |
 | `mermaid` | The cell is handed to `<dfk-mermaid>`, which renders in its **embedded** mode: no frame of its own and no floating cluster — **reset zoom** and **edit source** join the result's tab strip instead. One tab per row, trailing `Table` tab. | Same as above. |
+| `terminal` | The cell the way a terminal would draw it: SGR colours and decorations, box-drawing and braille characters, monospace, dark, **never wrapped**. For what a CLI *would have printed*, which `text` can only show flat. One tab per row, trailing `Table` tab, and no per-tab buttons (there is nothing to zoom). | Same as above. |
 
 Two facts worth knowing before you pick one:
 
@@ -104,6 +105,17 @@ Two facts worth knowing before you pick one:
   libraries emit — is given `viewBox="0 0 <width> <height>"` on the way in, because without a
   `viewBox` an SVG does not scale at all: it would keep its own size and be cut off at the panel's
   edge. Only a pixel size can be turned into a coordinate system; `width="100%"` is left alone.
+- `terminal` is parsed with [`anser`](https://www.npmjs.com/package/anser), which returns **styled
+  runs** rather than an HTML string — that is what lets the runs become text nodes and `<span>`s
+  instead of markup pasted in. Everything escape-shaped is stripped on the way: terminal string
+  sequences (OSC titles, DCS payloads) before parsing, any leftover CSI and every remaining control
+  character after it, so a label carrying an escape byte cannot put visible junk — or markup — on the
+  page. `\n` and `\t` survive (CSS gives the tab its stop). The colours that come through are the
+  basic and bright palettes, 256-colour and 24-bit, plus bold / dim / italic / underline /
+  strikethrough / hidden; **reverse video arrives already swapped**. The surface is dark in both site
+  themes (a frame is a picture of a terminal, not a part of the page) and `--duckfn-terminal-bg` /
+  `--duckfn-terminal-fg` are the two values to override. **Download** saves the raw text with its
+  escapes, ready to be piped back into a terminal.
 
 ### The strip at the right of the tabs
 
@@ -115,7 +127,7 @@ the **fullscreen** toggle.
 | --- | --- |
 | `Table` | Search, copy table, column-width mode, reset view, unfreeze columns |
 | `svg` / `mermaid` | Reset zoom (fullscreen only), edit source |
-| `html` / `iframe` / `text` | — |
+| `html` / `iframe` / `text` / `terminal` | — |
 
 - Those table buttons are the "whole table" half of the grid's right-click menu, placed where they
   cannot cover a cell; the menu itself keeps the per-cell items (copy this cell, wrap this
@@ -187,6 +199,9 @@ SELECT 'flowchart LR' || chr(10)
 - No `tab_name`, so the preview tabs read `Row 1`, `Row 2`, … instead of something meaningful.
 - A bare ```` ```sql ```` block where a runnable one was intended (it renders as a plain listing).
 - Declaring `extensions` for the extension the site already preloads.
+- `show: "terminal"` on a cell that carries no escape sequences: it renders, but as flat monospace
+  text. Check that the query really returns the sequences — in DuckDB that is `chr(27)`, as the
+  example in the docs' terminal section does.
 - A block that depends on a table created on a *different* page.
 
 ## Mermaid diagrams (`remarkMermaid`)
