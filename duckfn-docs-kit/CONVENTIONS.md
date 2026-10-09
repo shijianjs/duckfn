@@ -58,6 +58,10 @@ src/
 │                    #   结果区）+ render.ts（mermaid 单例加载、全页渲染队列、
 │                    #   配色契约、SVG 解析/序列化）+ config.ts（两侧共享的配色契约）
 │                    #   + remark.ts（Node：```mermaid 围栏 → <dfk-mermaid>）
+├── color-swatch/    # 行内色值上色：rehype.ts（Node：整段是颜色值的行内代码 /
+│                    #   `<code data-color-swatch>` → 带背景色与对比字色的行内代码。
+│                    #   rehype 而非 remark：style 要作为**属性**落在 HTML 上，
+│                    #   React 不接受 JSX 元素的字符串 style prop）
 ├── theme/           # tokens.css —— 全局设计基础设施，无业务归属，单独放
 ├── kit.css          # 全局 CSS 聚合入口（@import theme + toc-toggle + sql）
 ├── dom.ts           # el() / HTMLElementBase 纯工具
@@ -97,6 +101,9 @@ src/
   - `duckfn-docs-kit/remark`（**Node 构建期**：版本占位符 remark 插件）
   - `duckfn-docs-kit/sql/remark`（**Node 构建期**：可运行 SQL remark 插件）
   - `duckfn-docs-kit/mermaid/remark`（**Node 构建期**：```mermaid 围栏 → `<dfk-mermaid>`）
+  - `duckfn-docs-kit/color-swatch/rehype`（**Node 构建期**：行内色值 → 带背景色的行内代码；
+    颜色解析/对比度用 `colord` + `colord/plugins/a11y`，不自己实现。**rehype 阶段**：
+    style 必须是 HTML 属性，React 不接受 JSX 元素的字符串 style prop）
   - `duckfn-docs-kit/sql/extensions`（**Node 构建期**：扩展预加载 Docusaurus 插件）
   - `duckfn-docs-kit/sql/playwright`（**Node 运行期**：Playwright Test 集成 ——
     `defineDuckfnDocsConfig()` 配置 preset 与 `declareDocsTests()` 测试生成器）
@@ -815,8 +822,8 @@ Docusaurus 预渲染在 Node 里 import 本包。
   才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
   `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
-- Node 侧模块只有 `src/remark.ts`、`src/sql/remark.ts`、`src/mermaid/remark.ts`、
-  `src/sql/extensions.ts`（构建期）
+- Node 侧模块只有 `src/remark.ts`、`src/color-swatch/rehype.ts`、`src/sql/remark.ts`、
+  `src/mermaid/remark.ts`、`src/sql/extensions.ts`（构建期）
   与 `src/sql/collect.ts`、`src/sql/browserRunner.ts`、`src/sql/verify.ts`（测试期），
   连同无依赖的共享契约 `src/sql/runtimeConfig.ts`、`src/mermaid/config.ts`；它们都不得
   import 任何浏览器模块。

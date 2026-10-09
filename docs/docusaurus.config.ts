@@ -2,6 +2,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
+import {rehypeColorSwatch} from 'duckfn-docs-kit/color-swatch/rehype';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
 import {remarkMermaid} from 'duckfn-docs-kit/mermaid/remark';
 import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
@@ -109,6 +110,10 @@ const config: Config = {
             remarkRunnableSql,
             remarkMermaid,
           ],
+          // Inline code that *is* a colour value is painted with it (rehype, not
+          // remark: the swatch is a `style` attribute on finished HTML, and React
+          // rejects a string `style` prop on a JSX element).
+          rehypePlugins: [rehypeColorSwatch],
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/shijianjs/duckfn/tree/main/docs/',
           // Without this, translated pages link back to the English source in docs/docs/;

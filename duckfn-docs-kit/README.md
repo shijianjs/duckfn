@@ -24,6 +24,7 @@ npm install duckfn-docs-kit
 | --- | --- | --- |
 | `duckfn-docs-kit` | browser | Custom elements (`<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>`, `<dfk-sql>`, `<dfk-mermaid>`), `registerDfkElements()` and the value types their setters accept |
 | `duckfn-docs-kit/remark` | Node (build) | `remarkVersionPlaceholder`: replaces `{{DUCKFN_VERSION}}` inside `text` / `inlineCode` / `code` nodes |
+| `duckfn-docs-kit/color-swatch/rehype` | Node (build) | `rehypeColorSwatch`: paints inline code that *is* a colour value with that colour (contrast-picked foreground) |
 | `duckfn-docs-kit/sql/remark` | Node (build) | `remarkRunnableSql`: turns fenced `sql {"type":"duckfn",…}` blocks into `<dfk-sql>` elements |
 | `duckfn-docs-kit/mermaid/remark` | Node (build) | `remarkMermaid`: turns ```` ```mermaid ```` fences into `<dfk-mermaid>` diagrams |
 | `duckfn-docs-kit/sql/extensions` | Node (build) | `dfkExtensions()` Docusaurus plugin: preloads a site's DuckDB extensions before the first block runs |
@@ -43,6 +44,7 @@ that glue — plugins use them, sites should not import them directly.
 import {dfkExtensions} from 'duckfn-docs-kit/sql/extensions';
 import {dfkTocToggle} from 'duckfn-docs-kit/toc-toggle/plugin';
 import {remarkVersionPlaceholder} from 'duckfn-docs-kit/remark';
+import {rehypeColorSwatch} from 'duckfn-docs-kit/color-swatch/rehype';
 import {remarkRunnableSql} from 'duckfn-docs-kit/sql/remark';
 import {remarkMermaid} from 'duckfn-docs-kit/mermaid/remark';
 import {DUCKFN_VERSION} from './duckfn-version';
@@ -59,6 +61,11 @@ export default {
             // ```mermaid fences become diagrams; no @docusaurus/theme-mermaid.
             remarkMermaid,
           ],
+          // Rehype, not remark: the swatch is a `style` *attribute* on finished
+          // HTML, and React (which renders a JSX element) refuses a string
+          // `style` prop. Drop it — or pass {scan: false} — on a site that would
+          // rather not have inline colours painted.
+          rehypePlugins: [rehypeColorSwatch],
         },
       },
     ],

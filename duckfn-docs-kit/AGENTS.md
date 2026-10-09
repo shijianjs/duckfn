@@ -344,6 +344,37 @@ Adds a collapse button to the desktop table of contents and remembers the choice
 `localStorage` (`duckfn:toc-collapsed`). Custom labels come from the plugin's `labels` option,
 keyed by a lower-cased `html-lang` prefix (`{en: {hide, show}, 'zh-hans': {…}}`).
 
+## Colour swatches (`rehypeColorSwatch`)
+
+```ts
+// docusaurus.config.ts, in the docs preset's `rehypePlugins` — rehype, not
+// remark: the swatch is a `style` attribute on finished HTML, and React refuses
+// a string `style` prop on the JSX element a marked `<code>` becomes.
+rehypePlugins: [rehypeColorSwatch],
+```
+
+Inline code whose whole content is a colour value is painted with that colour (the foreground is picked
+between black and white by contrast), so a palette table reads as colour instead of as a column of hex codes.
+`scan: false` turns the scan off; a marked element works either way:
+
+````md
+`#E69F00`                                   <!-- swatch -->
+<code data-color-swatch>#E69F00</code>      <!-- swatch, without the scan -->
+<code data-color-swatch="#E69F00">treat</code>
+````
+
+- Scanning takes whatever `colord` parses out of the box: `#rgb` / `#rgba` / `#rrggbb` / `#rrggbbaa`,
+  `rgb()` / `rgba()`, `hsl()` / `hsla()`. **CSS colour names work nowhere** — `red`, `white` and
+  `transparent` are ordinary words in prose, and telling the name from the word needs a colour table the
+  plugin does not load. Write hex, `rgb()` or `hsl()`.
+- A fenced code block is never touched, an unparsable colour is left alone, and the plugin adds **no CSS**:
+  the two inline styles are the whole effect, so the site's own `code` styling (border, radius, padding) is
+  what the swatch sits in.
+- **Do not reach for `{.color-swatch}` / `{color="…"}`.** MDX tokenises `{...}` as a JavaScript expression
+  before any remark plugin runs: the first fails the build (`Could not parse expression with acorn`) and the
+  second throws `ReferenceError: color is not defined` in the browser. The attribute above is the spelling
+  that works.
+
 ## Version placeholder (`remarkVersionPlaceholder`)
 
 ```ts

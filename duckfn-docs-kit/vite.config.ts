@@ -39,6 +39,7 @@ export default defineConfig({
         'toc-toggle/client': src('toc-toggle/client.ts'),
         'toc-toggle/plugin': src('toc-toggle/plugin.ts'),
         remark: src('remark.ts'),
+        'color-swatch/rehype': src('color-swatch/rehype.ts'),
         'sql/remark': src('sql/remark.ts'),
         'mermaid/remark': src('mermaid/remark.ts'),
         'sql/client': src('sql/client.ts'),
@@ -103,6 +104,11 @@ export default defineConfig({
         '@codemirror/commands',
         '@codemirror/state',
         'sql-formatter',
+        // Colour parsing, contrast and normalisation for `color-swatch/remark`:
+        // the plugin is Node build code, and the site's own copy is what
+        // resolves it (`colord/plugins/a11y` is the same package, so the regex
+        // covers the sub-path too).
+        /^colord/,
       ],
     },
   },
