@@ -216,6 +216,7 @@ export class DfkMermaid extends HTMLElementBase {
     this.#fullscreen = value;
     this.classList.toggle('dfk-mermaid-fullscreen', value);
     this.#view.setActive(value);
+    this.#syncActions();
   }
 
   /**
@@ -278,7 +279,7 @@ export class DfkMermaid extends HTMLElementBase {
       this.#canvas.appendChild(this.#actions);
     }
     this.#applyLabels();
-    this.#setActionsAvailable(false);
+    this.#syncActions();
   }
 
   #applyLabels(): void {
@@ -338,7 +339,6 @@ export class DfkMermaid extends HTMLElementBase {
       output.bind?.(this.#content);
       this.#canvas.hidden = false;
       this.#setMessage('', false);
-      this.#setActionsAvailable(true);
     } catch (error) {
       if (token !== this.#renderToken || !this.isConnected) {
         return;
@@ -346,8 +346,9 @@ export class DfkMermaid extends HTMLElementBase {
       this.#svg = null;
       this.#view.setContent(null);
       this.#canvas.hidden = true;
-      this.#setActionsAvailable(false);
       this.#setMessage(`${this.#labels.renderFailed}: ${messageOf(error)}`, true);
+    } finally {
+      this.#syncActions();
     }
   }
 
@@ -357,13 +358,23 @@ export class DfkMermaid extends HTMLElementBase {
     this.#message.classList.toggle('dfk-mermaid-message-error', isError);
   }
 
-  /** Editing and resetting only mean something once a diagram is on screen. */
-  #setActionsAvailable(available: boolean): void {
-    this.#resetBtn.root.hidden = !available;
-    this.#editBtn.root.hidden = !available;
-    if (this.#downloadBtn) {
-      this.#downloadBtn.root.hidden = !available;
-    }
+  /**
+   * Editing, downloading and resetting only mean something once a diagram is on
+   * screen — and resetting only while zooming is possible, which is this element's
+   * own fullscreen when standalone and the result area's when embedded. Derived
+   * from the state rather than handed in, so every transition (render, expand,
+   * external fullscreen) calls the same thing.
+   */
+  #syncActions(): void {
+    const rendered = this.#svg !== null;
+    this.#editBtn.setHidden(!rendered);
+    this.#downloadBtn?.setHidden(!rendered);
+    this.#resetBtn.setHidden(!rendered || !this.#zoomActive());
+  }
+
+  /** Where this diagram's zoom lives: its own fullscreen, or the result area's. */
+  #zoomActive(): boolean {
+    return this.#embedded ? this.#fullscreen : this.#expanded;
   }
 
   // --- Fullscreen ------------------------------------------------------------
@@ -373,6 +384,7 @@ export class DfkMermaid extends HTMLElementBase {
     this.#expanded = value;
     this.#canvas.classList.toggle('dfk-mermaid-expanded', value);
     this.#view.setActive(value);
+    this.#syncActions();
     this.#fullscreenBtn?.setIcon(value ? 'lucide:minimize' : 'lucide:maximize');
     this.#applyLabels();
     if (value !== this.#escBound) {

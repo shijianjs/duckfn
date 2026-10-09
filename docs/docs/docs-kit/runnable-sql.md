@@ -18,6 +18,11 @@ DuckDB-Wasm instance, and the result renders below the block.
 time — useful on a page that draws a figure from a stack of blocks, where
 clicking Run on each of them is busywork.
 
+The editor is as tall as its SQL, unless the block asks for a ceiling:
+`option.code_max_height` (a CSS length) stops the block from growing past it and
+makes the code area scroll inside itself. An example of a few hundred lines would
+otherwise bury its own result below several screens of code.
+
 DuckDB itself starts initialising in the background as soon as a page with a
 block opens, so the first **Run** click does not wait for the download.
 
@@ -123,8 +128,9 @@ SELECT * FROM (VALUES
 still one tab per row plus the trailing table. Because inline SVG shares the
 page, anything that could execute or navigate (scripts, `foreignObject`,
 `on*` handlers, `javascript:` links) is stripped before it is inserted. The
-figure itself behaves like a diagram: zoom and pan switch on in fullscreen, and
-**Edit source** opens the markup in a dialog to apply and re-render.
+figure itself behaves like a diagram: in fullscreen it becomes a viewport (grab
+the figure to pan, use the wheel to zoom, in or out), and **Edit source** opens
+the markup in a dialog to apply and re-render.
 
 **A figure wider than the column is scaled down to fit it, and the panel's
 height follows the figure's aspect ratio** — a figure that already fits keeps
@@ -186,14 +192,16 @@ they appear and disappear with it:
 | Tab | Controls |
 | --- | --- |
 | `Table` | Search, Copy table, column-width mode, Reset view, Unfreeze columns |
-| `svg` / `mermaid` | Reset zoom, Edit source |
+| `svg` / `mermaid` | Reset zoom (fullscreen only), Edit source |
 | `html` / `iframe` / `text` | — |
 
 The table's controls are the whole-table half of its right-click menu, kept where
 they cannot cover a cell; the menu itself still has the per-cell entries (copy this
 cell, wrap this column, freeze up to here). **Unfreeze columns** only appears once
 a column has actually been frozen — freeze from the menu to get there — and goes
-away again when none are.
+away again when none are. **Reset zoom** is hidden the same way while the result is
+inline: a figure only becomes a viewport in fullscreen, so inline there is nothing
+to reset.
 
 **Download** saves whatever the active tab shows, in the format that tab has:
 `.csv` for a table, `.svg` for a figure, `.html` for a prepared frame, `.txt` for
@@ -202,8 +210,11 @@ finished rendering).
 
 The fullscreen toggle sits at the very end. Clicking it fills the viewport with
 the result, and the same button (now *Exit fullscreen*) stays in place.
-<kbd>Esc</kbd> exits too. Fullscreen is also the only place a figure zooms and
-pans — see [Mermaid diagrams](./mermaid.md) for what the pointer does there.
+<kbd>Esc</kbd> exits too. Fullscreen is also the only place a figure becomes a
+viewport rather than a picture — the pointer is a grab hand, a drag pans (even
+without zooming in first), the wheel zooms both ways, and **Reset zoom** appears
+in the strip. See [Mermaid diagrams](./mermaid.md) for what the pointer does
+there.
 
 ```sql {"type":"duckfn","show":"table"}
 SELECT i AS n, repeat('wide column ', 3) AS filler
@@ -233,6 +244,7 @@ FROM range(20) t(i);
 | `field` | Column holding the markup, for `html` / `iframe` / `svg` / `mermaid`. |
 | `tab_name` | Column labelling each preview tab. |
 | `option.width` · `option.height` | CSS lengths for the preview box. |
+| `option.code_max_height` | A ceiling for the code editor: past it the block stops growing and the code area scrolls inside itself. |
 | `option.sandbox` | Sandbox tokens for the iframe, replacing `allow-scripts`. |
 | `extensions` | Extension names to `LOAD` before running, on top of the site-wide preloads. |
 | `repository` | Where those extensions come from: `community`, `core` or a repository URL. |

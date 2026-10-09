@@ -170,6 +170,13 @@ src/
 - 预览尺寸用 CSS 自定义属性表达（`--dfk-sql-preview-width` / `-height`、
   `--dfk-sql-table-height`），靠选择器特异性覆盖，不写 `!important`。`svg` 的视口与 iframe
   的 frame 都用 `-width` / `-height`，所以 `option.height` 对两者是同一个开关。
+- **代码区也能限高**（`option.code_max_height` → 自定义属性 `--dfk-sql-code-max-height`，由
+  `DfkSql` 写在**宿主元素**上，穿过 shadow 边界继承进 `DfkSql.css`）：`max-height` 加在
+  `.dfk-sql-editor` 上，把 `overflow` 从 `hidden` 改成 `auto`。这一改必须有，因为 CodeMirror
+  的 `.cm-scroller` 只设了 `overflow-x`，**纵向滚动靠祖先**（`DOMObserver.listenForScroll()`
+  会沿父链一路注册 `scroll` 监听，所以祖先滚动它也重测、虚拟化照常）—— 上千行的示例因此能收成
+  一屏，结果不再被压到几十屏以下。动作按钮簇（绝对定位在 `.dfk-sql-code` 上，不随编辑器滚动）
+  仍然停在右上角；`DfkSql` 的加载占位在编辑器盒子里，跟着一起滚，两侧不用各写一份限高。
 - **结果面底色一律用 `--ifm-background-surface-color`，不要用
   `--ifm-background-color`**：后者可以被站点声明成 `transparent`（本仓库文档站
   正是如此，页面底色另有来源），全屏 overlay 会因此变成透明、内容直接透出。
@@ -476,30 +483,35 @@ src/
   upgrade，`connectedCallback` 才读）。
 - **缩放/拖拽用 `@panzoom/panzoom`**（CSS transform，**不改 SVG 节点本身**），实现在共享的
   `panzoom-view.ts`（`PanZoomView`，svg 结果与 mermaid 共用；`MIN_SCALE` / `MAX_SCALE` /
-  `ZOOM_STEP` 与下面几条坑都在那里）。`minScale: 1` 让 fit 成为下限，「放大」于是是一个干净的
-  布尔（`zoomed` getter），光标与手势处理都挂在它上面。`touchAction: 'pan-y'` 是刻意的取舍：
-  竖页滚留给浏览器，捏合与横向拖拽归图。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
+  `ZOOM_STEP` 与下面几条坑都在那里）。`touchAction: 'pan-y'` 是刻意的取舍：竖页滚留给浏览器，
+  捏合与横向拖拽归图。它是**增强**，`import()` 失败时图照常显示，只是不能缩放。
   - **缩放默认关闭，只在 `setActive(true)` 时打开**（`PanZoomView` 的 opt-in 契约）：页面上
     行内显示时滚轮是页面的、拖拽是选文字，全屏才是视口。deactivate 时连内联样式一起复位
     （`reset()` + `disablePan/disableZoom` + 解绑 wheel），所以下次进入全屏是从 fit 开始。
+  - **打开之后它就是一整个视口，不做「半开」**：`minScale` 取 0.25（**小于 fit**，图能被缩小，
+    fit 只是「还原缩放」回到的那个点）、`panOnlyWhenZoomed: false`（fit 状态下也能拖 —— 高过视口的
+    图不用先放大就能上下看到底）、`handleStartEvent` 无条件接管 pointerdown。**没有 `zoomed`
+    getter**：光标与手势不再挂在「是否放大」上，挂上去只会让 fit 这个状态同时想要两套行为。
+  - **文本可选只在行内存在**：全屏里拖拽一律是平移，所以也一律不让浏览器选字 —— 想两头兼顾时
+    （拖拽本来会平移却去选文字）手势是含混的。这条由 `handleStartEvent` 在 `#active` 时接管实现。
+    panzoom 的 move 监听是 `{passive: true}` 且从不 preventDefault，所以放行之后没有别的拦截点。
   - 两条必须绕开的默认行为（原在 `DfkMermaid.ts`，现集中在 `panzoom-view.ts`，改动前先读回）：
     **panzoom 构造时无条件往元素与父节点写内联样式**：`cursor`（默认 `'move'`）写在元素上，
     `user-select: none` 写在元素**和它的父节点**上，而且没有任何选项能关掉；**`setOptions()`
-    还会再写一遍**，所以清理挂在构造后与每次 `setOptions` 后（`#clearPanzoomStyles()`）。前者让
-    整个图看起来可以拽，后者让图里**一个字都选不中**（实测：清理前
-    `getComputedStyle(label).userSelect` 是 `none`，双击选不到词）。它原本的用途（拖拽时别选文字）
-    由下面的 `handleStartEvent` 覆盖。
-  - **`handleStartEvent` 的默认实现对每次 `pointerdown` 都 `preventDefault()` +
-    `stopPropagation()`**，与是否真的会平移无关 —— 这就是「图里选不中文字」的另一半原因。必须改成
-    「只有真的会平移时才接管」（即 `zoomed` 为真）。panzoom 的 move 监听是 `{passive: true}`
-    且从不 preventDefault，所以放行之后没有别的拦截点。
-  - 光标因此**不交给 panzoom 的 `cursor` 选项**，而是由缩放状态驱动 CSS：viewport 上的
-    `dfk-panzoom-zoomed` → `grab`，再叠 `dfk-panzoom-grabbing`（拖拽中）→ `grabbing`；未放大时
-    什么都不设，标签上就是浏览器默认的 I 型。`cursor` 是继承属性，所以规则打在 viewport 上即可，
-    两份副本在 `DfkMermaid.css` 与 `sql.css`（各自的选择器不同：`.dfk-mermaid-viewport` /
-    `.dfk-sql-svg`）。panzoom 通过**在元素上派发 `CustomEvent`**（v4 没有 `on()` API）报告状态，
-    所以 `panzoomchange` / `panzoomstart` / `panzoomend` 监听写在 `PanZoomView` 构造函数里、挂在
-    自有内容节点上（无需拆除，也不会因重连而重复注册）。
+    还会再写一遍**，所以清理挂在构造后与每次 `setOptions` 后（`#clearPanzoomStyles()`）。前者会
+    让图看起来一直可以拽（连行内也是），后者让图里**一个字都选不中**（实测：清理前
+    `getComputedStyle(label).userSelect` 是 `none`，双击选不到词）—— 行内「图是图片」这条就靠
+    这个清理维持。
+  - 光标因此**不交给 panzoom 的 `cursor` 选项**，而是由 CSS 按状态画：viewport 上的
+    `dfk-panzoom-active`（`setActive(true)` 时加）→ `grab`，再叠 `dfk-panzoom-grabbing`（拖拽中）
+    → `grabbing`；行内两个类都没有，标签上就是浏览器默认的 I 型。`cursor` 是继承属性，所以规则打在
+    viewport 上即可，两份副本在 `DfkMermaid.css` 与 `sql.css`（各自的选择器不同：
+    `.dfk-mermaid-viewport` / `.dfk-sql-svg`）。panzoom 通过**在元素上派发 `CustomEvent`**（v4
+    没有 `on()` API）报告状态，所以 `panzoomstart` / `panzoomend` 监听写在 `PanZoomView` 构造函数里、
+    挂在自有内容节点上（无需拆除，也不会因重连而重复注册）。
+  - **「还原缩放」按钮只在能缩放时出现**：`SvgViewer` 与 `<dfk-mermaid>` 各自把它们那个按钮的
+    `hidden` 挂在自己的「缩放是否打开」状态上（`SvgViewer.fullscreen` / `dfk-mermaid` 的
+    `#zoomActive()`），因为全屏里唯一需要还原的是缩放 —— 行内放一个点不动的按钮只是噪音。
 - **「下载 SVG」必须用 `XMLSerializer` 重新序列化那个节点，不能直接用 mermaid 返回的字符串**
   （`serializeMermaidSvg()`）。mermaid 是用 `innerHTML` 序列化的（HTML 序列化），空元素**不写闭合
   斜杠**：作者写的 `<br/>` 出来就是 `<br>`。页面里没问题（HTML 解析器照收），但下载下来的 `.svg`

@@ -40,6 +40,16 @@ export class IconButton {
     this.root.classList.toggle('dfk-icon-on', on);
   }
 
+  /**
+   * Hides the button without removing it (`[hidden]`, which every consumer's
+   * stylesheet turns back into `display: none` — a shadow host cannot rely on the
+   * UA rule alone). For controls that have nothing to do in the current state,
+   * such as reset-zoom while zooming is off.
+   */
+  setHidden(hidden: boolean): void {
+    this.root.hidden = hidden;
+  }
+
   setDisabled(disabled: boolean): void {
     if (disabled) {
       this.root.setAttribute('disabled', '');

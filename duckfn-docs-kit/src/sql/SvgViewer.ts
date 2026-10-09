@@ -62,6 +62,10 @@ export class SvgViewer {
     });
     this.#resetBtn.setLabel(labels.reset);
     this.#editBtn.setLabel(labels.edit);
+    // Zoom is off inline (the result panel is not a viewport until it is
+    // expanded), so an inline figure has nothing to reset — the button would be
+    // the one dead control in the strip. `setFullscreen` reveals it.
+    this.#resetBtn.setHidden(true);
     this.actions.append(this.#resetBtn.root, this.#editBtn.root);
     this.#view.setContent(svg ?? textBlock(markup));
     this.root.append(this.#content, this.#dialog.root);
@@ -70,6 +74,7 @@ export class SvgViewer {
   /** Turns zoom and pan on or off; the result area calls this with its fullscreen. */
   setFullscreen(value: boolean): void {
     this.#view.setActive(value);
+    this.#resetBtn.setHidden(!value);
   }
 
   /**

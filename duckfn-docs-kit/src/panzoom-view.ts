@@ -16,17 +16,25 @@ import type {PanzoomObject} from '@panzoom/panzoom';
  * fullscreen, a diagram's own). Deactivating resets the view to fit, so the next
  * activation starts from the whole figure.
  *
+ * **While it is active the figure is a viewport, not a picture.** The wheel
+ * zooms both ways — including below fit, so a figure can be shrunk — a drag
+ * always pans, and the pointer is a grab hand throughout. Nothing tries to keep
+ * the diagram's labels selectable while zoom is on: a drag that panned anyway
+ * would silently steal the selection, which made the whole gesture ambiguous.
+ * Inline, where panzoom is off, the labels are ordinary text again and a drag
+ * selects them.
+ *
  * This is browser-only code: `@panzoom/panzoom` is reached through a dynamic
  * `import()`, so a page whose figures are never zoomed never loads it.
  */
 
 /**
- * The zoom range. `MIN_SCALE` is the fit-to-box scale: the figure opens there and
- * cannot go below it, which is what makes "zoomed" a clean yes/no — it is exactly
- * the state in which a drag pans, the wheel has something to undo, and the cursor
- * stops promising plain text.
+ * The zoom range, in multiples of fit (scale 1, which is where a figure opens and
+ * where "Reset zoom" returns it). `MIN_SCALE` below 1 is what lets a reader shrink
+ * a figure that fills the viewport; the ceiling is high enough to inspect a dense
+ * scatter plot.
  */
-const MIN_SCALE = 1;
+const MIN_SCALE = 0.25;
 const MAX_SCALE = 8;
 const ZOOM_STEP = 0.25;
 
@@ -50,14 +58,8 @@ export class PanZoomView {
   readonly #onWheel = (event: WheelEvent): void => {
     this.#panzoom?.zoomWithWheel(event);
   };
-  /** The cursor follows the zoom state, so it never promises a pan that cannot happen. */
-  readonly #onChange = (): void => {
-    this.#viewport.classList.toggle('dfk-panzoom-zoomed', this.zoomed);
-  };
   readonly #onStart = (): void => {
-    // `panzoomstart` fires at fit too, where the gesture was left to the browser;
-    // only a drag that will really pan gets the closed hand.
-    this.#viewport.classList.toggle('dfk-panzoom-grabbing', this.zoomed);
+    this.#viewport.classList.add('dfk-panzoom-grabbing');
   };
   readonly #onEnd = (): void => {
     this.#viewport.classList.remove('dfk-panzoom-grabbing');
@@ -66,18 +68,13 @@ export class PanZoomView {
   constructor(viewport: HTMLElement, content: HTMLElement) {
     this.#viewport = viewport;
     this.#content = content;
-    // panzoom reports state as DOM `CustomEvent`s dispatched on the element it
-    // transforms (`@panzoom/panzoom` v4 has no `on()` API), so they are listened
-    // for here, on the content box — which also means they need no teardown, and
-    // that re-creating the panzoom instance after a reconnect cannot double them.
-    content.addEventListener('panzoomchange', this.#onChange);
+    // panzoom reports the start and end of a gesture as DOM `CustomEvent`s
+    // dispatched on the element it transforms (`@panzoom/panzoom` v4 has no `on()`
+    // API), so they are listened for here, on the content box — which also means
+    // they need no teardown, and that re-creating the panzoom instance after a
+    // reconnect cannot double them.
     content.addEventListener('panzoomstart', this.#onStart);
     content.addEventListener('panzoomend', this.#onEnd);
-  }
-
-  /** Whether the figure is enlarged past its fit-to-box size. */
-  get zoomed(): boolean {
-    return (this.#panzoom?.getScale() ?? MIN_SCALE) > MIN_SCALE;
   }
 
   /** Replaces the figure on screen and returns the view to fit. */
@@ -96,6 +93,11 @@ export class PanZoomView {
       return;
     }
     this.#active = active;
+    // The grab cursor follows "this figure is a viewport now", not the zoom
+    // level: inside one a drag always pans and the wheel always zooms, so the
+    // hand is honest from the first moment — and the I-beam stops promising a
+    // text selection that the drag would not deliver.
+    this.#viewport.classList.toggle('dfk-panzoom-active', active);
     if (active) {
       void this.#ensurePanzoom();
     } else {
@@ -119,7 +121,7 @@ export class PanZoomView {
     this.#unbindWheel();
     this.#panzoom?.destroy();
     this.#panzoom = null;
-    this.#viewport.classList.remove('dfk-panzoom-zoomed', 'dfk-panzoom-grabbing');
+    this.#viewport.classList.remove('dfk-panzoom-active', 'dfk-panzoom-grabbing');
   }
 
   /**
@@ -129,19 +131,17 @@ export class PanZoomView {
    *
    * Three settings carry the interaction contract:
    *
-   * - `panOnlyWhenZoomed` — a figure that already fits must not swallow drags, so
-   *   panning only engages once it is enlarged. That is also what keeps
-   *   `touchAction: 'pan-y'` meaningful: vertical page scrolling stays the
-   *   browser's, pinch and horizontal drags go to the figure.
-   * - `handleStartEvent` — panzoom's default takes the gesture on *every*
-   *   pointerdown (`preventDefault` + `stopPropagation`), which costs the reader
-   *   text selection at every zoom level. Handing the gesture over only when a
-   *   drag will really pan is what makes the labels selectable while the figure is
-   *   at fit. Nothing else blocks it: panzoom's move listener is `passive` and
-   *   never calls `preventDefault`.
+   * - `panOnlyWhenZoomed: false` — panning works at fit too, which is what a
+   *   fullscreen figure should do; `touchAction: 'pan-y'` keeps vertical page
+   *   scrolling the browser's while pinch and horizontal drags go to the figure.
+   * - `handleStartEvent` — panzoom's own default takes every pointerdown
+   *   (`preventDefault` + `stopPropagation`), which is what stops a drag from
+   *   selecting text instead of panning. It is applied here only while the view is
+   *   active: inline, the guard leaves the gesture alone so a diagram's labels
+   *   stay selectable and a drag still selects them.
    * - no `cursor` option — panzoom would then put `grab` on the element for good,
-   *   over text that is perfectly selectable. The cursor is driven by the zoom
-   *   state instead, from each consumer's stylesheet.
+   *   inline included, over text that is perfectly selectable. The cursor comes
+   *   from each consumer's stylesheet, driven by the active state instead.
    */
   async #ensurePanzoom(): Promise<void> {
     if (this.#panzoom !== null) {
@@ -164,7 +164,7 @@ export class PanZoomView {
         maxScale: MAX_SCALE,
         minScale: MIN_SCALE,
         step: ZOOM_STEP,
-        panOnlyWhenZoomed: true,
+        panOnlyWhenZoomed: false,
         touchAction: 'pan-y',
         // panzoom's own default is `move`, written inline on the element — the
         // cursor has to stay a CSS decision (see the consumers' stylesheets), so
@@ -173,7 +173,7 @@ export class PanZoomView {
         disablePan: false,
         disableZoom: false,
         handleStartEvent: (event) => {
-          if (!this.zoomed) {
+          if (!this.#active) {
             return;
           }
           event.preventDefault();

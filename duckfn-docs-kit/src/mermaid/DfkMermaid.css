@@ -79,17 +79,18 @@
 
 /* --- Cursor -------------------------------------------------------------- */
 
-/* The cursor says what a drag will actually do, which is why it is driven by the
-   zoom state rather than set on the element once and for all (panzoom's `cursor`
-   option does the latter, and it was promising a pan at fit — over text that is
-   perfectly selectable). `cursor` is inherited, so these two rules reach the
-   diagram and every label in it; the buttons override it with `pointer`. The state
-   classes are written by the shared `PanZoomView`. */
-.dfk-mermaid-viewport.dfk-panzoom-zoomed {
+/* The cursor says what a drag will actually do, which is why it follows the state
+   the shared `PanZoomView` reports instead of being set on the element once and
+   for all (panzoom's `cursor` option does the latter, and it would promise a pan
+   over inline text that is perfectly selectable). `-active` means the diagram is
+   expanded — a drag pans and the wheel zooms, so the hand is honest; `-grabbing`
+   is the drag itself. `cursor` is inherited, so both rules reach the diagram and
+   every label in it; the buttons override it with `pointer`. */
+.dfk-mermaid-viewport.dfk-panzoom-active {
   cursor: grab;
 }
 
-.dfk-mermaid-viewport.dfk-panzoom-zoomed.dfk-panzoom-grabbing {
+.dfk-mermaid-viewport.dfk-panzoom-active.dfk-panzoom-grabbing {
   cursor: grabbing;
 }
 

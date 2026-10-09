@@ -61,11 +61,20 @@ export interface RunnableSqlConfig {
   field?: string;
   /** The column to label each preview tab with; falls back to `Row N`. */
   tab_name?: string;
-  /** Presentation knobs for the preview renderers; see `option.width` etc. */
+  /** Presentation knobs for the renderers; see `option.width` etc. */
   option?: {
     /** CSS length for the preview box (e.g. `'100%'`, `'640px'`). */
     width?: string;
     height?: string;
+    /**
+     * A ceiling for the **code editor** (e.g. `'16rem'`, `'40vh'`), which is what
+     * keeps the result in reach when an example runs to hundreds of lines: past
+     * this the block stops growing and the code area scrolls inside itself.
+     * Unset, the editor is exactly as tall as its SQL.
+     *
+     * It is a ceiling, not a height — a short block stays as short as it looks.
+     */
+    code_max_height?: string;
     /**
      * `sandbox` tokens for the `iframe` renderer, replacing the default
      * `allow-scripts`. Only set this to *widen* what the report may do — the

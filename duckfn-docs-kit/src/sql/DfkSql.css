@@ -33,7 +33,13 @@
 .dfk-sql-editor {
   border: 1px solid var(--ifm-global-border-color, #e0e0e0);
   border-radius: var(--ifm-global-radius, 0.4rem);
-  overflow: hidden;
+  /* `auto`, not `hidden`: with a ceiling (`option.code_max_height` → the custom
+     property `DfkSql` writes on the host) a long example scrolls inside its own
+     box instead of growing a screenful and burying the result below it. Without
+     one the two are the same — nothing overflows — and `auto` still clips the
+     editor against the rounded corners. */
+  overflow: auto;
+  max-height: var(--dfk-sql-code-max-height, none);
   background: var(--ifm-background-surface-color, #fff);
   font-size: var(--ifm-code-font-size, 95%);
 }

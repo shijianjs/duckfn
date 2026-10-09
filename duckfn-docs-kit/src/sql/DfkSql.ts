@@ -317,6 +317,12 @@ export class DfkSql extends HTMLElementBase {
     // hand-edited doc and the headless harness.
     this.#originalSql = DuckDBRuntime.getInstance().expand(this.getAttribute('sql') ?? '');
     this.#currentSql = this.#originalSql;
+    // The custom property is written on the host, so it reaches both `DfkSql.css`
+    // (the editor, in the shadow tree) and `sql.css` by inheritance.
+    const codeMaxHeight = this.#config.option?.code_max_height;
+    if (codeMaxHeight) {
+      this.style.setProperty('--dfk-sql-code-max-height', codeMaxHeight);
+    }
     this.#applyLabels();
   }
 

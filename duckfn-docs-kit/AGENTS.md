@@ -56,6 +56,7 @@ is compiled.
 | `field` | The column holding the markup, for `html` / `iframe` / `svg` / `mermaid`. Required when the result has more than one column. |
 | `tab_name` | The column whose value labels each preview tab. Defaults to `Row N`. |
 | `option.width` · `option.height` | CSS lengths for the preview box (`"100%"`, `"640px"`). |
+| `option.code_max_height` | A ceiling for the **code editor** (`"16rem"`, `"40vh"`): past it the block stops growing and the code area scrolls inside itself. What keeps the result in reach when an example runs to a hundred lines. |
 | `option.sandbox` | Sandbox tokens for the iframe, replacing the default `allow-scripts`. Widen deliberately. |
 | `extensions` | Extra extension names to `LOAD` before this block runs, on top of the site's preloads. |
 | `repository` | Where those extensions come from: `community`, `core`, or a repository URL. |
@@ -113,7 +114,7 @@ the **fullscreen** toggle.
 | Active tab | Controls |
 | --- | --- |
 | `Table` | Search, copy table, column-width mode, reset view, unfreeze columns |
-| `svg` / `mermaid` | Reset zoom, edit source |
+| `svg` / `mermaid` | Reset zoom (fullscreen only), edit source |
 | `html` / `iframe` / `text` | — |
 
 - Those table buttons are the "whole table" half of the grid's right-click menu, placed where they
@@ -121,6 +122,9 @@ the **fullscreen** toggle.
   row/column, freeze up to this column). Freezing, column widths and the current view therefore
   survive a switch to another tab and back. **Unfreeze columns** is hidden until a column has
   actually been frozen, so it does not sit there as a dead control.
+- **Reset zoom** is hidden the same way while the result is inline: a figure only zooms in
+  fullscreen, so inline there is nothing to reset and the button would be dead. Expand the result and
+  it appears next to **Edit source**.
 - **Search** opens as an input in the strip rather than floating over the cells it searches, because
   the table spans the full width. It highlights every hit, shows `3/12`, and steps with the arrows;
   it is per result, not shared between blocks.
@@ -197,9 +201,11 @@ browser** (mermaid is a lazy `import()`, so a page with no diagram never downloa
 also install `@docusaurus/theme-mermaid` or list it in `themes`, and do not set `markdown.mermaid`:
 the kit's element replaces both, and two renderers on one page would fight.
 
-What the reader gets, in the element's top-right corner on hover: **reset zoom**, **fullscreen**,
-**edit the source** in a CodeMirror dialog, and **download SVG**. Zoom and pan are off until the
-diagram is expanded — fullscreen is what turns the wheel into a zoom and a drag into a pan.
+What the reader gets, in the element's top-right corner on hover: **reset zoom** (once the diagram
+can actually be zoomed, i.e. from the moment it is expanded), **fullscreen**, **edit the source** in
+a CodeMirror dialog, and **download SVG**. Expanding is what turns the diagram into a viewport: the
+pointer becomes a grab hand, a drag pans without zooming in first, and the wheel zooms both ways —
+including below fit, so a figure that fills the screen can still be shrunk.
 
 - **The file is named after the section it sits in.** `1. Expansion.svg`, not
   `mermaid-diagram.svg`, in a cascade that walks from the most specific source to the most general:
@@ -211,8 +217,11 @@ diagram is expanded — fullscreen is what turns the wheel into a zoom and a dra
 - **The diagram on the page is a picture, not a viewport.** The cursor is the browser's (an I-beam
   over a label), the wheel scrolls the page, and dragging selects text — labels are still text, and
   copying one works. Expanding the diagram is what turns the pointer into a `grab` hand and gives a
-  drag to panning; **Reset zoom** returns it to fit without leaving fullscreen, and zooming is off
-  again the moment the diagram is back inline. There is no select/drag mode to remember.
+  drag to panning, at which point selecting text inside the diagram is deliberately off: a drag that
+  panned anyway would silently steal the selection, and a mode that tried to keep both made the
+  gesture ambiguous. **Reset zoom** returns it to fit without leaving fullscreen, and zooming is off
+  again the moment the diagram is back inline — where the labels are selectable text once more.
+  There is no select/drag mode to remember.
 - **A `show: "mermaid"` result reuses the same element**, in an *embedded* mode: the result panel
   already draws the frame and the strip, so the element renders neither a frame nor a floating
   cluster, and **reset zoom** / **edit source** move into the tab strip. See *The strip at the right

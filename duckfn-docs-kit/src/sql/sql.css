@@ -436,15 +436,17 @@ dfk-sql:not(:defined) {
   height: auto;
 }
 
-/* The cursor says what a drag will actually do, so it follows the zoom state
-   rather than being set once (`PanZoomView` writes the two state classes).
-   `cursor` is inherited, so it reaches the figure and every label in it. The
-   same two rules live in `DfkMermaid.css`. */
-.dfk-sql-svg.dfk-panzoom-zoomed {
+/* The cursor says what a drag will actually do, so it follows the state the
+   shared `PanZoomView` reports: `-active` while this box is a viewport (the result
+   is expanded — a drag pans, the wheel zooms), `-grabbing` during the drag itself.
+   An inline figure carries neither, so its labels keep the I-beam and stay
+   selectable. `cursor` is inherited, so the rules reach the figure and every label
+   in it; the same two live in `DfkMermaid.css`. */
+.dfk-sql-svg.dfk-panzoom-active {
   cursor: grab;
 }
 
-.dfk-sql-svg.dfk-panzoom-zoomed.dfk-panzoom-grabbing {
+.dfk-sql-svg.dfk-panzoom-active.dfk-panzoom-grabbing {
   cursor: grabbing;
 }
 

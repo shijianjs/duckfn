@@ -74,21 +74,25 @@ back — so check a diagram in a browser, not by the build. (`node` elements car
 
 ## What the reader gets
 
-Hovering a diagram reveals four buttons in its top-right corner:
+Hovering a diagram reveals its buttons in the top-right corner:
 
 | Button | What it does |
 | --- | --- |
-| Reset zoom | Back to fit. Only does something in fullscreen, where the wheel zooms and dragging pans. |
+| Reset zoom | Back to fit. Appears once the diagram can actually be zoomed — i.e. in fullscreen. |
 | Fullscreen | Fills the viewport **and turns zooming on**; <kbd>Esc</kbd> exits. |
 | Edit source | Opens the mermaid source in a CodeMirror dialog. **Apply** re-renders; the change is local to the page. |
 | Download SVG | Saves the diagram as an `.svg` file, named after the section it sits in. |
 
-**A diagram on the page is a picture, not a viewport.** The wheel scrolls the page over it, the
-cursor is the ordinary one — an I-beam over a label — and dragging selects text, so a label can be
-copied like any other text on the page. Both are what fullscreen is for: expanding a diagram is what
-turns the wheel into a zoom and a drag into a pan, where the pointer becomes a `grab` hand. **Reset
-zoom** returns the diagram to fit without leaving fullscreen; zooming is off again as soon as the
-diagram comes back inline. There is no select/drag mode to switch.
+**A diagram on the page is a picture; fullscreen turns it into a viewport.** Inline, the wheel
+scrolls the page over it, the cursor is the ordinary one — an I-beam over a label — and dragging
+selects text, so a label can be copied like any other text on the page. Expanding the diagram is
+what changes all of that: the pointer becomes a `grab` hand, a drag pans (no need to zoom in first —
+a diagram taller than the screen can be dragged through straight away), and the wheel zooms in
+*and* out, so a diagram that fills the screen can still be shrunk. Selecting text is deliberately off
+while the diagram is a viewport: a drag that panned anyway would silently steal the selection, so
+there is no select/drag mode to switch — the mode is the fullscreen itself. **Reset zoom** returns
+the diagram to fit without leaving fullscreen, and everything is back to the inline behaviour the
+moment it comes back out.
 
 **The downloaded file is named from the page**, not `mermaid-diagram.svg` — the section it sits in
 (`2. Registration.svg`). The name comes from the first of these that says anything: the diagram's
