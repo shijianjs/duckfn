@@ -116,6 +116,15 @@ Two facts worth knowing before you pick one:
   themes (a frame is a picture of a terminal, not a part of the page) and `--duckfn-terminal-bg` /
   `--duckfn-terminal-fg` are the two values to override. **Download** saves the raw text with its
   escapes, ready to be piped back into a terminal.
+- **The frame's font ships with the kit** — [`@fontsource/cascadia-code`](https://www.npmjs.com/package/@fontsource/cascadia-code),
+  imported by `sql.css`. A frame mixes ASCII, box-drawing, block elements and braille, and that only
+  lines up in a monospace whose braille and box-drawing glyphs advance exactly like ASCII; measured
+  across the usual suspects (DejaVu Sans Mono, JetBrains Mono, Ubuntu Mono, Consolas, CJK monospace),
+  only the Cascadia family gets it right, and it is Windows Terminal's default rather than something
+  a reader is likely to have. The ten `unicode-range` subsets mean the browser downloads only the
+  ones a frame uses — latin, `symbols2` (box drawing and blocks) and `braille` for a plot, nothing at
+  all on a page without one. A site that would rather use its own face sets
+  `--duckfn-terminal-font`.
 
 ### The strip at the right of the tabs
 

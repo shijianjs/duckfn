@@ -197,6 +197,11 @@ FROM bars;
 - The surface is dark in **both** site themes — a frame is a picture of a terminal,
   not a part of the page — and `--duckfn-terminal-bg` / `--duckfn-terminal-fg`
   are the two values to override.
+- **The font ships with the kit** (Cascadia Code's webfont). A frame mixes ASCII,
+  box-drawing, block elements and braille, and that only lines up in a monospace
+  whose braille and box-drawing glyphs advance exactly like ASCII — almost no font
+  gets it right, so the panel brings one that does and downloads only the subsets a
+  frame uses. A site that prefers its own face sets `--duckfn-terminal-font`.
 - Escape sequences and control characters are stripped before anything reaches the
   page: an OSC window title or a stray escape byte inside a label cannot become
   visible text, and nothing here is ever built from markup — the styled runs
