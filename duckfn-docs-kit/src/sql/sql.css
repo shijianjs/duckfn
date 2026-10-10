@@ -11,19 +11,22 @@
  * Imported through `kit.css`; the consuming site gets it with the one-line
  * `@import 'duckfn-docs-kit/src/kit.css'` it already has. */
 
-/* The terminal frame's font ships with the kit, because the frame *has* to align
-   and almost nothing else does. A frame mixes ASCII, box-drawing (U+2500–257F),
-   block elements (U+2580–259F) and braille (U+2800–28FF), which only lines up in
-   a monospace whose braille and box-drawing glyphs advance exactly like ASCII —
-   measured across the usual suspects (DejaVu Sans Mono, JetBrains Mono, Ubuntu
-   Mono, Consolas, CJK monospace like SimSun or LXGW WenKai Mono), only the
-   Cascadia family gets it right, and it is Windows-Terminal's default rather than
-   something a reader is likely to have. So `400.css` declares Cascadia Code's
-   faces (all ten subsets, each with its own `unicode-range`) and the browser
-   downloads only the subsets a frame actually uses — latin, `symbols2` (box
-   drawing and blocks) and `braille` for a plot, and nothing at all on a page
-   without one. Sites that would rather use their own face set
-   `--duckfn-terminal-font`. */
+/* The terminal frame's font ships with the kit, because the frame is rendered in
+   the browser here and *there* alignment depends on the font. A frame mixes
+   ASCII, box-drawing (U+2500–257F), block elements (U+2580–259F) and braille
+   (U+2800–28FF); a browser lays text out by the glyph's own advance — no terminal
+   cell grid — so those only line up in a monospace whose box-drawing and braille
+   glyphs advance exactly like ASCII. Measured in the browser across the usual
+   suspects (DejaVu Sans Mono, JetBrains Mono, Ubuntu Mono, Consolas, CJK
+   monospace like SimSun or LXGW WenKai Mono), only the Cascadia family gets it
+   right, and it is Windows-Terminal's default rather than something a reader is
+   likely to have. (A real terminal emulator snaps every glyph into its own
+   equal-width cell, so there any monospace font aligns — the font only matters on
+   this side, in the browser.) So `400.css` declares Cascadia Code's faces (all
+   ten subsets, each with its own `unicode-range`) and the browser downloads only
+   the subsets a frame actually uses — latin, `symbols2` (box drawing and blocks)
+   and `braille` for a plot, and nothing at all on a page without one. Sites that
+   would rather use their own face set `--duckfn-terminal-font`. */
 @import '@fontsource/cascadia-code/400.css';
 
 /* The remark plugin prerenders two children: the loading ghost, and the original

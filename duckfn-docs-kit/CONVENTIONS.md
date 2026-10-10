@@ -205,13 +205,16 @@ src/
   `line-height: 1` 让行与行贴紧（盲文点阵／方块字符要连成一张图）、`white-space: pre`
   绝不折行（折行后字符网格就不再对齐，只能横向滚动）。
 - **字体随包发**（`@fontsource/cascadia-code`，`sql.css` 顶部 `@import` 它的
-  `400.css`）：画面同时混 ASCII、框线（U+2500–257F）、方块（U+2580–259F）与盲文
-  （U+2800–28FF），只有等宽字体里这几段的字形步进**与 ASCII 完全一致**才能对齐；把
-  DejaVu Sans Mono、JetBrains Mono、Ubuntu Mono、Consolas、宋体、霞鹜文楷等宽在真机上量
-  一遍，只有 Cascadia 一家全对 —— 而它只是 Windows Terminal 的默认字体，读者多半没有。
-  fontsource 的十个子集各带 `unicode-range`，浏览器只取画面用到的（latin、symbols2、
-  braille），没有画面就一个字节都不下。改字体前先量：用 Range 量 `M`/`─`/`█`/`⠁` 的
-  步进宽度必须完全相等，构建产物里 `url()` 指到的 woff2 必须都存在。
+  `400.css`）：kit 的画面是在**浏览器**里排的，浏览器按字形自身的步进排版、没有终端那层
+  单元格网格，所以画面对不对齐要看字体。画面同时混 ASCII、框线（U+2500–257F）、方块
+  （U+2580–259F）与盲文（U+2800–28FF），只有等宽字体里这几段的字形步进**与 ASCII 完全
+  一致**才能对齐；在浏览器里把 DejaVu Sans Mono、JetBrains Mono、Ubuntu Mono、Consolas、
+  宋体、霞鹜文楷等宽量一遍，只有 Cascadia 一家全对 —— 而它只是 Windows Terminal 的默认
+  字体，读者多半没有。（**真正的终端模拟器**会把每个字符塞进自己等宽的格子里，任何等宽
+  字体都能对齐 —— 字体只在浏览器这一侧才要紧。）fontsource 的十个子集各带 `unicode-range`，
+  浏览器只取画面用到的（latin、symbols2、braille），没有画面就一个字节都不下。改字体前先量：
+  用 Range 量 `M`/`─`/`█`/`⠁` 的步进宽度必须完全相等，构建产物里 `url()` 指到的 woff2
+  必须都存在。
 - 下载给的是**带转义的原始文本**（可以管回终端），不是渲染后的 HTML。
 
 **界面契约（`DfkSql.ts` + `PreviewTabs.ts`）**
