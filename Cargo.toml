@@ -9,8 +9,9 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 readme = "README.md"
-# crates.io's "Documentation" link should land on the user guide rather than on docs.rs.
-documentation = "https://shijianjs.github.io/duckfn/"
+# crates.io's "Documentation" link points at the API reference — docs.rs, the crate's default docs
+# host; the user guide is the "Homepage" link instead (see `homepage` below).
+documentation = "https://docs.rs/duckfn"
 keywords = ["duckdb", "extension", "ffi", "database", "macro"]
 categories = ["database", "api-bindings", "development-tools::ffi"]
 
@@ -79,7 +80,9 @@ edition = "2024"
 rust-version = "1.86"
 license = "MIT"
 repository = "https://github.com/shijianjs/duckfn"
-homepage = "https://github.com/shijianjs/duckfn"
+# crates.io's "Homepage" link lands on the user guide (the GitHub Pages site); the source repository
+# is the `repository` field above, and the API reference is the `documentation` field below.
+homepage = "https://shijianjs.github.io/duckfn/"
 authors = ["shijianjs"]
 
 [lib]
