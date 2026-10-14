@@ -212,6 +212,40 @@ The switch uses the stable C API (`duckdb_scalar_function_set_volatile`, availab
 overloads alike. The functions above are deterministic, so their values do not depend on the flag;
 what changes is how often DuckDB calls them.
 
+#### When the flag is not optional: side effects
+
+Those functions are deterministic, so the flag only changes how often the body runs. A function that touches
+the outside world — it starts a process, writes a file, prints — is the opposite case: there the flag stops
+being a performance knob and becomes a correctness requirement.
+
+Without it, DuckDB folds a constant-argument call into a constant while the query is being prepared (bind /
+plan time), so the side effect happens once **before execution**; if that folded constant is then consumed by
+another expression, the engine evaluates that expression again at execution and the side effect happens a
+second time. `f` below is any side-effecting function, measured on a downstream extension whose tests count
+the files its write family produces:
+
+| Call | Without `volatile` | With `volatile` |
+| --- | --- | --- |
+| `SELECT f('x')` | 1 — the call is folded into a constant | 1 |
+| `SELECT length(f('x'))` | **2** — folded once, evaluated again at execution | 1 |
+| `SELECT f('x')[1]` | **2** | 1 |
+| `EXPLAIN SELECT f('x')` | **1** — preparing the query alone runs the body | 0 |
+| `SELECT f('x') FROM range(3)` | 1 — folded, so one execution for three rows | 3 — one per row |
+
+So the rule is short: **if the body touches anything outside the process, set `volatile = true`**. A pure
+function is fine either way — folding something with no observable effect only saves an evaluation. When the
+name has overloads, set the flag on **every** signature of the set: `overloads_name` merges the SQL name, not
+the registration, so a signature registered without the flag stays foldable.
+
+Two consequences are worth writing down:
+
+- **A constant argument stops meaning "once".** With the flag, `SELECT f('x') FROM range(3)` runs three times.
+  That is the honest reading of a per-row scalar function, but it is a change of behaviour for anyone who had
+  come to rely on the folding.
+- **The flag is visible in the catalog.** Recent DuckDB releases expose it as
+  `duckdb_functions().has_side_effects`, so a test suite can pin the roster instead of trusting each attribute
+  to be written by hand.
+
 ### Variadic arguments
 
 `varargs = true` declares the last parameter as `Vec<T>`, where `T` is the type of one variadic

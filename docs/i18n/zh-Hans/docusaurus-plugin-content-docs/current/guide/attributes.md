@@ -40,7 +40,7 @@ description: duckfn 的全部属性、它们共用的参数、各自生成的 it
 | `example` | 所有「会注册出函数」的 `#[duck_*]` 属性宏 | — | 单条使用示例：`example = "SELECT ..."`。 |
 | `examples` | 所有「会注册出函数」的 `#[duck_*]` 属性宏 | — | 多条使用示例：`examples = ["SELECT ...", "..."]`，不能与 `example` 同用。 |
 | `special_null_handling` | `#[duck_scalar_function]`、`#[duck_aggregate_function]` | `false` | 让 DuckDB 把 `NULL` 入参交给回调，而不是在 bind 阶段折叠掉。见[标量函数](./scalar-functions.md#null-的处理)。 |
-| `volatile` | `#[duck_scalar_function]` | `false` | 标量函数用：标记为 volatile，注册时调用 `duckdb_scalar_function_set_volatile`，DuckDB 不缓存、不复用相同参数的调用结果。走 DuckDB 1.2.0 起的稳定 C API，不需要 feature；独立注册的标量函数与 `overloads_name` 重载都适用。见[标量函数](./scalar-functions.md#volatile)。 |
+| `volatile` | `#[duck_scalar_function]` | `false` | 标量函数用：标记为 volatile，注册时调用 `duckdb_scalar_function_set_volatile`，DuckDB 不缓存、不复用相同参数的调用结果。走 DuckDB 1.2.0 起的稳定 C API，不需要 feature；独立注册的标量函数与 `overloads_name` 重载都适用。**有副作用的函数要给每一条签名都写上** —— 否则调用会在准备查询时被折叠，可能执行两次，而 `EXPLAIN` 也会在不执行语句的情况下把它跑掉。见[标量函数](./scalar-functions.md#volatile)。 |
 | `varargs` | `#[duck_scalar_function]` | `false` | 标量函数用：开启可变参数。函数签名最后一个参数必须是 `Vec<T>`，其元素类型 `T` 的逻辑类型交给 `duckdb_scalar_function_set_varargs`。走 DuckDB 1.2.0 起的稳定 C API，不需要 feature；独立注册的标量函数与 `overloads_name` 重载都适用。见[标量函数](./scalar-functions.md#可变参数)。 |
 | `batch` | `#[duck_scalar_function]` | `false` | 标量函数用：把整批行一次性交给函数，而不是逐行遍历。唯一参数是 `Vec<MyRow>`（只含非空行）或 `Vec<Option<MyRow>>`，`MyRow` 是 `#[derive(DuckStruct)]` 结构体并直接充当参数类型；返回 `Vec<T>` / `Vec<Option<T>>` / `DuckOptionResult<Vec<…>>`。不能与 `varargs` 同用。见[标量函数](./scalar-functions.md#批量模式)。 |
 | `implicit_cost` | `#[duck_cast_function]` | — | 类型转换用：隐式转换代价。 |
