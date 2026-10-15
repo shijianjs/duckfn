@@ -91,6 +91,15 @@ updates:
       # This is the engine that runs the docs' SQL and has to stay in step with the preloaded extension
       # wasm (version and platform pairing); it is bumped by hand after verification.
       - dependency-name: "@duckdb/duckdb-wasm"
+      # TypeScript 只挡大版本：docs 站要停在 6.x —— Docusaurus（本站用的 3.10 那批包）还没支持 TS 7
+      # （实测提上去不行，2026-10 关掉过一条这样的 PR），而 duckfn-docs-kit 是 vite + tsc 的库，自己那份
+      # `~7.0.2` 不受影响，所以这里只挡 major，6.x 的补丁 / 次版本照常提。
+      #
+      # TypeScript: majors only. The docs site has to stay on 6.x because Docusaurus (the 3.10 packages
+      # this site uses) does not support TS 7 yet, while duckfn-docs-kit is a vite + tsc library and
+      # keeps its own `~7.0.2` — so minor and patch updates still arrive.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions：三条工作流里的 action 全部按完整 SHA pin、行尾注释写着版本，Dependabot 会把 SHA 与
   # 注释一起更新。工作流都很短，全部动作合成一条 PR 就够看。

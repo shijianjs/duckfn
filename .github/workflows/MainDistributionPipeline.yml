@@ -9,6 +9,26 @@ on:
 #  push:
 #    branches: [main]
   pull_request:
+    # 只在这条流水线真会编译的路径变动时跑。它是九平台构建（约 20 分钟），而 PR 里有一部分只碰文档 /
+    # npm：那些改动一行 Rust 也没动，跑它纯属白等。tag 推送与手动触发不受影响（paths 只加在
+    # pull_request 下）。改这份清单时想清楚「这条路径会不会影响产物」，别为了省时间漏掉构建入口。
+    #
+    # Only run when something this pipeline actually compiles changes. It is a nine-platform build (~20
+    # minutes) while some pull requests touch nothing but the docs site or the npm workspace; those
+    # cannot affect the artifact. Tag pushes and manual runs are unaffected (paths is on
+    # pull_request only).
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'examples/**'
+      - 'duckfn-macro/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Makefile'
+      - 'Justfile'
+      - 'scripts/**'
+      - 'extension-ci-tools'
+      - '.github/workflows/MainDistributionPipeline.yml'
   push:
     tags: ['v*.*.*']
   workflow_dispatch:

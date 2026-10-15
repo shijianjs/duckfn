@@ -24,6 +24,22 @@ name: Stable C API Pipeline
 
 on:
   pull_request:
+    # Same reasoning as in MainDistributionPipeline.yml: this builds the extension and runs DuckDB
+    # three times, so a pull request that only touches the docs site or the npm workspace (a
+    # Dependabot bump, say) has nothing for it to check. `paths` is on the pull_request event only —
+    # pushes to main and tags still run unconditionally.
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'examples/**'
+      - 'duckfn-macro/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Makefile'
+      - 'Justfile'
+      - 'scripts/**'
+      - 'extension-ci-tools'
+      - '.github/workflows/StableApiPipeline.yml'
   push:
     # Pushes to main as well as tags: this repository pushes straight to main, so those runs are the
     # ones that actually ship, and without this branch filter the commit that adds this file could not
