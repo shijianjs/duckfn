@@ -54,6 +54,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The root Makefile includes makefiles from this submodule (`include
+          # extension-ci-tools/makefiles/c_api_extensions/*.Makefile`), and checkout leaves
+          # submodules alone by default — without this every leg dies on
+          # "No rule to make target 'extension-ci-tools/makefiles/c_api_extensions/rust.Makefile'".
+          submodules: true
 
       - name: Set up Rust
         run: |
