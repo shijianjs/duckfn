@@ -260,6 +260,31 @@ pub fn with_file_system<R>(f: impl FnOnce(&FileSystem) -> DuckResult<R>) -> Duck
     f(&guard.fs)
 }
 
+/// 借出那条自有长连接，在闭包里跑完再释放它的锁。
+///
+/// Runs the closure with the owned long-lived connection, releasing its lock afterwards.
+///
+/// 这是给 [`crate::sql`] 用的入口：那条连接就是注册期捕获的同一份，所以 `sql` 与 `duck_vfs`
+/// 共享同一把锁 —— **在 [`with_file_system`] 的闭包里再调 [`crate::sql`] 会死锁**，反之亦然。
+///
+/// This is the entry point [`crate::sql`] uses: it is the same connection captured at registration
+/// time, so `sql` and `duck_vfs` share one lock — calling [`crate::sql`] inside a
+/// [`with_file_system`] closure deadlocks, and the other way round too.
+///
+/// # Errors
+///
+/// 同 [`file_system`]：扩展还没注册完（或注册时打开连接失败）时返回可读错误；闭包自身的错误
+/// 原样传出。
+///
+/// Same as [`file_system`]: a readable error when the extension has not finished registering yet (or
+/// capturing failed); the closure's own error is passed through unchanged.
+pub(crate) fn with_connection<R>(
+    f: impl FnOnce(&OwnedConnection) -> DuckResult<R>,
+) -> DuckResult<R> {
+    let connection = take_connection()?;
+    f(&connection)
+}
+
 /// 取一份可用的客户端上下文（连接级配置项、连接 ID）。
 ///
 /// Takes a usable client context (connection-level configuration options, connection ID).
@@ -321,11 +346,12 @@ impl DuckFileSystem<'_> {
         self.context.connection_id()
     }
 
-    /// 内部用：那条自有连接（[`crate::duck_vfs`] 的写工具借它跑一条 `COPY` 来清零文件）。
+    /// 内部用：那条自有连接（[`crate::duck_vfs`] 的写工具借它跑一条 `COPY` 来清零文件；
+    /// [`crate::sql`] 走的是 [`with_connection`]）。
     ///
     /// Internal: the owned connection (the write helpers in [`crate::duck_vfs`] borrow it to zero a
-    /// file with `COPY`). Not public: running SQL from a callback is a decision each caller should
-    /// take deliberately.
+    /// file with `COPY`; [`crate::sql`] goes through [`with_connection`] instead). Not public:
+    /// running SQL from a callback is a decision each caller should take deliberately.
     pub(crate) fn connection(&self) -> &OwnedConnection {
         &self._connection
     }

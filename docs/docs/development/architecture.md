@@ -22,7 +22,9 @@ layering, the registration flow and much more. When this page is not enough, sta
 | `quack-rs` | The DuckDB C API bindings: builders, `LogicalType`, `DataChunk`, `VectorReader`/`VectorWriter`, `SqlMacro`, `ExtensionError`. |
 | `libduckdb-sys` | DuckDB's C headers, compiled with the `loadable-extension` feature. |
 
-`duckfn`'s modules are all `pub(crate)`; the public surface is the set of `pub use` re-exports in
+`duckfn`'s modules are all `pub(crate)` — except the two that hold a callback-side capability rather
+than a function kind, `duckfn::duck_vfs` and `duckfn::sql`, which are `pub mod` behind the
+`owned-connection` feature. The rest of the public surface is the set of `pub use` re-exports in
 `src/lib.rs`, which is why `duckfn::DuckOptionResult` exists but `duckfn::ExtensionError` does
 not.
 
@@ -286,6 +288,8 @@ row), and `DuckBindArgs` (usable as a table function's arguments).
 | How does registration work? | `src/register.rs` |
 | How is a callback implemented? | `src/functions/*_adapter.rs` |
 | How is a type converted? | `src/value_types/*.rs` |
+| How do I run SQL from a callback? | `src/sql/*.rs` (the connection it borrows is captured in `src/duck_vfs/capture.rs`) |
+| How are runtime columns described? | `src/dynamic/*.rs` |
 
 ## Next
 

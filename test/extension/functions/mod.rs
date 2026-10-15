@@ -9,6 +9,7 @@ mod file_system;
 mod replacement_scan;
 mod rust_decimal_bridge;
 mod scalar_function;
+mod sql_exec;
 mod sql_macro;
 mod table_function;
 mod tsv_format;

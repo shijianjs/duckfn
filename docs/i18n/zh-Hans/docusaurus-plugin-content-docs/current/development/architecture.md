@@ -22,8 +22,10 @@ description: duckfn 如何把一个加了属性的函数变成已注册的 DuckD
 | `quack-rs` | DuckDB C API 绑定：各类 builder、`LogicalType`、`DataChunk`、`VectorReader`/`VectorWriter`、`SqlMacro`、`ExtensionError`。 |
 | `libduckdb-sys` | DuckDB 的 C 头文件，以 `loadable-extension` feature 编译。 |
 
-`duckfn` 的模块都是 `pub(crate)`，公共接口就是 `src/lib.rs` 里那些 `pub use` 重导出 ——
-这也是为什么 `duckfn::DuckOptionResult` 存在，而 `duckfn::ExtensionError` 不存在。
+`duckfn` 的模块都是 `pub(crate)` —— 只有两个例外：`duckfn::duck_vfs` 与 `duckfn::sql`，它们承载的
+是「回调侧能力」而不是某种函数种类，因此在 `owned-connection` feature 后面以 `pub mod` 暴露。
+其余公共接口就是 `src/lib.rs` 里那些 `pub use` 重导出 —— 这也是为什么
+`duckfn::DuckOptionResult` 存在，而 `duckfn::ExtensionError` 不存在。
 
 ## 1. 宏展开
 
@@ -258,6 +260,8 @@ quack-rs 的再导出都在 `duckdb-1-5` feature 后面。
 | 注册是怎么工作的？ | `src/register.rs` |
 | 回调是怎么实现的？ | `src/functions/*_adapter.rs` |
 | 类型是怎么转换的？ | `src/value_types/*.rs` |
+| 回调里怎么跑 SQL？ | `src/sql/*.rs`（它借的那条连接在 `src/duck_vfs/capture.rs` 里捕获） |
+| 运行期列是怎么描述的？ | `src/dynamic/*.rs` |
 
 ## 接下来
 

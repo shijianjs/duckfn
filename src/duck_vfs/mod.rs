@@ -97,7 +97,12 @@
 //!   no longer in `all` — enable `owned-connection` on native when you actually need it. On the
 //!   native CLI and a real disk everything is correct (see `test/sql/functions/duck_vfs.test`).
 
-mod capture;
+// `pub(crate)` 而不是私有：`crate::sql` 也借这条注册期捕获的自有连接跑 SQL（见 capture.rs 的
+// `with_connection`），它不是只属于 VFS 的设施。
+//
+// `pub(crate)` rather than private: `crate::sql` borrows the same registration-time owned connection
+// to run SQL (see `with_connection` in capture.rs), so it is not a VFS-only facility.
+pub(crate) mod capture;
 mod file;
 
 // 注册期捕获：由 `register_all_duckfn` 调用，不对用户公开。

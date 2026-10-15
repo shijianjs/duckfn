@@ -1,0 +1,212 @@
+# name: test/sql/functions/sql_exec.test
+# description: 在扩展里执行 SQL（duckfn::sql）：execute/query、参数绑定、标识符转义、动态结果（列名与类型来自 SQL 自己）、错误路径
+# group: [functions]
+
+require duckfn
+
+# ============================================================================
+# 执行：dfn_sql_exec 跑语句并返回影响行数。
+# 语句跑在 duckfn 注册期留下的那条自有长连接上，它与测试连接是同一个 database 实例，
+# 所以建出来的表测试连接也看得见。
+# ============================================================================
+
+statement ok
+SELECT dfn_sql_exec('CREATE OR REPLACE TABLE dfn_sql_demo(i INTEGER, s VARCHAR)');
+
+query I
+SELECT dfn_sql_exec('INSERT INTO dfn_sql_demo VALUES (1, ''a''), (2, ''b''), (3, ''c'')');
+----
+3
+
+query I
+SELECT dfn_sql_exec('DELETE FROM dfn_sql_demo WHERE i > 1');
+----
+2
+
+# 表是经自有连接建的，测试连接照样能查（同一个 database 实例）
+query I
+SELECT count(*) FROM dfn_sql_demo;
+----
+1
+
+# 多条语句（`;` 分隔）一起跑；返回的是产出结果那一条的影响行数
+query I
+SELECT dfn_sql_exec('DELETE FROM dfn_sql_demo; INSERT INTO dfn_sql_demo VALUES (7, ''z'')');
+----
+1
+
+# ============================================================================
+# 查询：结果 schema 来自被执行的语句自己（标量 / LIST / STRUCT / DECIMAL）
+# ============================================================================
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dfn_sql_query('SELECT 42::BIGINT AS answer, ''hi'' AS greeting, [1, 2] AS tags, {''a'': 1::BIGINT} AS info, 1.5::DECIMAL(4,1) AS amount'));
+----
+answer	BIGINT
+greeting	VARCHAR
+tags	INTEGER[]
+info	STRUCT(a BIGINT)
+amount	DECIMAL(4,1)
+
+query II
+SELECT answer, greeting FROM dfn_sql_query('SELECT 42::BIGINT AS answer, ''hi'' AS greeting');
+----
+42	hi
+
+# 嵌套值原样带回来：LIST 长度、STRUCT 子字段
+query I
+SELECT len(tags) FROM dfn_sql_query('SELECT [1, 2, 3] AS tags');
+----
+3
+
+query I
+SELECT info.a FROM dfn_sql_query('SELECT {''a'': 7} AS info');
+----
+7
+
+# NULL 单元格：行在，值为 NULL
+query T
+SELECT CAST(v AS VARCHAR) FROM dfn_sql_query('SELECT NULL::INTEGER AS v');
+----
+NULL
+
+# 零行的查询也要先声明出列（schema 来自 SQL，不由数据决定）
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dfn_sql_query('SELECT 1::INTEGER AS n FROM range(0)'));
+----
+n	INTEGER
+
+query I
+SELECT count(*) FROM dfn_sql_query('SELECT 1::INTEGER AS n FROM range(0)');
+----
+0
+
+# 跨 chunk（vector_size 默认 2048）也不能丢行或串位
+query III
+SELECT count(*), min(i), max(i) FROM dfn_sql_query('SELECT i FROM range(5000) t(i)');
+----
+5000	0	4999
+
+# 动态列能正常参与 WHERE / ORDER BY / 聚合
+query I
+SELECT sum(i)::BIGINT FROM dfn_sql_query('SELECT i FROM range(10) t(i)') WHERE i % 2 = 0;
+----
+20
+
+# ============================================================================
+# 结果处理：单行单列渲染成文本（标量函数只能用固定 Rust 类型回值）
+# ============================================================================
+
+query T
+SELECT dfn_sql_scalar('SELECT 6 * 7');
+----
+42
+
+query T
+SELECT dfn_sql_scalar('SELECT NULL::INTEGER');
+----
+NULL
+
+# to_text 渲染的是**物理值**：DECIMAL 输出未缩放整数（15 就是 1.5 * 10^1）
+query I
+SELECT dfn_sql_scalar('SELECT 1.5::DECIMAL(4,1)')::BIGINT;
+----
+15
+
+# DATE 同理输出「自 1970-01-01 起的天数」，这里与 DuckDB 自己算出来的对齐
+query I
+SELECT dfn_sql_scalar('SELECT DATE ''2024-01-01''')::BIGINT
+     = date_diff('day', DATE '1970-01-01', DATE '2024-01-01');
+----
+true
+
+# 多条语句的查询：返回第一条产出行的语句的结果
+query I
+SELECT dfn_sql_scalar('CREATE OR REPLACE TABLE dfn_sql_multi(i INTEGER); INSERT INTO dfn_sql_multi VALUES (1), (2); SELECT count(*) FROM dfn_sql_multi');
+----
+2
+
+# ============================================================================
+# 参数绑定：值走 `?` 占位，不拼进 SQL 文本
+# ============================================================================
+
+query T
+SELECT dfn_sql_scalar_arg('SELECT ?::BIGINT * 2', 21);
+----
+42
+
+query T
+SELECT dfn_sql_scalar_arg('SELECT ?::BIGINT - 1', 8);
+----
+7
+
+# 参数个数与语句不符：在绑定之前就报出来，而不是让 DuckDB 半途给一个难读的消息
+statement error
+SELECT dfn_sql_scalar_arg('SELECT ?::BIGINT + ?::BIGINT', 1);
+----
+duckfn::sql: the statement has 2 parameter(s) but 1 value(s) were given
+
+# ============================================================================
+# 标识符：表名不能用参数占位，只能转义后拼进 SQL
+# ============================================================================
+
+query I
+SELECT dfn_sql_table_count('dfn_sql_demo');
+----
+1
+
+# 保留字做表名：不转义会语法错误，转义后正常查
+statement ok
+SELECT dfn_sql_exec('CREATE OR REPLACE TABLE "select"(i INTEGER)');
+
+query I
+SELECT dfn_sql_table_count('select');
+----
+0
+
+# 名字里带引号：内部 `"` 双写，同样拼不坏 SQL
+statement ok
+SELECT dfn_sql_exec('CREATE OR REPLACE TABLE "a""b"(i INTEGER)');
+
+query I
+SELECT dfn_sql_table_count('a"b');
+----
+0
+
+# ============================================================================
+# 字符串值优先绑定（dfn_sql_has_table 就是把表名绑成参数的）
+# ============================================================================
+
+query I
+SELECT dfn_sql_has_table('dfn_sql_demo');
+----
+true
+
+query I
+SELECT dfn_sql_has_table('nope');
+----
+false
+
+# ============================================================================
+# 错误路径：底层错误带 `duckfn::sql::<步骤>:` 前缀，稳定可断言
+# ============================================================================
+
+statement error
+SELECT dfn_sql_scalar('SELECT nope');
+----
+duckfn::sql::query:
+
+# 列类型无法用动态列表达：ENUM 没有稳定的重建方式，消息里带列下标
+statement ok
+SELECT dfn_sql_exec('CREATE OR REPLACE TYPE dfn_sql_mood AS ENUM (''sad'', ''ok'')');
+
+statement error
+SELECT * FROM dfn_sql_query('SELECT ''ok''::dfn_sql_mood');
+----
+duckfn::sql: column 0
+
+# 表不存在时报的是 DuckDB 自己的错，经同一条前缀传出来
+statement error
+SELECT dfn_sql_table_count('dfn_sql_no_such_table');
+----
+duckfn::sql::query:
