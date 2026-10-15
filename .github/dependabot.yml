@@ -1,0 +1,110 @@
+# Dependabot：让机器人盯着三个生态的依赖版本，各自开 PR 由 CI 验。
+#
+# 这里**没有** gitsubmodule（extension-ci-tools）：子模块跟的是上游 duckdb/extension-ci-tools 的 main
+# 分支，而 MainDistributionPipeline.yml 用的是 v1.5-variegata 那个 tag 的复用工作流 —— 两者本来就不同步，
+# 自动跟上 main 只会让根 Makefile include 进来的 makefile 与工作流声明的 ci_tools_version 悄悄错位。
+# 换 DuckDB 版本是人做的事（见 AGENTS.md 的「发版流程」），不由机器人提议。
+#
+# Dependabot: three ecosystems, one pull request each, all validated by CI.
+#
+# gitsubmodule is deliberately absent: extension-ci-tools tracks upstream's main branch while
+# MainDistributionPipeline.yml pins the reusable workflow to the v1.5-variegata tag, so an automatic
+# bump would desync the makefiles the root Makefile includes from the ci_tools_version the workflow
+# declares. Moving to a new DuckDB release stays a manual step (see the release flow in AGENTS.md).
+version: 2
+updates:
+  # Rust：workspace 只有一份 Cargo.lock，所以 `directory: "/"` 一处就覆盖根包与 duckfn-macro。
+  #
+  # Rust: the workspace has a single Cargo.lock, so "/" covers both the root package and duckfn-macro.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # DuckDB 绑定层单独成组。libduckdb-sys 的版本号直接编码引擎版本（1.10506.0 = DuckDB 1.5.6 的头
+      # 文件），而根 Makefile 的 TARGET_DUCKDB_VERSION 与 MainDistributionPipeline.yml 的 duckdb_version
+      # 都写死 v1.5.6 —— 只升依赖不升引擎，测试引擎与产物就会版本不符而挂（见 Makefile 里
+      # DUCKDB_TEST_VERSION 的注释）。这条 PR 必须人工核对两处引擎版本一起动。
+      #
+      # quack-rs + libduckdb-sys as one group: libduckdb-sys' version encodes the engine version
+      # (1.10506.0 = DuckDB 1.5.6 headers) while TARGET_DUCKDB_VERSION in the root Makefile and
+      # duckdb_version in the workflow pin v1.5.6 by hand. Bumping the binding without the engine
+      # makes the test engine and the artefact disagree on the version, which fails the suite.
+      duckdb:
+        patterns:
+          - quack-rs
+          - libduckdb-sys
+      # 其余 Rust 依赖（clap / csv / chrono / uuid / rust_decimal / indexmap / inventory / itertools）
+      # 只在 minor + patch 上成组：大版本升级各开一条 PR，免得多处破坏性变更堆在一起。
+      #
+      # Everything else, grouped for minor and patch only; majors stay individual so breaking changes
+      # do not arrive bundled in one review.
+      rust:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - quack-rs
+          - libduckdb-sys
+        update-types:
+          - minor
+          - patch
+
+  # npm：根目录就是 npm workspace（docs + duckfn-docs-kit），只有一份 package-lock.json，所以 `/` 一处
+  # 即可。docs/package.json 里的 `"duckfn-docs-kit": "*"` 是 workspace 链接，Dependabot 不会动它。
+  #
+  # npm: the repository root *is* the npm workspace (docs + duckfn-docs-kit) with a single lockfile, so
+  # "/" is enough. The "duckfn-docs-kit": "*" entry in docs/package.json is a workspace link.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # docusaurus 那批包（core / faster / preset-classic / module-type-aliases / tsconfig / types）在清单
+      # 里是精确版本、必须同进同退，所以单独成组并排在最前 —— 一个依赖归入它匹配到的第一组。
+      #
+      # The Docusaurus packages are pinned exactly and have to move together; listed first because a
+      # dependency joins the first group it matches.
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
+      # 其余 JS 依赖（含 docs-kit 里的 CodeMirror / VTable / mermaid 等）同样只看 minor + patch。
+      #
+      # The rest, minor and patch only.
+      js:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # 站点里真跑 SQL 的就是它，而且必须与 docs/static 里预加载的那份扩展 wasm 对齐（版本与平台配对，
+      # 见 AGENTS.md 的文档测试一节），一直是人工验证着升的：机器人开 PR 只会得到一个跑不起来的站点。
+      #
+      # This is the engine that runs the docs' SQL and has to stay in step with the preloaded extension
+      # wasm (version and platform pairing); it is bumped by hand after verification.
+      - dependency-name: "@duckdb/duckdb-wasm"
+
+  # GitHub Actions：三条工作流里的 action 全部按完整 SHA pin、行尾注释写着版本，Dependabot 会把 SHA 与
+  # 注释一起更新。工作流都很短，全部动作合成一条 PR 就够看。
+  #
+  # GitHub Actions: every action is SHA-pinned with a version comment on the same line, and Dependabot
+  # updates both. The workflows are short, so one pull request for all of them is enough.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
