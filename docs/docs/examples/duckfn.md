@@ -27,7 +27,7 @@ takes the list from `EXTENSION_FEATURES` in the root `Makefile` (default: every 
 demos), and `just build` passes it in the Justfile (packaging the result into a loadable
 `duckfn.duckdb_extension` on the way). A bare `cargo build` would produce a cdylib without the
 entry-point symbol, which DuckDB refuses at `LOAD`; removing a capability is just a shorter list —
-`EXTENSION_FEATURES=quack` builds the stable-API-only variant, which older engines load (see
+`EXTENSION_FEATURES=quack,sql` builds the stable-API-only variant, which older engines load (see
 [Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md)).
 
 ```bash

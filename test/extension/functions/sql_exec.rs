@@ -30,13 +30,14 @@
 //   Column names and types come from the result itself, so a table function's output schema can be
 //   whatever the caller wrote in SQL.
 //
-//   前置条件：DuckDB 1.5.0+ 且 duckfn 打开 `owned-connection` feature（它自己依赖 `duckdb-1-5`；
-//   本示例 crate 通过 `quack` → `all` 打开）。sql 与 duck_vfs 共用同一条连接与同一把锁：一次
-//   调用从头持锁到尾，同一线程里别嵌套取用（会死锁）。
+//   前置条件：duckfn 打开 `sql` feature（它只依赖 `owned-connection`，**不需要** `duckdb-1-5` ——
+//   本模块发出的调用全在稳定区，所以它在 1.3–2.0 的引擎上都可用）。sql 与 duck_vfs 共用同一条连接
+//   与同一把锁：一次调用从头持锁到尾，同一线程里别嵌套取用（会死锁）。
 //
-//   Requires DuckDB 1.5.0+ and duckfn's `owned-connection` feature (which needs `duckdb-1-5`; this
-//   example crate gets it through `quack` → `all`). sql and duck_vfs share one connection and one
-//   lock: a call holds it from start to finish, so never nest take-ups on one thread (that deadlocks).
+//   Requires duckfn's `sql` feature (which only pulls in `owned-connection` and **does not** need
+//   `duckdb-1-5` — every call this module makes is in the stable region, so it works on 1.3–2.0).
+//   sql and duck_vfs share one connection and one lock: a call holds it from start to finish, so never
+//   nest take-ups on one thread (that deadlocks).
 // ============================================================================
 
 use duckfn::{

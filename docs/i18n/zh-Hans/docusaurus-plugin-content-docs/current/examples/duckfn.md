@@ -23,7 +23,7 @@ make debug       # -> build/debug/extension/duckfn/duckfn.duckdb_extension
 `quack` 只是那棵树开不开的标记。`make debug` 从根 `Makefile` 的 `EXTENSION_FEATURES` 取这份清单
 （默认是这一页演示到的全部能力），`just build` 在 Justfile 里带同一份（顺带把结果打包成可加载的
 `duckfn.duckdb_extension`）。裸跑 `cargo build` 只会得到一个没有入口符号的 cdylib，DuckDB 在
-`LOAD` 时会拒绝它；少给一项能力就只是清单短一点 —— `EXTENSION_FEATURES=quack` 编出来的是只用稳定版
+`LOAD` 时会拒绝它；少给一项能力就只是清单短一点 —— `EXTENSION_FEATURES=quack,sql` 编出来的是只用稳定版
 API 的那份，老引擎也能加载（见[版本号与 ABI](../duckdb-versions/c-api-and-abi.md)）。
 
 ```bash

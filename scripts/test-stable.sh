@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 #
-# 「稳定区」插件的对照测试：用不带 `duckdb-1-5` / `duck_vfs` / `sql` 的 feature 集打一份插件，再拿
-# 指定版本的 DuckDB 跑指定范围的 sqllogictest。
+# 「稳定区」插件的对照测试：用只含稳定区能力的 feature 集（默认 `quack,sql`，不带 `duckdb-1-5` /
+# `duck_vfs`）打一份插件，再拿指定版本的 DuckDB 跑指定范围的 sqllogictest。
 #
 # 为什么可行：那一档只用 C API 的**稳定区**，产物声明 `C_STRUCT` + C API 下限 v1.2.0，于是 1.3 到 2.0
 # 的引擎都收它（见 docs/docs/duckdb-versions/c-api-and-abi.md）。这就是「一份产物跨版本」的用法：同一
 # 份源码既能打「与引擎小版本严格对齐」的全量产物，也能打一份跨版本的，拿后者去跑更老引擎上的用例子集。
+#
+# `sql` 在这份清单里是**对的**：它在回调侧跑 SQL，但每个调用都落在稳定区，所以它是稳定区能力的一部分
+# （见 src/sql/mod.rs 与 docs/docs/guide/sql-execution.md）。早先这里只写 `quack`，于是 sql_exec 那条
+# 用例被当成「需要稳定区之外的能力」排除了 —— 划分错了，feature 集本该带上它。
 #
 # 用法：
 #   scripts/test-stable.sh 1.4.0
@@ -16,12 +20,16 @@
 # （可以给多条，`.test` 路径或 shell 通配），此时不再自动排除 —— 点名要跑的就跑。
 #
 # 环境变量：
-#   EXTENSION_FEATURES   覆盖构建用的 feature 列表（默认 quack = 只有稳定区）
+#   EXTENSION_FEATURES   覆盖构建用的 feature 列表（默认 quack,sql = 只有稳定区）
 #   DUCKDB_PYTHON        覆盖 venv 的 python 路径（默认自动探测 configure/venv）
 #
 # Usage: scripts/test-stable.sh <duckdb version> [test pattern ...]. Without patterns it runs the
 # default range: every case under test/sql except the NON_STABLE ones below. Environment:
-# EXTENSION_FEATURES overrides the build's feature list (default `quack`, i.e. stable region only).
+# EXTENSION_FEATURES overrides the build's feature list (default `quack,sql`, i.e. stable region only).
+#
+# `sql` belongs in that list: it runs SQL from a callback, but every call it makes is in the stable
+# region (see src/sql/mod.rs and docs/docs/guide/sql-execution.md). It used to be `quack` alone, which
+# left sql_exec out of the default range as if it needed the unstable API — a mis-classification.
 #
 # 注意：跑完之后 build/debug 里是**稳定区产物**；要恢复全量产物跑 `just build`（或 `make debug`）。
 # 另外 runner 的引擎版本会**就地改成你给的那个**（configure/venv 只由 configure 装一次），跑完要回到
@@ -45,11 +53,12 @@ fi
 engine="$1"
 shift
 
-# 默认构建的 feature 集：只开 `quack`（示例树这个标记），因此插件里只有稳定区的函数。
+# 默认构建的 feature 集：`quack`（示例树这个标记）+ `sql`（回调侧跑 SQL，仍属稳定区）。插件里因此只有
+# 稳定区的能力，而 `sql_exec` 那条用例也在默认范围里。
 #
-# The default feature set: only `quack` (the example tree's marker), so the plugin exposes the stable
-# region alone.
-features="${EXTENSION_FEATURES:-quack}"
+# The default feature set: `quack` (the example tree's marker) plus `sql` (running SQL from a callback,
+# still the stable region), so the plugin exposes the stable region alone — sql_exec included.
+features="${EXTENSION_FEATURES:-quack,sql}"
 
 # C API 下限：稳定区构建声明的是「C API 不低于此即可加载」，v1.2.0 是 quack-rs 的基线。
 #
@@ -62,11 +71,15 @@ c_api_floor="v1.2.0"
 #   copy_function / copy_from_function  COPY 函数（不稳定区）
 #   wrapper_types_*_echo                TIME_NS 那一条（DuckDB 1.5 才有）
 #   duck_vfs / file_system / file_util  宿主文件系统（duck_vfs）
-#   sql_exec                            在回调里执行 SQL（sql）
 #   chrono_bridge / rust_decimal_bridge / uuid_bridge   三个互操作桥各自的 feature
+#
+# 注意这里**没有** sql_exec：`sql` 是稳定区能力，默认 feature 集已经带上它（见上面）。
 #
 # The cases that need capabilities beyond the stable region (file names without `.test`). The default
 # range excludes them because their functions do not exist in a stable-region artifact at all.
+#
+# sql_exec is deliberately absent: `sql` is a stable-region capability and the default feature set
+# carries it (see above).
 NON_STABLE="\
 copy_function \
 copy_from_function \
@@ -75,7 +88,6 @@ wrapper_types_table_echo \
 duck_vfs \
 file_system \
 file_util \
-sql_exec \
 chrono_bridge \
 rust_decimal_bridge \
 uuid_bridge"
@@ -212,13 +224,24 @@ make USE_UNSTABLE_C_API=0 \
 
 # 3) 跑指定范围：EXTRA_TEST_ARGS 把清单交给 runner（--file-list 是空白分隔的路径列表）。
 #
+# `SKIP_TESTS=0` 不能省：base.Makefile 在 `DUCKDB_PLATFORM=linux_amd64` 下把测试目标换成 NOP（它
+# 自己的注释说是 Ubuntu 22.04 runner 的 wheel 问题，见那里 133 行往下的 TODO）。命令行赋值优先级
+# 最高，显式写 0 才保证这是**真跑过**，而不是「Skipping tests..」加退出码 0 —— 本机的 `make -n` 已
+# 验证过：不给这个变量时 `linux_amd64` 分支确实只打印一句跳过。CI 里尤其要命，那里没人读输出。
+#
 # 3) Run the range: EXTRA_TEST_ARGS hands the list to the runner (--file-list takes a
 # whitespace-separated list of paths).
+#
+# `SKIP_TESTS=0` is not optional: base.Makefile replaces the test targets with NOPs under
+# `DUCKDB_PLATFORM=linux_amd64` (its own comment blames the Ubuntu 22.04 runner's wheels). Only a
+# command-line assignment outranks that, and without it the run prints "Skipping tests.." and exits 0 —
+# verified with `make -n`. That failure mode matters most in CI, where nobody reads the output.
 make USE_UNSTABLE_C_API=0 \
     TARGET_DUCKDB_VERSION="$c_api_floor" \
     DUCKDB_TEST_VERSION="$engine" \
     EXTENSION_FEATURES="$features" \
     test_debug \
+    SKIP_TESTS=0 \
     EXTRA_TEST_ARGS="--file-list $list"
 
 echo "稳定区用例全部通过（引擎 $engine，feature: $features）"

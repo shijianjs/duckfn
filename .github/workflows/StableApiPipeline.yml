@@ -1,0 +1,70 @@
+#
+# Runs the stable-region suite: one artifact built with USE_UNSTABLE_C_API=0 and a v1.2.0 C API floor,
+# loaded into several DuckDB engines.
+#
+# Why it exists: "Version numbers and the ABI" (docs/docs/duckdb-versions/c-api-and-abi.md) claims one
+# stable build is accepted by every engine at or above the floor, and backs that with a table of
+# engines it was measured on — but nothing checked the claim afterwards. The distribution pipeline
+# only ever builds the *full* feature list, so neither the stable-region code path nor the metadata
+# that makes the artifact portable was covered by CI; it was verified by hand, if at all.
+#
+# Every leg is one call to scripts/test-stable.sh, the same entry point `just test_stable` uses, so a
+# local reproduction is literally `just test_stable <engine>`.
+#
+# The engines are the newest patch release of each minor the docs name as covered:
+#
+#   1.3.2  the oldest engine the claim reaches
+#   1.4.5  the previous minor
+#   1.5.6  what the unstable build targets — the control leg. If this one fails too, the stable build
+#          itself is broken, not the version range, and the other legs are not evidence of anything.
+#
+# Adding an engine is adding a matrix entry; pick a patch release that actually ships a wheel for the
+# runner's Python (see the runs-on comment below — the script fails fast when it does not).
+name: Stable C API Pipeline
+
+on:
+  pull_request:
+  push:
+    # Pushes to main as well as tags: this repository pushes straight to main, so those runs are the
+    # ones that actually ship, and without this branch filter the commit that adds this file could not
+    # be observed here. Drop the two lines below if the three legs per main push cost more than the
+    # signal is worth; `workflow_dispatch` still covers manual runs.
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stable-region:
+    name: Stable artifact on DuckDB ${{ matrix.engine }}
+    # Pinned rather than `ubuntu-latest`, because the venv's Python decides which `duckdb` wheels can
+    # be installed at all and an image bump changes that interpreter: the oldest engine here (1.3.2)
+    # ships nothing for Python 3.14. If this image is ever retired, move the pin forward and re-check
+    # every engine below — `--only-binary=:all:` in the script makes a missing wheel fail fast rather
+    # than start a C++ source build.
+    runs-on: ubuntu-24.04
+    strategy:
+      # Each leg is an independent claim; one old engine failing must not hide the others.
+      fail-fast: false
+      matrix:
+        engine: ['1.3.2', '1.4.5', '1.5.6']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Rust
+        run: |
+          set -euo pipefail
+          # The runner image already ships rustup; no third-party setup action needed.
+          rustup default stable
+          rustc --version
+
+      # The script drives the whole thing: `make configure` builds configure/venv (the sqllogictest
+      # runner), it installs the requested engine into that venv, `make debug` builds the stable
+      # artifact and appends its metadata, and the runner then loads that artifact into the engine.
+      # python3, make and git are all on the runner image already.
+      - name: Run the stable-region suite
+        run: bash scripts/test-stable.sh ${{ matrix.engine }}

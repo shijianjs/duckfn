@@ -171,6 +171,12 @@ real call:
 | --- | --- |
 | `v1.2.0` | 1.3.2, 1.4.0, 1.4.5, 1.5.0, 1.5.5, 1.5.6, 2.0.0 (pre-release) |
 
+That table began as a one-off measurement and is now checked on every pull request:
+`.github/workflows/StableApiPipeline.yml` builds an artifact with the settings above
+(`USE_UNSTABLE_C_API=0`, `TARGET_DUCKDB_VERSION=v1.2.0`, `EXTENSION_FEATURES=quack,sql`) and runs the
+stable subset of the suite against 1.3.2, 1.4.5 and 1.5.6. The newest of the three is the control —
+if that leg fails too, the stable build itself broke rather than the version range.
+
 DuckDB 2.0 is close (see its release calendar), and a stable build declaring `v1.2.0` already loads and
 runs there — verified by loading such an extension into a 2.0 pre-release and calling its functions (an
 aggregate and a scalar both returned the expected values). The floor is what buys that portability: do

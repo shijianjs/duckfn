@@ -30,9 +30,10 @@ EXTENSION_NAME=duckfn
 #   sql                在回调里执行 SQL（只用稳定区）
 #   chrono / uuid / rust_decimal   三个互操作桥的示例
 #
-# 换个组合就是另一份产物 —— 例如 EXTENSION_FEATURES=quack 得到一份**只用稳定版 C API** 的插件，
-# 配 USE_UNSTABLE_C_API=0 与 TARGET_DUCKDB_VERSION=v1.2.0（C API 下限）打出来，1.3 到 2.0 的引擎都
-# 能加载，可以用来跑老引擎上的用例子集（`just test_stable 1.4.0`）。
+# 换个组合就是另一份产物 —— 例如 EXTENSION_FEATURES=quack,sql 得到一份**只用稳定版 C API** 的插件
+# （`sql` 跑在回调侧但每个调用都在稳定区，所以它属于这一档），配 USE_UNSTABLE_C_API=0 与
+# TARGET_DUCKDB_VERSION=v1.2.0（C API 下限）打出来，1.3 到 2.0 的引擎都能加载，可以用来跑老引擎上的
+# 用例子集（`just test_stable 1.4.0`，CI 每个 PR 也跑这一份）。
 #
 # The duckfn features a build turns on (comma-separated, passed through to cargo `--features`). The
 # example tree splits itself by **capability** (each capability module carries its own
@@ -45,10 +46,11 @@ EXTENSION_NAME=duckfn
 #   sql                running SQL from a callback (stable region only)
 #   chrono / uuid / rust_decimal   the three bridge demos
 #
-# Another combination is another artifact — `EXTENSION_FEATURES=quack` with USE_UNSTABLE_C_API=0 and
-# TARGET_DUCKDB_VERSION=v1.2.0 (the C API floor) gives a **stable C API only** plugin that every engine
-# from 1.3 to 2.0 loads, which is what runs a subset of the suite against an older engine
-# (`just test_stable 1.4.0`).
+# Another combination is another artifact — `EXTENSION_FEATURES=quack,sql` with USE_UNSTABLE_C_API=0 and
+# TARGET_DUCKDB_VERSION=v1.2.0 (the C API floor) gives a **stable C API only** plugin (`sql` runs from a
+# callback but every call it makes stays in the stable region, so it belongs to this side) that every
+# engine from 1.3 to 2.0 loads, which is what runs a subset of the suite against an older engine
+# (`just test_stable 1.4.0`; CI runs the same thing on every pull request).
 EXTENSION_FEATURES ?= quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
 
 # Set to 1 to enable Unstable API (binaries will only work on TARGET_DUCKDB_VERSION, forwards compatibility will be broken)

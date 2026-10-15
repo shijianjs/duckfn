@@ -31,12 +31,14 @@
 //   macro-written aggregates and hand-written adapters. The capability is independent of the
 //   function kind, and function-level extra data (extra_info) plays no part.
 //
-// 前置条件：DuckDB 1.5.0+ 且 duckfn 打开 `owned-connection` feature（它自己依赖 `duckdb-1-5`；
-// 本示例 crate 通过 `quack` → `all` 打开），否则 `with_file_system` 一类入口不存在。
+// 前置条件：duckfn 打开 `duck_vfs` feature（它依赖 `owned-connection`，并额外带上 `duckdb-1-5` ——
+// 客户端上下文与文件系统入口在不稳定区，所以这一档必须与引擎小版本对齐），否则 `with_file_system`
+// 一类入口不存在。
 //
-// Requires DuckDB 1.5.0+ and duckfn's `owned-connection` feature (which itself needs
-// `duckdb-1-5`; this example crate gets it through `quack` → `all`); otherwise the entry points such
-// as `with_file_system` do not exist.
+// Requires duckfn's `duck_vfs` feature (it depends on `owned-connection` and additionally pulls in
+// `duckdb-1-5` — the client context and file-system entry points sit in the unstable region, so this
+// half has to line up with the engine's minor release); otherwise entry points such as
+// `with_file_system` do not exist.
 // ============================================================================
 
 use std::ffi::CString;

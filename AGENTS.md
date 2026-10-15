@@ -38,9 +38,12 @@
   同时给出的清单决定（根 `Makefile` 的 `EXTENSION_FEATURES`，默认 `quack,duckdb-1-5,duck_vfs,sql,`
   `chrono,uuid,rust_decimal`；Justfile 里那份 `_example_features` 与之保持一致），示例树自己按能力分
   模块（`test/extension/functions/mod.rs` 里每个模块挂自己的 `#[cfg(feature = ...)]`）。
-- 因此「换一份 feature 清单」= 「换一份产物」：`EXTENSION_FEATURES=quack` 配 `USE_UNSTABLE_C_API=0` +
-  `TARGET_DUCKDB_VERSION=v1.2.0` 就是只含稳定区 API 的插件，1.3–2.0 的引擎都能加载，`just test_stable
-  <引擎版本> [用例模式]` 就是拿它跑指定范围的 `.test`（逻辑在 `scripts/test-stable.sh`）。
+- 因此「换一份 feature 清单」= 「换一份产物」：`EXTENSION_FEATURES=quack,sql` 配 `USE_UNSTABLE_C_API=0` +
+  `TARGET_DUCKDB_VERSION=v1.2.0` 就是只含稳定区 API 的插件（`sql` 在回调侧但整个落在稳定区，属于这一档），
+  1.3–2.0 的引擎都能加载，`just test_stable <引擎版本> [用例模式]` 就是拿它跑指定范围的 `.test`（逻辑在
+  `scripts/test-stable.sh`）。这条**跨版本承诺由 CI 盯着**：`.github/workflows/StableApiPipeline.yml`
+  每个 PR 拿同一个脚本跑 1.3.2 / 1.4.5 / 1.5.6（最后一个是「当前引擎」的对照组 —— 它要是也挂，问题在稳定区
+  构建本身，不在版本范围）。
 - **没有「全开」（`all`）这一档**，也刻意不给：每个 feature 以它暴露的模块命名，`owned-connection`
   是 `sql` 与 `duck_vfs` 共用的底座（两者都依赖它，它不依赖任何一方），而带连接的那两档都有副作用
   （进程级常驻连接 + 单线程运行时下 LOAD 即死锁，见根 `Cargo.toml`）；文件系统那档在浏览器 /

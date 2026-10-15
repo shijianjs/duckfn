@@ -119,6 +119,10 @@ just doc                                 # 生成 duckfn 的 rustdoc
 用 DuckDB 官方的 sqllogictest 最实用：它通过 SQL 来验证扩展，也就是 DuckDB 真正调用扩展的方式，
 而且 CI 跑的就是这一套。它需要先跑通 `make` 流程（`make configure` 做一次，之后用 `make test`）。
 
+同一套用例在 CI 里还会以「稳定区矩阵」再跑一遍：本地是 `just test_stable <引擎版本>`，流水线里是
+DuckDB 1.3.2 / 1.4.5 / 1.5.6，能力清单裁到稳定版 C API 能给的那些（见
+[构建与发布](./build-and-release.md#稳定区矩阵)）。
+
 测试是 `test/sql/` 下的 sqllogictest 文件，与源码目录一一对应：
 
 ```

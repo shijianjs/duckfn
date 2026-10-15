@@ -134,6 +134,10 @@ DuckDB's own sqllogictest runner is the practical choice: it exercises the exten
 exactly the way DuckDB calls it, and it is what CI runs. It needs the `make` flow to be set up
 (`make configure` once, then `make test`).
 
+CI runs the same suite a second time as the stable-region matrix: `just test_stable <engine>` locally,
+DuckDB 1.3.2 / 1.4.5 / 1.5.6 in the pipeline, with the capability list cut back to what the stable C
+API offers (see [Build and release](./build-and-release.md#the-stable-region-matrix)).
+
 Tests are sqllogictest files under `test/sql/`, mirroring the source layout:
 
 ```

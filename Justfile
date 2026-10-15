@@ -70,19 +70,23 @@ build_wasm:
 # ==== 稳定区（不依赖 1.5 的）插件与它的对照测试 ====
 #
 # 示例树按能力分模块，所以同一份源码可以编出两种产物：全量（上面那些 recipe）与**只用稳定版 C API**
-# 的（这里）。后者声明 `C_STRUCT` + C API 下限 v1.2.0，因此 1.3 到 2.0 的引擎都能加载它 —— 用它做
-# 「同一份用例在老引擎上再跑一遍」的对照，而不必等 CI 的 9 平台产物。
+# 的（这里）。后者的能力集是 `quack,sql` —— `sql` 虽然跑在回调侧，但每个调用都在稳定区，算稳定区能力
+# （早先这里只写 `quack`，把 sql_exec 当成了不稳定用例，划错了）。它声明 `C_STRUCT` + C API 下限 v1.2.0，
+# 因此 1.3 到 2.0 的引擎都能加载 —— 用它做「同一份用例在老引擎上再跑一遍」的对照。
 #
 # The example tree splits itself by capability, so one source tree yields two artifacts: the full one
-# (the recipes above) and a **stable C API only** one (here). The latter declares `C_STRUCT` plus a
-# v1.2.0 C API floor, so every engine from 1.3 to 2.0 loads it — which is what re-runs a range of the
-# suite against an older engine without waiting for CI's nine-platform artifacts.
+# (the recipes above) and a **stable C API only** one (here). Its capability set is `quack,sql`: `sql`
+# runs from a callback but every call stays in the stable region, so it counts as one (this file used
+# to pass `quack` alone, which mis-filed sql_exec as an unstable case). The artifact declares
+# `C_STRUCT` plus a v1.2.0 C API floor, so every engine from 1.3 to 2.0 loads it — which is what
+# re-runs a range of the suite against an older engine. CI does the same thing per pull request; see
+# .github/workflows/StableApiPipeline.yml.
 
 # 只编稳定区插件（产物在 build/debug/，跨版本；跑完想要全量产物再跑 just build）
 build_stable:
-    make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.2.0 EXTENSION_FEATURES=quack debug
+    make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.2.0 EXTENSION_FEATURES=quack,sql debug
 
-# 稳定区插件 + 指定范围的用例：不给范围就跑「除需要 1.5 / duck_vfs / sql 等之外」的全部用例。
+# 稳定区插件 + 指定范围的用例：不给范围就跑「除需要 1.5 / duck_vfs / 三个桥之外」的全部用例（含 sql_exec）。
 #   just test_stable 1.4.0
 #   just test_stable 1.4.0 "test/sql/functions/scalar_function.test"
 #   just test_stable 1.4.0 "test/sql/functions/*.test"
