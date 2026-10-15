@@ -14,19 +14,24 @@ DuckDB 的 C API 只在部分回调里交出**客户端上下文**，而客户�
 因此在注册期打开**自己的一条长连接** —— 就是[文件系统访问](./file-system.md)里那条 —— 而
 `duckfn::sql` 是它的 SQL 那一面：跑语句、跑查询，并把行以运行期**动态值**的形式取回来。
 
-::::note[DuckDB 1.5.0+]
+::::note[只用稳定版 C API，不需要 `duckdb-1-5`]
 
-`duckfn::sql` 依赖注册期捕获的那条连接，所以需要 DuckDB 1.5.0+ 的头文件以及 `duckfn` 的
-`owned-connection` feature（它依赖 `duckdb-1-5`）：
+`duckfn::sql` 建在注册期捕获的那条连接上，但它发出的每一个调用都落在 C API 的**稳定区** ——
+`duckdb_connect`、预处理 / 绑定 / 取块、逻辑类型。所以它不需要 `duckdb-1-5`，只开这一个 feature
+就够：
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["sql"] }
 ```
 
-同一个 feature 也带来 [`duckfn::duck_vfs`](./file-system.md) —— 两者都建在那一条连接上，并共用
-它的锁（见[代价与限制](#代价与限制)）。
+这件事影响的不只是构建，还有产物本身：保持 `USE_UNSTABLE_C_API=0` 并以 `v1.2.0` 作为 floor，一份
+二进制就能服务 DuckDB 1.3 到 2.0（见[版本号与 ABI](../duckdb-versions/c-api-and-abi.md)）。还想顺带
+要宿主文件系统时开 `owned-connection`（它会带来 `sql`，并加上
+[`duckfn::duck_vfs`](./file-system.md)）—— 文件系统那一半**确实**在不稳定区，必须与引擎小版本对齐。
 
 ::::
+
+无论开哪一个，这类 feature 都有副作用，动手前值得先读[代价与限制](#代价与限制)。
 
 ## 执行语句
 
@@ -182,8 +187,9 @@ SELECT dfn_sql_has_table('dfn_sql_demo');                                -- true
   这条自有连接，不影响调用方。
 - **结果整份物化。** `query` 在返回前把所有块读进内存。结果大到放不下时，请改走「手写适配器 +
   自持连接」那条路。
-- **与 `duckfn::duck_vfs` 共用同一把锁。** 一次调用从头持锁到尾，所以长查询会挡住文件读写，而且
-  **同一线程里嵌套取用会死锁** —— 不要在 `with_file_system` 闭包里调 `duckfn::sql`，反之亦然。
+- **两个 feature 都开时与 `duckfn::duck_vfs` 共用同一把锁。** 一次调用从头持锁到尾，所以长查询会
+  挡住文件读写，而且**同一线程里嵌套取用会死锁** —— 开了 `owned-connection` 时不要在
+  `with_file_system` 闭包里调 `duckfn::sql`，反之亦然；其它线程的并发调用只是排队。
 - **进程级只有一条连接，以首个完成注册的实例为准。** 同一进程里存在多个数据库实例时，用的是先注册
   那个实例的连接。
 - **不能在「同一线程里同步执行 DuckDB」的运行时里用。** 注册期就在当前线程上打开连接并重入引擎，

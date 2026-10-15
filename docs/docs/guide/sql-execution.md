@@ -17,19 +17,27 @@ own long-lived connection** during registration — the same one [File system ac
 describes — and `duckfn::sql` is that connection's SQL side: run statements, run queries, and get the
 rows back as runtime **dynamic values**.
 
-::::note[DuckDB 1.5.0+]
+::::note[Stable C API — no `duckdb-1-5` needed]
 
-`duckfn::sql` rests on the connection captured at registration time, so it needs DuckDB 1.5.0+
-headers and `duckfn`'s `owned-connection` feature (which implies `duckdb-1-5`):
+`duckfn::sql` rests on the connection captured at registration time, but every call it makes lives in
+the **stable** region of the C API — `duckdb_connect`, prepare / bind / fetch-chunk, the logical
+types. So it does not need `duckdb-1-5`, and the one feature is enough:
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["sql"] }
 ```
 
-The same feature also brings [`duckfn::duck_vfs`](./file-system.md) — both are built on that one
-connection, and they share its lock (see [Cost and limits](#cost-and-limits)).
+That matters for the artifact, not just for the build: keep `USE_UNSTABLE_C_API=0` with a `v1.2.0`
+floor and one binary serves DuckDB 1.3 through 2.0 (see
+[Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md)). An extension that also wants the
+host file system needs `owned-connection` instead, which brings `sql` along and pulls in
+[`duckfn::duck_vfs`](./file-system.md) — that half *is* in the unstable region and has to line up with
+the engine's minor release.
 
 ::::
+
+Either way the feature has side effects worth reading before turning it on — see
+[Cost and limits](#cost-and-limits).
 
 ## Running statements
 
@@ -195,9 +203,10 @@ paths.
   owned connection, not to the caller's.
 - **The whole result is materialised.** `query` reads every chunk into memory before returning. For a
   result too large to hold, hand-write an adapter and keep your own connection instead.
-- **It shares one lock with `duckfn::duck_vfs`.** A call holds that connection from start to finish,
-  so a long query blocks file I/O, and **nesting a take-up on one thread deadlocks** — never call
-  `duckfn::sql` from inside a `with_file_system` closure, or the other way round.
+- **It shares one lock with `duckfn::duck_vfs` when both are on.** A call holds that connection from
+  start to finish, so a long query blocks file I/O, and **nesting a take-up on one thread deadlocks** —
+  with `owned-connection` on, never call `duckfn::sql` from inside a `with_file_system` closure, or the
+  other way round. Concurrent calls from other threads simply queue.
 - **One process-level connection, first instance wins.** With several database instances in one
   process, the one that finished registering first is the connection used.
 - **Not usable where DuckDB runs synchronously on a single thread.** Opening the connection during

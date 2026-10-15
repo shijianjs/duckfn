@@ -32,6 +32,10 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
 ```
 :::
 
+无论哪一档：`owned-connection` 捕获的那条连接本身并不属于 1.5 ——
+[`duckfn::sql`](./sql-execution.md) 只用 C API 的稳定区就复用了它，不需要 `duckdb-1-5`，也就不需要按
+引擎小版本对齐。这里需要 1.5 的是**文件系统**那一半：客户端上下文与 VFS 入口。
+
 ## duckfn 做了什么
 
 扩展加载时，`duckfn::register_all_duckfn`（`duckfn_entrypoint!` 指向的那个函数）先记下拿到的

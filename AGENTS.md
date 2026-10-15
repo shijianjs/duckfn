@@ -33,12 +33,13 @@
   `TARGET_INFO += --example $(EXTENSION_NAME) --features quack`）、`cargo build --features quack`、
   `just build`、`just build_wasm`。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口符号的
   cdylib），`LOAD` 时才报错，很难查。
-- `quack = ["all", "owned-connection"]`：示例把每一档可选能力都演示了一遍，包括 `duckfn::duck_vfs`，
-  所以除了 `all` 还要显式带上 `owned-connection`（见下）。
-- `all` 是给下游用户用的「全开」档，**不含 `owned-connection`（即 `duck_vfs`）**：宿主文件系统在
-  浏览器 / DuckDB-Wasm 上不可靠（存在性判定恒真、裸写偏移错），且 native 上能用 DuckDB 自身读写 /
-  系统库替代，所以不放进「全开」；需要时下游在 native 场景下单独开 `owned-connection`。`all` 也
-  **不**依赖 `quack`（用户不需要示例与那些测试函数）。
+- `quack = ["all", "owned-connection"]`：示例把每一档可选能力都演示了一遍，包括 `duckfn::sql` 与
+  `duckfn::duck_vfs`，所以除了 `all` 还要显式带上 `owned-connection`（它蕴含 `sql`，见下）。
+- `all` 是给下游用户用的「全开」档，**不含 `sql` 与 `owned-connection`**：两档都要在进程里留一条常驻
+  连接（副作用见根 `Cargo.toml` 里两个 feature 的说明），而其中的宿主文件系统在浏览器 / DuckDB-Wasm
+  上又不可靠（存在性判定恒真、裸写偏移错），native 上也能用 DuckDB 自身读写 / 系统库替代，所以不放进
+  「全开」；需要 SQL 执行的下游单独开 `sql`（落在稳定区，不需要 `duckdb-1-5`），再要文件系统才开
+  `owned-connection`。`all` 也**不**依赖 `quack`（用户不需要示例与那些测试函数）。
 
 ### 发布包内容
 

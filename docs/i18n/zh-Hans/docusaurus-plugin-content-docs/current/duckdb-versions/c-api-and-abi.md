@@ -77,8 +77,11 @@ registry 的 `duckdb_version` 只决定 checkout 哪份 DuckDB 源码、产物�
 - 稳定区之外的是：copy 函数、宿主文件系统（`duckfn::duck_vfs`）、标量的 `bind` / `init` 槽位、`varargs`，
   以及 DuckDB 1.5 新增的逻辑类型（目前是 `TIME_NS`）。duckfn 把这些统一收在 `duckdb-1-5` feature 后面；
   `owned-connection`（宿主 VFS）蕴含它。
-- 其余都在稳定区：标量、聚合、表函数、cast、replacement scan、SQL 宏、命名的 STRUCT / ENUM 类型，
-  以及 chrono / uuid / rust_decimal 桥。
+- 其余都在稳定区：标量、聚合、表函数、cast、replacement scan、SQL 宏、命名的 STRUCT / ENUM 类型、
+  chrono / uuid / rust_decimal 桥，以及**执行 SQL** —— `duckfn::sql`（`sql` feature）由 database 句柄
+  现开一条连接，走的是 `duckdb_query` / `duckdb_prepare` / `duckdb_bind_value` / `duckdb_fetch_chunk`
+  与逻辑类型，这些都不在不稳定区。这是刻意的：回调侧能力恰恰最需要「一份二进制跨版本」，所以即便它
+  借的那条连接与 `duck_vfs` 是同一份，它也不进 `duckdb-1-5` 那一组。
 
 ### 稳定区 —— 完整配置集
 
@@ -90,8 +93,9 @@ TARGET_DUCKDB_VERSION=v1.2.0
 ```
 
 ```toml
-# Cargo.toml —— ABI 要点是 `duckdb-1-5` 保持关闭（`cli` 只为 function_descriptions bin，与 ABI 无关）。
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli"] }
+# Cargo.toml —— ABI 要点是 `duckdb-1-5` 保持关闭（`cli` 只为 function_descriptions bin，与 ABI 无关；
+# `sql` 虽在回调侧，但仍在稳定区，不影响这套配置的可移植性）。
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 ```
 
 ```yaml
@@ -119,7 +123,7 @@ DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 ```toml
 # Cargo.toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" 用于 duckfn::duck_vfs
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" 用于 duckfn::duck_vfs（它会带来 "sql"）
 ```
 
 ```yaml
@@ -218,5 +222,6 @@ configure/venv/bin/python3       -m pip install --upgrade "duckdb==1.5.6"   # Li
 - [Wasm 下的 panic 处理](./rust-wasm-unwinding.md) —— `panic!` 为什么随 Rust 版本表现不同。
 - [安装](../getting-started/installation.md) —— duckfn 每个 feature 各自对 DuckDB 提什么要求。
 - [文件系统](../guide/file-system.md) 与 [COPY 函数](../guide/copy-functions.md) —— 住在不稳定区的两项能力。
+- [在扩展里执行 SQL](../guide/sql-execution.md) —— 回调侧能力里唯一留在稳定区的那一项，以及它为什么让产物保持可移植。
 - [构建与发版](../development/build-and-release.md) —— 两条构建路径与发版流程。
 - [已知问题](../known-issues.md) —— 与版本无关的上游 bug。

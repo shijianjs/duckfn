@@ -35,6 +35,11 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
 ```
 :::
 
+Either way, the connection `owned-connection` captures is not a 1.5 thing in itself:
+[`duckfn::sql`](./sql-execution.md) reuses it on the stable C API alone — no `duckdb-1-5`, and so no
+release-by-release pin. What needs 1.5 here is the **file system** half: the client context and the
+VFS entry points.
+
 ## What duckfn sets up
 
 At extension load, `duckfn::register_all_duckfn` (the function your `duckfn_entrypoint!` points at)

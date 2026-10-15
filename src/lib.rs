@@ -93,14 +93,20 @@ pub(crate) mod utils;
 // Cargo.toml).
 #[cfg(feature = "owned-connection")]
 pub mod duck_vfs;
-// 在扩展里执行 SQL：跑在同一个「注册期自有长连接」上，结果按动态列读回。模块文档见
-// `src/sql/mod.rs`；与 duck_vfs 同属 `owned-connection` feature（两者的前提是同一份东西）。
+// 在扩展里执行 SQL：跑在「注册期自有长连接」上，结果按动态列读回。模块文档见
+// `src/sql/mod.rs`；只用 C API 的稳定区，所以 `sql` feature 就够了（`owned-connection` 也带上它）。
 //
-// Running SQL from an extension: it uses the same "owned connection captured at registration time"
-// and brings results back as dynamic columns. Module docs live in `src/sql/mod.rs`; it sits behind the
-// same `owned-connection` feature as duck_vfs, since both rest on that one connection.
-#[cfg(feature = "owned-connection")]
+// Running SQL from an extension: it uses the connection captured at registration time and brings
+// results back as dynamic columns. Module docs live in `src/sql/mod.rs`; it uses only the stable
+// region of the C API, so the `sql` feature alone is enough (`owned-connection` brings it too).
+#[cfg(feature = "sql")]
 pub mod sql;
+// 注册期那条自有长连接：`duckfn::sql` 与 `duckfn::duck_vfs` 共同的底座，内部实现，不对用户公开。
+//
+// The owned connection captured at registration time: the shared base of `duckfn::sql` and
+// `duckfn::duck_vfs`, internal and not part of the public API.
+#[cfg(feature = "sql")]
+pub(crate) mod owned_connection;
 
 // 过程宏（属性宏、derive、函数式宏）的再导出；由 `duckfn-macro` crate 提供。
 //

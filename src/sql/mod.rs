@@ -6,16 +6,34 @@
 //!
 //! DuckDB 的 C API 只在部分回调里交出客户端上下文，而**客户端上下文里没有连接**：没有任何
 //! `duckdb_client_context_get_connection`。所以回调（标量 / 表 / 聚合 / COPY）想跑 SQL，只能靠
-//! 注册期那条**自有长连接** —— 就是 [`crate::duck_vfs`] 捕获、并借给本模块的那条。本模块把
+//! 注册期那条**自有长连接**（`duckfn` 内部捕获，`duckfn::duck_vfs` 用的也是同一份）。本模块把
 //! 「在它上面跑 SQL、再把结果接回来」这整件事封好：不用自己去碰 `duckdb_query` /
 //! `duckdb_prepare` / `duckdb_fetch_chunk` 那套句柄，也不必自己拆 `duckdb_result` 的列与块。
 //!
 //! DuckDB's C API hands out a client context in some callbacks only, and **a client context carries
 //! no connection**: there is no `duckdb_client_context_get_connection`. A callback (scalar / table /
 //! aggregate / COPY) that wants to run SQL therefore has exactly one window — the **owned long-lived
-//! connection** captured by [`crate::duck_vfs`] and lent to this module. This module wraps the whole
-//! job: run SQL on it and bring the result back, without touching the `duckdb_query` /
-//! `duckdb_prepare` / `duckdb_fetch_chunk` handles or dissecting a `duckdb_result` column by column.
+//! connection** `duckfn` captures at registration time (the same one `duckfn::duck_vfs` uses). This
+//! module wraps the whole job: run SQL on it and bring the result back, without touching the
+//! `duckdb_query` / `duckdb_prepare` / `duckdb_fetch_chunk` handles or dissecting a `duckdb_result`
+//! column by column.
+//!
+//! # 只要 `sql` feature，不需要 `duckdb-1-5` / Only the `sql` feature — no `duckdb-1-5`
+//!
+//! 本模块发出的每个调用都在 C API 的**稳定区**（`duckdb_connect` + 预处理 / 绑定 / 取块 + 逻辑
+//! 类型），所以它落在 `sql` feature 后面、**不依赖 `duckdb-1-5`**：配
+//! `USE_UNSTABLE_C_API=0` + `TARGET_DUCKDB_VERSION=v1.2.0` 打出来的一份 `C_STRUCT` 二进制，
+//! DuckDB 1.3 一直到 2.0 都接受；quack-rs 的 ABI 自检也直接返回 `StableOnly`，不做版本比对。
+//! **宿主文件系统**才是需要 1.5 的那一半：开 `owned-connection` 会带来本模块，并把
+//! `duckfn::duck_vfs` 一并加上。
+//!
+//! Every call this module makes lives in the **stable** region of the C API (`duckdb_connect` plus
+//! prepare / bind / fetch-chunk and the logical types), so it sits behind the `sql` feature and
+//! **does not depend on `duckdb-1-5`**: built with `USE_UNSTABLE_C_API=0` and a
+//! `TARGET_DUCKDB_VERSION=v1.2.0` floor, the `C_STRUCT` artifact is accepted all the way from DuckDB
+//! 1.3 to 2.0, and quack-rs' ABI check short-circuits to `StableOnly`. **The host file system** is
+//! the half that needs 1.5: enabling `owned-connection` brings this module and adds
+//! `duckfn::duck_vfs` on top.
 //!
 //! # 两个层次 / Two layers
 //!
@@ -79,26 +97,28 @@
 //!   （[`DuckDynamicRow::read_batch`](crate::DuckDynamicRow::read_batch)）。
 //!   这是为了不把 `duckdb_result` 的句柄带出这条连接；需要边读边处理的大结果请改用
 //!   「手写适配器 + 自持连接」那条路。
-//! - **与 [`crate::duck_vfs`] 共用同一把锁**：一次调用从头到尾持锁，所以长查询会挡住文件读写；
-//!   同一线程里**绝不能嵌套取用**（在 `with_file_system` 闭包里调本模块会死锁）。
-//! - **前置条件**：DuckDB 1.5.0+ 且打开 `owned-connection` feature（它自己依赖 `duckdb-1-5`）；
-//!   以及注册期捕获成功 —— 捕获失败时每次调用都报出记录下来的原因。
-//! - **不能在「同一线程里同步执行 DuckDB」的运行时里用**：与 [`crate::duck_vfs`] 同一个前提
-//!   （注册期就在当前线程上开了连接），已知一处是 DuckDB-Wasm 的 Node blocking 绑定。
+//! - **一次调用从头到尾持锁**，所以长查询会挡住同一把锁上的其它取用；两个 feature 都开时，那把锁也
+//!   是 `duckfn::duck_vfs` 的 —— 同一线程里**绝不能嵌套取用**（在 `with_file_system` 闭包里调本模块
+//!   会死锁，反之亦然）。并发取用之间串行化。
+//! - **前置条件**：注册期捕获成功（扩展正常 `LOAD` 即可）—— 捕获失败时每次调用都报出记录下来的原因。
+//!   除了这次捕获，**没有版本要求**：见上面的「只用 `sql` feature」。
+//! - **不能在「同一线程里同步执行 DuckDB」的运行时里用**：注册期就在当前线程上开了连接并重入引擎，
+//!   已知一处是 DuckDB-Wasm 的 Node blocking 绑定。
 //!
 //! - **The whole result is materialised in memory**: `query` reads every chunk into dynamic rows
 //!   right away ([`DuckDynamicRow::read_batch`](crate::DuckDynamicRow::read_batch)), precisely so no
 //!   `duckdb_result` handle escapes that connection. For a large result that must be processed as it
 //!   streams, hand-write an adapter and keep your own connection instead.
-//! - **It shares one lock with [`crate::duck_vfs`]**: a call holds it from start to finish, so a long
-//!   query blocks file I/O; never nest take-ups on one thread (calling this from inside a
-//!   `with_file_system` closure deadlocks).
-//! - **Prerequisites**: DuckDB 1.5.0+ and the `owned-connection` feature (which implies `duckdb-1-5`),
-//!   plus a successful registration-time capture — when capturing failed, every call reports the
-//!   recorded reason.
-//! - **It cannot be used in a runtime that executes DuckDB synchronously on one thread**: the same
-//!   precondition as [`crate::duck_vfs`] (a connection is opened on the current thread during
-//!   registration); the one known case is DuckDB-Wasm's Node blocking bindings.
+//! - **A call holds the lock from start to finish**, so a long query blocks every other take-up on
+//!   it; with both features on that is `duckfn::duck_vfs`'s lock too, and nesting take-ups on one
+//!   thread **deadlocks** (calling this from inside a `with_file_system` closure, and the other way
+//!   round). Concurrent take-ups serialize.
+//! - **Prerequisites**: a successful registration-time capture (a normal extension `LOAD` is enough)
+//!   — when capturing failed, every call reports the recorded reason. Beyond that capture there is
+//!   **no version requirement**: see "Only the `sql` feature" above.
+//! - **It cannot be used in a runtime that executes DuckDB synchronously on one thread**: the
+//!   connection is opened, and the engine re-entered, on the current thread during registration; the
+//!   one known case is DuckDB-Wasm's Node blocking bindings.
 //!
 //! # 用法 / Usage
 //!
@@ -126,7 +146,7 @@ mod result;
 
 pub use result::DuckQueryResult;
 
-use crate::duck_vfs::capture::with_connection;
+use crate::owned_connection::with_connection;
 
 /// 执行 SQL 语句（可含多条，用 `;` 分隔），返回影响行数。
 ///

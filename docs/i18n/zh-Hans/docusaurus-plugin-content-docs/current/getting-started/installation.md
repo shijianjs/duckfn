@@ -28,7 +28,8 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | feature | 作用 | 要求 |
 | --- | --- | --- |
 | `duckdb-1-5` | 支持 DuckDB 1.5 新增的逻辑类型 —— 目前是 `TIME_NS`（`DuckTimeNs`）—— 以及 `COPY ... TO` 用的 COPY 函数类型。 | `libduckdb-sys` 使用 DuckDB 1.5 及以上的头文件。 |
-| `owned-connection` | 宿主文件系统（`duckfn::duck_vfs`）：注册期捕获一条常驻长连接，让聚合函数这类拿不到客户端上下文的回调也能经 DuckDB 的 VFS 读写文件。它依赖 `duckdb-1-5`。有副作用：连接跟进程同寿、取用串行，并且在「同线程同步执行 DuckDB」的运行时（DuckDB-Wasm 的 Node **blocking** 绑定）里会死锁 —— 见[文件系统访问](../guide/file-system.md#代价)。 | 其余与 `duckdb-1-5` 相同。 |
+| `sql` | 在回调里执行 SQL（`duckfn::sql`）：注册期捕获一条常驻长连接，之后用 `execute` / `query`（可绑定参数）跑语句，结果按动态列读回。**只用 C API 的稳定区**，因此不需要 `duckdb-1-5`：配 `USE_UNSTABLE_C_API=0` 与 `v1.2.0` 的 floor，一份二进制就能在 DuckDB 1.3 – 2.0 上加载。有副作用：连接跟进程同寿、取用串行，并且在「同线程同步执行 DuckDB」的运行时（DuckDB-Wasm 的 Node **blocking** 绑定）里会死锁 —— 见[执行 SQL](../guide/sql-execution.md#代价与限制)。 | 除本 crate 自身的 `libduckdb-sys` 外没有额外要求：所有调用都在稳定区，这也正是产物能跨版本加载的原因。 |
+| `owned-connection` | 宿主文件系统（`duckfn::duck_vfs`）：同一条常驻长连接，之上再加 DuckDB 的 VFS，让聚合函数这类拿不到客户端上下文的回调也能读写文件（含 `s3://` 与 `http(s)://`）。它依赖 `duckdb-1-5` 与 `sql`，副作用同 `sql` —— 见[文件系统访问](../guide/file-system.md#代价)。 | 其余与 `duckdb-1-5` 相同。 |
 | `chrono` | 时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 的互转（`DuckDate::to_naive_date` 等），把纪元换算交给 duckfn。 | 由本 feature 引入的可选 `chrono` 依赖。 |
 | `uuid` | `DuckUuid` 与 [`uuid`](https://crates.io/crates/uuid) 的互转（`to_uuid` / `from_uuid`）。 | 可选的 `uuid` 依赖。 |
 | `rust_decimal` | `DuckDecimal<W, S>` 与 [`rust_decimal`](https://crates.io/crates/rust_decimal) 的互转；越界与丢位都以错误返回。 | 可选的 `rust_decimal` 依赖。 |

@@ -87,7 +87,12 @@ One question decides it: **does your code touch the unstable region?**
   slots, `varargs`, and the logical types DuckDB gained in 1.5 (today `TIME_NS`). duckfn groups all
   of it behind the `duckdb-1-5` feature; `owned-connection` (the host VFS) implies it.
 - Everything else is in the stable region: scalars, aggregates, table functions, casts, replacement
-  scans, SQL macros, named STRUCT / ENUM types, and the chrono / uuid / rust_decimal bridges.
+  scans, SQL macros, named STRUCT / ENUM types, the chrono / uuid / rust_decimal bridges, and
+  **running SQL** — `duckfn::sql` (the `sql` feature) opens a connection from the database handle and
+  goes through `duckdb_query` / `duckdb_prepare` / `duckdb_bind_value` / `duckdb_fetch_chunk` and the
+  logical types, none of which sit in the unstable region. That is deliberate: a callback-side
+  capability is exactly where one binary across releases pays off, so it is kept out of the
+  `duckdb-1-5` group even though the connection it borrows is the same one `duck_vfs` uses.
 
 ### Stable region — the complete set
 
@@ -100,8 +105,9 @@ TARGET_DUCKDB_VERSION=v1.2.0
 
 ```toml
 # Cargo.toml — the ABI point is that `duckdb-1-5` stays off (`cli` is only for the
-# `function_descriptions` bin and has nothing to do with the ABI).
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli"] }
+# `function_descriptions` bin and has nothing to do with the ABI; `sql` is
+# callback-side but stable, and keeps this set portable).
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 ```
 
 ```yaml
@@ -131,7 +137,7 @@ DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 ```toml
 # Cargo.toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" for duckfn::duck_vfs
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" for duckfn::duck_vfs (it brings "sql" along)
 ```
 
 ```yaml
@@ -242,5 +248,7 @@ version-directed rather than version-tolerant, whatever you declared.
 - [Installation](../getting-started/installation.md) — what each duckfn feature requires of DuckDB.
 - [File system](../guide/file-system.md) and [Copy functions](../guide/copy-functions.md) — the two
   capabilities that live in the unstable region.
+- [Running SQL from an extension](../guide/sql-execution.md) — the one callback-side capability that
+  stays in the stable region, and why that keeps the artifact portable.
 - [Build and release](../development/build-and-release.md) — the build paths and the release flow.
 - [Known issues](../known-issues.md) — upstream bugs that are not about versions.
