@@ -84,6 +84,12 @@ Two levers, at different layers:
   file lives in the repo, it also travels with the community-registry's `override_ref` — which a
   `ci_tools_version` bump cannot (see below).
 
+**A dependency bump is the usual way to walk into this.** duckfn's own `syn 2 → 3` update (Dependabot
+PR #2, parked in October 2026) needs `darling 2.4`, which needs rustc 1.88 — so on `v1.5-variegata` the
+native jobs would stay green and every `wasm_*` job would fail with the error above. It is parked, not
+merged, until DuckDB 2.0 ships a pipeline on 1.97; the repo-side `rust-toolchain.toml` is the lever for
+taking it sooner.
+
 ### 2 · Link: modern Rust emits features old binaryen cannot parse
 
 Recent Rust (`>=1.89`) building for `wasm32-unknown-emscripten` emits a module that declares post-MVP

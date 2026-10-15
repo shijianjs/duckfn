@@ -1,0 +1,73 @@
+#
+# Checks the npm workspace (docs + duckfn-docs-kit) — the counterpart to the Rust pipelines.
+#
+# Why it exists: a Dependabot bump that only touches package.json / package-lock.json now skips the
+# Rust workflows on purpose (they have `paths` filters), so nothing validated the JS side at all.
+# TypeScript 7 was exactly that case — it arrived, looked fine, and would only have failed at
+# `npm run build` time, which nothing ran. These four steps run what the release flow runs:
+# `npm ci` (which also fails when the lockfile and package.json disagree), typecheck, the kit's own
+# tests, and a full build of the kit plus both locales of the site.
+#
+# What it deliberately does *not* run: `npm test -w docs`, the Playwright suite over the site's
+# runnable SQL blocks. That suite needs the wasm extension, and AGENTS.md records why it stays a
+# local command rather than a CI one. If that decision is ever revisited, this is where it goes.
+name: npm workspace checks
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'duckfn-docs-kit/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/NpmChecks.yml'
+  # `paths` here too, so a push that only touches Rust does not queue a JS build. The Rust pipelines
+  # filter the pull_request event only; this one filters both, because a JS build costs minutes and
+  # pushes to main happen on Rust-only changes just as often.
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'duckfn-docs-kit/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/NpmChecks.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: typecheck, tests, build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # Same major as the docs deploy (DeployDocs.yml): "green here" then means "green there".
+          # `duckfn-docs-kit` is published from Node 24 — its own pipeline pins that separately.
+          node-version: 22
+          cache: npm
+          # npm workspaces: the lockfile lives at the repository root and covers both packages.
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        # Root script: duckfn-docs-kit first, then the docs site (tsconfig for both).
+        run: npm run typecheck
+
+      - name: Test
+        # The kit's own suite (`node --test`); the docs site has no unit tests of its own.
+        run: npm test -w duckfn-docs-kit
+
+      - name: Build
+        # Root script: builds the kit, then the site. A broken link or an unusable type alias fails
+        # here, which is the check that catches a dependency bump like TypeScript 7.
+        run: npm run build
