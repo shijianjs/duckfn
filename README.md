@@ -72,32 +72,30 @@ If you prefer the macros without the runtime, depend on
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro) directly; otherwise the macros are
 re-exported by `duckfn` and no extra dependency is needed.
 
-`duckfn` has seven optional features. `cli` adds the command-line tool that exports a
+`duckfn`'s features are each named after the module they expose, and there is **no aggregate switch**
+— a dependency names exactly what it uses. `cli` adds the command-line tool that exports a
 `function_descriptions.csv` for DuckDB's community-extension pages
-(`cargo run --features quack --bin duckfn-cli -- function_descriptions` in this repository); only an
-extension project's `src/bin/duckfn.rs` needs it. `duckdb-1-5` enables what DuckDB's 1.5 C API
-added: the logical types from DuckDB 1.5 (currently `TIME_NS`) and copy functions. `owned-connection`
-builds on it to add **host file-system access** (`duckfn::duck_vfs`): read/write through DuckDB's VFS
-from any callback, aggregates included. The other three are interop and independent of each other:
-`chrono` converts the time wrapper types to and from [`chrono`](https://crates.io/crates/chrono),
-`uuid` converts `DuckUuid` to and from [`uuid`](https://crates.io/crates/uuid), and `rust_decimal`
-converts `DuckDecimal<W, S>` to and from [`rust_decimal`](https://crates.io/crates/rust_decimal) — so
-the epoch / 128-bit / scaled-integer arithmetic lives in duckfn rather than in every extension:
+(`cargo run --features quack,cli --bin duckfn-cli -- function_descriptions` in this repository); only
+an extension project's `src/bin/duckfn.rs` needs it. Two features carry a capability a callback could
+not otherwise reach, both built on one connection captured at registration time (`owned-connection`,
+which exposes no API of its own): `sql` runs SQL from a callback and reads the result back as dynamic
+columns — it uses **only the stable C API**, so one artifact covers DuckDB 1.3 through 2.0 — and
+`duck_vfs` adds the host file system (DuckDB's VFS, `s3://` and `http(s)://` included) on top of
+`duckdb-1-5`, the feature for what DuckDB 1.5 added: the logical types from 1.5 (currently `TIME_NS`)
+and copy functions. The other three are interop and independent of each other: `chrono` converts the
+time wrapper types to and from [`chrono`](https://crates.io/crates/chrono), `uuid` converts `DuckUuid`
+to and from [`uuid`](https://crates.io/crates/uuid), and `rust_decimal` converts `DuckDecimal<W, S>`
+to and from [`rust_decimal`](https://crates.io/crates/rust_decimal) — so the epoch / 128-bit /
+scaled-integer arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.1.0", features = ["duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.1.0", features = ["sql", "chrono", "uuid", "rust_decimal"] }
 ```
 
-`all` is the aggregate switch — every optional feature **except `owned-connection`**. duckfn normally
-sits at the end of the dependency tree, so `features = ["all"]` is the convenient spelling. The host
-file system is left out of `all` on purpose: it is unreliable under the browser / DuckDB-Wasm build
-(see the Troubleshooting / file-system docs), and on native DuckDB's own readers or the standard
-library cover it, so it is opt-in via `owned-connection` rather than charged to everyone. Pick
-individual features when you want a leaner tree.
-
-`quack` is the one feature that is not meant for dependents: it compiles this package's own example
-extension (`test/extension/`), and depends on `all` plus `owned-connection` (the example demonstrates
-every capability). Asking for `all` never drags the example or its test functions into your build.
+`quack` is the one feature that is not meant for dependents: it is a marker that compiles this
+package's own example extension (`test/extension/`), and which capabilities that example has comes
+from the feature list a build passes alongside it. Turning it on never drags the example or its test
+functions into a dependent's build.
 
 ## Quick start
 

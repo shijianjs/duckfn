@@ -33,7 +33,8 @@ just doc                    # cargo doc -p duckfn
 EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
 TARGET_DUCKDB_VERSION=v1.5.6
-TARGET_INFO += --example $(EXTENSION_NAME) --features quack
+EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
+TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
 
 `USE_UNSTABLE_C_API=1` 决定了产出的扩展只能在兼容版本的 DuckDB 里、并加 `-unsigned` 才能加载。
@@ -42,9 +43,16 @@ DuckDB 发行版本号来读，必须与引擎逐字相等。两种 ABI 类型�
 [DuckDB 版本兼容性](../duckdb-versions/index.md)。`EXTENSION_NAME` 必须与
 `test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
 `TARGET_INFO` 里带 `--example $(EXTENSION_NAME)`：扩展产物来自 `[[example]] duckfn` 这个 target；
-再带上 `--features quack` 决定示例树会不会被编译（它挂在默认关闭的 `quack` feature 上）。
-`TARGET_INFO` 是 DuckDB 官方 makefile 唯一会原样拼进 `cargo build` 的变量。少了后面这一项，产出的是
-一个没有入口符号的 cdylib。
+`EXTENSION_FEATURES` 则说明这个 target 要演示哪些能力。`TARGET_INFO` 是 DuckDB 官方 makefile 唯一
+会原样拼进 `cargo build` 的变量。少了后面这一项，产出的是一个没有入口符号的 cdylib。
+
+那份清单里的 `quack` 只是**标记**（决定示例树编不编），其余是能力清单 —— 因为示例树自己按能力分模块。
+换一份清单就是另一份产物，只用稳定版 API 的那份就是这么打的：
+
+```bash
+make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.2.0 EXTENSION_FEATURES=quack debug
+just test_stable 1.4.0        # ……再拿 DuckDB 1.4 跑一遍指定范围的用例
+```
 
 ## WebAssembly
 
@@ -144,8 +152,8 @@ rust-version = "1.86"
 中文译文）、`demo.sh`、README 与许可证一起打进去。所以解包即得完整文档**和**一份可以直接跑的示例 ——
 这正是把它们放进同一个包的意义。确切清单用 `cargo package -p duckfn --list` 查看。
 
-示例只在打开 `quack` feature 时才参与编译（`cargo build --features quack`），所以它进包对任何依赖
-`duckfn` 的下游项目都没有影响。
+示例只在打开 `quack` feature 时才参与编译（例如 `cargo build --features quack,duck_vfs` —— 标记加上它要
+演示的能力），所以它进包对任何依赖 `duckfn` 的下游项目都没有影响。
 
 ## 文档站
 

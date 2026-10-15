@@ -2,8 +2,11 @@
 //!
 //! 本模块只给 [`wrapper_types`](crate::value_types::wrapper_types) 里的时间类型加**固有关联方法**：
 //! `DuckDate` / `DuckTimestamp` / `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` /
-//! `DuckTimestampTz` / `DuckTime`（以及 `duckdb-1-5` 下的 `DuckTimeNs`）各自与 chrono 的对应类型
-//! 互转。没有这些方法时，每个用到时间的下游扩展都得自己写一遍「自纪元起的微秒」数学。
+//! `DuckTimestampTz` / `DuckTime` 各自与 chrono 的对应类型互转。没有这些方法时，每个用到时间的下游
+//! 扩展都得自己写一遍「自纪元起的微秒」数学。
+//!
+//! [`DuckTimeNs`](crate::DuckTimeNs) 的同一对方法在 `src/value_types/time_ns.rs` —— 那个类型只有
+//! `duckdb-1-5` 才有，所以它连同自己的 chrono 互操作一起待在一个按 feature 开关的模块里。
 //!
 //! 两条硬约束：
 //!
@@ -21,10 +24,13 @@
 //!
 //! This module only adds **inherent methods** to the time types in
 //! [`wrapper_types`](crate::value_types::wrapper_types): `DuckDate` / `DuckTimestamp` /
-//! `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` / `DuckTimestampTz` / `DuckTime` (plus
-//! `DuckTimeNs` under `duckdb-1-5`) each convert to and from the corresponding chrono type. Without
-//! them every downstream extension that touches time has to redo the "microseconds since the epoch"
-//! arithmetic itself.
+//! `DuckTimestampS` / `DuckTimestampMs` / `DuckTimestampNs` / `DuckTimestampTz` / `DuckTime` each
+//! convert to and from the corresponding chrono type. Without them every downstream extension that
+//! touches time has to redo the "microseconds since the epoch" arithmetic itself.
+//!
+//! The same pair for [`DuckTimeNs`](crate::DuckTimeNs) lives in `src/value_types/time_ns.rs`: that
+//! type only exists under `duckdb-1-5`, so it and its chrono interop sit together in a
+//! feature-gated module.
 //!
 //! Two hard rules:
 //!
@@ -44,8 +50,6 @@ use crate::value_types::wrapper_types::{
     DuckDate, DuckTime, DuckTimestamp, DuckTimestampMs, DuckTimestampNs, DuckTimestampS,
     DuckTimestampTz,
 };
-#[cfg(feature = "duckdb-1-5")]
-use crate::value_types::wrapper_types::DuckTimeNs;
 use crate::DuckResult;
 use chrono::{
     DateTime, Datelike, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc,
@@ -73,12 +77,6 @@ const DAYS_FROM_CE_TO_UNIX_EPOCH: i64 = 719_163;
 /// Microseconds in a day; the exclusive upper bound of a valid `TIME`.
 const MICROS_PER_DAY: i64 = 86_400 * 1_000_000;
 
-/// 一天的纳秒数；`TIME_NS` 的合法取值上界（不含）。
-///
-/// Nanoseconds in a day; the exclusive upper bound of a valid `TIME_NS`.
-#[cfg(feature = "duckdb-1-5")]
-const NANOS_PER_DAY: i64 = 86_400 * 1_000_000_000;
-
 /// 判断一个 `i64` 时间戳值是否为 DuckDB 的 `infinity` / `-infinity` 哨兵。
 ///
 /// Whether an `i64` timestamp value is one of DuckDB's `infinity` / `-infinity` sentinels.
@@ -88,8 +86,11 @@ fn is_infinite_i64(value: i64) -> bool {
 
 /// 构造「chrono 表示不了」的错误。
 ///
-/// Builds the "not representable by chrono" error.
-fn out_of_range(
+/// `pub(crate)`：`time_ns.rs` 的 chrono 互操作也用它，两边的措辞因此保持一致。
+///
+/// Builds the "not representable by chrono" error. `pub(crate)` because the chrono interop in
+/// `time_ns.rs` uses it too, which keeps the wording identical on both sides.
+pub(crate) fn out_of_range(
     duck_type: &str,
     value: impl std::fmt::Display,
     unit: &str,
@@ -312,7 +313,10 @@ impl DuckTimestampTz {
 }
 
 // ---------------------------------------------------------------------------
-// DuckTime / DuckTimeNs <-> chrono::NaiveTime
+// DuckTime <-> chrono::NaiveTime（`DuckTimeNs` 那一半在 `time_ns.rs`：它还要 `duckdb-1-5`）
+//
+// DuckTime <-> chrono::NaiveTime (the `DuckTimeNs` half lives in `time_ns.rs`, which also needs
+// `duckdb-1-5`)
 // ---------------------------------------------------------------------------
 
 impl DuckTime {
@@ -350,45 +354,6 @@ impl DuckTime {
         }
         Ok(Self {
             micros_since_midnight: micros,
-        })
-    }
-}
-
-#[cfg(feature = "duckdb-1-5")]
-impl DuckTimeNs {
-    /// 转成 `chrono::NaiveTime`。
-    ///
-    /// `TIME_NS` 是「自 00:00:00 起的纳秒数」，合法区间是 `[0, 86_400_000_000_000)`。
-    ///
-    /// Converts to a `chrono::NaiveTime`. `TIME_NS` counts nanoseconds since 00:00:00 and is only
-    /// valid in `[0, 86_400_000_000_000)`.
-    pub fn to_naive_time(self) -> DuckResult<NaiveTime> {
-        let nanos = self.nanos_since_midnight;
-        if !(0..NANOS_PER_DAY).contains(&nanos) {
-            return Err(out_of_range(
-                "TIME_NS",
-                nanos,
-                "nanoseconds since 00:00:00",
-            ));
-        }
-        NaiveTime::from_num_seconds_from_midnight_opt(
-            (nanos / 1_000_000_000) as u32,
-            (nanos % 1_000_000_000) as u32,
-        )
-        .ok_or_else(|| out_of_range("TIME_NS", nanos, "nanoseconds since 00:00:00"))
-    }
-
-    /// 由 `chrono::NaiveTime` 构造（纳秒精度，不丢位）。
-    ///
-    /// Builds one from a `chrono::NaiveTime` at nanosecond precision, losing nothing.
-    pub fn from_naive_time(value: NaiveTime) -> DuckResult<Self> {
-        let nanos = i64::from(value.num_seconds_from_midnight()) * 1_000_000_000
-            + i64::from(value.nanosecond());
-        if nanos >= NANOS_PER_DAY {
-            return Err(out_of_range("TIME_NS", value, "as a time of day"));
-        }
-        Ok(Self {
-            nanos_since_midnight: nanos,
         })
     }
 }
@@ -590,22 +555,6 @@ mod tests {
                 .to_naive_time()
                 .unwrap(),
             NaiveTime::from_hms_micro_opt(1, 2, 3, 456_789).unwrap()
-        );
-    }
-
-    /// `TIME_NS` 需要 `duckdb-1-5`（该逻辑类型是 DuckDB 1.5 新增的）。
-    ///
-    /// `TIME_NS` needs `duckdb-1-5`, since that logical type was added in DuckDB 1.5.
-    #[cfg(feature = "duckdb-1-5")]
-    #[test]
-    fn time_ns_round_trip() {
-        let ns = NaiveTime::from_hms_nano_opt(1, 2, 3, 456_789_012).unwrap();
-        assert_eq!(
-            DuckTimeNs::from_naive_time(ns)
-                .unwrap()
-                .to_naive_time()
-                .unwrap(),
-            ns
         );
     }
 

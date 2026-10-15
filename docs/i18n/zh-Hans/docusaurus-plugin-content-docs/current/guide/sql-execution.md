@@ -26,8 +26,9 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["sql"] }
 
 这件事影响的不只是构建，还有产物本身：保持 `USE_UNSTABLE_C_API=0` 并以 `v1.2.0` 作为 floor，一份
 二进制就能服务 DuckDB 1.3 到 2.0（见[版本号与 ABI](../duckdb-versions/c-api-and-abi.md)）。还想顺带
-要宿主文件系统时开 `owned-connection`（它会带来 `sql`，并加上
-[`duckfn::duck_vfs`](./file-system.md)）—— 文件系统那一半**确实**在不稳定区，必须与引擎小版本对齐。
+要宿主文件系统就再加 `duck_vfs`：它建在同一条连接上，但既带来
+[`duckfn::duck_vfs`](./file-system.md)，又要 `duckdb-1-5` —— 文件系统那一半**确实**在不稳定区，必须与
+引擎小版本对齐。两个 feature 互不依赖，只共用那条连接与它的锁。
 
 ::::
 
@@ -188,7 +189,7 @@ SELECT dfn_sql_has_table('dfn_sql_demo');                                -- true
 - **结果整份物化。** `query` 在返回前把所有块读进内存。结果大到放不下时，请改走「手写适配器 +
   自持连接」那条路。
 - **两个 feature 都开时与 `duckfn::duck_vfs` 共用同一把锁。** 一次调用从头持锁到尾，所以长查询会
-  挡住文件读写，而且**同一线程里嵌套取用会死锁** —— 开了 `owned-connection` 时不要在
+  挡住文件读写，而且**同一线程里嵌套取用会死锁** —— 开了 `duck_vfs` 时不要在
   `with_file_system` 闭包里调 `duckfn::sql`，反之亦然；其它线程的并发调用只是排队。
 - **进程级只有一条连接，以首个完成注册的实例为准。** 同一进程里存在多个数据库实例时，用的是先注册
   那个实例的连接。

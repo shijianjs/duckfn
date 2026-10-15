@@ -57,8 +57,9 @@ cargo 永远不会打包含自己 `Cargo.toml` 的子目录，所以独立成 cr
 `src/bin/duckfn.rs` 这个命令行入口、`test/sql/` 的 sqllogictest 用例（确切清单见
 [构建与发布](./build-and-release.md)）。
 
-真正编译它的是默认关闭的 `quack` feature：`make debug` 通过根 `Makefile` 里的
-`TARGET_INFO += --features quack` 把它带上，`just build`、`just build_wasm` 同理。裸跑 `cargo build`
+真正编译它的是默认关闭的 `quack` feature —— 它只是个「编那棵示例树」的标记，**能力由构建时给的 feature
+清单决定**：根 `Makefile` 里 `TARGET_INFO += ... --features $(EXTENSION_FEATURES)`（`EXTENSION_FEATURES`
+默认是示例演示到的全部能力），`just build`、`just build_wasm` 带的是同一份清单。裸跑 `cargo build`
 只会静默跳过目标，交出一个没有入口符号的 cdylib，DuckDB 要到 `LOAD` 才报错。依赖 `duckfn` 的下游
 完全不受影响：源码在包里，feature 关着，依赖树与以前一致。跑运行时自身的测试用
 `cargo test -p duckfn`，跑全部用 `cargo test --workspace`。

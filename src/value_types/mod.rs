@@ -24,6 +24,14 @@ pub(crate) mod duck_array;
 /// Wrapper types (timestamp, date, time, UUID, blob, ...) whose physical representation is
 /// shared but whose logical semantics differ.
 pub(crate) mod wrapper_types;
+// DuckDB 1.5 的 `TIME_NS`：整个模块挂在 `duckdb-1-5` 后面（该逻辑类型与 quack-rs 的
+// `TypeId::TimeNs` 都是 1.5 才有的）；模块文档见 `src/value_types/time_ns.rs`。
+//
+// DuckDB 1.5's `TIME_NS`: the whole module sits behind `duckdb-1-5` (both the logical type and
+// quack-rs' `TypeId::TimeNs` only exist there); the module docs live in
+// `src/value_types/time_ns.rs`.
+#[cfg(feature = "duckdb-1-5")]
+pub(crate) mod time_ns;
 // 时间包装类型与 chrono 的互操作（`to_naive_date` / `from_naive_date` 等固有方法），
 // 由 `chrono` feature 开关；模块文档见 `src/value_types/chrono_bridge.rs`。
 //
@@ -92,6 +100,8 @@ pub use duck_array::*;
 pub use duck_list::*;
 pub use duck_map::*;
 pub use wrapper_types::*;
+#[cfg(feature = "duckdb-1-5")]
+pub use time_ns::*;
 pub use duck_struct::*;
 pub use duck_lazy::*;
 pub use duck_lazy_slot::*;

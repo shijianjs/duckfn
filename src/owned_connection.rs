@@ -32,7 +32,7 @@
 //! - [`crate::sql`]（`sql` feature）：跑 SQL、把结果按动态列读回来。**只用 C API 的稳定区**
 //!   （`duckdb_connect` + 预处理 / 绑定 / 取块 + 逻辑类型），所以不需要 `duckdb-1-5`，一份
 //!   `C_STRUCT` 二进制能在 DuckDB 1.3 – 2.0 之间通用。
-//! - [`crate::duck_vfs`]（`owned-connection` feature）：宿主文件系统。它额外需要 1.5 的客户端上下文
+//! - [`crate::duck_vfs`]（`duck_vfs` feature）：宿主文件系统。它额外需要 1.5 的客户端上下文
 //!   与文件系统入口，因此落在不稳定区。
 //!
 //! - [`crate::sql`] (the `sql` feature): run SQL and read the result back as dynamic columns. It uses
@@ -81,13 +81,23 @@
 //!   succeeds anyway (an extension that never needs this connection must not fail to load over it);
 //!   every later take-up then reports the recorded reason.
 
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, OnceLock};
 
 use quack_rs::connection::Connection;
-use quack_rs::error::ExtensionError;
 use quack_rs::query::OwnedConnection;
 
+// 只有取用入口用到这几个：`MutexGuard` 在返回类型里，`ExtensionError` 与 `DuckResult` /
+// `duck_error` 在错误构造里。所以它们跟着入口一起，挂在用到入口的那两个 feature 上。
+//
+// Only the accessors use these: `MutexGuard` in their return types, `ExtensionError` and `DuckResult`
+// / `duck_error` in the error builders. They are therefore gated together with the accessors, on the
+// two features that use them.
+#[cfg(any(feature = "sql", feature = "duck_vfs"))]
 use crate::{DuckResult, duck_error};
+#[cfg(any(feature = "sql", feature = "duck_vfs"))]
+use quack_rs::error::ExtensionError;
+#[cfg(any(feature = "sql", feature = "duck_vfs"))]
+use std::sync::MutexGuard;
 
 /// 注册期打开的自有长连接；进程级唯一，且静态永不析构。
 ///
@@ -154,6 +164,7 @@ pub(crate) fn capture(connection: &Connection) {
 ///
 /// Returns a readable error when the extension has not finished registering yet (or opening the
 /// connection failed); the closure's own error is passed through unchanged.
+#[cfg(feature = "sql")]
 pub(crate) fn with_connection<R>(
     f: impl FnOnce(&OwnedConnection) -> DuckResult<R>,
 ) -> DuckResult<R> {
@@ -172,6 +183,17 @@ pub(crate) fn with_connection<R>(
 ///
 /// Returns an error when the extension has not finished registering yet, or when opening the
 /// connection during registration failed.
+//
+// 下面这一组（`take_connection` 与它的两个错误构造函数）各自挂在**用到它的 feature** 上：
+// `take_connection` 给 `duck_vfs` 的 guard 与 `with_connection`；只开 `owned-connection` 时模块里
+// 就只剩捕获（连接留下了，但没人来取）—— 那正是「不该只开它」的情形，这几个 `#[cfg]` 只是让那种
+// 配置也编得干净。
+//
+// This group (`take_connection` and its two error builders) is gated on **the features that use it**:
+// `take_connection` serves `duck_vfs`'s guards and `with_connection`. With only `owned-connection` on,
+// all that is left in the module is the capture (the connection is kept, but nobody takes it) — the
+// configuration you should not be in; these `#[cfg]`s merely keep even that one compiling cleanly.
+#[cfg(any(feature = "sql", feature = "duck_vfs"))]
 pub(crate) fn take_connection() -> DuckResult<MutexGuard<'static, OwnedConnection>> {
     let mutex = CONNECTION.get().ok_or_else(not_ready_error)?;
     // 业务代码在 guard 里 panic 会毒化互斥锁，但连接本身（以及它引用的数据库实例）依然有效，
@@ -186,6 +208,7 @@ pub(crate) fn take_connection() -> DuckResult<MutexGuard<'static, OwnedConnectio
 /// 构造「还没准备好」的错误，区分「注册失败」与「尚未注册」两种情况。
 ///
 /// Builds the "not ready" error, distinguishing "capture failed" from "not registered yet".
+#[cfg(any(feature = "sql", feature = "duck_vfs"))]
 fn not_ready_error() -> ExtensionError {
     duck_error(not_ready_message(CAPTURE_ERROR.get().map(String::as_str)))
 }
@@ -194,6 +217,7 @@ fn not_ready_error() -> ExtensionError {
 ///
 /// The pure part of [`not_ready_error`]: report the captured failure when there is one, otherwise
 /// say "not registered yet". Kept free of global state so it can be tested deterministically.
+#[cfg(any(feature = "sql", feature = "duck_vfs"))]
 fn not_ready_message(capture_error: Option<&str>) -> String {
     capture_error.map_or_else(
         || {
@@ -211,9 +235,13 @@ fn not_ready_message(capture_error: Option<&str>) -> String {
     )
 }
 
-#[cfg(test)]
+// 单测跟着 `take_connection` 走：只开 `owned-connection` 时这两个取用入口不存在，没什么可测的。
+//
+// The tests follow `take_connection`: with only `owned-connection` on those two accessors do not
+// exist, so there is nothing to test.
+#[cfg(all(test, any(feature = "sql", feature = "duck_vfs")))]
 mod tests {
-    use super::{CONNECTION, not_ready_message, take_connection, with_connection};
+    use super::{CONNECTION, not_ready_message, take_connection};
 
     // 这些测试只覆盖纯 Rust 逻辑：真正的连接需要 DuckDB 运行时（见 `test/sql` 里的 sqllogictest），
     // 单测不去碰 FFI。
@@ -230,7 +258,16 @@ mod tests {
         assert!(CONNECTION.get().is_none(), "no DuckDB runtime in unit tests");
         let error = take_connection().expect_err("nothing was captured yet");
         assert!(error.as_str().contains("not available"), "{error}");
-        assert!(with_connection(|_| Ok(())).is_err());
+    }
+
+    /// `with_connection` 是 `sql` 那一档的入口，所以在只开 `duck_vfs` 的构建里它不存在。
+    ///
+    /// `with_connection` is the `sql` side's entry point, so it does not exist in a `duck_vfs`-only
+    /// build.
+    #[cfg(feature = "sql")]
+    #[test]
+    fn with_connection_before_registration_is_an_error() {
+        assert!(super::with_connection(|_| Ok(())).is_err());
     }
 
     #[test]

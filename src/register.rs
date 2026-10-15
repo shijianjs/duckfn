@@ -34,15 +34,15 @@ inventory::collect!(DuckFunctionItem);
 
 /// 注册本扩展收集到的全部 DuckDB 函数（扩展初始化入口）。
 ///
-/// 开跑之前先 best-effort 捕获一条自有长连接（`sql` feature 下打开并存进进程级静态，供
-/// `duckfn::sql` 与 `duckfn::duck_vfs` 使用）：聚合函数这类回调在调用期拿不到连接，注册期是唯一
+/// 开跑之前先 best-effort 捕获一条自有长连接（`owned-connection` feature 下打开并存进进程级静态，
+/// 供 `duckfn::sql` 与 `duckfn::duck_vfs` 使用）：聚合函数这类回调在调用期拿不到连接，注册期是唯一
 /// 窗口；捕获失败只记原因，不影响注册成败。
 ///
-/// Before anything else it captures an owned long-lived connection, best-effort (under the `sql`
-/// feature it opens it and stores it in a process-level static, backing both `duckfn::sql` and
-/// `duckfn::duck_vfs`): callbacks such as aggregates cannot obtain a connection at call time, so
-/// registration is the only window. A failed capture is only recorded — it never decides whether
-/// registration succeeds.
+/// Before anything else it captures an owned long-lived connection, best-effort (under the
+/// `owned-connection` feature it opens it and stores it in a process-level static, backing both
+/// `duckfn::sql` and `duckfn::duck_vfs`): callbacks such as aggregates cannot obtain a connection at
+/// call time, so registration is the only window. A failed capture is only recorded — it never
+/// decides whether registration succeeds.
 ///
 /// 顺序为：先按提交顺序执行所有 `DuckFunctionItem`（标量函数、表函数、cast、SQL 宏、
 /// replacement scan、自定义注册等），再分组注册聚合函数集重载，最后分组注册标量函数集
@@ -66,12 +66,13 @@ inventory::collect!(DuckFunctionItem);
 pub fn register_all_duckfn(connection: &Connection) -> DuckResult<()> {
     // 注册期是拿到 DuckDB 数据库句柄的唯一窗口：这里留一条自有长连接（见
     // `crate::owned_connection`），供聚合等回调跑 SQL（`duckfn::sql`）与访问宿主文件系统
-    // （`duckfn::duck_vfs`，需要 `owned-connection`）。
+    // （`duckfn::duck_vfs`）—— 两个 feature 都建在这条连接上。
     //
     // Registration time is the only window onto DuckDB's database handle: keep an owned, long-lived
     // connection here (see `crate::owned_connection`) so callbacks such as aggregates can run SQL
-    // (`duckfn::sql`) and reach the host file system (`duckfn::duck_vfs`, needing `owned-connection`).
-    #[cfg(feature = "sql")]
+    // (`duckfn::sql`) and reach the host file system (`duckfn::duck_vfs`) — both features are built on
+    // that one connection.
+    #[cfg(feature = "owned-connection")]
     crate::owned_connection::capture(connection);
     // 导出文档前先留一份 catalog 快照：注册完成后用它差出「本扩展新增的函数」，
     // 这样 `function` 列一定和 community-extensions 做 JOIN 的 `function_name` 对齐。

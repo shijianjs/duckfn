@@ -58,7 +58,7 @@
 //!
 //! # 前置条件与限制 / Prerequisites and limits
 //!
-//! - 需要 DuckDB 1.5.0+ 与本 crate 的 `owned-connection` feature（它自己依赖 `duckdb-1-5`）。
+//! - 需要本 crate 的 `duck_vfs` feature（它依赖 `owned-connection` 与 `duckdb-1-5`）。
 //! - 进程级只有一份入口，以**首个完成注册的实例**为准；需要按实例隔离时，手写适配器并自持连接。
 //! - **没有删除**：C API 既没有 remove 也没有 move，DuckDB 也没有 `remove_file` 函数。
 //! - 每次取用都会拿那条自有连接上的互斥锁：**同一线程别嵌套取用**（会死锁），并发取用之间串行。
@@ -71,11 +71,10 @@
 //!   「不存在」（不是 duckfn 能修的 bug）。duckfn 裸 `FileHandle` 的 create/write 偏移也坏（写出的文件
 //!   多一字节 / 错位）。DuckDB 的 `COPY … TO` 只能把查询结果按格式（CSV/JSON/parquet）导出 —— 它能
 //!   往返，但**存不了一个任意长字符串（如 HTML）的原样字节**（CSV 会加引号/换行），所以 wasm 上本就
-//!   没有通用的“把内容写进文件”路子。因此 duck_vfs 已从 `all` 移除，**只在 native 需要时开 `owned-connection`**。
+//!   没有通用的“把内容写进文件”路子。因此这一档**只在 native 真需要时打开**（`duck_vfs`）。
 //!   native CLI 与真实磁盘上语义全部正确（见 `test/sql/functions/duck_vfs.test`）。
 //!
-//! - Requires DuckDB 1.5.0+ and this crate's `owned-connection` feature (which itself needs
-//!   `duckdb-1-5`).
+//! - Requires this crate's `duck_vfs` feature (which needs `owned-connection` and `duckdb-1-5`).
 //! - One process-level entry, first instance to finish registering wins; for per-instance isolation,
 //!   hand-write an adapter and keep your own connection.
 //! - **No delete**: the C API offers neither remove nor move, and DuckDB has no `remove_file`.
@@ -93,9 +92,9 @@
 //!   create/write offset is also broken on wasm (the written file gains / misorders a byte). DuckDB's
 //!   `COPY … TO` only exports query results in a format (CSV/JSON/parquet) — it round-trips, but it
 //!   **cannot store an arbitrary string (e.g. HTML) as its raw bytes** (CSV adds quoting/newlines),
-//!   so there is no general "write this content to this file" path on wasm at all. Hence duck_vfs is
-//!   no longer in `all` — enable `owned-connection` on native when you actually need it. On the
-//!   native CLI and a real disk everything is correct (see `test/sql/functions/duck_vfs.test`).
+//!   so there is no general "write this content to this file" path on wasm at all. Hence this feature
+//!   is enabled **only where it is actually needed, on native** (via `duck_vfs`). On the native CLI
+//!   and a real disk everything is correct (see `test/sql/functions/duck_vfs.test`).
 
 mod capture;
 mod file;

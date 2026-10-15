@@ -25,21 +25,27 @@
 
 示例的模块树由默认关闭的 `quack` feature 控制 —— 它由两个 target 用 `#[path]` 挂进来：
 `examples/duckfn.rs`（扩展产物）与 `src/bin/duckfn.rs`（CLI），两者都写了
-`required-features = ["quack"]`。`src/lib.rs` **不**挂它，lib 只是纯 rlib。
+`required-features = ["quack"]`（CLI 另加 `"cli"`）。`src/lib.rs` **不**挂它，lib 只是纯 rlib。
 
 - **下游**：`duckfn = "0.0.11"` 的依赖树与示例并入前完全一致，示例源码在包里但不参与编译；而且因为
   lib 只有 rlib，下游编 wasm 时也不会被「把 duckfn 的 cdylib 也链一遍」拖下水（见下）。
-- **本仓库**：所有构建扩展的命令都必须带上它 —— `make debug`（根 Makefile 里
-  `TARGET_INFO += --example $(EXTENSION_NAME) --features quack`）、`cargo build --features quack`、
-  `just build`、`just build_wasm`。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口符号的
-  cdylib），`LOAD` 时才报错，很难查。
-- `quack = ["all", "owned-connection"]`：示例把每一档可选能力都演示了一遍，包括 `duckfn::sql` 与
-  `duckfn::duck_vfs`，所以除了 `all` 还要显式带上 `owned-connection`（它蕴含 `sql`，见下）。
-- `all` 是给下游用户用的「全开」档，**不含 `sql` 与 `owned-connection`**：两档都要在进程里留一条常驻
-  连接（副作用见根 `Cargo.toml` 里两个 feature 的说明），而其中的宿主文件系统在浏览器 / DuckDB-Wasm
-  上又不可靠（存在性判定恒真、裸写偏移错），native 上也能用 DuckDB 自身读写 / 系统库替代，所以不放进
-  「全开」；需要 SQL 执行的下游单独开 `sql`（落在稳定区，不需要 `duckdb-1-5`），再要文件系统才开
-  `owned-connection`。`all` 也**不**依赖 `quack`（用户不需要示例与那些测试函数）。
+- **本仓库**：所有构建扩展的命令都必须把**标记与能力清单**一起给出 —— `make debug`（根 Makefile 里
+  `TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)`，清单默认在
+  `EXTENSION_FEATURES` 里）、`cargo build --features quack,duck_vfs`、`just build`、`just build_wasm`
+  （Justfile 里 `_example_features` 那份）。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口
+  符号的 cdylib），`LOAD` 时才报错，很难查。
+- `quack = []` 是**纯标记**：它只决定示例树与 CLI 那两个 target 编不编。示例要演示哪些能力由构建命令
+  同时给出的清单决定（根 `Makefile` 的 `EXTENSION_FEATURES`，默认 `quack,duckdb-1-5,duck_vfs,sql,`
+  `chrono,uuid,rust_decimal`；Justfile 里那份 `_example_features` 与之保持一致），示例树自己按能力分
+  模块（`test/extension/functions/mod.rs` 里每个模块挂自己的 `#[cfg(feature = ...)]`）。
+- 因此「换一份 feature 清单」= 「换一份产物」：`EXTENSION_FEATURES=quack` 配 `USE_UNSTABLE_C_API=0` +
+  `TARGET_DUCKDB_VERSION=v1.2.0` 就是只含稳定区 API 的插件，1.3–2.0 的引擎都能加载，`just test_stable
+  <引擎版本> [用例模式]` 就是拿它跑指定范围的 `.test`（逻辑在 `scripts/test-stable.sh`）。
+- **没有「全开」（`all`）这一档**，也刻意不给：每个 feature 以它暴露的模块命名，`owned-connection`
+  是 `sql` 与 `duck_vfs` 共用的底座（两者都依赖它，它不依赖任何一方），而带连接的那两档都有副作用
+  （进程级常驻连接 + 单线程运行时下 LOAD 即死锁，见根 `Cargo.toml`）；文件系统那档在浏览器 /
+  DuckDB-Wasm 上还不可靠（存在性判定恒真、裸写偏移错），native 上也能用 DuckDB 自身读写 / 系统库替代。
+  「全开」说不清这些代价，也看不出产物到底开过什么，所以由调用方各自列清楚。
 
 ### 发布包内容
 
@@ -96,10 +102,11 @@ import 同一份（`Justfile` 里写明 `set allow-duplicate-recipes := true`，
   以及本项目特有的 recipe（模板的 `rename`、本仓库的 `publish_*` / `release_kit_*` / `doc`）。
 - **覆盖共享 recipe 必须显式开 `set allow-duplicate-recipes := true`**：不开这个开关，重名 recipe 会让
   just 在解析期直接报错，连 `just --list` 都跑不了。本仓库就是这么覆盖 `release` /
-  `build_wasm` / `lint` / `docs_csv` / `release_check` 的（示例与 CLI 挂在 `quack` feature 上）。
+  `build_wasm` / `lint` / `docs_csv` / `release_check` 的（示例树挂在 `quack` 标记上，能力清单在
+  `_example_features` / `EXTENSION_FEATURES` 里）。
   `build` 已不再覆盖：共享的 `build` 现在走官方 make 工具链（`make configure` + `make debug`），而根
-  `Makefile` 的 `TARGET_INFO` 已带 `--example $(EXTENSION_NAME) --features quack`，示例与 feature 都由
-  make 负责，无需再用 `cargo duckdb-ext`（该工具已不再推荐）单独覆盖一条 `build`。
+  `Makefile` 的 `TARGET_INFO` 已带 `--example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)`，
+  示例与 feature 都由 make 负责，无需再用 `cargo duckdb-ext`（该工具已不再推荐）单独覆盖一条 `build`。
 - 共享文件里**不写具体版本号**，用 `X.Y.Z` 占位：否则下游副本会被各自的 `scripts/release.sh`
   换个版本号，每次 `just sync-common` 都白白多出一行 diff。
 - 它也**不进 crate 包**：根 `Cargo.toml` 的 `include` 白名单里没有 `scripts/`。

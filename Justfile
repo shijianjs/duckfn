@@ -25,9 +25,22 @@ import "scripts/common.just"
 # duckfn_entrypoint!("...")、根 Makefile 的 EXTENSION_NAME、CI 的 extension_name 一致
 extension_name := "duckfn"
 
-# 本仓库的示例扩展与 CLI 都挂在默认关闭的 `quack` feature 上，涉及 cargo 的命令都得显式带上它
-# （不带的话 cargo 只是静默跳过目标，产物没有入口符号，LOAD 时才报错）。
-_quack := "--features quack"
+# 示例树挂在默认关闭的标记式 feature `quack` 上，它要演示哪些能力由这份清单给出 —— 与根 Makefile 的
+# EXTENSION_FEATURES 默认值保持一致（改一处记得改另一处）。涉及 cargo 的命令都得显式带上它们，不带时
+# cargo 只是静默跳过目标，产物没有入口符号，LOAD 时才报错。
+#
+# The example tree sits behind the marker feature `quack`, and which capabilities it demonstrates comes
+# from this list — kept in sync with EXTENSION_FEATURES in the root Makefile. Every cargo command that
+# builds the extension passes them explicitly: without them cargo silently skips the targets and the
+# artifact has no entry-point symbol, which only `LOAD` complains about.
+_example_features := "quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal"
+_example := "--features " + _example_features
+
+# CLI 只需要示例树 + `duckfn::cli`（导出函数描述用不到那些能力）。
+#
+# The CLI needs the example tree plus `duckfn::cli` only (exporting the function descriptions uses none
+# of those capabilities).
+_cli := "--features quack,cli"
 
 # ==== 覆盖共享 recipe ====
 default:
@@ -39,7 +52,7 @@ default:
 
 # 全量 release 构建
 release:
-    cargo build --release {{_quack}}
+    cargo build --release {{_example}}
 
 # 提交前检查：这是全 workspace 的 crate，所以 --workspace；示例、CLI 都在 `quack` 上，所以 --all-features
 lint:
@@ -47,12 +60,35 @@ lint:
 
 # 生成 function_descriptions.csv（本仓库的 CLI 目标名是 duckfn-cli，理由见 Cargo.toml 的 [[bin]]）
 docs_csv:
-    cargo run {{_quack}} --bin duckfn-cli -- function_descriptions
+    cargo run {{_cli}} --bin duckfn-cli -- function_descriptions
 
 # WebAssembly 构建：产物是 `examples/duckfn.rs` 的 staticlib（libduckfn.a），与下游一样走
-# --example（见 Cargo.toml 的 [[example]]）；`quack` 是示例树与 CLI 的开关。
+# --example（见 Cargo.toml 的 [[example]]）；`quack` + 能力清单是示例树的开关。
 build_wasm:
-    cargo build --release --target wasm32-unknown-emscripten --example {{extension_name}} {{_quack}}
+    cargo build --release --target wasm32-unknown-emscripten --example {{extension_name}} {{_example}}
+
+# ==== 稳定区（不依赖 1.5 的）插件与它的对照测试 ====
+#
+# 示例树按能力分模块，所以同一份源码可以编出两种产物：全量（上面那些 recipe）与**只用稳定版 C API**
+# 的（这里）。后者声明 `C_STRUCT` + C API 下限 v1.2.0，因此 1.3 到 2.0 的引擎都能加载它 —— 用它做
+# 「同一份用例在老引擎上再跑一遍」的对照，而不必等 CI 的 9 平台产物。
+#
+# The example tree splits itself by capability, so one source tree yields two artifacts: the full one
+# (the recipes above) and a **stable C API only** one (here). The latter declares `C_STRUCT` plus a
+# v1.2.0 C API floor, so every engine from 1.3 to 2.0 loads it — which is what re-runs a range of the
+# suite against an older engine without waiting for CI's nine-platform artifacts.
+
+# 只编稳定区插件（产物在 build/debug/，跨版本；跑完想要全量产物再跑 just build）
+build_stable:
+    make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.2.0 EXTENSION_FEATURES=quack debug
+
+# 稳定区插件 + 指定范围的用例：不给范围就跑「除需要 1.5 / duck_vfs / sql 等之外」的全部用例。
+#   just test_stable 1.4.0
+#   just test_stable 1.4.0 "test/sql/functions/scalar_function.test"
+#   just test_stable 1.4.0 "test/sql/functions/*.test"
+# 逻辑在 scripts/test-stable.sh（本仓库特有；scripts/ 不进 crate 包）。
+test_stable *args:
+    bash scripts/test-stable.sh {{args}}
 
 # 发版前检查：clippy（warning 视为错误）与全 feature 构建都必须干净
 release_check: lint

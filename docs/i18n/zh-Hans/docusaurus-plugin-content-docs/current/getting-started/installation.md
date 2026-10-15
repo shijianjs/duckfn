@@ -29,21 +29,25 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | --- | --- | --- |
 | `duckdb-1-5` | 支持 DuckDB 1.5 新增的逻辑类型 —— 目前是 `TIME_NS`（`DuckTimeNs`）—— 以及 `COPY ... TO` 用的 COPY 函数类型。 | `libduckdb-sys` 使用 DuckDB 1.5 及以上的头文件。 |
 | `sql` | 在回调里执行 SQL（`duckfn::sql`）：注册期捕获一条常驻长连接，之后用 `execute` / `query`（可绑定参数）跑语句，结果按动态列读回。**只用 C API 的稳定区**，因此不需要 `duckdb-1-5`：配 `USE_UNSTABLE_C_API=0` 与 `v1.2.0` 的 floor，一份二进制就能在 DuckDB 1.3 – 2.0 上加载。有副作用：连接跟进程同寿、取用串行，并且在「同线程同步执行 DuckDB」的运行时（DuckDB-Wasm 的 Node **blocking** 绑定）里会死锁 —— 见[执行 SQL](../guide/sql-execution.md#代价与限制)。 | 除本 crate 自身的 `libduckdb-sys` 外没有额外要求：所有调用都在稳定区，这也正是产物能跨版本加载的原因。 |
-| `owned-connection` | 宿主文件系统（`duckfn::duck_vfs`）：同一条常驻长连接，之上再加 DuckDB 的 VFS，让聚合函数这类拿不到客户端上下文的回调也能读写文件（含 `s3://` 与 `http(s)://`）。它依赖 `duckdb-1-5` 与 `sql`，副作用同 `sql` —— 见[文件系统访问](../guide/file-system.md#代价)。 | 其余与 `duckdb-1-5` 相同。 |
+| `duck_vfs` | 宿主文件系统（`duckfn::duck_vfs`）：在同一条注册期长连接之上再加 DuckDB 的 VFS，让聚合函数这类拿不到客户端上下文的回调也能读写文件（含 `s3://` 与 `http(s)://`）。它依赖 `owned-connection` 与 `duckdb-1-5`，副作用同 `sql` —— 见[文件系统访问](../guide/file-system.md#代价)。 | 其余与 `duckdb-1-5` 相同。 |
+| `owned-connection` | 两项「回调侧能力」共用的底座：注册期捕获的一条常驻长连接。它**不暴露任何 API** —— `sql` 与 `duck_vfs` 是它的两个公开面，各自依赖它，而它不依赖任何一方。只在想把这个底座写明确时才直接列它。 | 无。 |
 | `chrono` | 时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 的互转（`DuckDate::to_naive_date` 等），把纪元换算交给 duckfn。 | 由本 feature 引入的可选 `chrono` 依赖。 |
 | `uuid` | `DuckUuid` 与 [`uuid`](https://crates.io/crates/uuid) 的互转（`to_uuid` / `from_uuid`）。 | 可选的 `uuid` 依赖。 |
 | `rust_decimal` | `DuckDecimal<W, S>` 与 [`rust_decimal`](https://crates.io/crates/rust_decimal) 的互转；越界与丢位都以错误返回。 | 可选的 `rust_decimal` 依赖。 |
-| `all` | 聚合开关，一次打开所有可选 feature。 | 随它打开的那些 feature（含 `duckdb-1-5` 时需要 DuckDB 1.5 头文件）。 |
+| `quack` | **本仓库**（以及模板）示例扩展与 CLI 的标记：它只决定那两个 target 编不编，不决定它们有什么能力 —— 那由构建时列的 feature 决定。下游永远用不到它。 | 示例自己的那份能力清单，由构建命令一并给出。 |
+
+每个 feature 都以它暴露的模块命名，并且**没有「全开」开关**：依赖里写清楚要用哪几项。这是刻意的
+——「全开」说不清代价（带连接的那两项有副作用；`duckdb-1-5` 把构建钉在某个引擎发行版上），也看不出
+一份构建到底开了哪些能力。
 
 三个互转 feature 各自独立，用到哪个开哪个：
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["sql", "chrono", "uuid", "rust_decimal"] }
 ```
 
-全开就是 `duckfn = { version = "{{DUCKFN_VERSION}}", features = ["all"] }`。它连 `cli` 一起打开，
-而 `cli` 只多带 `clap` 与 `csv`：对要构建 `src/bin/duckfn.rs` 的那个 crate 无所谓，但想把依赖树
-压到最小的话，还是按上面的单项挑。
+`cli` 只多带 `clap` 与 `csv` 给 CLI 那个 bin 用，属于构建 `src/bin/duckfn.rs` 的那个 crate，不该进
+想压到最小的依赖树。
 
 `loadable-extension` 是 `libduckdb-sys` 的 feature，不是 `duckfn` 的，需要你自己开启。
 

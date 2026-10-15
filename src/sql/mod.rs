@@ -24,16 +24,17 @@
 //! 类型），所以它落在 `sql` feature 后面、**不依赖 `duckdb-1-5`**：配
 //! `USE_UNSTABLE_C_API=0` + `TARGET_DUCKDB_VERSION=v1.2.0` 打出来的一份 `C_STRUCT` 二进制，
 //! DuckDB 1.3 一直到 2.0 都接受；quack-rs 的 ABI 自检也直接返回 `StableOnly`，不做版本比对。
-//! **宿主文件系统**才是需要 1.5 的那一半：开 `owned-connection` 会带来本模块，并把
-//! `duckfn::duck_vfs` 一并加上。
+//! **宿主文件系统**才是需要 1.5 的那一半：`duck_vfs` 建在同一条连接上（它也依赖
+//! `owned-connection`），并额外要 `duckdb-1-5`。两个 feature 互不依赖，只是共用那条连接与那把锁。
 //!
 //! Every call this module makes lives in the **stable** region of the C API (`duckdb_connect` plus
 //! prepare / bind / fetch-chunk and the logical types), so it sits behind the `sql` feature and
 //! **does not depend on `duckdb-1-5`**: built with `USE_UNSTABLE_C_API=0` and a
 //! `TARGET_DUCKDB_VERSION=v1.2.0` floor, the `C_STRUCT` artifact is accepted all the way from DuckDB
 //! 1.3 to 2.0, and quack-rs' ABI check short-circuits to `StableOnly`. **The host file system** is
-//! the half that needs 1.5: enabling `owned-connection` brings this module and adds
-//! `duckfn::duck_vfs` on top.
+//! the half that needs 1.5: `duck_vfs` is built on the same connection (it depends on
+//! `owned-connection` too) and additionally needs `duckdb-1-5`. The two features do not depend on each
+//! other; they merely share that connection and its lock.
 //!
 //! # 两个层次 / Two layers
 //!

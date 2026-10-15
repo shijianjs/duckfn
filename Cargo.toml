@@ -126,7 +126,13 @@ crate-type = ["rlib"]
 # no collision, so the template's bin keeps the plain `duckfn`.
 name = "duckfn-cli"
 path = "src/bin/duckfn.rs"
-required-features = ["quack"]
+# 两个都得开：`quack` 让示例树被编进来（CLI 靠它收集注册项），`cli` 提供 `duckfn::cli` 本身。
+# 关掉 `cli` 时这条 recipe 的依赖（clap / csv）也不进依赖树。
+#
+# Both must be on: `quack` compiles the example tree in (the CLI collects the registrations from it)
+# and `cli` provides `duckfn::cli` itself. With `cli` off, its own dependencies (clap / csv) stay out
+# of the dependency tree too.
+required-features = ["quack", "cli"]
 
 [[example]]
 # 扩展产物本体：原生扩展的 cdylib（`duckfn.dll` / `libduckfn.so`）与 WebAssembly 用的
@@ -151,84 +157,89 @@ required-features = ["quack"]
 [features]
 default = []
 
-# 命令行工具的开关：`cargo run --features quack --bin duckfn-cli -- function_descriptions` 用的 clap
-# 与 csv（那个 bin 的文件在 src/bin/duckfn.rs，目标名见上面的 `[[bin]]`，本身也挂在 `quack` 上）。
+# 命令行工具的开关：`cargo run --features quack,cli --bin duckfn-cli -- function_descriptions` 用的
+# clap 与 csv（那个 bin 的文件在 src/bin/duckfn.rs，目标名见上面的 `[[bin]]`，required-features 是
+# `quack` + `cli`）。
 # 只有扩展项目里的那个 bin 需要它，插件本体（cdylib）不需要；关掉时 duckfn 完全不依赖
 # 这两个 crate，所以下游没用到 CLI 就不用打开。
 #
 # The command-line tool switch: clap and csv, used by
-# `cargo run --features quack --bin duckfn-cli -- function_descriptions` (that bin's file is
-# src/bin/duckfn.rs, its target name is set by the `[[bin]]` above, and it is itself gated on
-# `quack`). Only the extension project's bin needs them,
-# never the extension itself; with this off duckfn depends on neither crate, so downstream projects
-# that never run the CLI need not enable it.
+# `cargo run --features quack,cli --bin duckfn-cli -- function_descriptions` (that bin's file is
+# src/bin/duckfn.rs, its target name is set by the `[[bin]]` above, whose required-features are
+# `quack` + `cli`). Only the extension project's bin needs them, never the extension itself; with this
+# off duckfn depends on neither crate, so downstream projects that never run the CLI need not enable
+# it.
 cli = ["dep:clap", "dep:csv"]
 
 # DuckDB 1.5 新增能力的支持：开启 quack-rs 的 duckdb-1-5，从而拿到 1.5 的新逻辑类型
-# （TypeId::TimeNs / Value::as_time_ns）与 COPY 函数相关的 *Info 类型。
-# 宿主文件系统（duckfn::duck_vfs）**不在**这一档里，它由下面的 `owned-connection` 控制 ——
-# 因为那一档真正要的东西是注册期的一条常驻连接，而它带着副作用。
-# 要求 libduckdb-sys 使用 >= 1.5 的头文件。
+# （`TypeId::TimeNs` / `Value::as_time_ns`）与 COPY 函数相关的 `*Info` 类型。
+# 它只描述 **C API 的版本面**，不代表任何具体能力：`duck_vfs`（宿主文件系统）与示例里的 COPY 演示
+# 各自选择依赖它 —— 前者因为客户端上下文在不稳定区，后者因为 COPY 函数在不稳定区。要求
+# libduckdb-sys 使用 >= 1.5 的头文件。
 #
-# Support for what DuckDB 1.5 added: forwards to quack-rs' `duckdb-1-5` feature, which exposes the
-# new logical types (`TypeId::TimeNs` / `Value::as_time_ns`) and the copy-function `*Info` types.
-# The host file system (`duckfn::duck_vfs`) is **not** here: it needs a connection captured at
-# registration time, which is what `owned-connection` below is about — that one carries side effects.
-# Requires libduckdb-sys with >= 1.5 headers.
+# Support for what DuckDB 1.5 added: forwards to quack-rs' `duckdb-1-5` feature, which exposes the new
+# logical types (`TypeId::TimeNs` / `Value::as_time_ns`) and the copy-function `*Info` types.
+# It describes **the API surface of one DuckDB version**, not a capability: `duck_vfs` (the host file
+# system) and the COPY demos in the example each opt into it — the first because the client context
+# sits in the unstable region, the second because COPY functions do. Requires libduckdb-sys with
+# >= 1.5 headers.
 duckdb-1-5 = ["quack-rs/duckdb-1-5"]
 
-# 在扩展里执行 SQL：注册期留一条自有长连接（src/owned_connection.rs），
-# `duckfn::sql` 的 execute / query / 参数绑定都跑在它上面，结果按动态列读回。
+# 注册期那条「自有长连接」（src/owned_connection.rs）：扩展加载时打开一条进程级常驻连接并存进静态，
+# 让任何回调都能借它做事。它本身**不暴露任何公开 API** —— 公开的是建在它上面的 `sql` 与 `duck_vfs`。
+#
+# 依赖方向是单向的：`sql` 与 `duck_vfs` 都依赖它（同一条连接、同一把锁），它不依赖任何一方 ——
+# 一条连接既不需要 SQL 也不需要文件系统。代价（两档都继承）：连接跟进程同寿；取用串行，
+# 同一线程嵌套取用**死锁**；在「同一个线程里同步执行 DuckDB」的运行时里，注册期打开连接并重入引擎
+# 会**直接死锁**（扩展 LOAD 卡住），已知一处是 DuckDB-Wasm 的 Node blocking 绑定（Node 的 worker
+# 模式、浏览器与原生 CLI 都正常）。
+#
+# The owned connection captured at registration time (src/owned_connection.rs): a process-level,
+# long-lived connection opened while the extension loads and kept in a static, so any callback can
+# borrow it. It exposes **no public API of its own** — the public faces are `sql` and `duck_vfs`,
+# which are built on it.
+#
+# The dependency runs one way: `sql` and `duck_vfs` both depend on it (one connection, one lock), and
+# it depends on neither — a connection needs neither SQL nor a file system. The cost (inherited by
+# both): the connection lives as long as the process; take-ups serialize, and nesting one on a single
+# thread **deadlocks**; in a runtime that executes DuckDB synchronously on one thread, opening a
+# connection during registration and re-entering the engine **deadlocks outright** (the extension
+# LOAD hangs) — the one known case is DuckDB-Wasm's Node blocking bindings (Node's worker mode, the
+# browser and the native CLI are all fine).
+owned-connection = []
+
+# 在扩展里执行 SQL（src/sql/）：execute / query / 参数绑定，结果按动态列读回。
 #
 # 它**只用 C API 的稳定区**（`duckdb_connect` + 预处理 / 绑定 / 取块 + 逻辑类型），所以**不依赖
-# `duckdb-1-5`**：开这一档可以用 `USE_UNSTABLE_C_API=0` + `TARGET_DUCKDB_VERSION=v1.2.0` 打一份
-# `C_STRUCT` 二进制，DuckDB 1.3 一直到 2.0 都接受（见 docs 的版本说明）。quack-rs 的 ABI 自检也
-# 因此直接返回 `StableOnly`，不做任何版本比对。
+# `duckdb-1-5`**：例如 `USE_UNSTABLE_C_API=0` + `TARGET_DUCKDB_VERSION=v1.2.0` 打出的 `C_STRUCT`
+# 二进制，DuckDB 1.3 一直到 2.0 都接受（见 docs 的版本说明），quack-rs 的 ABI 自检也直接返回
+# `StableOnly`，不做任何版本比对。
 #
-# 它仍然**不在 `all` 里**：这一档会在进程里留一条永不释放的连接，并且
-#   1. 每次取用都要拿它上面的互斥锁，取用之间串行化（同一线程嵌套取用会死锁）；
-#   2. 在「同一个线程里同步执行 DuckDB」的运行时里，注册期打开连接并重入会**直接死锁**，
-#      表现为扩展 LOAD / 注册卡住不动 —— 已知一处就是 DuckDB-Wasm 的 Node blocking 绑定
-#      （Node 的 worker 模式与浏览器正常，原生 CLI 也正常）。
-# 所以用不上它的人不该被动带上这些代价；需要时显式打开 `sql`（只要 SQL）或 `owned-connection`
-# （再加宿主文件系统，那一档才需要 1.5）。
-#
-# Running SQL from an extension: a owned long-lived connection is captured at registration time
-# (src/owned_connection.rs) and `duckfn::sql`'s execute / query / parameter binding runs on it,
-# reading results back as dynamic columns.
+# Running SQL from an extension (src/sql/): execute / query / parameter binding, with results read
+# back as dynamic columns.
 #
 # It uses **only the stable region** of the C API (`duckdb_connect` plus prepare / bind / fetch-chunk
-# and the logical types), so it does **not** depend on `duckdb-1-5`: this feature can be built with
-# `USE_UNSTABLE_C_API=0` and `TARGET_DUCKDB_VERSION=v1.2.0` as a `C_STRUCT` binary that DuckDB 1.3
-# through 2.0 all accept (see the version docs). quack-rs' ABI check short-circuits to `StableOnly`
-# because of that, comparing no versions at all.
-#
-# It is still **not in `all`**: this feature keeps a connection alive for the life of the process and
-#   1. serializes every take-up on that connection's mutex (nesting it on one thread deadlocks);
-#   2. **deadlocks outright** in a runtime that executes DuckDB synchronously on a single thread:
-#      opening a connection during registration and then re-entering the engine hangs the extension
-#      LOAD. The one known case is DuckDB-Wasm's Node blocking bindings (Node's worker mode and the
-#      browser are fine, and so is the native CLI).
-# Nobody who does not need it should inherit that; enable `sql` (SQL only) or `owned-connection` (plus
-# the host file system, which is the one that needs 1.5) when you actually do.
-sql = []
+# and the logical types), so it does **not** depend on `duckdb-1-5`: built with `USE_UNSTABLE_C_API=0`
+# and `TARGET_DUCKDB_VERSION=v1.2.0`, the `C_STRUCT` binary is accepted all the way from DuckDB 1.3 to
+# 2.0 (see the version docs), and quack-rs' ABI check short-circuits to `StableOnly` without comparing
+# any versions.
+sql = ["owned-connection"]
 
-# 注册期捕获的「自有长连接」加上**宿主文件系统**（src/duck_vfs/）：`duckfn::duck_vfs` 的
-# `with_file_system` / `file_system` / `client_context` 与基于它的便捷读写。
+# 宿主文件系统（src/duck_vfs/）：`duckfn::duck_vfs` 的 `with_file_system` / `file_system` /
+# `client_context` 与基于它的便捷读写。
 #
-# 它依赖 `sql`（同一条连接，也顺带带来 `duckfn::sql`）与 `duckdb-1-5`：客户端上下文与文件系统入口
-# 落在 C API 的不稳定区，所以这一档必须按 `USE_UNSTABLE_C_API=1` 那样与引擎小版本对齐，不能像
-# `sql` 那样一份二进制跑一个范围。
+# 除了那条连接（`owned-connection`）还要 `duckdb-1-5`：客户端上下文与文件系统入口落在 C API 的不稳定
+# 区，所以这一档必须按 `USE_UNSTABLE_C_API=1` 那样与引擎小版本对齐，不能像 `sql` 那样一份二进制跑
+# 一个范围。
 #
-# The owned long-lived connection captured at registration time **plus the host file system**
-# (src/duck_vfs/): `duckfn::duck_vfs`'s `with_file_system` / `file_system` / `client_context` and the
-# convenience read/write helpers built on them.
+# The host file system (src/duck_vfs/): `duckfn::duck_vfs`'s `with_file_system` / `file_system` /
+# `client_context` and the convenience read/write helpers built on them.
 #
-# It depends on `sql` (same connection, and it brings `duckfn::sql` along) and on `duckdb-1-5`: the
-# client context and the file-system entry points sit in the unstable region of the C API, so this
-# feature has to line up with the engine's minor release (as `USE_UNSTABLE_C_API=1` does) rather than
-# covering a range with one binary the way `sql` does.
-owned-connection = ["duckdb-1-5", "sql"]
+# Besides that connection (`owned-connection`) it needs `duckdb-1-5`: the client context and the
+# file-system entry points sit in the unstable region of the C API, so this feature has to line up
+# with the engine's minor release (as `USE_UNSTABLE_C_API=1` does) rather than covering a range with
+# one binary the way `sql` does.
+duck_vfs = ["owned-connection", "duckdb-1-5"]
 
 # 与 chrono 的互操作：给 DuckDate / DuckTimestamp* / DuckTime 等时间包装类型加上
 # `to_naive_date` / `from_naive_date` 这类双向转换方法（见 src/value_types/chrono_bridge.rs）。
@@ -258,39 +269,32 @@ uuid = ["dep:uuid"]
 # values come back as an error.
 rust_decimal = ["dep:rust_decimal"]
 
-# 示例扩展与 CLI 的开关（示例源码在 test/extension/，CLI 在 src/bin/duckfn.rs）：它依赖 `all`，
-# 因为示例把每一档可选能力都演示了一遍。
-# 反过来 `all` **不**依赖它 —— `all` 是给下游用户用的，用户不需要示例与那些测试函数进自己的依赖树。
+# 示例扩展与 CLI 的**标记**（示例源码在 test/extension/，CLI 在 src/bin/duckfn.rs）：只有打开它，
+# 那两个 target 才会被 cargo 编（见它们的 `required-features`），于是示例与那些测试函数永远不进下游
+# 的依赖树，而源码仍在包里可见。
+#
+# 它**不**依赖任何能力 feature —— 示例树自己按能力分模块（每个能力模块都挂 `#[cfg(feature = ...)]`），
+# 想要哪一套就在命令行上列出来，例如 `make debug EXTENSION_FEATURES=quack,duck_vfs`。于是同一份示例
+# 能编出「稳定区」与「全量」两种插件做对比测试，也不需要一个语义含糊的「全开」开关。
 # 默认关闭还有一个原因：`required-features` 的失败是静默的（裸 `cargo build` 只会产出一个没有入口
 # 符号的 cdylib，LOAD 时才报错），所以构建扩展的命令一律显式带上它 —— 不带上时示例源码在包里却
 # 不参与编译，正好就是「只有源码、不生效」。
 #
-# The example extension and CLI switch (the example lives in test/extension/, the CLI in
-# src/bin/duckfn.rs): it depends on `all`, since the example exercises every optional capability.
-# The reverse does not hold — `all` is meant for downstream users, who have no use for the example
-# and its test functions in their dependency tree. Being off by default also means `required-features`
-# can silently skip the targets: a bare `cargo build` produces a cdylib without the entry-point
-# symbol and only `LOAD` complains, so every command that builds the extension passes this feature
-# explicitly. With it off, the example sources sit in the package without being compiled — exactly
-# the intended "sources present, no effect" behaviour.
-quack = ["all", "owned-connection"]
-
-# 聚合开关：一次打开大部分可选 feature（含 `cli`）。**不含 `sql` / `owned-connection`** ——
-# 两档都要在进程里留一条常驻连接（副作用 + 单线程运行时下 LOAD 即死锁，见上），而其中有文件系统的
-# 那一档（`owned-connection`）在浏览器 / DuckDB-Wasm 上又不可靠（存在性判定恒真、裸写偏移错，详见
-# `src/duck_vfs` 模块文档），在原生上还能被 DuckDB 自身的读写 / 系统库替代。所以不放进「全开」这一
-# 档，避免下游为用不上的能力付代价；需要 SQL 执行的用户显式打开 `sql`，再要文件系统就开
-# `owned-connection`。
+# The example extension and CLI **marker** (the example lives in test/extension/, the CLI in
+# src/bin/duckfn.rs): only with it on does cargo compile those two targets (see their
+# `required-features`), so the example and its test functions never enter a downstream dependency tree
+# while the sources stay visible in the package.
 #
-# Aggregate switch: turns most optional features on at once (including `cli`). It deliberately does
-# **not** include `sql` / `owned-connection`: both keep a connection alive for the process (a side
-# effect, and a LOAD-time deadlock in single-threaded runtimes — see above), and the one that also
-# carries the file system (`owned-connection`) is unreliable under the browser / DuckDB-Wasm build
-# (existence always true, raw-write offset broken — see the `src/duck_vfs` module docs) and on native
-# DuckDB's own readers or the standard library cover the same need. They are therefore left out of
-# "everything on" rather than charging every downstream user for them; enable `sql` when you want SQL
-# execution, and `owned-connection` when you also want the file system.
-all = ["cli", "duckdb-1-5", "chrono", "uuid", "rust_decimal"]
+# It depends on **no** capability feature: the example tree splits itself by capability (every
+# capability module carries its own `#[cfg(feature = ...)]`), and a build lists the ones it wants —
+# `make debug EXTENSION_FEATURES=quack,duck_vfs`, say. One example tree therefore yields both a
+# stable-only and a full plugin to test side by side, and no vague "everything on" switch is needed.
+# Being off by default also means `required-features` can silently skip the targets: a bare
+# `cargo build` produces a cdylib without the entry-point symbol and only `LOAD` complains, so every
+# command that builds the extension passes this feature explicitly. With it off, the example sources
+# sit in the package without being compiled — exactly the intended "sources present, no effect"
+# behaviour.
+quack = []
 
 [dependencies]
 quack-rs = "0.18.0"

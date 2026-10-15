@@ -75,8 +75,8 @@ registry 的 `duckdb_version` 只决定 checkout 哪份 DuckDB 源码、产物�
 一个问题决定一切：**你的代码碰不稳定区吗？**
 
 - 稳定区之外的是：copy 函数、宿主文件系统（`duckfn::duck_vfs`）、标量的 `bind` / `init` 槽位、`varargs`，
-  以及 DuckDB 1.5 新增的逻辑类型（目前是 `TIME_NS`）。duckfn 把这些统一收在 `duckdb-1-5` feature 后面；
-  `owned-connection`（宿主 VFS）蕴含它。
+  以及 DuckDB 1.5 新增的逻辑类型（目前是 `TIME_NS`）。duckfn 把这些统一收在 `duckdb-1-5` feature 后面，
+  `duck_vfs`（宿主 VFS）依赖它。
 - 其余都在稳定区：标量、聚合、表函数、cast、replacement scan、SQL 宏、命名的 STRUCT / ENUM 类型、
   chrono / uuid / rust_decimal 桥，以及**执行 SQL** —— `duckfn::sql`（`sql` feature）由 database 句柄
   现开一条连接，走的是 `duckdb_query` / `duckdb_prepare` / `duckdb_bind_value` / `duckdb_fetch_chunk`
@@ -123,7 +123,7 @@ DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 ```toml
 # Cargo.toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" 用于 duckfn::duck_vfs（它会带来 "sql"）
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "duck_vfs" 用于 duckfn::duck_vfs（同样在不稳定区）
 ```
 
 ```yaml

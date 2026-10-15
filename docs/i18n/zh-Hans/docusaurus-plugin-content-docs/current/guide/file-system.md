@@ -24,11 +24,11 @@ DuckDB 的 C API 只在部分回调里交出**客户端上下文**：标量函�
 :::note[DuckDB 1.5.0+]
 
 文件系统访问来自 DuckDB 1.5.0 的 C API，所以需要 DuckDB 1.5 的头文件 —— 以及 `duckfn` 的
-`owned-connection` feature（下面那条连接的捕获就在它里面）。`duckdb-1-5` 只带来 1.5 的类型面，
-`owned-connection` 依赖它：
+`duck_vfs` feature（下面那条连接的捕获就在它里面，1.5 的客户端上下文与 VFS 入口也由它加上）。
+`duckdb-1-5` 只带来 1.5 的类型面，`duck_vfs` 依赖它（也依赖 `owned-connection`，即连接本身）：
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duck_vfs"] }
 ```
 :::
 
@@ -69,7 +69,8 @@ database 句柄，并由它打开一条 `OwnedConnection`，把结果存进进�
   限制而非 duckfn 的 bug，所以文档站把文件系统相关的示例保持为普通（非可运行）块。DuckDB 的
   `COPY … TO` 只能把查询结果按格式（CSV / JSON / parquet）导出 —— 能往返，但**存不了一个任意长
   字符串（如 HTML 报告）的原样字节**（CSV 会加引号/换行），所以浏览器上根本没有通用的文件写出
-  路子。因此 **`duck_vfs` 已从 `all` feature 移除** —— native 下确需时再显式开 `owned-connection`。本站在
+  路子。所以 `duck_vfs` 是**只在 native 确需时显式打开**的一档 —— 它就以它给出的东西命名，开不开本身就是
+  全部决策。本站在
   CI 里跑的可运行 SQL 是在**真实浏览器**里执行的（[测试示例](../docs-kit/sql-test.md)）。
 
 ## 读一个文件
@@ -204,7 +205,7 @@ guard 持有那条自有连接上的互斥锁：
   （`duckfn::DuckExtraInfo` + `quack_rs::query::OwnedConnection`），框架不必参与。
 - **自有连接的 `FileOpener` 与查询连接不是同一个。** 实例级配置与 secrets 生效，但连接级 `SET`
   不保证等价。
-- **需要 DuckDB 1.5.0+ 与 `owned-connection` feature**（它依赖 `duckdb-1-5`），否则这些函数不存在。
+- **`duck_vfs` feature**（它带来注册期那条连接与 `duckdb-1-5`），否则这些函数不存在。
 
 示例扩展在聚合函数里用了它（`test/extension/functions/file_system.rs` 的 `dfn_agg_file_size`），
 `test/sql/functions/file_system.test` 用 DuckDB 自己的 `read_blob` 对照校验结果；`duckfn::duck_vfs`

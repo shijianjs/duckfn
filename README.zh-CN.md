@@ -67,28 +67,26 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 如果只想用宏、不要运行时，可以直接依赖
 [`duckfn-macro`](https://crates.io/crates/duckfn-macro)；否则宏已由 `duckfn` 重新导出，不必额外添加。
 
-`duckfn` 有七个可选 feature。`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区
-扩展文档页使用，本仓库里的命令是 `cargo run --features quack --bin duckfn-cli -- function_descriptions`），
-只有扩展项目的 `src/bin/duckfn.rs` 需要它。`duckdb-1-5` 用于开启 DuckDB 1.5 C API 带来的能力：1.5
-新增的逻辑类型（目前是 `TIME_NS`）与 COPY 函数。`owned-connection` 在其之上加上**宿主文件系统访问**
-（`duckfn::duck_vfs`）：从任意回调（含聚合）通过 DuckDB 的 VFS 读写。另外三个是互转，彼此独立：
-`chrono` 让时间包装类型与 [`chrono`](https://crates.io/crates/chrono) 双向转换，`uuid` 让 `DuckUuid` 与
+`duckfn` 的每个 feature 都以它暴露的模块命名，并且**没有「全开」开关** —— 依赖里写清楚要用哪几项。
+`cli` 带来导出 `function_descriptions.csv` 的命令行工具（供 DuckDB 社区扩展文档页使用，本仓库里的命令是
+`cargo run --features quack,cli --bin duckfn-cli -- function_descriptions`），只有扩展项目的
+`src/bin/duckfn.rs` 需要它。有两项 feature 提供「回调本来够不到的能力」，都建在注册期捕获的那一条连接上
+（`owned-connection`，它自己不暴露 API）：`sql` 让回调能跑 SQL 并把结果按动态列读回 —— 它**只用 C API 的
+稳定区**，所以一份产物能在 DuckDB 1.3 – 2.0 上加载；`duck_vfs` 在 `duckdb-1-5` 之上再加**宿主文件系统**
+（DuckDB 的 VFS，含 `s3://` 与 `http(s)://`）。`duckdb-1-5` 本身对应 DuckDB 1.5 C API 带来的能力：1.5
+新增的逻辑类型（目前是 `TIME_NS`）与 COPY 函数。另外三个是互转，彼此独立：`chrono` 让时间包装类型与
+[`chrono`](https://crates.io/crates/chrono) 双向转换，`uuid` 让 `DuckUuid` 与
 [`uuid`](https://crates.io/crates/uuid) 双向转换，`rust_decimal` 让 `DuckDecimal<W, S>` 与
 [`rust_decimal`](https://crates.io/crates/rust_decimal) 双向转换 —— 纪元 / 128 位 / 定标整数的换算都收进
 duckfn，而不是留给每个扩展各写一遍：
 
 ```toml
-duckfn = { version = "0.1.0", features = ["duckdb-1-5", "owned-connection", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.1.0", features = ["sql", "chrono", "uuid", "rust_decimal"] }
 ```
 
-`all` 是聚合开关 —— 除 `owned-connection` 之外的所有可选 feature。duckfn 通常就在依赖树的末端，所以直接写
-`features = ["all"]` 最省事。宿主文件系统被故意排除在 `all` 之外：它在浏览器 / DuckDB-Wasm 上不可靠
-（见 Troubleshooting / 文件系统文档），而 native 上又能用 DuckDB 自身读写 / 系统库替代，所以只能按需
-显式开 `owned-connection`，不强加给所有人。想精简依赖树时再按上面的单项挑着开。
-
-`quack` 是唯一一个不面向下游的 feature：它编译本包自己的示例扩展（`test/extension/`），依赖 `all` 外加
-`owned-connection`（示例把每项能力都演示了一遍，包括 duck_vfs）。反过来 `all` 不依赖 `quack`，所以下游
-写 `features = ["all"]` 不会被带进示例和那些测试函数。
+`quack` 是唯一一个不面向下游的 feature：它只是个标记，决定要不要编译本包自己的示例扩展
+（`test/extension/`）；那个示例有哪些能力，由构建命令同时给出的 feature 清单决定。下游永远不需要它，
+开了也不会把示例与那些测试函数带进依赖树。
 
 ## 快速开始
 

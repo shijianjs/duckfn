@@ -24,7 +24,7 @@ layering, the registration flow and much more. When this page is not enough, sta
 
 `duckfn`'s modules are all `pub(crate)` — except the two that hold a callback-side capability rather
 than a function kind, `duckfn::duck_vfs` and `duckfn::sql`, which are `pub mod` behind the
-`owned-connection` feature. The rest of the public surface is the set of `pub use` re-exports in
+`duck_vfs` / `sql` features. The rest of the public surface is the set of `pub use` re-exports in
 `src/lib.rs`, which is why `duckfn::DuckOptionResult` exists but `duckfn::ExtensionError` does
 not.
 

@@ -27,15 +27,16 @@ to `std::fs`, which only ever sees local disk.
 :::note[DuckDB 1.5.0+]
 
 File-system access comes from DuckDB's C API as of 1.5.0, so it needs DuckDB 1.5 headers — and
-`duckfn`'s `owned-connection` feature, the one that captures the connection described below.
-`duckdb-1-5` on its own brings only 1.5's type surface; `owned-connection` implies it:
+`duckfn`'s `duck_vfs` feature, which captures the connection described below and adds 1.5's client
+context and VFS entry points on top. `duckdb-1-5` on its own brings only 1.5's type surface;
+`duck_vfs` depends on it (and on `owned-connection`, the connection itself):
 
 ```toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["owned-connection"] }
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duck_vfs"] }
 ```
 :::
 
-Either way, the connection `owned-connection` captures is not a 1.5 thing in itself:
+Either way, the connection `duck_vfs` captures is not a 1.5 thing in itself:
 [`duckfn::sql`](./sql-execution.md) reuses it on the stable C API alone — no `duckdb-1-5`, and so no
 release-by-release pin. What needs 1.5 here is the **file system** half: the client context and the
 VFS entry points.
@@ -80,8 +81,9 @@ Keeping that connection is not free, and the costs are worth weighing before tur
   file-system examples as plain (non-runnable) blocks. DuckDB's `COPY … TO` only exports query
   results in a format (CSV / JSON / parquet) — it round-trips, but it **cannot dump an arbitrary
   string (e.g. an HTML report) as raw bytes** (CSV adds quoting/newlines), so there is no general
-  file-write on the browser at all. `duck_vfs` is consequently **no longer part of the `all`
-  feature** — enable `owned-connection` explicitly when you run natively. The SQL examples this site
+  file-write on the browser at all. `duck_vfs` is consequently a feature you turn on **explicitly,
+  when you run natively** — it is named after what it gives you, so enabling it is the whole decision.
+  The SQL examples this site
   runs in CI are executed in a real browser, as Playwright tests
   ([Testing the examples](../docs-kit/sql-test.md)).
 
@@ -225,7 +227,8 @@ handler returning `Err` fails the query (the adapter reports it through
   involved.
 - **The owned connection's `FileOpener` is not the query connection's.** Instance-level
   configuration and secrets apply, but connection-level `SET`s are not guaranteed to be equivalent.
-- **DuckDB 1.5.0+ and the `owned-connection` feature** (which implies `duckdb-1-5`), as noted above;
+- **The `duck_vfs` feature** (which brings the registration-time connection and `duckdb-1-5`), as
+  noted above;
   without them these functions do not exist.
 
 The example extension uses this from an aggregate (`dfn_agg_file_size` in

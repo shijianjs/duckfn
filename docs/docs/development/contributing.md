@@ -62,9 +62,11 @@ the crate carry a complete worked example — the module tree in `test/extension
 `src/bin/duckfn.rs` and the sqllogictest suite in `test/sql/` — which is the point of the
 arrangement (see [Build and release](./build-and-release.md) for the exact file list).
 
-What compiles it is the `quack` feature, off by default: `make debug` passes it on through
-`TARGET_INFO += --features quack` in the root `Makefile`, and `just build` / `just build_wasm` do
-the same. A bare `cargo build` skips the target silently and hands back a cdylib with no entry-point
+What compiles it is the `quack` feature, off by default — a marker that says "compile the example
+tree", with the capabilities themselves coming from the feature list a build passes:
+`TARGET_INFO += ... --features $(EXTENSION_FEATURES)` in the root `Makefile` (`EXTENSION_FEATURES`
+defaults to every capability the example demos), and `just build` / `just build_wasm` pass the same
+list. A bare `cargo build` skips the target silently and hands back a cdylib with no entry-point
 symbol, which DuckDB only rejects at `LOAD`. A dependency on `duckfn` is unaffected: the sources
 are in the package, the feature is off, and the dependency tree is unchanged. Use
 `cargo test -p duckfn` for the runtime's own tests, or `cargo test --workspace` for everything.

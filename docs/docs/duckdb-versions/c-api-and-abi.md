@@ -85,7 +85,7 @@ One question decides it: **does your code touch the unstable region?**
 
 - It holds copy functions, the host file system (`duckfn::duck_vfs`), the scalar `bind` / `init`
   slots, `varargs`, and the logical types DuckDB gained in 1.5 (today `TIME_NS`). duckfn groups all
-  of it behind the `duckdb-1-5` feature; `owned-connection` (the host VFS) implies it.
+  of it behind the `duckdb-1-5` feature, which `duck_vfs` (the host VFS) depends on.
 - Everything else is in the stable region: scalars, aggregates, table functions, casts, replacement
   scans, SQL macros, named STRUCT / ENUM types, the chrono / uuid / rust_decimal bridges, and
   **running SQL** — `duckfn::sql` (the `sql` feature) opens a connection from the database handle and
@@ -137,7 +137,7 @@ DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 ```toml
 # Cargo.toml
-duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "owned-connection" for duckfn::duck_vfs (it brings "sql" along)
+duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "duck_vfs" for duckfn::duck_vfs (also in the unstable region)
 ```
 
 ```yaml

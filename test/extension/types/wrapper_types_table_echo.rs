@@ -1,11 +1,20 @@
 use duckfn::duck_table_function;
 use duckfn::{
-    DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTime, DuckTimeNs, DuckTimeTz, DuckTimestamp,
-    DuckTimestampMs, DuckTimestampNs, DuckTimestampS, DuckTimestampTz, DuckUuid,
+    DuckBlob, DuckDate, DuckDecimal, DuckStruct, DuckTime, DuckTimeTz, DuckTimestamp, DuckTimestampMs,
+    DuckTimestampNs, DuckTimestampS, DuckTimestampTz, DuckUuid,
 };
 use quack_rs::interval::DuckInterval;
 
 use super::table_echo_util::echo_rows;
+
+// `TIME_NS`（DuckDB 1.5）只有 `duckdb-1-5` 才有：这里按**条目**挂 feature，理由与
+// `wrapper_types_scalar_echo.rs` 里那段注释相同（本模块把稳定类型与它混在一起演示）。
+//
+// `TIME_NS` (DuckDB 1.5) only exists under `duckdb-1-5`: the item is gated here for the reason
+// spelled out in `wrapper_types_scalar_echo.rs` (this module demonstrates it alongside the stable
+// wrappers).
+#[cfg(feature = "duckdb-1-5")]
+use duckfn::DuckTimeNs;
 
 // ============================================================================
 // 包装类型的表函数回显（wrapper_types_scalar_echo.rs 的表函数版本）
@@ -122,11 +131,13 @@ fn dfn_table_echo_time(
 /// ```sql
 /// SELECT v FROM dfn_table_echo_time_ns(TIME_NS '03:04:05.123456789');
 /// ```
+#[cfg(feature = "duckdb-1-5")]
 #[derive(Clone, Debug, Default, DuckStruct)]
 pub struct TableEchoTimeNsRow {
     pub v: Option<DuckTimeNs>,
 }
 
+#[cfg(feature = "duckdb-1-5")]
 #[duck_table_function(named_param_from = "count")]
 fn dfn_table_echo_time_ns(
     v: Option<DuckTimeNs>,

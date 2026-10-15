@@ -20,14 +20,65 @@ PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 # platform-specific override.
 EXTENSION_NAME=duckfn
 
+# 构建扩展时打开的 duckfn feature（逗号分隔，原样传给 cargo 的 --features）。示例树按**能力**分模块
+# （每个能力模块挂自己的 #[cfg(feature = ...)]，见 test/extension/functions/mod.rs 与 Cargo.toml 的
+# `quack`），所以这里列出来的就是「这份产物演示了哪些能力」：
+#
+#   quack              示例树本身（标记式 feature：只决定编不编那棵树）
+#   duckdb-1-5         C API 不稳定区：COPY 函数与 TIME_NS 示例
+#   duck_vfs           宿主文件系统（依赖 owned-connection 与 duckdb-1-5）
+#   sql                在回调里执行 SQL（只用稳定区）
+#   chrono / uuid / rust_decimal   三个互操作桥的示例
+#
+# 换个组合就是另一份产物 —— 例如 EXTENSION_FEATURES=quack 得到一份**只用稳定版 C API** 的插件，
+# 配 USE_UNSTABLE_C_API=0 与 TARGET_DUCKDB_VERSION=v1.2.0（C API 下限）打出来，1.3 到 2.0 的引擎都
+# 能加载，可以用来跑老引擎上的用例子集（`just test_stable 1.4.0`）。
+#
+# The duckfn features a build turns on (comma-separated, passed through to cargo `--features`). The
+# example tree splits itself by **capability** (each capability module carries its own
+# `#[cfg(feature = ...)]` — see test/extension/functions/mod.rs and `quack` in Cargo.toml), so this
+# list is exactly "which capabilities this artifact demonstrates":
+#
+#   quack              the example tree itself (a marker feature: it only decides whether it compiles)
+#   duckdb-1-5         the unstable C API region: the COPY demos and TIME_NS
+#   duck_vfs           the host file system (needs owned-connection and duckdb-1-5)
+#   sql                running SQL from a callback (stable region only)
+#   chrono / uuid / rust_decimal   the three bridge demos
+#
+# Another combination is another artifact — `EXTENSION_FEATURES=quack` with USE_UNSTABLE_C_API=0 and
+# TARGET_DUCKDB_VERSION=v1.2.0 (the C API floor) gives a **stable C API only** plugin that every engine
+# from 1.3 to 2.0 loads, which is what runs a subset of the suite against an older engine
+# (`just test_stable 1.4.0`).
+EXTENSION_FEATURES ?= quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
+
 # Set to 1 to enable Unstable API (binaries will only work on TARGET_DUCKDB_VERSION, forwards compatibility will be broken)
 # Note: currently extension-template-rs requires this, as duckdb-rs relies on unstable C API functionality
-USE_UNSTABLE_C_API=1
+#
+# 只有 EXTENSION_FEATURES 里出现不稳定区的能力（duckdb-1-5 / duck_vfs）时才需要置 1；稳定区组合配 0。
+#
+# Set to 1 only when EXTENSION_FEATURES contains an unstable-region capability (duckdb-1-5 /
+# duck_vfs); a stable-region combination goes with 0.
+USE_UNSTABLE_C_API ?= 1
 
 # Target DuckDB version
-TARGET_DUCKDB_VERSION=v1.5.6
+#
+# 在 USE_UNSTABLE_C_API=1 下它是**发行版**（产物只在这一版引擎上加载）；在 =0 下它是**C API 下限**
+# （产物在任何 C API 不低于它的引擎上加载），所以稳定区构建一般写 v1.2.0。
+#
+# With USE_UNSTABLE_C_API=1 this is a **release** (the artifact only loads on that engine); with =0 it
+# is a **C API floor** (the artifact loads on any engine whose C API is at or above it), which is why a
+# stable-region build normally writes v1.2.0.
+TARGET_DUCKDB_VERSION ?= v1.5.6
 
+# quack-rs 只在不稳定路径上读这个变量（稳定区构建里 `abi::check()` 先返回 `StableOnly`），所以只在
+# 需要时导出：稳定区构建带上它会声明一个与编译进去的布局不符的版本。
+#
+# quack-rs reads this variable only on the unstable path (a stable build's `abi::check()` returns
+# `StableOnly` first), so it is exported only when it means something: on a stable build it would
+# declare a release that contradicts the layout compiled in.
+ifeq ($(USE_UNSTABLE_C_API),1)
 export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
+endif
 
 # 测试用的 DuckDB 版本必须与构建目标一致：扩展在 USE_UNSTABLE_C_API=1 下构建，产物被钉死在精确版本上
 # （加载时校验），而 base.Makefile 里 DUCKDB_TEST_VERSION 默认留空 = 从 PyPI 装 latest —— 上游一发新的
@@ -35,12 +86,18 @@ export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
 # macos_arm64 与 windows_amd64 这两个真正跑测试的平台就是这么挂的）。这里由 TARGET_DUCKDB_VERSION 推出
 # （去掉前缀 v，pip 的写法），保持版本号只有一个来源。
 #
+# 稳定区构建不受这条约束（任何不低于下限的引擎都收），所以那时按需要显式给一个引擎版本：
+#   make DUCKDB_TEST_VERSION=1.4.0 test_debug
+#
 # The DuckDB version the test runner uses has to match the build target: with USE_UNSTABLE_C_API=1 the
 # artifact is pinned to an exact version (verified at load time), while base.Makefile leaves
 # DUCKDB_TEST_VERSION empty, which means "latest from PyPI" — one patch release upstream and the test
 # engine is newer than the artifact, so `make test_release` fails on the version check. Derived from
 # TARGET_DUCKDB_VERSION (minus the `v` prefix, the way pip spells it) to keep one source of truth.
-DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
+#
+# A stable-region build is not bound by that (every engine at or above the floor accepts it), so pass
+# the engine explicitly there: `make DUCKDB_TEST_VERSION=1.4.0 test_debug`.
+DUCKDB_TEST_VERSION ?= $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 
 all: configure debug
 
@@ -50,9 +107,10 @@ all: configure debug
 # `make configure_ci|debug|release|test_*|upload`，上游工作流不支持自定义工作目录。
 #
 # 示例扩展已经并进根包（test/extension/），于是 rust.Makefile 里那条裸构建命令 `cargo build` 正好命中
-# 本包的 lib（rlib + cdylib），所以这里不需要覆盖任何 recipe。唯一要补的是 feature：示例挂在 `quack` 上
-# （默认关闭，下游依赖树才不受影响），而上游 recipe 没给 feature 留位置 —— 只有 TARGET_INFO 会被
-# 原样拼进 `cargo build`，因此在 include 之后追加一次。wasm 那边稍特殊：上游默认会带
+# 本包的 lib（rlib + cdylib），所以这里不需要覆盖任何 recipe。唯一要补的是 feature：示例树挂在标记式
+# 的 `quack` 上，它要演示的能力由 EXTENSION_FEATURES 列出（两者默认关闭，下游依赖树才不受影响），
+# 而上游 recipe 没给 feature 留位置 —— 只有 TARGET_INFO 会被原样拼进 `cargo build`，因此在 include
+# 之后追加一次。wasm 那边稍特殊：上游默认会带
 # `--example $(EXTENSION_NAME)`，而本包没有这个 example 目标，产物来自 lib 的 staticlib —— 见下面
 # TARGET_INFO 的 wasm 分支，它把整条 TARGET_INFO 换掉，`--example` 随之消失。
 #
@@ -65,8 +123,9 @@ all: configure debug
 # The example extension now lives inside the root package (test/extension/), so the two bare build
 # commands in rust.Makefile — `cargo build`, plus `--example $(EXTENSION_NAME)` for wasm — hit this
 # package's lib (rlib + cdylib) and its `[[example]] duckfn` respectively, which is why no recipe has
-# to be overridden here. The one thing to add is the feature: the example sits behind `quack` (off by
-# default, so a downstream dependency tree is unaffected) and the upstream recipes leave no slot for
+# to be overridden here. The one thing to add is the features: the example tree sits behind the marker
+# `quack`, and the capabilities it should demonstrate come from EXTENSION_FEATURES (both off by
+# default, so a downstream dependency tree is unaffected), while the upstream recipes leave no slot for
 # features. TARGET_INFO is the single variable they splice verbatim into `cargo build` (empty
 # natively, `--target`/`--example` for wasm), so it is appended to right after the includes.
 #
@@ -94,12 +153,29 @@ include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 # The extension artefact (cdylib / staticlib) comes from `[[example]] duckfn`, so both branches pass
 # `--example` and point IS_EXAMPLE at examples/ — the same convention the upstream rust.Makefile uses.
 ifneq ($(DUCKDB_WASM_PLATFORM),)
-TARGET_INFO := --target $(TARGET) --example $(EXTENSION_NAME) --features quack
+TARGET_INFO := --target $(TARGET) --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 IS_EXAMPLE := /examples
 else
-TARGET_INFO += --example $(EXTENSION_NAME) --features quack
+TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 IS_EXAMPLE := /examples
 endif
+
+# 用例范围：默认是 --test-dir test/sql（整棵树），EXTRA_TEST_ARGS 原样追加给 runner，用来只跑一部分
+# 用例（老引擎上跑稳定区子集就是这么跑的，见 `just test_stable`）：
+#
+#   make test_debug EXTRA_TEST_ARGS="--file-path test/sql/functions/scalar_function.test"
+#   make test_debug EXTRA_TEST_ARGS="--file-list target/stable-tests.txt"   # 空白分隔的路径清单
+#
+# runner（duckdb-sqllogictest-python 的 python_runner.py）的参数是 --file-path / --test-dir /
+# --file-list；给了 --file-path 或 --file-list 就按列出来的文件跑（--test-dir 仍作为工作目录传下去）。
+#
+# The test range: `--test-dir test/sql` (the whole tree) by default, with EXTRA_TEST_ARGS appended
+# verbatim so a run can cover a subset — that is how the stable-region subset runs on an older engine
+# (see `just test_stable`). The runner's own options are --file-path / --test-dir / --file-list
+# (duckdb-sqllogictest-python's python_runner.py): with --file-path or --file-list it runs exactly the
+# files listed, while --test-dir still names the working directory.
+EXTRA_TEST_ARGS ?=
+TEST_RUNNER_BASE := $(TEST_RUNNER) --test-dir test/sql $(EXTRA_EXTENSIONS_PARAM) $(EXTRA_TEST_ARGS)
 
 configure: venv platform extension_version
 

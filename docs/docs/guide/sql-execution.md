@@ -30,9 +30,10 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["sql"] }
 That matters for the artifact, not just for the build: keep `USE_UNSTABLE_C_API=0` with a `v1.2.0`
 floor and one binary serves DuckDB 1.3 through 2.0 (see
 [Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md)). An extension that also wants the
-host file system needs `owned-connection` instead, which brings `sql` along and pulls in
-[`duckfn::duck_vfs`](./file-system.md) — that half *is* in the unstable region and has to line up with
-the engine's minor release.
+host file system adds `duck_vfs`, which builds on the same connection but pulls in
+[`duckfn::duck_vfs`](./file-system.md) *and* `duckdb-1-5` — that half is in the unstable region and has
+to line up with the engine's minor release. The two features do not depend on each other; they share
+only the connection and its lock.
 
 ::::
 
@@ -205,8 +206,8 @@ paths.
   result too large to hold, hand-write an adapter and keep your own connection instead.
 - **It shares one lock with `duckfn::duck_vfs` when both are on.** A call holds that connection from
   start to finish, so a long query blocks file I/O, and **nesting a take-up on one thread deadlocks** —
-  with `owned-connection` on, never call `duckfn::sql` from inside a `with_file_system` closure, or the
-  other way round. Concurrent calls from other threads simply queue.
+  with `duck_vfs` on, never call `duckfn::sql` from inside a `with_file_system` closure, or the other
+  way round. Concurrent calls from other threads simply queue.
 - **One process-level connection, first instance wins.** With several database instances in one
   process, the one that finished registering first is the connection used.
 - **Not usable where DuckDB runs synchronously on a single thread.** Opening the connection during

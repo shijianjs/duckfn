@@ -95,9 +95,9 @@
 //! - **不能用在「同一个线程里同步执行 DuckDB」的运行时里**：注册期就在当前线程上打开连接并重入
 //!   引擎，那类运行时（单线程 wasm、DuckDB-Wasm 的 Node blocking 绑定）会直接死锁，表现为扩展
 //!   LOAD / 注册卡住不动。Node 的 worker 模式、浏览器与原生 CLI 都不受影响 —— 这也是本 crate
-//!   把它单独放在 `owned-connection` feature 后面的原因。
-//! - 需要 DuckDB 1.5.0+ 与本 crate 的 `owned-connection` feature（它自己依赖 `duckdb-1-5`），
-//!   否则整个模块不存在。
+//!   把它单独放在 `duck_vfs` feature 后面的原因。
+//! - 需要本 crate 的 `duck_vfs` feature（它依赖 `owned-connection` 与 `duckdb-1-5`），否则整个
+//!   模块不存在。
 //!
 //! - There is exactly one process-level entry, and it is the **first instance to finish
 //!   registering** that wins. With several database instances in one process, the VFS of that first
@@ -114,9 +114,9 @@
 //!   connection is opened, and the engine re-entered, on the current thread during registration,
 //!   which deadlocks such a runtime (single-threaded wasm, DuckDB-Wasm's Node blocking bindings) —
 //!   the extension LOAD just hangs. Node's worker mode, the browser and the native CLI are
-//!   unaffected, which is why this sits behind the crate's `owned-connection` feature.
-//! - Requires DuckDB 1.5.0+ and this crate's `owned-connection` feature (which itself needs
-//!   `duckdb-1-5`); without them the whole module is absent.
+//!   unaffected, which is why this sits behind the crate's `duck_vfs` feature.
+//! - Requires this crate's `duck_vfs` feature (which needs `owned-connection` and `duckdb-1-5`);
+//!   without them the whole module is absent.
 
 use std::mem::ManuallyDrop;
 use std::ops::Deref;

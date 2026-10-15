@@ -34,7 +34,8 @@ Four settings in the `Makefile` are worth knowing:
 EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
 TARGET_DUCKDB_VERSION=v1.5.6
-TARGET_INFO += --features quack
+EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
+TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
 
 `USE_UNSTABLE_C_API=1` is what makes the built extension loadable only with `-unsigned`, and only in
@@ -42,10 +43,20 @@ a compatible DuckDB version. `TARGET_DUCKDB_VERSION` names the version the metad
 and, because the ABI type is unstable, that value is read as a DuckDB release number and must match
 the engine exactly. [DuckDB version compatibility](../duckdb-versions/index.md) covers both ABI types.
 `EXTENSION_NAME` has to match `duckfn_entrypoint!` in `test/extension/entry.rs` and the `require` lines
-of the sqllogictest files. `TARGET_INFO` carries `--example $(EXTENSION_NAME)` plus `--features quack`:
-the extension artefacts come from the `[[example]] duckfn` target, and the example tree lives behind the
-`quack` feature (off by default). `TARGET_INFO` is the one variable DuckDB's shared makefiles splice
-verbatim into `cargo build`. Without it the build would hand back a cdylib with no entry-point symbol.
+of the sqllogictest files. `TARGET_INFO` carries `--example $(EXTENSION_NAME)` plus
+`--features $(EXTENSION_FEATURES)`: the extension artefacts come from the `[[example]] duckfn` target,
+and `EXTENSION_FEATURES` is which capabilities that target demonstrates. `TARGET_INFO` is the one
+variable DuckDB's shared makefiles splice verbatim into `cargo build`; without it the build would hand
+back a cdylib with no entry-point symbol.
+
+`quack` in that list is only a **marker** — it decides whether the example tree is compiled at all —
+and the rest is the capability list, because the tree splits itself by capability module. A different
+list is therefore a different artifact, which is how the stable-API-only plugin is built:
+
+```bash
+make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.2.0 EXTENSION_FEATURES=quack debug
+just test_stable 1.4.0        # …and run a range of the suite against DuckDB 1.4
+```
 
 ## WebAssembly
 
@@ -157,8 +168,9 @@ and the license. Unpacking the crate therefore hands you both the full documenta
 example — which is the point of keeping them in one package. `cargo package -p duckfn --list` prints
 the exact file list.
 
-The example only compiles when the `quack` feature is on (`cargo build --features quack`), so its
-presence leaves a dependency on `duckfn` untouched.
+The example only compiles when the `quack` feature is on (`cargo build --features quack,duck_vfs`,
+say — the marker plus the capabilities it should demonstrate), so its presence leaves a dependency on
+`duckfn` untouched.
 
 ## Documentation site
 

@@ -21,10 +21,14 @@ make configure   # once: prepares the Python venv used by the test runner
 make debug       # -> build/debug/extension/duckfn/duckfn.duckdb_extension
 ```
 
-The example is compiled only when the `quack` feature is on, so every command that builds it passes
-`--features quack`: `make debug` does that through the root `Makefile`, and `just build` does it in
-the Justfile (packaging the result into a loadable `duckfn.duckdb_extension` on the way). A bare
-`cargo build` would produce a cdylib without the entry-point symbol, which DuckDB refuses at `LOAD`.
+The example is compiled only when the `quack` feature is on, and **which capabilities it demonstrates
+comes from the feature list a build passes** — `quack` is only the marker for the tree. `make debug`
+takes the list from `EXTENSION_FEATURES` in the root `Makefile` (default: every capability this page
+demos), and `just build` passes it in the Justfile (packaging the result into a loadable
+`duckfn.duckdb_extension` on the way). A bare `cargo build` would produce a cdylib without the
+entry-point symbol, which DuckDB refuses at `LOAD`; removing a capability is just a shorter list —
+`EXTENSION_FEATURES=quack` builds the stable-API-only variant, which older engines load (see
+[Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md)).
 
 ```bash
 duckdb -unsigned -c "
