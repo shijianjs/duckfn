@@ -24,6 +24,8 @@ on:
       - 'duckfn-macro/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/config.toml'
       - 'Makefile'
       - 'Justfile'
       - 'scripts/**'
