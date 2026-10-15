@@ -317,6 +317,27 @@ just release_dev 0.0.6-dev.0
 这一步只动根 `Cargo.toml` 和 `Cargo.lock`：文档与 README 中的示例
 始终指向最新**已发布**版本，不打 tag、不发布。
 
+### 下游文档里「安装发布产物」的写法（别写 `LOAD '<release url>'`）
+
+这条坑在下游出现过很多次（模板与各 `duckfn-*` 扩展仓的 README、用户指南都写过错的），两个前提都不成立：
+
+- `LOAD` 收的是**扩展名**或**本地路径**，它**不会去下载 URL** —— 下载那条路是 `INSTALL '<url>'`
+  （`LOAD 'https://…'` 会把 URL 当扩展名解析，报 `Extension "https:\\…" not found`）。
+- Release 里的资产叫 `<扩展名>-<平台>.duckdb_extension`，而 DuckDB 是**拿文件名去找入口点符号**的：照原名
+  加载会报 `did not contain function "<扩展名>-windows_amd64_init_c_api"`。
+
+所以给用户的写法就是三步 —— 模板与各 `duckfn-*` 扩展仓的 README / `docs` 都按它写，中文侧同形（本仓库文档里
+对应的是 [Quick start 的「加载已发布的产物」](docs/docs/getting-started/quick-start.md)）：
+
+```shell
+curl -LO https://github.com/<owner>/<repo>/releases/latest/download/<扩展名>-windows_amd64.duckdb_extension
+mv <扩展名>-windows_amd64.duckdb_extension <扩展名>.duckdb_extension
+duckdb -unsigned -c "LOAD './<扩展名>.duckdb_extension';"
+```
+
+注册进社区仓之后另有更省事的一条：`INSTALL <扩展名> FROM community;` 再 `LOAD <扩展名>;` —— 那份是签过名
+的，文件名本来就对。
+
 ## 相关文档
 
 - [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md)：`duckfn` 的 crate README（根 README，同时在 GitHub 首页与 crates.io 上展示）。

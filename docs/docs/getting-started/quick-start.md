@@ -103,6 +103,20 @@ SELECT double_it(21);
 
 `-unsigned` is required because the extension is built against DuckDB's unstable C API.
 
+### Loading a released build
+
+Once the project publishes releases, the asset is named `<name>-<platform>.duckdb_extension`, and it has to be
+**renamed to `<name>.duckdb_extension` before it can be loaded**: `LOAD` takes an extension name or a local path
+— it fetches no URLs (`INSTALL '<url>'` is the one that downloads) — and DuckDB takes the entry-point symbol
+from the file name, so the release name fails with
+`did not contain function "my_ext-windows_amd64_init_c_api"`.
+
+```shell
+curl -LO https://github.com/<owner>/<repo>/releases/latest/download/my_ext-windows_amd64.duckdb_extension
+mv my_ext-windows_amd64.duckdb_extension my_ext.duckdb_extension
+duckdb -unsigned -c "LOAD './my_ext.duckdb_extension';"
+```
+
 ## The entry point name
 
 `duckfn_entrypoint!("my_ext")` generates the symbol **`my_ext_init_c_api`**, which is the symbol

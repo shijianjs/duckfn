@@ -97,6 +97,19 @@ SELECT double_it(21);
 
 扩展基于 DuckDB 的 unstable C API 构建，因此必须加 `-unsigned`。
 
+### 加载已发布的产物
+
+项目发了 Release 之后，资产命名是 `<名字>-<平台>.duckdb_extension`，**加载之前必须先改名成
+`<名字>.duckdb_extension`**：`LOAD` 收的是扩展名或本地路径 —— 它不会去下载 URL（下载那条路是 `INSTALL '<url>'`）
+—— 而入口点符号由文件名决定，直接用 Release 里的名字会报
+`did not contain function "my_ext-windows_amd64_init_c_api"`。
+
+```shell
+curl -LO https://github.com/<owner>/<repo>/releases/latest/download/my_ext-windows_amd64.duckdb_extension
+mv my_ext-windows_amd64.duckdb_extension my_ext.duckdb_extension
+duckdb -unsigned -c "LOAD './my_ext.duckdb_extension';"
+```
+
 ## 入口符号名称
 
 `duckfn_entrypoint!("my_ext")` 生成符号 **`my_ext_init_c_api`**，这正是 DuckDB 加载扩展时查找的符号。
