@@ -925,7 +925,7 @@ npm token，CI 里也不需要 OTP。真正上线还差一步：维护者在 npm
 各打各的 tag，也互不触发对方的 CI。
 
 版本号形如 `X.Y.Z`（例如 `0.2.0`），tag 形如 `docs-kit-v0.2.0`。只有**正式版本**才打 tag、
-才送暂存；`0.1.1-dev.0` 这类开发版本留在分支上。
+才送暂存；`0.2.1-dev.0` 这类开发版本留在分支上。
 
 | 步骤 | 命令 |
 | --- | --- |
@@ -954,7 +954,7 @@ just release_kit_check   # 构建 + 类型检查 + npm pack --dry-run
 just release_kit_bump 0.1.1
 ```
 
-脚本把版本号从工作区的开发版本（如 `0.1.1-dev.0`）切成正式版本，只改两个文件：
+脚本把版本号从工作区的开发版本（如 `0.2.1-dev.0`）切成正式版本，只改两个文件：
 `duckfn-docs-kit/package.json`，以及根 `package-lock.json` 里该 workspace 的条目；然后打印
 残留的旧版本号（应为空）与 `git diff --stat`。
 
