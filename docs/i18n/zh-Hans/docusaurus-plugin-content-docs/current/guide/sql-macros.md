@@ -194,7 +194,7 @@ SELECT dfn_macro_quad(3);  -- 12
 
 | 错误用法 | 报错 |
 | --- | --- |
-| 参数个数不对 | `dfn_macro_add does not support the supplied arguments` |
+| 参数个数不对 | `dfn_macro_add does not support the supplied arguments` —— DuckDB 1.3.x 的措辞不同（`... requires 2 positional arguments, but ...`），这句话是上游的，所以 `test/sql/functions/sql_macro.test` 两种都收 |
 | 把表宏当标量函数用 | `dfn_macro_gen is a table function but it was used as a scalar function` |
 | 把标量宏用在 `FROM` 后 | `Table Function with name dfn_macro_add does not exist` |
 

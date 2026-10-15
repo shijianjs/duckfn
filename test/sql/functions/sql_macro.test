@@ -511,16 +511,26 @@ dfn_macro_pi	[]
 # 错误场景
 # ============================================================================
 
-# 参数个数不符
+# 参数个数不符。文案随引擎版本变 —— 1.3.x 是「requires 2 positional arguments, but ...」，1.4 起
+# 是「does not support the supplied arguments」（上游改过措辞，不是我们的行为差异），所以用 runner
+# 支持的 <REGEX> 同时接受两种：稳定区矩阵要拿同一份用例跑 1.3.2 / 1.4.5 / 1.5.6，别让一条上游文案把
+# 老引擎那条 leg 判红。注意 runner 会把没以 `.*` 开头结尾的模式自动裹上 `.*` 再 fullmatch，所以两条
+# 候选必须包在一个组里 —— 写成 `A|B` 会被裹成 `.*A|B.*`，交替优先级比 `.*` 低，匹配就错了。
+#
+# Wrong arity. The wording is engine-dependent: 1.3.x says "requires 2 positional arguments, but ...",
+# 1.4 and up say "does not support the supplied arguments" (upstream reworded it, our behaviour is
+# unchanged), so a <REGEX> accepts both — the stable-region matrix runs this same file on 1.3.2, 1.4.5
+# and 1.5.6. The runner wraps a pattern in `.*` before full-matching, hence the group: `A|B` alone
+# would become `.*A|B.*`, where the alternation binds too loosely to match.
 statement error
 SELECT dfn_macro_add(1);
 ----
-does not support the supplied arguments
+<REGEX>:(does not support the supplied arguments|requires 2 positional arguments)
 
 statement error
 SELECT dfn_macro_add(1, 2, 3);
 ----
-does not support the supplied arguments
+<REGEX>:(does not support the supplied arguments|requires 2 positional arguments)
 
 # 未注册的名字
 statement error

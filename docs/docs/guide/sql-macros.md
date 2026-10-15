@@ -199,7 +199,7 @@ Macro names are looked up case-insensitively, and mistakes surface as ordinary D
 
 | Mistake | Error |
 | --- | --- |
-| Wrong number of arguments | `dfn_macro_add does not support the supplied arguments` |
+| Wrong number of arguments | `dfn_macro_add does not support the supplied arguments` — DuckDB 1.3.x words it differently (`... requires 2 positional arguments, but ...`); the message is upstream's, so `test/sql/functions/sql_macro.test` accepts both |
 | A table macro used as a scalar | `dfn_macro_gen is a table function but it was used as a scalar function` |
 | A scalar macro used with `FROM` | `Table Function with name dfn_macro_add does not exist` |
 
