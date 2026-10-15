@@ -305,11 +305,21 @@ true
 
 # ============================================================================
 # 批量扫描：1000 行，验证子向量容量足够（parent_capacity * N）
+#
+# 外层 `CAST(... AS INTEGER[])` 不能省：`unnest()` 接受定长 ARRAY 是 DuckDB 1.4 起的事，1.3.x 上它
+# 只吃 LIST / STRUCT / NULL（会报 `UNNEST() can only be applied to lists, structs and NULL, not
+# INTEGER[3]`）。定长 ARRAY 与 LIST 的物理布局相同，所以这个 cast 是免费的，但它让同一份用例在稳定区
+# 矩阵的每个引擎上都跑得动。
+#
+# The outer `CAST(... AS INTEGER[])` is load-bearing: `unnest()` accepting a fixed-size ARRAY arrived
+# in DuckDB 1.4; on 1.3.x it takes LIST / STRUCT / NULL only (`UNNEST() can only be applied to lists,
+# structs and NULL, not INTEGER[3]`). ARRAY and LIST share their physical layout, so the cast is free
+# — it is what keeps this file runnable on every engine in the stable-region matrix.
 # ============================================================================
 
 query T
 SELECT CAST(count(*) AS VARCHAR) FROM (
-    SELECT unnest(dfn_echo_array_integer(a)) AS x
+    SELECT unnest(CAST(dfn_echo_array_integer(a) AS INTEGER[])) AS x
     FROM (SELECT [1, 2, 3]::INTEGER[3] AS a FROM range(1000)) t
 ) s;
 ----
@@ -317,7 +327,7 @@ SELECT CAST(count(*) AS VARCHAR) FROM (
 
 query T
 SELECT CAST(sum(x) AS VARCHAR) FROM (
-    SELECT unnest(dfn_echo_array_integer(a)) AS x
+    SELECT unnest(CAST(dfn_echo_array_integer(a) AS INTEGER[])) AS x
     FROM (SELECT [1, 2, 3]::INTEGER[3] AS a FROM range(1000)) t
 ) s;
 ----

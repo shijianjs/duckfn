@@ -22,10 +22,20 @@
 # 环境变量：
 #   EXTENSION_FEATURES   覆盖构建用的 feature 列表（默认 quack,sql = 只有稳定区）
 #   DUCKDB_PYTHON        覆盖 venv 的 python 路径（默认自动探测 configure/venv）
+#   PYTHON_BIN           建 venv 用哪个解释器（默认 python3，仅首次 configure 生效）。**本机 Python
+#                        太新时要指向一个更老的**：老引擎没有新 Python 的 wheel（1.3.2 只到 cp313，
+#                        本机是 cp314 时 pip 直接说没有可用版本），而 venv 只在 configure 时建一次 ——
+#                        所以要先把 configure/venv 删掉再用它重跑：
+#                        rm -rf configure/venv && PYTHON_BIN=python3.12 just test_stable 1.3.2
 #
 # Usage: scripts/test-stable.sh <duckdb version> [test pattern ...]. Without patterns it runs the
 # default range: every case under test/sql except the NON_STABLE ones below. Environment:
 # EXTENSION_FEATURES overrides the build's feature list (default `quack,sql`, i.e. stable region only).
+# PYTHON_BIN picks the interpreter that creates the venv (python3 by default, read once, when the venv
+# is built). Point it at an **older** Python when the local one is too new for the engine: 1.3.2 ships
+# wheels up to cp313 only, so on a cp314 machine pip finds nothing. The venv is created once, so that
+# means deleting it first:
+#   rm -rf configure/venv && PYTHON_BIN=python3.12 just test_stable 1.3.2
 #
 # `sql` belongs in that list: it runs SQL from a callback, but every call it makes is in the stable
 # region (see src/sql/mod.rs and docs/docs/guide/sql-execution.md). It used to be `quack` alone, which
