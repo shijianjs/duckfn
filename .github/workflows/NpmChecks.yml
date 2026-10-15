@@ -34,6 +34,11 @@ on:
       - '.github/workflows/NpmChecks.yml'
   workflow_dispatch:
 
+# `contents: read` is what the release-asset fetch in the Build step authenticates with; everything
+# else here needs no permissions at all.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -78,4 +83,12 @@ jobs:
       - name: Build
         # Root script: builds the kit, then the site. A broken link or an unusable type alias fails
         # here, which is the check that catches a dependency bump like TypeScript 7.
+        #
+        # The site preloads `duckfn.duckdb_extension.wasm`, and that file is *not* in the repository
+        # (`docs/.gitignore` ignores `static/duckdb-extensions/`; a local build writes it there, the
+        # Pages deploy fetches it). Pointing the entry at the release — the same two lines DeployDocs
+        # uses — is what lets a checkout build the site at all.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DOCS_EXTENSION_FROM_RELEASE: '1'
         run: npm run build
