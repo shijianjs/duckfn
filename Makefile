@@ -136,6 +136,36 @@ all: configure debug
 include extension-ci-tools/makefiles/c_api_extensions/base.Makefile
 include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 
+# 覆盖 base.Makefile 的 wasm 链接：把 `-O3` 换成 `-O0`。
+#
+# 必须和 base 一样套 `ifneq ($(DUCKDB_WASM_PLATFORM),)` 守卫：base 只在 wasm 平台把 link_wasm_* 定义成
+# emcc 命令，原生平台走 else 分支得到**空的** link_wasm_*。若无条件重定义，会把原生那条空目标也改成
+# emcc，于是 linux/macos/windows 构建时报 `emcc: command not found`（Error 127）。
+#
+# 换 -O0 的原因：本仓库用 rust-toolchain.toml 钉 Rust 1.97.1（≥1.89），产出的 wasm 模块可能声明
+# `call-indirect-overlong` 这类较新的提案，而 CI 钉死的 emsdk 3.1.71（binaryen/wasm-opt v120）解析不了，
+# `-O3` 的优化步直接 `Unknown option` 失败。wasm-opt 只是优化器：`-O0` 跳过它，wasm-ld 的产物本身合法、
+# DuckDB-Wasm 照样加载运行，只是没做体积优化。
+#
+# 这个守卫块与 rust-toolchain.toml 是一套：哪天不再钉 Rust（比如 DuckDB 2.0 的官方流水线上到 1.97、
+# 且 emsdk 的 binaryen 跟上了新提案），两个一起删。
+#
+# Same `ifneq` guard as base.Makefile: base only defines link_wasm_* as emcc for wasm platforms and
+# leaves them empty for native, so an unconditional redefinition would make native builds call `emcc`
+# (command not found, Error 127). The `-O0` swap: this repository pins Rust 1.97.1 in
+# rust-toolchain.toml, and Rust >= 1.89 can emit a module declaring `call-indirect-overlong`, which the
+# pinned emsdk 3.1.71 (binaryen/wasm-opt v120) cannot parse — so the `-O3` post-link step dies on
+# "Unknown option". wasm-opt is only an optimizer: `-O0` skips it and wasm-ld's output stays valid and
+# loadable, just unoptimised. This block and rust-toolchain.toml go together — remove both when neither
+# is needed.
+ifneq ($(DUCKDB_WASM_PLATFORM),)
+link_wasm_debug:
+	emcc $(EXTENSION_BUILD_PATH)/debug/$(EXTENSION_LIB_FILENAME) -o $(EXTENSION_BUILD_PATH)/debug/$(EXTENSION_FILENAME_NO_METADATA) -O0 -g -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_$(EXTENSION_NAME)_init_c_api"
+
+link_wasm_release:
+	emcc $(EXTENSION_BUILD_PATH)/release/$(EXTENSION_LIB_FILENAME) -o $(EXTENSION_BUILD_PATH)/release/$(EXTENSION_FILENAME_NO_METADATA) -O0 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="_$(EXTENSION_NAME)_init_c_api"
+endif
+
 # 构建参数：
 #   - native / macOS 交叉编译：上游给的是空值（或 `--target <triple>`），追加 feature 即可。
 #   - wasm：扩展产物来自 lib 的 staticlib（名字自动就是 lib$(EXTENSION_NAME).a），所以上游给的

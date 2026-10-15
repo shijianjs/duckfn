@@ -115,20 +115,20 @@ impl<A: DuckDocArgsProvider> ItemFnWrapper<A> {
             return Ok(DuckSqlMacroResult::Str);
         }
 
-        if let Type::Path(type_path) = &**ty {
-            if let Some(segment) = type_path.path.segments.last() {
-                if segment.ident == "SqlMacro" {
-                    return Ok(DuckSqlMacroResult::SqlMacro);
+        if let Type::Path(type_path) = &**ty
+            && let Some(segment) = type_path.path.segments.last()
+        {
+            if segment.ident == "SqlMacro" {
+                return Ok(DuckSqlMacroResult::SqlMacro);
+            }
+            if segment.ident == "DuckResult"
+                && let Some(inner) = extract_generic_arg_type(segment)
+            {
+                if Self::is_str_type(inner) {
+                    return Ok(DuckSqlMacroResult::ResultStr);
                 }
-                if segment.ident == "DuckResult" {
-                    if let Some(inner) = extract_generic_arg_type(segment) {
-                        if Self::is_str_type(inner) {
-                            return Ok(DuckSqlMacroResult::ResultStr);
-                        }
-                        if Self::is_sql_macro_type(inner) {
-                            return Ok(DuckSqlMacroResult::ResultSqlMacro);
-                        }
-                    }
+                if Self::is_sql_macro_type(inner) {
+                    return Ok(DuckSqlMacroResult::ResultSqlMacro);
                 }
             }
         }

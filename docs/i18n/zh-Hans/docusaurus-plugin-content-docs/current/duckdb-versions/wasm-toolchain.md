@@ -78,10 +78,11 @@ ref，仍带 `1.86.0`。
   default，于是 `cargo` 用钉定的工具链（rustup 自动补装）。因为文件在仓库里，它也随社区注册表的
   `override_ref` 一起生效 —— 而 `ci_tools_version` 抬版做不到（见下）。
 
-**最常见的踩坑方式是升级依赖。** duckfn 自己的 `syn 2 → 3`（Dependabot PR #2，2026-10 起挂着）需要
-`darling 2.4`，后者需要 rustc 1.88 —— 于是在 `v1.5-variegata` 上 native 作业照绿、而每个 `wasm_*` 作业
-都会以那条报错失败。它**挂着不合并**，等 DuckDB 2.0 的官方流水线（1.97）；想提前做，杠杆就是上面那个
-仓库内的 `rust-toolchain.toml`。
+**最常见的踩坑方式是升级依赖。** duckfn 自己的 `syn 2 → 3` 需要 `darling 2.4`，后者需要 rustc 1.88 ——
+于是在 `v1.5-variegata` 上 native 作业照绿、而每个 `wasm_*` 作业都会以那条报错失败。这里没有干等 DuckDB
+2.0，而是走仓库侧那条杠杆：根目录 `rust-toolchain.toml` 钉 **1.97.1**（外加 wasm target）**加上**下面的
+`-O0` 链接覆盖 —— 前者压过那个 1.86，后者让新 Rust 的产物仍能过旧 binaryen。两个文件里都写了删除条件：
+等 ci-tools 的 ref 越过 PR #394、其 binaryen 也认识新的 target-feature 之后，一起删掉。
 
 ### 2 · 链接：现代 Rust 产出的特性，旧 binaryen 解析不了
 

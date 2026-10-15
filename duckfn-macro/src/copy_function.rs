@@ -218,16 +218,15 @@ impl ItemFnWrapper<DuckCopyFunctionArgs> {
 ///
 /// Whether the type is `&[DuckDynamicRow]` (any path prefix, element named `DuckDynamicRow`).
 fn is_dynamic_rows_ref(ty: &Type) -> bool {
-    if let Type::Reference(type_ref) = ty {
-        if let Type::Slice(slice) = &*type_ref.elem {
-            if let Type::Path(element) = &*slice.elem {
-                return element
-                    .path
-                    .segments
-                    .last()
-                    .is_some_and(|segment| segment.ident == "DuckDynamicRow");
-            }
-        }
+    if let Type::Reference(type_ref) = ty
+        && let Type::Slice(slice) = &*type_ref.elem
+        && let Type::Path(element) = &*slice.elem
+    {
+        return element
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "DuckDynamicRow");
     }
     false
 }

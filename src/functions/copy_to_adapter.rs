@@ -578,6 +578,14 @@ fn bind_data_of(info: &impl BindDataAccessor) -> DuckResult<&CopyToBindData> {
 /// 从回调信息里取回 writer；缺失时报错。
 ///
 /// Retrieves the writer from a callback info record, reporting an error when it is missing.
+// 返回的 `&mut` 来自 DuckDB 交出的裸指针（global state），不是从入参那个共享引用推导出来的：
+// clippy 的 mut_from_ref 只看到「& 进、&mut 出」这个形状，看不到指针的真正来源与排他性。
+// 同一时刻只有一个 sink 回调在跑（见下面 SAFETY），所以这是 FFI 里常规的内部可变性写法。
+//
+// The returned `&mut` comes from the raw pointer DuckDB hands out (the global state), not from the
+// shared input reference; clippy's mut_from_ref only sees the "& in, &mut out" shape. Exclusivity is
+// the SAFETY note below — one sink callback at a time.
+#[allow(clippy::mut_from_ref)]
 fn writer_of<W>(info: &impl GlobalStateAccessor) -> DuckResult<&mut W> {
     // SAFETY: 回调期间有效；global init 阶段一定设置过 global state。
     let ptr = unsafe { info.global_state() }.cast::<W>();

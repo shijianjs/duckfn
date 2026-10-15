@@ -170,22 +170,22 @@ impl ItemFnWrapper<DuckReplacementScanArgs> {
             ));
         };
 
-        if let Type::Path(type_path) = &**ty {
-            if let Some(segment) = type_path.path.segments.last() {
-                let result_type = match segment.ident.to_string().as_str() {
-                    "Option" => Some(DuckReplacementScanResult::Option),
-                    "DuckOptionResult" => Some(DuckReplacementScanResult::OptionResult),
-                    _ => None,
-                };
-                if let Some(result_type) = result_type {
-                    let inner = extract_generic_arg_type(segment).ok_or_else(|| {
-                        syn::Error::new_spanned(ty, REPLACEMENT_SCAN_RETURN_TYPE_HINT)
-                    })?;
-                    let str_kind = Self::replacement_scan_str_kind(inner).ok_or_else(|| {
-                        syn::Error::new_spanned(ty, REPLACEMENT_SCAN_RETURN_TYPE_HINT)
-                    })?;
-                    return Ok((result_type, str_kind));
-                }
+        if let Type::Path(type_path) = &**ty
+            && let Some(segment) = type_path.path.segments.last()
+        {
+            let result_type = match segment.ident.to_string().as_str() {
+                "Option" => Some(DuckReplacementScanResult::Option),
+                "DuckOptionResult" => Some(DuckReplacementScanResult::OptionResult),
+                _ => None,
+            };
+            if let Some(result_type) = result_type {
+                let inner = extract_generic_arg_type(segment).ok_or_else(|| {
+                    syn::Error::new_spanned(ty, REPLACEMENT_SCAN_RETURN_TYPE_HINT)
+                })?;
+                let str_kind = Self::replacement_scan_str_kind(inner).ok_or_else(|| {
+                    syn::Error::new_spanned(ty, REPLACEMENT_SCAN_RETURN_TYPE_HINT)
+                })?;
+                return Ok((result_type, str_kind));
             }
         }
 

@@ -77,7 +77,13 @@ members = ["duckfn-macro"]
 [workspace.package]
 version = "0.1.1-dev.0"
 edition = "2024"
-rust-version = "1.86"
+# 硬下限 1.88：duckfn-macro 依赖 syn 3，它带 darling 2.4，需要 rustc 1.88。实际构建用
+# rust-toolchain.toml 钉的 1.97.1 —— 那个版本给 wasm 的 std 带上展开运行时，catch_unwind 在
+# 浏览器里才把 panic 转成可读错误（见 docs 的 known-issues）。
+#
+# The floor is 1.88 because duckfn-macro depends on syn 3, which brings darling 2.4. Builds actually
+# use the 1.97.1 pinned in rust-toolchain.toml, whose wasm std carries the unwinding runtime.
+rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/shijianjs/duckfn"
 # crates.io's "Homepage" link lands on the user guide (the GitHub Pages site); the source repository

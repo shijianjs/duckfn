@@ -13,4 +13,23 @@ rustflags = ["-Ctarget-feature=+crt-static"]
 # The artefact DuckDB actually loads comes from the same lib's staticlib (linked by emcc in the Makefile,
 # see link_wasm_*), so this cdylib is unavoidable baggage.
 [target.wasm32-unknown-emscripten]
-rustflags = ["-C", "link-arg=-sSIDE_MODULE=2"]
+rustflags = ["-C", "link-arg=-sSIDE_MODULE=2", "-C", "link-arg=-O0"]
+
+# 上面第二个 `-O0` 是新加的，和 Makefile 里 link_wasm_* 的 `-O0` 覆盖是一套：
+#
+# 本仓库用 rust-toolchain.toml 钉 Rust 1.97.1。≥1.89 的 Rust 为 wasm32-unknown-emscripten 产出的模块会
+# 声明 `bulk-memory-opt` / `call-indirect-overlong` 这类较新的提案，而 CI 钉死的 emsdk 3.1.71 带的
+# binaryen v120 解析不了它们，于是 emcc 的优化步（wasm-opt）直接 `Unknown option` 失败。
+#
+# 麻烦在于**有两次链接**：`cargo build` 自己就要把这个 example 的 cdylib 链成 wasm（`[[example]] duckfn`
+# 同时是 cdylib 与 staticlib），那一次由 rustc 调 emcc，并带上 release profile 的 `-O3`；只有
+# Makefile 的 link_wasm_* 覆盖管不到它。所以这里也从 cargo 侧把优化关掉。
+# 真正给 DuckDB 加载的产物来自 staticlib + link_wasm_*，这个 cdylib 只是绕不开的副产物。
+#
+# The second `-O0` pairs with the Makefile's `link_wasm_*` override. Rust >= 1.89 (this repo pins
+# 1.97.1) emits a wasm module declaring newer proposals such as `bulk-memory-opt` and
+# `call-indirect-overlong`, which the pinned emsdk's binaryen v120 cannot optimise — emcc then dies on
+# "Unknown option". There are *two* links: `cargo build` links this example's cdylib itself (the
+# `[[example]] duckfn` target is both cdylib and staticlib) and rustc drives that one, with the release
+# profile's `-O3`; the Makefile override cannot reach it. The artefact DuckDB loads comes from the
+# staticlib plus `link_wasm_*`, so this cdylib is unavoidable baggage.

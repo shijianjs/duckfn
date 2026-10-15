@@ -17,10 +17,20 @@ categories = ["database", "development-tools::ffi"]
 proc-macro = true
 
 [dependencies]
-# 官方wasm ci报错：
-# error: rustc 1.86.0 is not supported by the following packages:
-# darling@0.23.0 requires rustc 1.88.0
-darling = "0.21"
+# 依赖版本与工具链是一套，改一处要想着另外两处：
+#
+# - `syn 3` 只按需再导出 AST：`ItemFn` / `FnArg` / `Pat` 这些在 `full` 后面，`LitStr` 的 `Debug` 在
+#   `extra-traits` 后面。少了它们，报错是「cannot find `FnArg` in `syn`」而不是「feature 没开」。
+# - `darling` 要与 syn 同代：0.21 的 `FromMeta` 实现是针对 syn 2 的 `LitStr` 的，配 syn 3 会得到
+#   `Vec<syn::LitStr>: darling::FromMeta is not satisfied`。0.24 起才跟着 syn 3。
+# - 这条线（syn 3 + darling 0.24）要 rustc 1.88，因此本仓库用 rust-toolchain.toml 钉 1.97.1 ——
+#   官方 ci-tools 的 v1.5-variegata 把 wasm 作业的 Rust 钉在 1.86.0，那里连编译都过不去。
+#
+# The three versions move together: syn 3 re-exports `ItemFn` / `FnArg` / `Pat` behind `full` and
+# `LitStr`'s `Debug` behind `extra-traits`; darling must match syn's major (0.21's `FromMeta` impls
+# target syn 2's `LitStr`); and that line needs rustc 1.88, which is why the repo pins 1.97.1 in
+# rust-toolchain.toml (ci-tools' v1.5-variegata pins 1.86.0 for the wasm job and cannot compile it).
+darling = "0.24"
 proc-macro2 = "1"
 quote = "1"
-syn = "3"
+syn = { version = "3", features = ["full", "extra-traits"] }

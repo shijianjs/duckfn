@@ -240,14 +240,12 @@ impl<A> ItemFnWrapper<A> {
     /// Returns the `T` of a `DuckResult<T>` return type, or `None` when the outer type is something
     /// else.
     pub(crate) fn duck_result_inner(&self) -> Option<&Type> {
-        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
-            if let Type::Path(type_path) = &**ty {
-                if let Some(segment) = type_path.path.segments.last() {
-                    if segment.ident == "DuckResult" {
-                        return extract_generic_arg_type(segment);
-                    }
-                }
-            }
+        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output
+            && let Type::Path(type_path) = &**ty
+            && let Some(segment) = type_path.path.segments.last()
+            && segment.ident == "DuckResult"
+        {
+            return extract_generic_arg_type(segment);
         }
         None
     }
@@ -267,33 +265,33 @@ impl<A> ItemFnWrapper<A> {
     /// `#[duck_scalar_function]` and `#[duck_cast_function]`.
     pub(crate) fn scalar_return_type(&self) -> syn::Result<(DuckScalarResult, &Type)> {
         if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
-            if let Type::Path(type_path) = &**ty {
-                if let Some(segment) = type_path.path.segments.last() {
-                    let result_type = match segment.ident.to_string().as_str() {
-                        "Option" => Some(DuckScalarResult::Option),
-                        "DuckOptionResult" => Some(DuckScalarResult::DuckOptionResult),
-                        _ => None,
-                    };
+            if let Type::Path(type_path) = &**ty
+                && let Some(segment) = type_path.path.segments.last()
+            {
+                let result_type = match segment.ident.to_string().as_str() {
+                    "Option" => Some(DuckScalarResult::Option),
+                    "DuckOptionResult" => Some(DuckScalarResult::DuckOptionResult),
+                    _ => None,
+                };
 
-                    if let Some(result_type) = result_type {
-                        let inner = extract_generic_arg_type(segment).ok_or_else(|| {
-                            syn::Error::new_spanned(
-                                ty,
-                                "Only like `-> f64` `-> Option<f64>` `-> DuckOptionResult<f64>` is supported",
-                            )
-                        })?;
-                        // `Option<T>` 自己就是值类型，`Output` 保持 `Option<T>`；
-                        // `DuckOptionResult<T>` 只表示可失败，`Output` 取内层 `T`。
-                        //
-                        // `Option<T>` is a value type of its own, so `Output` stays `Option<T>`;
-                        // `DuckOptionResult<T>` only means "fallible", so `Output` is the inner `T`.
-                        let output = if matches!(result_type, DuckScalarResult::Option) {
-                            &**ty
-                        } else {
-                            inner
-                        };
-                        return Ok((result_type, output));
-                    }
+                if let Some(result_type) = result_type {
+                    let inner = extract_generic_arg_type(segment).ok_or_else(|| {
+                        syn::Error::new_spanned(
+                            ty,
+                            "Only like `-> f64` `-> Option<f64>` `-> DuckOptionResult<f64>` is supported",
+                        )
+                    })?;
+                    // `Option<T>` 自己就是值类型，`Output` 保持 `Option<T>`；
+                    // `DuckOptionResult<T>` 只表示可失败，`Output` 取内层 `T`。
+                    //
+                    // `Option<T>` is a value type of its own, so `Output` stays `Option<T>`;
+                    // `DuckOptionResult<T>` only means "fallible", so `Output` is the inner `T`.
+                    let output = if matches!(result_type, DuckScalarResult::Option) {
+                        &**ty
+                    } else {
+                        inner
+                    };
+                    return Ok((result_type, output));
                 }
             }
 
@@ -628,10 +626,10 @@ impl FnArgWrapper {
     ///
     /// Returns the parameter name; only the `foo: f64` (identifier + type) form is supported.
     pub(crate) fn name(&self) -> syn::Result<&syn::Ident> {
-        if let syn::FnArg::Typed(pat) = &self.fn_arg {
-            if let syn::Pat::Ident(ref ident) = *pat.pat {
-                return Ok(&ident.ident);
-            }
+        if let syn::FnArg::Typed(pat) = &self.fn_arg
+            && let syn::Pat::Ident(ref ident) = *pat.pat
+        {
+            return Ok(&ident.ident);
         }
         Err(syn::Error::new_spanned(
             self.fn_arg.to_owned(),

@@ -111,14 +111,14 @@ impl DuckDynamicRow {
                 )));
             }
             for (column_index, (name, desc)) in columns.iter().enumerate() {
-                if let Some(value) = &row.values[column_index] {
-                    if !desc.matches_value(value) {
-                        return Err(duck_error(format!(
-                            "dynamic column: row {row_index} column `{name}` expects \
-                             {desc} but got a value of type {}",
-                            value.scalar_type_desc()
-                        )));
-                    }
+                if let Some(value) = &row.values[column_index]
+                    && !desc.matches_value(value)
+                {
+                    return Err(duck_error(format!(
+                        "dynamic column: row {row_index} column `{name}` expects \
+                         {desc} but got a value of type {}",
+                        value.scalar_type_desc()
+                    )));
                 }
             }
         }

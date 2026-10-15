@@ -84,11 +84,13 @@ Two levers, at different layers:
   file lives in the repo, it also travels with the community-registry's `override_ref` — which a
   `ci_tools_version` bump cannot (see below).
 
-**A dependency bump is the usual way to walk into this.** duckfn's own `syn 2 → 3` update (Dependabot
-PR #2, parked in October 2026) needs `darling 2.4`, which needs rustc 1.88 — so on `v1.5-variegata` the
-native jobs would stay green and every `wasm_*` job would fail with the error above. It is parked, not
-merged, until DuckDB 2.0 ships a pipeline on 1.97; the repo-side `rust-toolchain.toml` is the lever for
-taking it sooner.
+**A dependency bump is the usual way to walk into this.** duckfn's own `syn 2 → 3` update needs
+`darling 2.4`, which needs rustc 1.88 — so on `v1.5-variegata` the native jobs would stay green and every
+`wasm_*` job would fail with the error above. Rather than wait for DuckDB 2.0, this repository took the
+repo-side lever: a `rust-toolchain.toml` pinning **1.97.1** (plus the wasm target) plus the `-O0` link
+override below, so the wasm job builds on the pinned 1.86 and still links. Both files carry the removal
+condition in their comments — delete them together once the ci-tools ref moves past PR #394 and its
+binaryen understands the newer target-features.
 
 ### 2 · Link: modern Rust emits features old binaryen cannot parse
 

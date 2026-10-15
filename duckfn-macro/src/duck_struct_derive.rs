@@ -77,21 +77,20 @@ pub(crate) fn duck_struct_derive(input: DeriveInput) -> TokenStream2Result {
         let mut wrapper = FieldWrapper::new(f, index);
         if start_named_param {
             wrapper.is_named_param = true;
-        } else if let Some(named_param_from) = &macro_args.named_param_from {
-            if wrapper.require_field_name()? == named_param_from {
-                start_named_param = true;
-                wrapper.is_named_param = true;
-            }
+        } else if let Some(named_param_from) = &macro_args.named_param_from
+            && wrapper.require_field_name()? == named_param_from
+        {
+            start_named_param = true;
+            wrapper.is_named_param = true;
         }
         fields.push(wrapper)
     }
-    if macro_args.named_param_from.is_some() && !start_named_param {
+    if let Some(field) = &macro_args.named_param_from
+        && !start_named_param
+    {
         return Err(syn::Error::new(
             input.span(),
-            format!(
-                "named_param_from field `{}` not found",
-                macro_args.named_param_from.as_ref().unwrap()
-            ),
+            format!("named_param_from field `{field}` not found"),
         ));
     }
     let context = DuckStructContext {

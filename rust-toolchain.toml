@@ -1,0 +1,29 @@
+# 固定构建用的 Rust 工具链（本仓库自己编产物时生效；下游依赖 duckfn 不继承它）。
+#
+# 为什么钉：Cargo.toml 的 `rust-version` 是 **1.88** —— `syn 3` 要带 `darling 2.4`，后者需要 rustc
+# 1.88。而官方 ci-tools 的 `v1.5-variegata`（本仓库 workflow 里钉的那条）把 wasm 作业的 Rust 钉在
+# 1.86.0（早于 ci-tools PR #394 的提升），1.86 下连 `cargo build` 都过不去，而且**只有 wasm 作业挂** ——
+# native 用的是 stable，看着全绿，很容易误判成插件的问题。
+#
+# 为什么是 1.97.1 而不是 1.88：较新的 stable 才给 `wasm32-unknown-emscripten` 的预编译 std 带上展开
+# 运行时，于是 `catch_unwind` 在浏览器里也能把 panic 转成可读错误（1.88 的 std 是 panic=abort，实测见
+# docs 的 known-issues「A panic! inside a function on WebAssembly」）。
+#
+# `dtolnay/rust-toolchain` 只把它的工具链设成 rustup **default**，而本文件优先级高于 default，于是 cargo
+# 用下面钉的版本编译（rustup 自动补装工具链与列出的 target）。
+#
+# Rust ≥1.89 的 wasm 产物可能需要 `call-indirect-overlong`，而 CI 钉死的 emsdk 3.1.71（binaryen v120）
+# 优化不了它 → 由本仓库 Makefile 的 `-O0` 链接覆盖兜住那一步（详见 docs/docs/duckdb-versions/wasm-toolchain.md）。
+# 两者是一套：删掉任何一个，另一个就不再需要。
+#
+# 等 DuckDB 2.0 的官方流水线（Rust 1.97）发版、把 ci_tools_version / @ref 换过去之后，就可以删掉本文件。
+#
+# Pins the Rust used to build this repository (downstream dependencies on duckfn do not inherit it).
+# The floor is 1.88 because syn 3 pulls in darling 2.4; the pin is 1.97.1 because a recent stable ships
+# the wasm32-unknown-emscripten std *with* unwinding, so catch_unwind works in the browser. It outranks
+# the ci-tools' dtolnay rustup default (which is 1.86.0 on v1.5-variegata and fails the wasm job only).
+# Keep it together with the Makefile's -O0 link override: Rust >= 1.89 can emit a module needing
+# call-indirect-overlong, which the pinned emsdk's binaryen cannot optimize.
+[toolchain]
+channel = "1.97.1"
+targets = ["wasm32-unknown-emscripten"]

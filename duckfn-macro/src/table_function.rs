@@ -202,25 +202,22 @@ impl ItemFnWrapper<DuckTableFunctionArgs> {
     /// `-> DuckResult<DuckDynamicTable>` are accepted; anything else is a compile error carrying
     /// the dynamic-mode usage hint.
     fn dynamic_table_return_type(&self) -> syn::Result<DuckDynamicTableResult> {
-        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output {
-            if let Type::Path(type_path) = &**ty {
-                if let Some(segment) = type_path.path.segments.last() {
-                    if segment.ident == "DuckDynamicTable" {
-                        return Ok(DuckDynamicTableResult::Plain);
-                    }
-                    if segment.ident == "DuckResult" {
-                        if let Some(Type::Path(inner_path)) = extract_generic_arg_type(segment) {
-                            if inner_path
-                                .path
-                                .segments
-                                .last()
-                                .is_some_and(|s| s.ident == "DuckDynamicTable")
-                            {
-                                return Ok(DuckDynamicTableResult::Result);
-                            }
-                        }
-                    }
-                }
+        if let ReturnType::Type(_, ty) = &self.item_fn.sig.output
+            && let Type::Path(type_path) = &**ty
+            && let Some(segment) = type_path.path.segments.last()
+        {
+            if segment.ident == "DuckDynamicTable" {
+                return Ok(DuckDynamicTableResult::Plain);
+            }
+            if segment.ident == "DuckResult"
+                && let Some(Type::Path(inner_path)) = extract_generic_arg_type(segment)
+                && inner_path
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "DuckDynamicTable")
+            {
+                return Ok(DuckDynamicTableResult::Result);
             }
         }
 
@@ -269,36 +266,32 @@ impl ItemFnWrapper<DuckTableFunctionArgs> {
     /// `DuckResult<impl Iterator<Item = T>>` and `DuckFullIteratorResult<T>` are supported;
     /// anything else is a compile error.
     fn table_return_type(&self) -> syn::Result<(DuckTableResult, &Type)> {
-        if let ReturnType::Type(_, ty) = self.return_type() {
-            if let Type::Path(type_path) = &**ty {
-                if let Some(segment) = type_path.path.segments.last() {
-                    if segment.ident == "DuckFullIteratorResult" {
-                        if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(GenericArgument::Type(inner)) = args.args.first() {
-                                return Ok((DuckTableResult::Full, inner));
-                            }
-                        }
-                    }
-
-                    if segment.ident == "DuckResult" {
-                        if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(GenericArgument::Type(Type::ImplTrait(impl_trait))) =
-                                args.args.first()
-                            {
-                                if let Some(item) = iterator_item_type(impl_trait) {
-                                    return Ok((DuckTableResult::ResultIterator, item));
-                                }
-                            }
-                        }
-                    }
-                }
+        if let ReturnType::Type(_, ty) = self.return_type()
+            && let Type::Path(type_path) = &**ty
+            && let Some(segment) = type_path.path.segments.last()
+        {
+            if segment.ident == "DuckFullIteratorResult"
+                && let PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(GenericArgument::Type(inner)) = args.args.first()
+            {
+                return Ok((DuckTableResult::Full, inner));
             }
 
-            if let Type::ImplTrait(impl_trait) = &**ty {
-                if let Some(item) = iterator_item_type(impl_trait) {
-                    return Ok((DuckTableResult::SimpleIterator, item));
-                }
+            if segment.ident == "DuckResult"
+                && let PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(GenericArgument::Type(Type::ImplTrait(impl_trait))) =
+                    args.args.first()
+                && let Some(item) = iterator_item_type(impl_trait)
+            {
+                return Ok((DuckTableResult::ResultIterator, item));
             }
+        }
+
+        if let ReturnType::Type(_, ty) = self.return_type()
+            && let Type::ImplTrait(impl_trait) = &**ty
+            && let Some(item) = iterator_item_type(impl_trait)
+        {
+            return Ok((DuckTableResult::SimpleIterator, item));
         }
 
         Err(syn::Error::new_spanned(

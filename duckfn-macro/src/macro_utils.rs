@@ -89,18 +89,16 @@ pub fn to_snake_case(name: &str) -> String {
 /// Extracts the `Item` type of an `impl Iterator<Item = T>` trait object.
 pub fn iterator_item_type(impl_trait: &TypeImplTrait) -> Option<&Type> {
     for bound in &impl_trait.bounds {
-        if let TypeParamBound::Trait(trait_bound) = bound {
-            if let Some(segment) = trait_bound.path.segments.last() {
-                if segment.ident == "Iterator" {
-                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                        for arg in &args.args {
-                            if let GenericArgument::AssocType(assoc) = arg {
-                                if assoc.ident == "Item" {
-                                    return Some(&assoc.ty);
-                                }
-                            }
-                        }
-                    }
+        if let TypeParamBound::Trait(trait_bound) = bound
+            && let Some(segment) = trait_bound.path.segments.last()
+            && segment.ident == "Iterator"
+            && let PathArguments::AngleBracketed(args) = &segment.arguments
+        {
+            for arg in &args.args {
+                if let GenericArgument::AssocType(assoc) = arg
+                    && assoc.ident == "Item"
+                {
+                    return Some(&assoc.ty);
                 }
             }
         }

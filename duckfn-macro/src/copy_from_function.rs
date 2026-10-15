@@ -184,27 +184,21 @@ impl ItemFnWrapper<DuckCopyFromFunctionArgs> {
     ///
     /// Validates that the COPY FROM function returns `DuckResult<Vec<DuckDynamicRow>>`.
     fn copy_from_return_type(&self) -> syn::Result<()> {
-        if let Some(Type::Path(vec_path)) = self.duck_result_inner() {
-            if let Some(vec) = vec_path
+        if let Some(Type::Path(vec_path)) = self.duck_result_inner()
+            && let Some(vec) = vec_path
                 .path
                 .segments
                 .last()
                 .filter(|segment| segment.ident == "Vec")
-            {
-                if let PathArguments::AngleBracketed(generic_args) = &vec.arguments {
-                    if let Some(GenericArgument::Type(Type::Path(item))) = generic_args.args.first()
-                    {
-                        if item
-                            .path
-                            .segments
-                            .last()
-                            .is_some_and(|segment| segment.ident == "DuckDynamicRow")
-                        {
-                            return Ok(());
-                        }
-                    }
-                }
-            }
+            && let PathArguments::AngleBracketed(generic_args) = &vec.arguments
+            && let Some(GenericArgument::Type(Type::Path(item))) = generic_args.args.first()
+            && item
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "DuckDynamicRow")
+        {
+            return Ok(());
         }
         Err(syn::Error::new_spanned(
             &self.item_fn.sig.output,
