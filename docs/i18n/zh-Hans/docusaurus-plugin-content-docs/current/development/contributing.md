@@ -10,7 +10,7 @@ description: 环境准备、日常命令、测试组织方式，以及需要遵�
 
 | | |
 | --- | --- |
-| Rust | 1.86 及以上 —— workspace 设置 `rust-version = "1.86"`，使用 edition 2024。 |
+| Rust | 1.88 及以上 —— workspace 设置 `rust-version = "1.88"`，使用 edition 2024。 |
 | Python 3 + 网络 | 仅 `make configure` 需要，用于创建 sqllogictest 运行器的虚拟环境。 |
 | `make` | 驱动 DuckDB 的 `extension-ci-tools` makefile。 |
 | [`just`](https://github.com/casey/just) *（可选）* | `Justfile` 封装了常用命令。 |

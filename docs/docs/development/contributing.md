@@ -10,7 +10,7 @@ description: Setting up the repository, the day-to-day commands, how the tests a
 
 | | |
 | --- | --- |
-| Rust | 1.86 or newer — the workspace sets `rust-version = "1.86"` and uses edition 2024. |
+| Rust | 1.88 or newer — the workspace sets `rust-version = "1.88"` and uses edition 2024. |
 | Python 3 + network | Only for `make configure`, which builds the sqllogictest runner's virtualenv. |
 | `make` | Drives the DuckDB `extension-ci-tools` makefiles. |
 | [`just`](https://github.com/casey/just) *(optional)* | The `Justfile` wraps the common commands. |

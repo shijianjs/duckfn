@@ -78,7 +78,7 @@ crate-type = ["cdylib"]
 
 | | |
 | --- | --- |
-| Rust | 1.86 及以上（crate 使用 edition 2024） |
+| Rust | 1.88 及以上（crate 使用 edition 2024；下限来自 `duckfn-macro` 依赖的 `syn 3`，它需要 rustc 1.88） |
 | DuckDB | 针对 v1.5.6 验证 |
 | Python 3 *（可选）* | 仅 `make configure` / `make test` 流程需要，用于准备 sqllogictest 运行环境 |
 

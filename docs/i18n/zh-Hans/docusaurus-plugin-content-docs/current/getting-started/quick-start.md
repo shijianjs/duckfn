@@ -27,7 +27,7 @@ flowchart LR
 name = "my_ext"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.86"
+rust-version = "1.88"
 
 [lib]
 crate-type = ["cdylib"]

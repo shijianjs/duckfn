@@ -57,7 +57,7 @@ packages a subdirectory that contains its own `Cargo.toml`.
 
 ```toml
 [dependencies]
-duckfn = "0.1.0"
+duckfn = "0.2.0"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
@@ -89,7 +89,7 @@ to and from [`rust_decimal`](https://crates.io/crates/rust_decimal) — so the e
 scaled-integer arithmetic lives in duckfn rather than in every extension:
 
 ```toml
-duckfn = { version = "0.1.0", features = ["sql", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.2.0", features = ["sql", "chrono", "uuid", "rust_decimal"] }
 ```
 
 `quack` is the one feature that is not meant for dependents: it is a marker that compiles this

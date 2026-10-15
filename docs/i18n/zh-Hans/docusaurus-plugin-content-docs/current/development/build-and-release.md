@@ -156,7 +156,7 @@ just release_publish   # publish_macro_dry → publish_macro → publish_dry →
 ```toml
 [workspace.package]
 version = "{{DUCKFN_VERSION}}"
-rust-version = "1.86"
+rust-version = "1.88"
 ```
 
 示例扩展随本包一起发布，而不是独立 crate，所以也不会单独上传。

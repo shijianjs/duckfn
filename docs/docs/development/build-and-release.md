@@ -173,7 +173,7 @@ Versions come from the workspace:
 ```toml
 [workspace.package]
 version = "{{DUCKFN_VERSION}}"
-rust-version = "1.86"
+rust-version = "1.88"
 ```
 
 The example extension ships as part of this package instead of as a crate of its own, so it is never

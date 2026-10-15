@@ -54,7 +54,7 @@ sqllogictest 用例，所以想读文档、看示例页、抄一份完整扩展�
 
 ```toml
 [dependencies]
-duckfn = "0.1.0"
+duckfn = "0.2.0"
 
 # duckfn 本身就建立在下面两个 crate 之上；需要直接使用它们的类型或 builder 时显式加上。
 quack-rs = "0.18.0"
@@ -81,7 +81,7 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 duckfn，而不是留给每个扩展各写一遍：
 
 ```toml
-duckfn = { version = "0.1.0", features = ["sql", "chrono", "uuid", "rust_decimal"] }
+duckfn = { version = "0.2.0", features = ["sql", "chrono", "uuid", "rust_decimal"] }
 ```
 
 `quack` 是唯一一个不面向下游的 feature：它只是个标记，决定要不要编译本包自己的示例扩展
