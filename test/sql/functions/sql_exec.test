@@ -6,8 +6,19 @@ require duckfn
 
 # ============================================================================
 # 执行：dfn_sql_exec 跑语句并返回影响行数。
-# 语句跑在 duckfn 注册期留下的那条自有长连接上，它与测试连接是同一个 database 实例，
-# 所以建出来的表测试连接也看得见。
+#
+# 这些语句跑在 duckfn 注册期捕获的那条自有长连接上（进程级唯一，见 duckfn::sql 的「代价与限制」）。
+# sqllogictest 的 runner 会为每个用例文件新开一个 :memory: 实例并重新 LOAD 扩展，而那条连接仍指向
+# **最早**装载它的实例 —— 所以「经 dfn_sql_exec 建出来的表」在本文件的测试连接上是查不到的。
+# 下面的断言一律经由同一份 dfn_sql_* 读回，于是与「哪个实例」无关（真实会话只 LOAD 一次，不存在这个
+# 差异；这条差异只出现在会重开实例的测试框架里）。
+#
+# The statements run on duckfn's captured connection, which is one per process. The sqllogictest runner
+# opens a fresh :memory: instance per test file and LOADs the extension again, while that connection
+# still points at the **first** instance that loaded it, so a table created through dfn_sql_exec is not
+# visible to this file's test connection. Every assertion below therefore reads back through the same
+# dfn_sql_* functions, which makes it instance-independent. (A real session LOADs once, so the
+# difference never arises there; it only shows up in a harness that reopens instances.)
 # ============================================================================
 
 statement ok
@@ -23,9 +34,9 @@ SELECT dfn_sql_exec('DELETE FROM dfn_sql_demo WHERE i > 1');
 ----
 2
 
-# 表是经自有连接建的，测试连接照样能查（同一个 database 实例）
-query I
-SELECT count(*) FROM dfn_sql_demo;
+# 读回经自有连接：DELETE 后剩 1 行
+query T
+SELECT dfn_sql_scalar('SELECT count(*) FROM dfn_sql_demo');
 ----
 1
 

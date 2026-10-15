@@ -209,7 +209,11 @@ paths.
   with `duck_vfs` on, never call `duckfn::sql` from inside a `with_file_system` closure, or the other
   way round. Concurrent calls from other threads simply queue.
 - **One process-level connection, first instance wins.** With several database instances in one
-  process, the one that finished registering first is the connection used.
+  process, the one that finished registering first is the connection used — including instances opened
+  *after* the extension was loaded. A harness that reopens a database and `LOAD`s the extension again
+  (the `duckdb_sqllogictest` runner does, once per test file) therefore keeps talking to the earlier
+  instance: state created through `duckfn::sql` is not visible on the new test connection, so assert
+  such state through `duckfn::sql` itself. A real session `LOAD`s once and never sees the difference.
 - **Not usable where DuckDB runs synchronously on a single thread.** Opening the connection during
   registration re-enters the engine on the current thread, so a runtime with no other thread
   deadlocks and the extension `LOAD` hangs. The one known case is DuckDB-Wasm's Node **blocking**

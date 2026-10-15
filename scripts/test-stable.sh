@@ -112,12 +112,33 @@ else
         base="$(basename "$file" .test)"
         case " $NON_STABLE " in
             *" $base "*)
-                echo "  skip (needs more than the stable API): $file"
+                # 提示写到 **stderr**：这个循环的 stdout 就是清单文件（`done >"$list"`），
+                # 写到 stdout 会把提示词混进清单，runner 再把它们当成用例路径（曾经的 bug：
+                # 45 行 122 个词，runner 报了 `[1/122]`）。
+                #
+                # The notice goes to **stderr**: this loop's stdout *is* the list file
+                # (`done >"$list"`), so writing it to stdout mixes the words into the list and the
+                # runner then reads them as test paths (the bug this once was: 45 lines, 122 words,
+                # and the runner reported `[1/122]`).
+                echo "  skip (needs more than the stable API): $file" >&2
                 continue
                 ;;
         esac
         printf '%s\n' "$file"
     done >"$list"
+fi
+
+# 再来一道闸：清单里每一行都必须是 `test/sql/**/*.test`。这一条能立刻抓住「提示信息混进清单」
+# 这类错误（runner 对读不出来的路径只是记一笔，然后照样往下跑，所以不查的话会误以为跑过了）。
+#
+# One more gate: every line must be a `test/sql/**/*.test`. It catches "a notice leaked into the list"
+# immediately (the runner merely logs an unparsable path and carries on, so without this check a broken
+# list still looks like a run).
+if grep -qv '^test/sql/.*\.test$' "$list"; then
+    echo "错误：清单里出现了不是用例路径的行，多半是提示信息混进去了：" >&2
+    echo "error: the list contains lines that are not test paths:" >&2
+    grep -v '^test/sql/.*\.test$' "$list" | head -5 >&2
+    exit 1
 fi
 
 count="$(wc -l <"$list" | tr -d '[:space:]')"
@@ -165,7 +186,20 @@ if [ "$installed" = "$engine" ]; then
 else
     echo "把 runner 的引擎从 ${installed:-（未装）} 换成 $engine（首次约 20MB，慢网络下会等一会）…"
     echo "switching the runner's engine from ${installed:-none} to $engine (about 20 MB the first time)…"
-    "$venv_python" -m pip install --upgrade --timeout 60 "duckdb==${engine}"
+    # `--only-binary=:all:` 是刻意的：DuckDB 的 sdist 要从源码编 C++（十几分钟起步，而且常常编不过），
+    # 碰到「那个 patch 版本没给这个 Python 预编译 wheel」时（例如 cp314 上的 1.4.0，只有 1.4.5+ 才有）
+    # 与其静默开始一次源码构建，不如立刻失败，让人换个 patch 版本重试。
+    #
+    # `--only-binary=:all:` is deliberate: DuckDB's sdist compiles C++ from source (ten minutes and up,
+    # and often fails outright). When a patch release ships no wheel for this Python — 1.4.0 on cp314,
+    # say, where only 1.4.5+ has one — failing immediately beats silently starting a source build.
+    if ! "$venv_python" -m pip install --upgrade --timeout 60 --only-binary=:all: "duckdb==${engine}"; then
+        echo "错误：装不上 duckdb $engine —— 多半是这个 patch 版本没有本机 Python 的预编译 wheel。" >&2
+        echo "      换一个 patch 版本重试（同一 minor 里挑有 wheel 的，例如 1.4.5 而不是 1.4.0）。" >&2
+        echo "error: cannot install duckdb $engine — most likely that patch release has no wheel for" >&2
+        echo "       this Python. Pick another patch release of the same minor (1.4.5, not 1.4.0)." >&2
+        exit 1
+    fi
 fi
 
 # 2) 稳定区构建：USE_UNSTABLE_C_API=0 + C API 下限，产物跨版本。
