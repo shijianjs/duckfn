@@ -23,4 +23,4 @@ proc-macro = true
 darling = "0.21"
 proc-macro2 = "1"
 quote = "1"
-syn = "2"
+syn = "3"
