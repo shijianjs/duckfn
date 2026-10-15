@@ -59,6 +59,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The docs' `tsc` resolves `duckfn-docs-kit/*` through the kit's `dist/*.d.ts` (its exports
+      # point there), so the kit has to be built before anything can typecheck the site — a fresh
+      # checkout has no `dist/` and the docs typecheck then fails with TS2307 on every kit import.
+      # This is the ordering the release flows already use: PublishDocsKit builds before it tests,
+      # DeployDocs builds before it deploys.
+      - name: Build the kit
+        run: npm run build -w duckfn-docs-kit
+
       - name: Typecheck
         # Root script: duckfn-docs-kit first, then the docs site (tsconfig for both).
         run: npm run typecheck
