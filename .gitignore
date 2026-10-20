@@ -1,7 +1,8 @@
 /target
 build
 configure
-.idea
+/.idea/*
+!/.idea/icon.svg
 duckdb_unittest_tempdir
 /test/bin
 venv
