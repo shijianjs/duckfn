@@ -68,7 +68,7 @@
     "codemirror": "^6.0.2",
     "colord": "^2.10.0",
     "filenamify": "^7.0.3",
-    "iconify-icon": "^3.0.3",
+    "iconify-icon": "^3.0.4",
     "mermaid": "^12.2.0",
     "playwright-core": "^1.63.0",
     "sql-formatter": "^15.9.0"
