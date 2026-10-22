@@ -117,11 +117,12 @@ SELECT CAST(dfn_echo_color_n(i) AS VARCHAR) FROM (VALUES
 green
 NULL
 
-# 字典由 DuckDB 强制：不在字典里的标签在转换阶段就被拒绝（UINT8 正是它的内部表示）
+# 字典由 DuckDB 强制：不在字典里的标签在转换阶段就被拒绝（1.x 报文里是内部表示 UINT8，
+# 2.0 直接报 ENUM 类型，取共同前缀做断言）
 statement error
 SELECT dfn_echo_color('purple'::ENUM('red', 'green', 'blue'));
 ----
-Could not convert string 'purple' to UINT8
+Could not convert string 'purple'
 
 # ============================================================================
 # 自定义 ENUM 作为 STRUCT 字段（含可空字段）

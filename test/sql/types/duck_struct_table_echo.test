@@ -77,13 +77,26 @@ NULL
 # STRUCT(d DATE, ts TIMESTAMP, dec DECIMAL(18,3), bl BLOB) // DuckStructWrapper
 # ============================================================================
 
+# STRUCT 里 BLOB 的文本渲染随引擎变化，逐字段检查；第二行验证 NULL 行
+query TTTI
+SELECT
+    CAST(v.d AS VARCHAR),
+    CAST(v.ts AS VARCHAR),
+    CAST(v.dec AS VARCHAR),
+    octet_length(v.bl)
+FROM dfn_table_echo_struct_wrapper(
+    {'d': DATE '2024-01-02', 'ts': TIMESTAMP '2024-01-02 03:04:05',
+     'dec': 1.234::DECIMAL(18,3), 'bl': '\xAA\xBB'::BLOB}, count => 1);
+----
+2024-01-02	2024-01-02 03:04:05	1.234	2
+
 query T
-SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_struct_wrapper(
+SELECT CAST(v IS NULL AS VARCHAR) FROM dfn_table_echo_struct_wrapper(
     {'d': DATE '2024-01-02', 'ts': TIMESTAMP '2024-01-02 03:04:05',
      'dec': 1.234::DECIMAL(18,3), 'bl': '\xAA\xBB'::BLOB}, count => 2);
 ----
-{'d': 2024-01-02, 'ts': '2024-01-02 03:04:05', 'dec': 1.234, 'bl': \xAA\xBB}
-NULL
+false
+true
 
 # ============================================================================
 # STRUCT(id INTEGER, age INTEGER, name VARCHAR) // DuckStructNullable

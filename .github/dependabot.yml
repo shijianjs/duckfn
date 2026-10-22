@@ -25,15 +25,16 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      # DuckDB 绑定层单独成组。libduckdb-sys 的版本号直接编码头文件对应的引擎版本（当前 1.10506.0 =
-      # DuckDB 1.5.6；2.0 的头文件是 1.20000.0），而根 Makefile 的 TARGET_DUCKDB_VERSION 与
-      # MainDistributionPipeline.yml 的 duckdb_version 已钉 v2.0.0。绑定升到 1.20000.0 要等 quack-rs
-      # 支持 2.0，且须人工核对头文件与引擎的配对，不能只让机器人升依赖。
+      # DuckDB 绑定层单独成组。libduckdb-sys 的版本号直接编码头文件对应的引擎版本（当前 1.20000.0 =
+      # DuckDB 2.0.0 头文件；1.10506.0 是 1.5.6），而根 Makefile 的 TARGET_DUCKDB_VERSION 仍是稳定区下限
+      # v1.2.0、MainDistributionPipeline.yml 的 duckdb_version 钉 v2.0.0。两者要一起核对，不能只让
+      # 机器人升依赖。
       #
       # quack-rs + libduckdb-sys as one group: libduckdb-sys' version encodes the header engine
-      # (1.10506.0 = DuckDB 1.5.6 headers; 2.0's are 1.20000.0) while TARGET_DUCKDB_VERSION in the root
-      # Makefile and duckdb_version in the workflow already pin v2.0.0. Moving to 1.20000.0 waits for
-      # quack-rs' 2.0 line and needs a human to check the pair.
+      # (the lock now resolves 1.20000.0 = DuckDB 2.0.0 headers; 1.10506.0 was 1.5.6), while the root
+      # Makefile's TARGET_DUCKDB_VERSION stays the stable C API floor v1.2.0 and the workflow's
+      # duckdb_version pins v2.0.0. Keep the pair together: a header bump needs a matching engine and
+      # a human check.
       duckdb:
         patterns:
           - quack-rs

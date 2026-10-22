@@ -35,9 +35,11 @@
   （Justfile 里 `_example_features` 那份）。不带 feature 时 cargo 只是静默跳过目标（产出一个没有入口
   符号的 cdylib），`LOAD` 时才报错，很难查。
 - `quack = []` 是**纯标记**：它只决定示例树与 CLI 那两个 target 编不编。示例要演示哪些能力由构建命令
-  同时给出的清单决定（根 `Makefile` 的 `EXTENSION_FEATURES`，默认 `quack,duckdb-1-5,duck_vfs,sql,`
-  `chrono,uuid,rust_decimal`；Justfile 里那份 `_example_features` 与之保持一致），示例树自己按能力分
-  模块（`test/extension/functions/mod.rs` 里每个模块挂自己的 `#[cfg(feature = ...)]`）。
+  同时给出的清单决定（根 `Makefile` 的 `EXTENSION_FEATURES`，默认 `quack,sql,chrono,uuid,`
+  `rust_decimal`，即**只含稳定区**；Justfile 里那份 `_example_features` 与之保持一致），示例树自己按能力分
+  模块（`test/extension/functions/mod.rs` 里每个模块挂自己的 `#[cfg(feature = ...)]`）。`duckdb-1-5` /
+  `duck_vfs` 是 opt-in：DuckDB 2.0 的 unstable ABI 要求 `_init_c_api_v2` 入口，而 quack-rs 0.18.0 只支持
+  v1 C API，所以全量 unstable 构建只能在本机对 DuckDB 1.5.6 做（见 `Makefile` 顶部注释）。
 - 因此「换一份 feature 清单」= 「换一份产物」：`EXTENSION_FEATURES=quack,sql` 配 `USE_UNSTABLE_C_API=0` +
   `TARGET_DUCKDB_VERSION=v1.2.0` 就是只含稳定区 API 的插件（`sql` 在回调侧但整个落在稳定区，属于这一档），
   1.3–2.0 的引擎都能加载，`just test_stable <引擎版本> [用例模式]` 就是拿它跑指定范围的 `.test`（逻辑在

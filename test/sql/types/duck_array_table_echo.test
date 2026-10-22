@@ -159,11 +159,12 @@ DECIMAL(18,3)[2]
 # ARRAY(BLOB, 2) // DuckArray<DuckBlob, 2>
 # ============================================================================
 
-query T
-SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_array_blob(['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB], count => 2);
+# BLOB 数组的文本渲染随引擎变化，按元素长度比对
+query II
+SELECT octet_length(v[1]), octet_length(v[2])
+FROM dfn_table_echo_array_blob(['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB], count => 1);
 ----
-[\xAA\xBB, \x00\x01\xFF]
-NULL
+2	3
 
 query T
 SELECT typeof(v) FROM dfn_table_echo_array_blob(['\xAA'::BLOB, ''::BLOB]);
@@ -176,20 +177,23 @@ BLOB[2]
 # 参数 100% 崩，混 NULL 行约 30%~50% 崩（src/value_types/duck_array.rs
 # 的 write_null 现在会把子槽一并置 NULL）。
 query T
-SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_array_blob(NULL, count => 3);
+SELECT CAST(v IS NULL AS VARCHAR) FROM dfn_table_echo_array_blob(NULL, count => 3);
 ----
-NULL
-NULL
-NULL
+true
+true
+true
 
-# 值行 + NULL 行交替，同样不能崩
-query T
-SELECT CAST(v AS VARCHAR) FROM dfn_table_echo_array_blob(['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB], count => 4);
+# 值行 + NULL 行交替，同样不能崩（按行判断并给出首元素长度）
+query IT
+SELECT
+    CASE WHEN v IS NULL THEN -1 ELSE octet_length(v[1]) END,
+    CAST(v IS NULL AS VARCHAR)
+FROM dfn_table_echo_array_blob(['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB], count => 4);
 ----
-[\xAA\xBB, \x00\x01\xFF]
-NULL
-[\xAA\xBB, \x00\x01\xFF]
-NULL
+2	false
+-1	true
+2	false
+-1	true
 
 # ============================================================================
 # ARRAY(ARRAY(INTEGER, 2), 2) // DuckArray<DuckArray<i32, 2>, 2>，嵌套定长数组

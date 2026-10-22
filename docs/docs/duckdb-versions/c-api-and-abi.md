@@ -75,7 +75,9 @@ is DuckDB 1.5.6, `1.20000.0` is DuckDB 2.0.0, and the `>=1.10500` above means "D
 newer" — which includes 2.0. In the 2.0 generation the v1 bindings moved under `libduckdb_sys::v1`
 (re-exported at the crate root as well) behind the default `capi-v1` feature, so code that names
 those items should be checked when you move; quack-rs 0.18.0 has no 2.0 line yet, which is why the
-dependency range stays where it is.
+dependency range stays where it is. The checked-in `Cargo.lock` files of duckfn and the five
+extensions now resolve `1.20000.0` (2.0 headers) on the stable `capi-v1` surface; the range itself is
+unchanged so a downstream crate can still resolve older headers.
 
 Nothing else rewrites the `Makefile` line: ci-tools' `set_duckdb_version` is a no-op for C API
 extensions, and the community registry's `duckdb_version` only chooses which DuckDB source to check
@@ -128,13 +130,21 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 - `DUCKDB_TEST_VERSION` is absent for the same reason: the test runner may be any newer engine,
   because every engine at or above the floor accepts the artifact.
 
-### Unstable region — the complete set
+### Unstable region — the complete set (DuckDB 1.5.x only)
+
+:::warning
+DuckDB 2.0 changed the unstable entrypoint. An artifact whose metadata says `C_STRUCT_UNSTABLE` must
+export `<name>_init_c_api_v2` from `duckdb_extension_v2.h`, while quack-rs 0.18.0 (including its `main`
+branch) only emits the v1 entrypoint `<name>_init_c_api`. Such an artifact is rejected at `LOAD` time on
+2.0 with *"did not contain function ..._init_c_api_v2"*. That is why duckfn's own 2.0 distribution is a
+stable build. Until quack-rs supports C API v2, keep the unstable opt-in on DuckDB **1.5.6**.
+:::
 
 ```make
 # Makefile
 EXTENSION_NAME=my_extension
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v2.0.0
+TARGET_DUCKDB_VERSION=v1.5.6
 export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
 DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 ```
@@ -146,7 +156,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "du
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v2.0.0     # must equal TARGET_DUCKDB_VERSION; it is the engine `make test` loads into
+      duckdb_version: v1.5.6     # must equal TARGET_DUCKDB_VERSION; it is the engine `make test` loads into
 ```
 
 - **The `export` keyword is part of the line, not decoration.** quack-rs' build script reads

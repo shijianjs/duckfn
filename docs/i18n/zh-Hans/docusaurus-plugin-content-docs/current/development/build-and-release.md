@@ -31,26 +31,37 @@ just doc                    # cargo doc -p duckfn
 
 ```make
 EXTENSION_NAME=duckfn
-USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v2.0.0
-EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
+USE_UNSTABLE_C_API=0
+TARGET_DUCKDB_VERSION=v1.2.0
+EXTENSION_FEATURES=quack,sql,chrono,uuid,rust_decimal
 TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
 
-`USE_UNSTABLE_C_API=1` 决定了产出的扩展只能在兼容版本的 DuckDB 里、并加 `-unsigned` 才能加载。
-`TARGET_DUCKDB_VERSION` 指明写入元数据时针对的版本 —— 又因为 ABI 类型是 unstable，这个值被当作
-DuckDB 发行版本号来读，必须与引擎逐字相等。两种 ABI 类型的差别见
-[DuckDB 版本兼容性](../duckdb-versions/index.md)。`EXTENSION_NAME` 必须与
-`test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的 `require` 保持一致。
-`TARGET_INFO` 里带 `--example $(EXTENSION_NAME)`：扩展产物来自 `[[example]] duckfn` 这个 target；
-`EXTENSION_FEATURES` 则说明这个 target 要演示哪些能力。`TARGET_INFO` 是 DuckDB 官方 makefile 唯一
-会原样拼进 `cargo build` 的变量。少了后面这一项，产出的是一个没有入口符号的 cdylib。
+默认构建是**稳定版 C API** 构建。DuckDB 2.0 改了不稳定入口点：声明 `C_STRUCT_UNSTABLE` 的产物必须导出
+`<name>_init_c_api_v2`，而 duckfn 依赖的 Rust 封装 quack-rs 0.18.0 只会生成 v1 的 `<name>_init_c_api`。
+所以 2.0 发行版留在稳定区，`TARGET_DUCKDB_VERSION=v1.2.0` 是 **C API 下限**而不是发行版本号：一份产物
+覆盖 DuckDB 1.3.2 到 2.0.0。两种 ABI 类型与 2.0 入口点的变化见
+[DuckDB 版本兼容性](../duckdb-versions/index.md)。
+
+`EXTENSION_NAME` 必须与 `test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的
+`require` 保持一致。`TARGET_INFO` 里带 `--example $(EXTENSION_NAME)` 和 `--features $(EXTENSION_FEATURES)`：
+扩展产物来自 `[[example]] duckfn` 这个 target，`EXTENSION_FEATURES` 则说明这个 target 要演示哪些能力。
+`TARGET_INFO` 是 DuckDB 官方 makefile 唯一会原样拼进 `cargo build` 的变量 —— 少了它，产出的是一个没有
+入口符号的 cdylib。
 
 那份清单里的 `quack` 只是**标记**（决定示例树编不编），其余是能力清单 —— 因为示例树自己按能力分模块。
-换一份清单就是另一份产物，只用稳定版 API 的那份就是这么打的：
+`duckdb-1-5` 与 `duck_vfs` 在不稳定区，是显式 opt-in 的；在 quack-rs 支持 C API v2 之前，只能对本地
+DuckDB 1.5.6 构建：
 
 ```bash
-make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.2.0 EXTENSION_FEATURES=quack,sql debug
+make USE_UNSTABLE_C_API=1 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=1.5.6 \
+     EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal debug
+```
+
+稳定区构建会自动跑用例里的稳定子集（`scripts/stable_test_list.py`），所以 `make test` 不会去调用
+不稳定档的示例函数。要把同一份产物拿给更旧的引擎跑：
+
+```bash
 just test_stable 1.4.0        # ……再拿 DuckDB 1.4 跑一遍指定范围的用例
 ```
 

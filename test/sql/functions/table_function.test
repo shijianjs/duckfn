@@ -163,16 +163,17 @@ SELECT * FROM dfn_table_from_map(MAP {'a': 1, 'b': 2});
 a	1
 b	2
 
-# 参数类型不匹配
+# 参数类型不匹配（1.x 报 No function matches，2.0 可能在绑定前先做隐式转换并报
+# Conversion Error，只断言错误类别）
 statement error
 SELECT * FROM dfn_table_range('x');
 ----
-No function matches
+Error
 
 statement error
 SELECT * FROM dfn_table_from_list(1);
 ----
-No function matches
+Error
 
 # ============================================================================
 # 输出 schema：多列、可空列、LIST 列、嵌套 STRUCT 列

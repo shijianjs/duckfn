@@ -101,15 +101,18 @@ SELECT typeof(dfn_echo_array_varchar(['a', 'b']::VARCHAR[2]));
 ----
 VARCHAR[2]
 
-# 注意：DuckDB 对 ARRAY 里空字符串的渲染与 LIST 不同（LIST 显示为 ''，ARRAY 直接为空）
-query T
-SELECT CAST(dfn_echo_array_varchar(i) AS VARCHAR) FROM (VALUES
+# ARRAY 的文本渲染随引擎变化（1.x 把空串渲染为空，2.0 渲染为 ''），所以按元素长度比对
+query IT
+SELECT
+    length(dfn_echo_array_varchar(i)[1]),
+    CAST(dfn_echo_array_varchar(i)[2] AS VARCHAR)
+FROM (VALUES
     (['a', 'bb']::VARCHAR[2]),
     (['', '你好']::VARCHAR[2])
 ) t(i);
 ----
-[a, bb]
-[, 你好]
+1	bb
+0	你好
 
 # 空字符串没有被丢掉，长度仍为 0
 query T
@@ -158,13 +161,13 @@ SELECT typeof(dfn_echo_array_blob(['\xAA'::BLOB, '\xBB'::BLOB]::BLOB[2]));
 ----
 BLOB[2]
 
-# 空 BLOB 在 ARRAY 里渲染为空串（LIST 里是 ''）
-query T
-SELECT CAST(dfn_echo_array_blob(
-    ['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[2]
-) AS VARCHAR);
+# 空 BLOB 在 ARRAY 里的文本渲染随引擎变化（1.x 为空串，2.0 为 ''），按元素长度比对
+query II
+SELECT
+    octet_length(dfn_echo_array_blob(['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[2])[1]),
+    octet_length(dfn_echo_array_blob(['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[2])[2]);
 ----
-[\xAA\xBB, ]
+2	0
 
 query T
 SELECT CAST(octet_length(dfn_echo_array_blob(['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[2])[2]) AS VARCHAR);
@@ -176,14 +179,22 @@ SELECT CAST(octet_length(dfn_echo_array_blob(['\xAA\xBB'::BLOB, ''::BLOB]::BLOB[
 # VARCHAR 时会解引用未初始化的 string_t。
 # 注意必须用「列里的 NULL」：常量 NULL 入参会被 DuckDB 在 bind 阶段折叠成常量
 # NULL，根本不会走到写出路径（上面的 NULL 处理一节就是这种情况）。
+query II
+SELECT
+    octet_length(dfn_echo_array_blob(i)[1]),
+    octet_length(dfn_echo_array_blob(i)[2])
+FROM (VALUES
+    (['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB]::BLOB[2])
+) t(i);
+----
+2	3
+
 query T
-SELECT CAST(dfn_echo_array_blob(i) AS VARCHAR) FROM (VALUES
-    (['\xAA\xBB'::BLOB, '\x00\x01\xFF'::BLOB]::BLOB[2]),
+SELECT CAST(dfn_echo_array_blob(i) IS NULL AS VARCHAR) FROM (VALUES
     (NULL::BLOB[2])
 ) t(i);
 ----
-[\xAA\xBB, \x00\x01\xFF]
-NULL
+true
 
 # ============================================================================
 # ARRAY(ARRAY(INTEGER, 2), 2) // [[i32; 2]; 2]，嵌套定长数组
@@ -250,16 +261,23 @@ SELECT typeof(dfn_echo_array_varchar_n(['a', NULL]::VARCHAR[2]));
 ----
 VARCHAR[2]
 
-query T
-SELECT CAST(dfn_echo_array_varchar_n(i) AS VARCHAR) FROM (VALUES
-    (['a', NULL]::VARCHAR[2]),
-    ([NULL, NULL]::VARCHAR[2]),
-    (['', 'x']::VARCHAR[2])
-) t(i);
+# ARRAY 的文本渲染随引擎变化（空串 1.x 为空、2.0 为 ''），按元素长度/是否为 NULL 比对
+query II
+SELECT
+    CASE WHEN x[1] IS NULL THEN -1 ELSE length(x[1]) END,
+    CASE WHEN x[2] IS NULL THEN -1 ELSE length(x[2]) END
+FROM (
+    SELECT dfn_echo_array_varchar_n(i) AS x
+    FROM (VALUES
+        (['a', NULL]::VARCHAR[2]),
+        ([NULL, NULL]::VARCHAR[2]),
+        (['', 'x']::VARCHAR[2])
+    ) t(i)
+) s;
 ----
-[a, NULL]
-[NULL, NULL]
-[, x]
+1	-1
+-1	-1
+0	1
 
 # ============================================================================
 # ARRAY(DATE, 2) // [Option<DuckDate>; 2]，元素可为 NULL

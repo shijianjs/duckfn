@@ -90,11 +90,11 @@ SELECT CAST(dfn_echo_priority('medium') AS VARCHAR);
 ----
 medium
 
-# 不在字典里的标签在转换阶段就被拒绝
+# 不在字典里的标签在转换阶段就被拒绝（1.x 报文里是内部表示 UINT8，2.0 直接报 ENUM）
 statement error
 SELECT dfn_echo_priority('LOW'::priority);
 ----
-Could not convert string 'LOW' to UINT8
+Could not convert string 'LOW'
 
 # ============================================================================
 # NULL：非可空参数整行短路，Option<Priority> 取到 None

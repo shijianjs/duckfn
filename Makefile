@@ -51,7 +51,12 @@ EXTENSION_NAME=duckfn
 # callback but every call it makes stays in the stable region, so it belongs to this side) that every
 # engine from 1.3 to 2.0 loads, which is what runs a subset of the suite against an older engine
 # (`just test_stable 1.4.0`; CI runs the same thing on every pull request).
-EXTENSION_FEATURES ?= quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
+# Default: stable C API only. DuckDB 2.0's unstable ABI requires the v2 entrypoint
+# (`<name>_init_c_api_v2`), which quack-rs 0.18.0 does not emit, so the 2.0 distribution
+# must stay in the stable region. For a local full-featured DuckDB 1.5.6 build:
+#   make USE_UNSTABLE_C_API=1 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=1.5.6 \
+#        EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal debug
+EXTENSION_FEATURES ?= quack,sql,chrono,uuid,rust_decimal
 
 # Set to 1 to enable Unstable API (binaries will only work on TARGET_DUCKDB_VERSION, forwards compatibility will be broken)
 # Note: currently extension-template-rs requires this, as duckdb-rs relies on unstable C API functionality
@@ -60,7 +65,7 @@ EXTENSION_FEATURES ?= quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
 #
 # Set to 1 only when EXTENSION_FEATURES contains an unstable-region capability (duckdb-1-5 /
 # duck_vfs); a stable-region combination goes with 0.
-USE_UNSTABLE_C_API ?= 1
+USE_UNSTABLE_C_API ?= 0
 
 # Target DuckDB version
 #
@@ -70,7 +75,10 @@ USE_UNSTABLE_C_API ?= 1
 # With USE_UNSTABLE_C_API=1 this is a **release** (the artifact only loads on that engine); with =0 it
 # is a **C API floor** (the artifact loads on any engine whose C API is at or above it), which is why a
 # stable-region build normally writes v1.2.0.
-TARGET_DUCKDB_VERSION ?= v2.0.0
+# The distribution build is stable (USE_UNSTABLE_C_API=0), so this is a C API floor, not a release:
+# v1.2.0 is accepted by DuckDB 1.3 through 2.0. An unstable opt-in build must set it to the exact
+# engine release instead (v1.5.6 under quack-rs 0.18.0).
+TARGET_DUCKDB_VERSION ?= v1.2.0
 
 # quack-rs 只在不稳定路径上读这个变量（稳定区构建里 `abi::check()` 先返回 `StableOnly`），所以只在
 # 需要时导出：稳定区构建带上它会声明一个与编译进去的布局不符的版本。
@@ -99,7 +107,9 @@ endif
 #
 # A stable-region build is not bound by that (every engine at or above the floor accepts it), so pass
 # the engine explicitly there: `make DUCKDB_TEST_VERSION=1.4.0 test_debug`.
-DUCKDB_TEST_VERSION ?= $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
+# The engine the test runner uses. A stable build is not pinned to it, so this is the newest engine
+# the 2.0 pipeline ships against, not a copy of TARGET_DUCKDB_VERSION (which is the C API floor).
+DUCKDB_TEST_VERSION ?= 2.0.0
 
 all: configure debug
 
@@ -208,6 +218,25 @@ endif
 # files listed, while --test-dir still names the working directory.
 EXTRA_TEST_ARGS ?=
 TEST_RUNNER_BASE := $(TEST_RUNNER) --test-dir test/sql $(EXTRA_EXTENSIONS_PARAM) $(EXTRA_TEST_ARGS)
+
+# A stable build cannot carry the unstable-region demo functions, so the default test run uses the
+# stable subset of the suite. `scripts/test-stable.sh` passes its own list via EXTRA_TEST_ARGS and
+# therefore bypasses this override; an unstable opt-in build keeps the whole tree.
+ifeq ($(USE_UNSTABLE_C_API),0)
+STABLE_TEST_LIST := target/stable-default-tests.txt
+
+.PHONY: stable_test_list
+stable_test_list:
+	@$(PYTHON_VENV_BIN) scripts/stable_test_list.py $(STABLE_TEST_LIST)
+
+test_extension_debug_internal: stable_test_list
+test_extension_release_internal: stable_test_list
+
+ifeq ($(strip $(EXTRA_TEST_ARGS)),)
+TEST_RUNNER_DEBUG := $(TEST_RUNNER_BASE) --external-extension build/debug/$(EXTENSION_NAME).duckdb_extension --file-list $(STABLE_TEST_LIST)
+TEST_RUNNER_RELEASE := $(TEST_RUNNER_BASE) --external-extension build/release/$(EXTENSION_NAME).duckdb_extension --file-list $(STABLE_TEST_LIST)
+endif
+endif
 
 configure: venv platform extension_version
 

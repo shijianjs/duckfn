@@ -216,8 +216,9 @@ the in-repo file is preferred because it propagates to the registry too.) The Du
 the workflow ref to `v2.0-cyanoptera`, whose default is the same 1.97.1, so the toolchain pin needed no
 change; the `-O0` override remains.
 
-Note that load-compatibility and build-target are different things: the build now targets DuckDB
-**2.0.0**, while a *stable* build of this extension still loads and runs on older engines (see
+Note that load-compatibility and build-target are different things: the headers now come from DuckDB
+**2.0.0** (`libduckdb-sys 1.20000.0`), while the default artifact is a *stable* build declaring the
+C API floor `v1.2.0`, so it still loads and runs on older engines (see
 [Version numbers and the ABI](./c-api-and-abi.md#what-a-stable-build-actually-covers)).
 
 Separately, the **`panic!` / `catch_unwind` behaviour on wasm is also Rust-version-dependent** — measured

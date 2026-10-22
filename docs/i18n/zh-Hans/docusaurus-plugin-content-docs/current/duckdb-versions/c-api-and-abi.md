@@ -67,7 +67,8 @@ libduckdb-sys = { version = ">=1.10500, <2", features = ["loadable-extension"] }
 DuckDB 1.5.6，`1.20000.0` 是 DuckDB 2.0.0，上面那个 `>=1.10500` 就是「DuckDB 1.5 头文件或更新」——
 2.0 也在这个范围里。2.0 这一代把 v1 绑定挪到了 `libduckdb_sys::v1` 下（crate 根仍有再导出），由默认的
 `capi-v1` feature 控制；迁过去时，凡是通过 crate 根路径引用这些条目的代码都要过一遍。quack-rs 0.18.0
-还没有 2.0 那一支，所以依赖范围暂时不动。
+还没有 2.0 那一支，所以依赖范围暂时不动。duckfn 与五个扩展仓库里已提交的 `Cargo.lock` 现在解析到
+`1.20000.0`（2.0 头文件），走的仍是稳定区 `capi-v1`；范围本身没改，下游依旧可以解析到更旧的标头。
 
 没有别的东西会改写 `Makefile` 那一行：ci-tools 的 `set_duckdb_version` 对 C API 扩展是 no-op，社区
 registry 的 `duckdb_version` 只决定 checkout 哪份 DuckDB 源码、产物怎么命名、部署进哪个版本目录。它归你
@@ -113,13 +114,21 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
   `built_against_version()` 之前就返回 `StableOnly`。
 - 也没有 `DUCKDB_TEST_VERSION`，同理：测试 runner 可以是任意更新的引擎，因为每个不低于下限的引擎都收这份产物。
 
-### 不稳定区 —— 完整配置集
+### 不稳定区 —— 完整配置集（仅限 DuckDB 1.5.x）
+
+:::warning
+DuckDB 2.0 改了不稳定入口点。元数据声明 `C_STRUCT_UNSTABLE` 的产物必须导出
+`duckdb_extension_v2.h` 里的 `<name>_init_c_api_v2`，而 quack-rs 0.18.0（包括它的 `main` 分支）只会生成
+v1 入口 `<name>_init_c_api`。这样的产物在 2.0 上 `LOAD` 时会被拒，报
+*"did not contain function ..._init_c_api_v2"* —— 这正是 duckfn 自己的 2.0 发行版走稳定区构建的原因。
+quack-rs 支持 C API v2 之前，不稳定档里的 `TARGET_DUCKDB_VERSION` 请钉在 **1.5.6**。
+:::
 
 ```make
 # Makefile
 EXTENSION_NAME=my_extension
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v2.0.0
+TARGET_DUCKDB_VERSION=v1.5.6
 export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
 DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 ```
@@ -131,7 +140,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "du
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v2.0.0     # 必须等于 TARGET_DUCKDB_VERSION；它是 `make test` 载入进去的那个引擎
+      duckdb_version: v1.5.6     # 必须等于 TARGET_DUCKDB_VERSION；它是 `make test` 载入进去的那个引擎
 ```
 
 - **`export` 关键字是这一行的一部分，不是装饰。** quack-rs 的 build script 从*环境*里读

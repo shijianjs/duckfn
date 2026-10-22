@@ -314,20 +314,12 @@ SELECT dfn_scalar_reg_named_param(NULL::INTEGER, 2);
 ----
 NULL
 
-# `:=` 的名字对 scalar 没有任何作用：DuckDB 按书写顺序绑定到位置参数，
-# 名字与参数名不一致、甚至完全不存在都不报错
-query I
-SELECT dfn_scalar_reg_named_param(a := 1, b := 2);
-----
-12
+# DuckDB 2.0 起 `:=` 是真正的命名参数，会按名字匹配函数签名；这个函数注册的是位置参数，
+# 所以 `a := 1` 在 2.0 上正确报「无匹配函数」，1.5.6 则按书写顺序绑定。行为随引擎而变，
+# 这里不再断言；命名参数本身的用法由 DuckDB 负责，不是 duckfn 的注册面。
 
 query I
-SELECT dfn_scalar_reg_named_param(b := 2, a := 1);
-----
-21
-
-query I
-SELECT dfn_scalar_reg_named_param(x := 1, y := 2);
+SELECT dfn_scalar_reg_named_param(1, 2);
 ----
 12
 
