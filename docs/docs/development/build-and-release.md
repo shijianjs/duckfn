@@ -33,7 +33,7 @@ Four settings in the `Makefile` are worth knowing:
 ```make
 EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v1.5.6
+TARGET_DUCKDB_VERSION=v2.0.0
 EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
 TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
@@ -61,7 +61,7 @@ just test_stable 1.4.0        # …and run a range of the suite against DuckDB 1
 `sql` belongs on this side even though it runs from a callback: every call it makes goes through
 `duckdb_connect`, prepare / bind / fetch-chunk and the logical types, all of them stable
 ([Running SQL from an extension](../guide/sql-execution.md)). CI runs the same script on every pull
-request against DuckDB 1.3.2, 1.4.5 and 1.5.6 (`.github/workflows/StableApiPipeline.yml`), so the
+request against DuckDB 1.3.2, 1.4.5 and 2.0.0 (`.github/workflows/StableApiPipeline.yml`), so the
 portability claim is checked rather than assumed.
 
 ## WebAssembly
@@ -107,10 +107,10 @@ on:
 
 jobs:
   duckdb-stable-build:
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v2.0-cyanoptera
     with:
-      duckdb_version: v1.5.6
-      ci_tools_version: v1.5-variegata
+      duckdb_version: v2.0.0
+      ci_tools_version: v2.0-cyanoptera
       extension_name: duckfn
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
@@ -127,7 +127,7 @@ the one that is meant to load into a range of releases rather than exactly one (
 [Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md)). `.github/workflows/StableApiPipeline.yml`
 closes that gap: on every pull request, on pushes to `main`, on version tags and on demand, it builds
 one artifact with `USE_UNSTABLE_C_API=0`, `TARGET_DUCKDB_VERSION=v1.2.0` and
-`EXTENSION_FEATURES=quack,sql`, then loads it into DuckDB 1.3.2, 1.4.5 and 1.5.6 and runs the stable
+`EXTENSION_FEATURES=quack,sql`, then loads it into DuckDB 1.3.2, 1.4.5 and 2.0.0 and runs the stable
 subset of the suite. The newest engine is the control leg — a failure there means the stable build is
 broken rather than the version range. Each leg is one call to `scripts/test-stable.sh`, the same entry
 point as `just test_stable`, and the runner image is pinned to `ubuntu-24.04` because the venv's Python

@@ -1,14 +1,14 @@
 # Dependabot：让机器人盯着三个生态的依赖版本，各自开 PR 由 CI 验。
 #
 # 这里**没有** gitsubmodule（extension-ci-tools）：子模块跟的是上游 duckdb/extension-ci-tools 的 main
-# 分支，而 MainDistributionPipeline.yml 用的是 v1.5-variegata 那个 tag 的复用工作流 —— 两者本来就不同步，
+# 分支，而 MainDistributionPipeline.yml 用的是 v2.0-cyanoptera 那个分支的复用工作流 —— 两者本来就不同步，
 # 自动跟上 main 只会让根 Makefile include 进来的 makefile 与工作流声明的 ci_tools_version 悄悄错位。
 # 换 DuckDB 版本是人做的事（见 AGENTS.md 的「发版流程」），不由机器人提议。
 #
 # Dependabot: three ecosystems, one pull request each, all validated by CI.
 #
 # gitsubmodule is deliberately absent: extension-ci-tools tracks upstream's main branch while
-# MainDistributionPipeline.yml pins the reusable workflow to the v1.5-variegata tag, so an automatic
+# MainDistributionPipeline.yml pins the reusable workflow to the v2.0-cyanoptera branch, so an automatic
 # bump would desync the makefiles the root Makefile includes from the ci_tools_version the workflow
 # declares. Moving to a new DuckDB release stays a manual step (see the release flow in AGENTS.md).
 version: 2
@@ -25,15 +25,15 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      # DuckDB 绑定层单独成组。libduckdb-sys 的版本号直接编码引擎版本（1.10506.0 = DuckDB 1.5.6 的头
-      # 文件），而根 Makefile 的 TARGET_DUCKDB_VERSION 与 MainDistributionPipeline.yml 的 duckdb_version
-      # 都写死 v1.5.6 —— 只升依赖不升引擎，测试引擎与产物就会版本不符而挂（见 Makefile 里
-      # DUCKDB_TEST_VERSION 的注释）。这条 PR 必须人工核对两处引擎版本一起动。
+      # DuckDB 绑定层单独成组。libduckdb-sys 的版本号直接编码头文件对应的引擎版本（当前 1.10506.0 =
+      # DuckDB 1.5.6；2.0 的头文件是 1.20000.0），而根 Makefile 的 TARGET_DUCKDB_VERSION 与
+      # MainDistributionPipeline.yml 的 duckdb_version 已钉 v2.0.0。绑定升到 1.20000.0 要等 quack-rs
+      # 支持 2.0，且须人工核对头文件与引擎的配对，不能只让机器人升依赖。
       #
-      # quack-rs + libduckdb-sys as one group: libduckdb-sys' version encodes the engine version
-      # (1.10506.0 = DuckDB 1.5.6 headers) while TARGET_DUCKDB_VERSION in the root Makefile and
-      # duckdb_version in the workflow pin v1.5.6 by hand. Bumping the binding without the engine
-      # makes the test engine and the artefact disagree on the version, which fails the suite.
+      # quack-rs + libduckdb-sys as one group: libduckdb-sys' version encodes the header engine
+      # (1.10506.0 = DuckDB 1.5.6 headers; 2.0's are 1.20000.0) while TARGET_DUCKDB_VERSION in the root
+      # Makefile and duckdb_version in the workflow already pin v2.0.0. Moving to 1.20000.0 waits for
+      # quack-rs' 2.0 line and needs a human to check the pair.
       duckdb:
         patterns:
           - quack-rs

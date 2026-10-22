@@ -109,7 +109,7 @@ sets up the extension with `require duckfn`, then pairs statements with their ex
 ### The extension loads but calls fail with a version error
 
 The extension is compiled against a specific DuckDB version (`TARGET_DUCKDB_VERSION`, currently
-v1.5.6) and uses the unstable C API, so it only works with a compatible DuckDB. Load it into the
+v2.0.0) and uses the unstable C API, so it only works with a compatible DuckDB. Load it into the
 matching version, or rebuild against the version you are running. What "compatible" means — and how
 the same error reads under the stable ABI — is in
 [DuckDB version compatibility](./duckdb-versions/index.md).

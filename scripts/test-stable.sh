@@ -43,12 +43,12 @@
 #
 # 注意：跑完之后 build/debug 里是**稳定区产物**；要恢复全量产物跑 `just build`（或 `make debug`）。
 # 另外 runner 的引擎版本会**就地改成你给的那个**（configure/venv 只由 configure 装一次），跑完要回到
-# 默认引擎就再装一次：`configure/venv/Scripts/python.exe -m pip install --upgrade duckdb==1.5.6`。
+# 默认引擎就再装一次：`configure/venv/Scripts/python.exe -m pip install --upgrade duckdb==2.0.0`。
 #
 # Note: afterwards build/debug holds the **stable-region artifact**; run `just build` (or `make debug`)
 # to get the full one back. The runner's engine is also **changed in place** to the version you passed
 # (configure/venv is only populated by `configure`); to go back to the default engine:
-# `configure/venv/Scripts/python.exe -m pip install --upgrade duckdb==1.5.6`.
+# `configure/venv/Scripts/python.exe -m pip install --upgrade duckdb==2.0.0`.
 
 set -euo pipefail
 

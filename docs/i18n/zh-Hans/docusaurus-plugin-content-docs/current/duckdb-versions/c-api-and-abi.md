@@ -64,7 +64,10 @@ libduckdb-sys = { version = ">=1.10500, <2", features = ["loadable-extension"] }
 ```
 
 `libduckdb-sys` 把 DuckDB 发行版编码成 `1.<major*10000 + minor*100 + patch>.0`，所以 `1.10506.0` 是
-DuckDB 1.5.6，上面那个 `>=1.10500` 就是「DuckDB 1.5 头文件或更新」。
+DuckDB 1.5.6，`1.20000.0` 是 DuckDB 2.0.0，上面那个 `>=1.10500` 就是「DuckDB 1.5 头文件或更新」——
+2.0 也在这个范围里。2.0 这一代把 v1 绑定挪到了 `libduckdb_sys::v1` 下（crate 根仍有再导出），由默认的
+`capi-v1` feature 控制；迁过去时，凡是通过 crate 根路径引用这些条目的代码都要过一遍。quack-rs 0.18.0
+还没有 2.0 那一支，所以依赖范围暂时不动。
 
 没有别的东西会改写 `Makefile` 那一行：ci-tools 的 `set_duckdb_version` 对 C API 扩展是 no-op，社区
 registry 的 `duckdb_version` 只决定 checkout 哪份 DuckDB 源码、产物怎么命名、部署进哪个版本目录。它归你
@@ -100,7 +103,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v1.5.6     # 任何不低于下限的引擎都行；选最新的更稳
+      duckdb_version: v2.0.0     # 任何不低于下限的引擎都行；选最新的更稳
 ```
 
 - `TARGET_DUCKDB_VERSION` 是 **C API 下限**，不是发行版 —— 这就是该模式买到的东西。`v1.2.0` 是 DuckDB
@@ -116,7 +119,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 # Makefile
 EXTENSION_NAME=my_extension
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v1.5.6
+TARGET_DUCKDB_VERSION=v2.0.0
 export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
 DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 ```
@@ -128,7 +131,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "du
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v1.5.6     # 必须等于 TARGET_DUCKDB_VERSION；它是 `make test` 载入进去的那个引擎
+      duckdb_version: v2.0.0     # 必须等于 TARGET_DUCKDB_VERSION；它是 `make test` 载入进去的那个引擎
 ```
 
 - **`export` 关键字是这一行的一部分，不是装饰。** quack-rs 的 build script 从*环境*里读
@@ -152,24 +155,24 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "du
 
 | 声明的 C API 下限 | 收下同一个二进制的引擎 |
 | --- | --- |
-| `v1.2.0` | 1.3.2、1.4.0、1.4.5、1.5.0、1.5.5、1.5.6、2.0.0（预发布） |
+| `v1.2.0` | 1.3.2、1.4.0、1.4.5、1.5.0、1.5.5、1.5.6、2.0.0 |
 
 这张表起初只是一次性实测，现在每个 PR 都会被验一遍：`.github/workflows/StableApiPipeline.yml`
 用上面那套配置（`USE_UNSTABLE_C_API=0`、`TARGET_DUCKDB_VERSION=v1.2.0`、`EXTENSION_FEATURES=quack,sql`）
-打一份产物，再对着 1.3.2、1.4.5、1.5.6 跑稳定区子集。三个引擎里最新的那个是**对照组** —— 它那一条要是
+打一份产物，再对着 1.3.2、1.4.5、2.0.0 跑稳定区子集。三个引擎里最新的那个是**对照组** —— 它那一条要是
 也挂，说明坏的是稳定区构建本身，而不是版本范围。
 
-DuckDB 2.0 已经很近了（见它的 release calendar），而一份声明 `v1.2.0` 的稳定区产物在 2.0 上已经能加载
-并跑通 —— 把这样的扩展装进一个 2.0 预发布、调用它的函数（一个聚合、一个标量都返回预期值）实测过。买到
-这份可移植性的是那个「下限」：别把「能跑在 2.0 上」当成「是对着 2.0 编的」。
+DuckDB 2.0 已经发布，一份声明 `v1.2.0` 的稳定区产物在 2.0 上能加载并跑通 —— 把这样的扩展装进一个
+2.0 引擎、调用它的函数（一个聚合、一个标量都返回预期值）实测过。买到这份可移植性的是那个「下限」：
+别把「能跑在 2.0 上」当成「是对着 2.0 编的」。
 
 关于 2.0 有个命名坑：DuckDB 新出了**第二套 v2 C API**（`duckdb_v2.h`）—— 一套真正不同、仍在快速演进的
 接口，由实验性的 `duckdb-neo` wrapper 使用。它**并不取代扩展所走的 v1 API**：可加载扩展构建在 v1 C API 上
 （`libduckdb-sys` 默认的 `capi-v1` feature，`loadable-extension` 必需），而 2.0 照样加载的正是这套 v1。所以
 「v2 C API 不一样」讲的是**那个新头文件**，不是 v1 扩展失去兼容。版本编码也要留意：DuckDB 2.0.0 映射成
 `libduckdb-sys` 的 crate 版本 `1.20000.x`（格式 `1.<major*10000 + minor*100 + patch>.x`）—— 仍是 `1.x`，
-所以 `>=1.10500, <2` 的约束会选中它。`<2` 不是拦路虎；把发布线切到 2.0 的真正闸门是它是否**正式发布**
-（稳定的 `v2.0-cyanoptera` ci-tools ref 与真实的 `duckdb-shared-libs` 资产），不是某个 crate 版本上限。
+所以 `>=1.10500, <2` 的约束会选中它。`<2` 不是拦路虎；把发布线切到 2.0 的真正闸门是 Rust 封装层跟上来
+（quack-rs 还没有 2.0 那一支）以及绑定新的 `libduckdb_sys::v1` 路径，不是某个 crate 版本上限。
 
 只有确实需要更新的头文件时才抬高这个下限。抬的时候填的是 **C API 版本**、不是发行版本号：在那里写
 `v1.5.6` 就只剩那一个引擎肯收了。
@@ -198,8 +201,8 @@ duckdb -unsigned -c "LOAD '<path>/my_extension.duckdb_extension'; SELECT my_gree
   扩展。就地升级它 —— 下面两条正是 `base.Makefile` 自己用的路径：
 
 ```shell
-configure/venv/Scripts/python.exe -m pip install --upgrade "duckdb==1.5.6"   # Windows
-configure/venv/bin/python3       -m pip install --upgrade "duckdb==1.5.6"   # Linux / macOS
+configure/venv/Scripts/python.exe -m pip install --upgrade "duckdb==2.0.0"   # Windows
+configure/venv/bin/python3       -m pip install --upgrade "duckdb==2.0.0"   # Linux / macOS
 ```
 
 - **头文件的钉版与引擎是两码事。** 更新 `libduckdb-sys` 改的是「你能调用什么」，不是「谁会加载你」；

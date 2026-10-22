@@ -38,12 +38,12 @@ _common_url := "https://raw.githubusercontent.com/" + duckfn_repo + "/" + duckfn
 # duckdb 命令行。不在 PATH 里时用 `just DUCKDB=/path/to/duckdb repl` 覆盖。
 duckdb := env_var_or_default("DUCKDB", "duckdb")
 
-# 工具链锁定的 Rust 版本（与 Cargo.toml 的 rust-version 对齐）。默认 1.86.0，可用环境变量
+# 工具链锁定的 Rust 版本（与 Cargo.toml 的 rust-version 对齐）。默认 1.97.1，可用环境变量
 # RUST_VERSION 或 `just RUST_VERSION=X.Y.Z config_env` 覆盖。
 #
 # The Rust version the toolchain pins (kept in sync with Cargo.toml's rust-version). Defaults to
-# 1.86.0; override with the RUST_VERSION environment variable or `just RUST_VERSION=X.Y.Z config_env`.
-rust_version := env_var_or_default("RUST_VERSION", "1.86.0")
+# 1.97.1; override with the RUST_VERSION environment variable or `just RUST_VERSION=X.Y.Z config_env`.
+rust_version := env_var_or_default("RUST_VERSION", "1.97.1")
 
 # 扩展构建产物路径（官方 make 工具链的 debug 产物）。`extension_name` 由各项目根 Justfile 定义
 # —— import 是同一个作用域，且 just 对顺序不敏感，所以导入文件引用导入方的变量没问题。

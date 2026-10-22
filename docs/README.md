@@ -63,12 +63,14 @@ when the release asset's sha256 changes. Both `.cache/` and
 `static/duckdb-extensions/` are gitignored — a file placed there by hand needs
 `git add -f`.
 
-The extension is built by CI for DuckDB v1.5.6, and the site pins
-`@duckdb/duckdb-wasm` to the exact dev build whose engine matches
-(`1.33.1-dev65.0`, engine v1.5.6 — npm's `next` tag at the time of writing;
-stable `1.32.0` bundles v1.4.3 and rejects the extension with a C-API layout
-mismatch). When either side moves, re-check the Docs kit pages: the live blocks
-there must run.
+The extension is built by CI for DuckDB v2.0.0. The site pins
+`@duckdb/duckdb-wasm` to `1.33.1-dev65.0` (engine v1.5.6 — npm's `next` tag at the time the
+pin was taken; stable `1.32.0` bundles v1.4.3). **That engine is older than the build and its
+unstable C-API layout does not match**, so the live runnable blocks need a `duckdb-wasm` release
+whose engine is v2.0.0 (at the time of writing the `next` dev builds still carried a `v2.0.0-dev…`
+engine). Do not bump the pin to such a dev build — an unstable ABI matches the final release, not a
+commit in between. When either side moves, re-check the Docs kit pages: the live blocks there must
+run.
 
 ## Commands
 

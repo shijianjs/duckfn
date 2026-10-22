@@ -32,7 +32,7 @@ just doc                    # cargo doc -p duckfn
 ```make
 EXTENSION_NAME=duckfn
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v1.5.6
+TARGET_DUCKDB_VERSION=v2.0.0
 EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal
 TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
@@ -56,7 +56,7 @@ just test_stable 1.4.0        # ……再拿 DuckDB 1.4 跑一遍指定范围的
 
 `sql` 也归在这一档：它虽然跑在回调侧，但发出的每个调用都走 `duckdb_connect`、预处理 / 绑定 / 取块与
 逻辑类型，全在稳定区（[在扩展里执行 SQL](../guide/sql-execution.md)）。CI 每个 PR 都拿同一个脚本对着
-DuckDB 1.3.2、1.4.5、1.5.6 跑一遍（`.github/workflows/StableApiPipeline.yml`），所以那份可移植性
+DuckDB 1.3.2、1.4.5、2.0.0 跑一遍（`.github/workflows/StableApiPipeline.yml`），所以那份可移植性
 承诺是被验证的，而不是被假定的。
 
 ## WebAssembly
@@ -99,10 +99,10 @@ on:
 
 jobs:
   duckdb-stable-build:
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v2.0-cyanoptera
     with:
-      duckdb_version: v1.5.6
-      ci_tools_version: v1.5-variegata
+      duckdb_version: v2.0.0
+      ci_tools_version: v2.0-cyanoptera
       extension_name: duckfn
       extra_toolchains: rust;python3
       exclude_archs: 'linux_amd64_musl'
@@ -117,7 +117,7 @@ jobs:
 范围、而不是某一个引擎」的那份（见[版本号与 ABI](../duckdb-versions/c-api-and-abi.md)）。
 `.github/workflows/StableApiPipeline.yml` 把这块补上：每个 PR、每次推送到 `main`、每个版本 tag 以及
 手动触发，都用 `USE_UNSTABLE_C_API=0` + `TARGET_DUCKDB_VERSION=v1.2.0` + `EXTENSION_FEATURES=quack,sql`
-打一份产物，再装进 DuckDB 1.3.2、1.4.5、1.5.6 跑一遍稳定区子集。最新的那个引擎是对照组 —— 它挂了说明
+打一份产物，再装进 DuckDB 1.3.2、1.4.5、2.0.0 跑一遍稳定区子集。最新的那个引擎是对照组 —— 它挂了说明
 坏的是稳定区构建本身，而不是版本范围。每条 leg 就是一次 `scripts/test-stable.sh`（与 `just test_stable`
 同一个入口）；运行器镜像钉在 `ubuntu-24.04`，因为 venv 里的 Python 决定能装哪个 `duckdb` wheel。
 

@@ -87,7 +87,7 @@ marked as using the *unstable* C API, which is why loading it requires `-unsigne
 | | |
 | --- | --- |
 | Rust | 1.88 or newer (the crates use edition 2024; the floor comes from `syn 3` in `duckfn-macro`, which needs rustc 1.88) |
-| DuckDB | tested against v1.5.6 |
+| DuckDB | tested against v2.0.0 |
 | Python 3 *(optional)* | only for the `make configure` / `make test` flow, which sets up the sqllogictest runner |
 
 ## Where next

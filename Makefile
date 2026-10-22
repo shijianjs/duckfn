@@ -70,7 +70,7 @@ USE_UNSTABLE_C_API ?= 1
 # With USE_UNSTABLE_C_API=1 this is a **release** (the artifact only loads on that engine); with =0 it
 # is a **C API floor** (the artifact loads on any engine whose C API is at or above it), which is why a
 # stable-region build normally writes v1.2.0.
-TARGET_DUCKDB_VERSION ?= v1.5.6
+TARGET_DUCKDB_VERSION ?= v2.0.0
 
 # quack-rs 只在不稳定路径上读这个变量（稳定区构建里 `abi::check()` 先返回 `StableOnly`），所以只在
 # 需要时导出：稳定区构建带上它会声明一个与编译进去的布局不符的版本。

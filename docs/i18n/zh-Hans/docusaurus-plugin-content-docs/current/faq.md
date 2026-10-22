@@ -98,7 +98,7 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 ### 扩展能加载，但调用时报版本错误
 
-扩展针对特定的 DuckDB 版本编译（`TARGET_DUCKDB_VERSION`，当前为 v1.5.6），且使用 unstable C API，
+扩展针对特定的 DuckDB 版本编译（`TARGET_DUCKDB_VERSION`，当前为 v2.0.0），且使用 unstable C API，
 因此只能与兼容版本配合使用。请用匹配的版本加载，或针对你手上的版本重新构建。「兼容」具体指什么、同一条
 报错在稳定 ABI 下又是什么样子，见 [DuckDB 版本兼容性](./duckdb-versions/index.md)。
 

@@ -24,12 +24,12 @@ proc-macro = true
 # - `darling` 要与 syn 同代：0.21 的 `FromMeta` 实现是针对 syn 2 的 `LitStr` 的，配 syn 3 会得到
 #   `Vec<syn::LitStr>: darling::FromMeta is not satisfied`。0.24 起才跟着 syn 3。
 # - 这条线（syn 3 + darling 0.24）要 rustc 1.88，因此本仓库用 rust-toolchain.toml 钉 1.97.1 ——
-#   官方 ci-tools 的 v1.5-variegata 把 wasm 作业的 Rust 钉在 1.86.0，那里连编译都过不去。
+#   官方 ci-tools 的 v2.0-cyanoptera 已经把 Rust 钉在 1.97.1，本地仍用同一版本复现 CI。
 #
 # The three versions move together: syn 3 re-exports `ItemFn` / `FnArg` / `Pat` behind `full` and
 # `LitStr`'s `Debug` behind `extra-traits`; darling must match syn's major (0.21's `FromMeta` impls
 # target syn 2's `LitStr`); and that line needs rustc 1.88, which is why the repo pins 1.97.1 in
-# rust-toolchain.toml (ci-tools' v1.5-variegata pins 1.86.0 for the wasm job and cannot compile it).
+# rust-toolchain.toml (ci-tools' v2.0-cyanoptera already pins 1.97.1; local builds use the same version).
 darling = "0.24"
 proc-macro2 = "1"
 quote = "1"

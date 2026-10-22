@@ -71,7 +71,11 @@ libduckdb-sys = { version = ">=1.10500, <2", features = ["loadable-extension"] }
 ```
 
 `libduckdb-sys` encodes a DuckDB release as `1.<major*10000 + minor*100 + patch>.0`, so `1.10506.0`
-is DuckDB 1.5.6 and the `>=1.10500` above means "DuckDB 1.5 headers or newer".
+is DuckDB 1.5.6, `1.20000.0` is DuckDB 2.0.0, and the `>=1.10500` above means "DuckDB 1.5 headers or
+newer" — which includes 2.0. In the 2.0 generation the v1 bindings moved under `libduckdb_sys::v1`
+(re-exported at the crate root as well) behind the default `capi-v1` feature, so code that names
+those items should be checked when you move; quack-rs 0.18.0 has no 2.0 line yet, which is why the
+dependency range stays where it is.
 
 Nothing else rewrites the `Makefile` line: ci-tools' `set_duckdb_version` is a no-op for C API
 extensions, and the community registry's `duckdb_version` only chooses which DuckDB source to check
@@ -112,7 +116,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v1.5.6     # any engine at or above the floor; the newest is the safe pick
+      duckdb_version: v2.0.0     # any engine at or above the floor; the newest is the safe pick
 ```
 
 - `TARGET_DUCKDB_VERSION` is a **C API floor**, not a release — that is what the mode buys.
@@ -130,7 +134,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 # Makefile
 EXTENSION_NAME=my_extension
 USE_UNSTABLE_C_API=1
-TARGET_DUCKDB_VERSION=v1.5.6
+TARGET_DUCKDB_VERSION=v2.0.0
 export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
 DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
 ```
@@ -142,7 +146,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "du
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v1.5.6     # must equal TARGET_DUCKDB_VERSION; it is the engine `make test` loads into
+      duckdb_version: v2.0.0     # must equal TARGET_DUCKDB_VERSION; it is the engine `make test` loads into
 ```
 
 - **The `export` keyword is part of the line, not decoration.** quack-rs' build script reads
@@ -169,18 +173,18 @@ real call:
 
 | Declared C API floor | Engines that took the same binary |
 | --- | --- |
-| `v1.2.0` | 1.3.2, 1.4.0, 1.4.5, 1.5.0, 1.5.5, 1.5.6, 2.0.0 (pre-release) |
+| `v1.2.0` | 1.3.2, 1.4.0, 1.4.5, 1.5.0, 1.5.5, 1.5.6, 2.0.0 |
 
 That table began as a one-off measurement and is now checked on every pull request:
 `.github/workflows/StableApiPipeline.yml` builds an artifact with the settings above
 (`USE_UNSTABLE_C_API=0`, `TARGET_DUCKDB_VERSION=v1.2.0`, `EXTENSION_FEATURES=quack,sql`) and runs the
-stable subset of the suite against 1.3.2, 1.4.5 and 1.5.6. The newest of the three is the control —
+stable subset of the suite against 1.3.2, 1.4.5 and 2.0.0. The newest of the three is the control —
 if that leg fails too, the stable build itself broke rather than the version range.
 
-DuckDB 2.0 is close (see its release calendar), and a stable build declaring `v1.2.0` already loads and
-runs there — verified by loading such an extension into a 2.0 pre-release and calling its functions (an
-aggregate and a scalar both returned the expected values). The floor is what buys that portability: do
-not read "runs on 2.0" as "was compiled against 2.0".
+DuckDB 2.0 is out, and a stable build declaring `v1.2.0` loads and runs there — verified by loading
+such an extension into a 2.0 engine and calling its functions (an aggregate and a scalar both
+returned the expected values). The floor is what buys that portability: do not read "runs on 2.0" as
+"was compiled against 2.0".
 
 One 2.0 naming trap: DuckDB ships a **second, v2 C API** (`duckdb_v2.h`) — a genuinely different,
 still-rapid surface that the experimental `duckdb-neo` wrapper targets. It does **not** replace the v1
@@ -189,8 +193,9 @@ feature, required by `loadable-extension`), and that v1 surface is exactly what 
 API v2 is different" is about the *new header*, not about v1 extensions losing compatibility. Mind the
 version encoding too: DuckDB 2.0.0 maps to a `libduckdb-sys` crate version `1.20000.x` (format
 `1.<major*10000 + minor*100 + patch>.x`) — still a `1.x`, so a `>=1.10500, <2` constraint selects it.
-The `<2` bound is not the blocker; moving your release line onto 2.0 is gated by it being *released* (a
-stable `v2.0-cyanoptera` ci-tools ref and real `duckdb-shared-libs` assets), not by a crate version bound.
+The `<2` bound is not the blocker; moving your release line onto 2.0 is gated by the Rust wrapper
+catching up (quack-rs has no 2.0 line yet) and by the bindings' new `libduckdb_sys::v1` path, not by
+a crate version bound.
 
 Raise the floor only when you genuinely need newer headers. And raise it by the *C API version*, not
 by a release number: writing `v1.5.6` there leaves exactly that engine willing to take the file.
@@ -221,8 +226,8 @@ Two traps come up here:
   these are the two paths `base.Makefile` itself uses:
 
 ```shell
-configure/venv/Scripts/python.exe -m pip install --upgrade "duckdb==1.5.6"   # Windows
-configure/venv/bin/python3       -m pip install --upgrade "duckdb==1.5.6"   # Linux / macOS
+configure/venv/Scripts/python.exe -m pip install --upgrade "duckdb==2.0.0"   # Windows
+configure/venv/bin/python3       -m pip install --upgrade "duckdb==2.0.0"   # Linux / macOS
 ```
 
 - **The header pin and the engine are separate.** Updating `libduckdb-sys` changes what you may call,

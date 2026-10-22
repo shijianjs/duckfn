@@ -67,8 +67,8 @@ error: rustc 1.86.0 is not supported by the following packages:
 
 —— 根本到不了 `emcc`。这就是 ci-tools 的 [issue #385](https://github.com/duckdb/extension-ci-tools/issues/385)，
 被 [PR #394](https://github.com/duckdb/extension-ci-tools/pull/394) 关闭（把 wasm 的 Rust 抬到 1.97.1、与
-native 统一）。**但这个提升只活在含 #394 的 ci-tools ref 里** —— 像 `@v1.5-variegata` 这种在合并前切出的
-ref，仍带 `1.86.0`。
+native 统一）。**修复只活在含 #394 的 ci-tools ref 里。** 1.5 那一支我们用的 ref（`@v1.5-variegata`）在合并前
+切出，仍带 `1.86.0`；现在面向的 `v2.0-cyanoptera` 分支已经钉 `1.97.1`。
 
 两个杠杆，分处不同层：
 
@@ -79,10 +79,11 @@ ref，仍带 `1.86.0`。
   `override_ref` 一起生效 —— 而 `ci_tools_version` 抬版做不到（见下）。
 
 **最常见的踩坑方式是升级依赖。** duckfn 自己的 `syn 2 → 3` 需要 `darling 2.4`，后者需要 rustc 1.88 ——
-于是在 `v1.5-variegata` 上 native 作业照绿、而每个 `wasm_*` 作业都会以那条报错失败。这里没有干等 DuckDB
-2.0，而是走仓库侧那条杠杆：根目录 `rust-toolchain.toml` 钉 **1.97.1**（外加 wasm target）**加上**下面的
-`-O0` 链接覆盖 —— 前者压过那个 1.86，后者让新 Rust 的产物仍能过旧 binaryen。两个文件里都写了删除条件：
-等 ci-tools 的 ref 越过 PR #394、其 binaryen 也认识新的 target-feature 之后，一起删掉。
+于是在 `v1.5-variegata` 上 native 作业照绿、而每个 `wasm_*` 作业都会以那条报错失败。做法是走仓库侧那条杠杆：
+根目录 `rust-toolchain.toml` 钉 **1.97.1**（外加 wasm target）压过 CI 的 default，**加上**下面的 `-O0`
+链接覆盖，让 wasm 作业照样链得出来。到了 `v2.0-cyanoptera`，CI 的默认值已经是 1.97.1，这个文件不再压过
+任何东西 —— 它让本地构建与社区注册表的构建用同一个 rustc。`-O0` 覆盖保留到 2.0 那一支的 binaryen
+认识新的 target-feature 为止。
 
 ### 2 · 链接：现代 Rust 产出的特性，旧 binaryen 解析不了
 
@@ -191,15 +192,15 @@ flowchart TD
 ## 实例：`duckfn_statrs`
 
 `duckfn_statrs` 包 `statrs 0.19` / `nalgebra 0.35`（需 rustc ≥ 1.89）。在 `@v1.5-variegata` 钉法下它的 wasm
-job 卡在 #385 的 1.86。采用的做法是**保持 `v1.5-variegata` 不变**、从**仓库自身**覆盖 Rust —— 根目录
+job 卡在 #385 的 1.86。采用的做法是从**仓库自身**覆盖 Rust —— 根目录
 `rust-toolchain.toml`（`channel = "1.97.1"` + wasm target，优先级高于 dtolnay 的 default，且能传到注册表）
 **加上**上面的 `-O0` 链接覆盖（旧 binaryen → 跳过优化器）。结果：`just test_wasm` 全绿（554/0），在钉住的
 ref 上一次 `workflow_dispatch` 构建出九平台含三个 `wasm_*`（约 1.5MB，未优化）。（更早一版是借
-`ci_tools_version: main` 拿 1.97.1；改用仓库内文件更佳，因为它能一并传播到注册表。）
+`ci_tools_version: main` 拿 1.97.1；改用仓库内文件更佳，因为它能一并传播到注册表。）迁到 DuckDB 2.0 后
+工作流 ref 换成了 `v2.0-cyanoptera`，它的默认值就是同一个 1.97.1，所以工具链钉法不用改；`-O0` 覆盖仍然保留。
 
-注意：wasm 构建**并不**依赖 DuckDB 2.0 是否发布 —— 它仍面向 DuckDB 1.5.x。而且这份扩展的*稳定*产物已经能在
-DuckDB **2.0** 预发布引擎上加载并运行（见[版本数字与 ABI 兼容性](./c-api-and-abi.md)里「稳定区的一份产物到底覆盖到哪」）—— 不过
-「加载兼容」和「构建目标」仍是两码事。
+「加载兼容」和「构建目标」仍是两码事：现在构建面向 DuckDB **2.0.0**，而这套扩展的*稳定*产物仍能在更老的
+引擎上加载并运行（见[版本数字与 ABI 兼容性](./c-api-and-abi.md)里「稳定区的一份产物到底覆盖到哪」）。
 
 另外，wasm 上的 **`panic!` / `catch_unwind` 行为同样取决于 Rust 版本**（是同一次排查里测出来的），单开了一页：
 [Wasm 下的 panic 处理](./rust-wasm-unwinding.md)。

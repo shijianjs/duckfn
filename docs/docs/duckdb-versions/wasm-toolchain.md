@@ -71,8 +71,9 @@ error: rustc 1.86.0 is not supported by the following packages:
 
 — before it ever reaches `emcc`. This was ci-tools [issue #385](https://github.com/duckdb/extension-ci-tools/issues/385),
 closed by [PR #394](https://github.com/duckdb/extension-ci-tools/pull/394), which raised the wasm Rust
-to 1.97.1 and unified it with the native job. **But the bump only lives in a ci-tools ref at/after
-#394** — a ref like `@v1.5-variegata`, cut before the merge, still carries `1.86.0`.
+to 1.97.1 and unified it with the native job. **The fix lives in ci-tools refs at/after #394.** On
+the 1.5 line the ref we used (`@v1.5-variegata`) was cut before the merge and still carried `1.86.0`;
+the `v2.0-cyanoptera` branch we target now already pins `1.97.1`.
 
 Two levers, at different layers:
 
@@ -86,11 +87,11 @@ Two levers, at different layers:
 
 **A dependency bump is the usual way to walk into this.** duckfn's own `syn 2 → 3` update needs
 `darling 2.4`, which needs rustc 1.88 — so on `v1.5-variegata` the native jobs would stay green and every
-`wasm_*` job would fail with the error above. Rather than wait for DuckDB 2.0, this repository took the
-repo-side lever: a `rust-toolchain.toml` pinning **1.97.1** (plus the wasm target) plus the `-O0` link
-override below, so the wasm job builds on the pinned 1.86 and still links. Both files carry the removal
-condition in their comments — delete them together once the ci-tools ref moves past PR #394 and its
-binaryen understands the newer target-features.
+`wasm_*` job would fail with the error above. The fix was the repo-side lever: a `rust-toolchain.toml`
+pinning **1.97.1** (plus the wasm target), which outranks the CI default, plus the `-O0` link override
+below so the wasm job still links. On `v2.0-cyanoptera` the CI default is already 1.97.1, so the file
+no longer overrides anything — it keeps local builds and the community-registry build on the same
+rustc. The `-O0` override stays until the 2.0 line's binaryen understands the newer target-features.
 
 ### 2 · Link: modern Rust emits features old binaryen cannot parse
 
@@ -206,18 +207,18 @@ flowchart TD
 ## Worked example: `duckfn_statrs`
 
 `duckfn_statrs` wraps `statrs 0.19` / `nalgebra 0.35` (rustc ≥ 1.89). On `@v1.5-variegata` its wasm job
-failed at #385's 1.86. The adopted fix stays on `v1.5-variegata` and overrides Rust **from the repo** —
-a root `rust-toolchain.toml` (`channel = "1.97.1"`, plus the wasm target), which outranks the dtolnay
-default and also reaches the registry — **plus** the `-O0` link override (old binaryen → skip it).
-Result: `just test_wasm` green (554/0), and a CI `workflow_dispatch` on the pinned ref built all nine
-platforms including the three `wasm_*` (~1.5 MB, un-optimized). (An earlier variant borrowed
-`ci_tools_version: main` to reach 1.97.1; the in-repo file is preferred because it propagates to the
-registry too.)
+failed at #385's 1.86. The adopted fix pinned Rust **from the repo** — a root `rust-toolchain.toml`
+(`channel = "1.97.1"`, plus the wasm target), which outranks the dtolnay default and also reaches the
+registry — **plus** the `-O0` link override (old binaryen → skip it). Result: `just test_wasm` green
+(554/0), and a CI `workflow_dispatch` on the pinned ref built all nine platforms including the three
+`wasm_*` (~1.5 MB, un-optimized). (An earlier variant borrowed `ci_tools_version: main` to reach 1.97.1;
+the in-repo file is preferred because it propagates to the registry too.) The DuckDB 2.0 migration moved
+the workflow ref to `v2.0-cyanoptera`, whose default is the same 1.97.1, so the toolchain pin needed no
+change; the `-O0` override remains.
 
-Note the wasm build does **not** depend on DuckDB 2.0 being out: it still targets DuckDB 1.5.x. And a
-*stable* build of this extension already loads and runs on a DuckDB **2.0** pre-release engine (see
-[Version numbers and the ABI](./c-api-and-abi.md#what-a-stable-build-actually-covers)) — load-compatible is not the
-same as build-target, though.
+Note that load-compatibility and build-target are different things: the build now targets DuckDB
+**2.0.0**, while a *stable* build of this extension still loads and runs on older engines (see
+[Version numbers and the ABI](./c-api-and-abi.md#what-a-stable-build-actually-covers)).
 
 Separately, the **`panic!` / `catch_unwind` behaviour on wasm is also Rust-version-dependent** — measured
 as part of the same investigation — and has its own page:
