@@ -294,9 +294,9 @@ gh run watch <run-id>
 失败就修到成功为止。若已推送的 tag 需要重发（修复后重新指向新的提交）：
 
 ```bash
-git push github --delete vX.Y.Z   # 删除远程 tag
+git push origin --delete vX.Y.Z   # 删除远程 tag
 git tag -f vX.Y.Z                 # 本地 tag 指向修复后的提交
-git push github vX.Y.Z            # 重新推送
+git push origin vX.Y.Z            # 重新推送
 ```
 
 > 删除/移动已发布的 tag 会影响已有的 GitHub Release，谨慎操作。tag 已经跑过一轮的话，crate 可能

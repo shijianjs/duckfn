@@ -179,8 +179,8 @@ cmd_tag() {
     fi
 
     git tag "v${version}"
-    git push github main
-    git push github "v${version}"
+    git push origin main
+    git push origin "v${version}"
     echo "已推送 v${version}，用 just release_ci 查看进度"
 }
 

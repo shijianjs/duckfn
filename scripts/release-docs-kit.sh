@@ -112,8 +112,8 @@ cmd_tag() {
     fi
 
     git tag "${TAG_PREFIX}${version}"
-    git push github main
-    git push github "${TAG_PREFIX}${version}"
+    git push origin main
+    git push origin "${TAG_PREFIX}${version}"
     echo "已推送 ${TAG_PREFIX}${version}"
     echo "它不匹配 CI 的 v*.*.* 过滤器，因此不会触发扩展构建与文档站部署，"
     echo "但会触发 PublishDocsKit.yml —— CI 会把版本送进 npm 暂存区，用 just release_kit_ci 看结果，"
