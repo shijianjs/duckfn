@@ -67,7 +67,7 @@ just test_stable 1.4.0        # ……再拿 DuckDB 1.4 跑一遍指定范围的
 
 `sql` 也归在这一档：它虽然跑在回调侧，但发出的每个调用都走 `duckdb_connect`、预处理 / 绑定 / 取块与
 逻辑类型，全在稳定区（[在扩展里执行 SQL](../guide/sql-execution.md)）。CI 每个 PR 都拿同一个脚本对着
-DuckDB 1.3.2、1.4.5、2.0.0 跑一遍（`.github/workflows/StableApiPipeline.yml`），所以那份可移植性
+DuckDB 1.3.2、1.4.5、1.5.6、2.0.0 跑一遍（`.github/workflows/StableApiPipeline.yml`），所以那份可移植性
 承诺是被验证的，而不是被假定的。
 
 ## WebAssembly
@@ -126,9 +126,9 @@ jobs:
 
 那条流水线打的始终是**全量** feature 清单，所以它覆盖不到稳定区那份产物 —— 也就是打算「装进一段版本
 范围、而不是某一个引擎」的那份（见[版本号与 ABI](../duckdb-versions/c-api-and-abi.md)）。
-`.github/workflows/StableApiPipeline.yml` 把这块补上：每个 PR、每次推送到 `main`、每个版本 tag 以及
+`.github/workflows/StableApiPipeline.yml` 把这块补上：每个 PR、每个版本 tag 以及
 手动触发，都用 `USE_UNSTABLE_C_API=0` + `TARGET_DUCKDB_VERSION=v1.2.0` + `EXTENSION_FEATURES=quack,sql`
-打一份产物，再装进 DuckDB 1.3.2、1.4.5、2.0.0 跑一遍稳定区子集。最新的那个引擎是对照组 —— 它挂了说明
+打一份产物，再装进 DuckDB 1.3.2、1.4.5、1.5.6、2.0.0 跑一遍稳定区子集。最新的那个引擎是对照组 —— 它挂了说明
 坏的是稳定区构建本身，而不是版本范围。每条 leg 就是一次 `scripts/test-stable.sh`（与 `just test_stable`
 同一个入口）；运行器镜像钉在 `ubuntu-24.04`，因为 venv 里的 Python 决定能装哪个 `duckdb` wheel。
 

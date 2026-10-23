@@ -188,7 +188,7 @@ real call:
 That table began as a one-off measurement and is now checked on every pull request:
 `.github/workflows/StableApiPipeline.yml` builds an artifact with the settings above
 (`USE_UNSTABLE_C_API=0`, `TARGET_DUCKDB_VERSION=v1.2.0`, `EXTENSION_FEATURES=quack,sql`) and runs the
-stable subset of the suite against 1.3.2, 1.4.5 and 2.0.0. The newest of the three is the control —
+stable subset of the suite against 1.3.2, 1.4.5, 1.5.6 and 2.0.0. The newest of the four is the control —
 if that leg fails too, the stable build itself broke rather than the version range.
 
 DuckDB 2.0 is out, and a stable build declaring `v1.2.0` loads and runs there — verified by loading

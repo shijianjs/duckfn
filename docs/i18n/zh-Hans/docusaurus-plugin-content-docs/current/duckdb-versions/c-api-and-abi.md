@@ -168,7 +168,7 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "du
 
 这张表起初只是一次性实测，现在每个 PR 都会被验一遍：`.github/workflows/StableApiPipeline.yml`
 用上面那套配置（`USE_UNSTABLE_C_API=0`、`TARGET_DUCKDB_VERSION=v1.2.0`、`EXTENSION_FEATURES=quack,sql`）
-打一份产物，再对着 1.3.2、1.4.5、2.0.0 跑稳定区子集。三个引擎里最新的那个是**对照组** —— 它那一条要是
+打一份产物，再对着 1.3.2、1.4.5、1.5.6、2.0.0 跑稳定区子集。四个引擎里最新的那个是**对照组** —— 它那一条要是
 也挂，说明坏的是稳定区构建本身，而不是版本范围。
 
 DuckDB 2.0 已经发布，一份声明 `v1.2.0` 的稳定区产物在 2.0 上能加载并跑通 —— 把这样的扩展装进一个

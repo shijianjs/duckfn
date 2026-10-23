@@ -73,7 +73,7 @@ just test_stable 1.4.0        # …run a range of the suite against DuckDB 1.4
 `sql` belongs on this side even though it runs from a callback: every call it makes goes through
 `duckdb_connect`, prepare / bind / fetch-chunk and the logical types, all of them stable
 ([Running SQL from an extension](../guide/sql-execution.md)). CI runs the same script on every pull
-request against DuckDB 1.3.2, 1.4.5 and 2.0.0 (`.github/workflows/StableApiPipeline.yml`), so the
+request against DuckDB 1.3.2, 1.4.5, 1.5.6 and 2.0.0 (`.github/workflows/StableApiPipeline.yml`), so the
 portability claim is checked rather than assumed.
 
 ## WebAssembly
@@ -137,9 +137,9 @@ use.
 That pipeline always builds the **full** feature list, so it never covers the stable-region artifact —
 the one that is meant to load into a range of releases rather than exactly one (see
 [Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md)). `.github/workflows/StableApiPipeline.yml`
-closes that gap: on every pull request, on pushes to `main`, on version tags and on demand, it builds
+closes that gap: on every pull request, on version tags and on demand, it builds
 one artifact with `USE_UNSTABLE_C_API=0`, `TARGET_DUCKDB_VERSION=v1.2.0` and
-`EXTENSION_FEATURES=quack,sql`, then loads it into DuckDB 1.3.2, 1.4.5 and 2.0.0 and runs the stable
+`EXTENSION_FEATURES=quack,sql`, then loads it into DuckDB 1.3.2, 1.4.5, 1.5.6 and 2.0.0 and runs the stable
 subset of the suite. The newest engine is the control leg — a failure there means the stable build is
 broken rather than the version range. Each leg is one call to `scripts/test-stable.sh`, the same entry
 point as `just test_stable`, and the runner image is pinned to `ubuntu-24.04` because the venv's Python

@@ -14,9 +14,11 @@
 # The engines are the newest patch release of each minor the docs name as covered:
 #
 #   1.3.2  the oldest engine the claim reaches
-#   1.4.5  the previous minor
-#   2.0.0  what the unstable build targets — the control leg. If this one fails too, the stable build
-#          itself is broken, not the version range, and the other legs are not evidence of anything.
+#   1.4.5  the last patch of the minor before 1.5
+#   1.5.6  the last 1.5 patch — what the unstable opt-in still builds against
+#   2.0.0  the engine the distribution pipeline builds for — the control leg. If this one fails too,
+#          the stable build itself is broken, not the version range, and the other legs are not
+#          evidence of anything.
 #
 # Adding an engine is adding a matrix entry; pick a patch release that actually ships a wheel for the
 # runner's Python (see the runs-on comment below — the script fails fast when it does not).
@@ -25,7 +27,7 @@ name: Stable C API Pipeline
 on:
   pull_request:
     # Same reasoning as in MainDistributionPipeline.yml: this builds the extension and runs DuckDB
-    # three times, so a pull request that only touches the docs site or the npm workspace (a
+    # four times, so a pull request that only touches the docs site or the npm workspace (a
     # Dependabot bump, say) has nothing for it to check. `paths` only filters the pull_request event.
     paths:
       - 'src/**'
@@ -42,7 +44,7 @@ on:
       - 'extension-ci-tools'
       - '.github/workflows/StableApiPipeline.yml'
   # 推 main 不跑：main 上的提交已经以 PR 形式跑过同一套，而 docs-kit 发版之类只改 npm / 文档的提交也会
-  # 推 main，那些跑三个引擎纯属白等。真正要发出去的产物由版本 tag 决定，所以这里只跟 tag；需要时手动触发。
+  # 推 main，那些跑四个引擎纯属白等。真正要发出去的产物由版本 tag 决定，所以这里只跟 tag；需要时手动触发。
   #
   # No `push: branches: [main]`: commits on main already ran this suite as a pull request, and pushes
   # that only bump the docs-kit or the npm workspace would run the whole matrix again for nothing. The
@@ -69,7 +71,7 @@ jobs:
       # Each leg is an independent claim; one old engine failing must not hide the others.
       fail-fast: false
       matrix:
-        engine: ['1.3.2', '1.4.5', '2.0.0']
+        engine: ['1.3.2', '1.4.5', '1.5.6', '2.0.0']
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
