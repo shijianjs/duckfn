@@ -1,0 +1,210 @@
+#
+# 合并 Dependabot 的依赖 PR：这个 PR 对应的检查全部通过之后 squash 合并。思源插件系列用的是同一套
+# 模式（`.github/workflows/auto-merge.yml`），这里按 duckfn 系列的 `paths` 过滤规则做了调整。
+#
+# 为什么不用「等全部 check 都 SUCCESS」：本仓库的测试工作流都带 `paths` 过滤
+# （NpmChecks.yml 盯 docs/ 与 npm 清单，MainDistributionPipeline.yml 盯 Rust 源码与构建入口）。只改
+# Cargo.lock 的 PR 不会产生 npm 检查，只改 docs/ 的 PR 也不会产生 Rust 检查，名单是随改动浮动的。
+# 所以这里直接查这条 PR 的 head commit 上由 `pull_request` 事件产生的 Actions
+# 运行：实际跑起来几条就等几条，没被 paths 命中的工作流根本不在列表里，不会把 PR 卡死。
+#
+# Merges a Dependabot pull request once the checks *it actually triggered* have passed. This repository's
+# test workflows are path-filtered (NpmChecks.yml watches the docs site and the npm manifests; the Rust
+# pipeline watches sources and build entry points), so the set of checks differs per pull request. Instead
+# of guessing that set, the job polls the `pull_request` workflow runs for the head commit: whatever ran is
+# what has to be green, and a workflow that its `paths` filter skipped cannot block the merge.
+#
+# 触发方式说明：直接由 Dependabot PR 触发的 `pull_request` 工作流拿到的 GITHUB_TOKEN 是只读的，而
+# `pull_request_target` 在默认分支的上下文里运行、带有本文件声明的写权限，所以用后者。它**不**
+# checkout PR 的代码，只通过 API 读状态、合并 —— 没有把不可信代码带进带写权限的作业里。
+#
+# `pull_request` workflows started by Dependabot get a read-only GITHUB_TOKEN; `pull_request_target` runs
+# in the context of the default branch with the write permissions declared below. It never checks out the
+# pull request's code — it only reads state through the API and merges.
+name: Dependabot auto-merge
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number to merge once its checks pass"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  # workflow_dispatch runs have no pull_request payload, so fall back to the input.
+  group: dependabot-auto-merge-${{ github.event.inputs.pr || github.event.pull_request.number }}
+  # A new commit starts a new run and supersedes the one waiting for the old commit.
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    name: Merge when checks pass
+    runs-on: ubuntu-latest
+    # The nine-platform build takes ~20 minutes; the rest of the budget is runner queueing.
+    timeout-minutes: 60
+    env:
+      # Reading runs and pull request state always goes through GITHUB_TOKEN, which has the `actions:
+      # read` declared above; the optional fine-grained GH_PAT only needs contents + pull requests
+      # write, not Actions.
+      GH_TOKEN: ${{ github.token }}
+      # GH_PAT (fine-grained token with contents + pull requests write) is optional: without it
+      # GITHUB_TOKEN is used, and pull requests touching workflow files are left for a human because
+      # GITHUB_TOKEN has no "workflows" permission.
+      MERGE_TOKEN: ${{ secrets.GH_PAT || github.token }}
+      # Detecting the optional PAT by string-comparing tokens is unreliable (GITHUB_TOKEN is not
+      # exported to the shell), so branch on whether the secret exists.
+      HAS_PAT: ${{ secrets.GH_PAT != '' }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.inputs.pr || github.event.pull_request.number }}
+      # Give up (leaving the pull request open) instead of waiting for the job timeout.
+      TIMEOUT_SECONDS: 3300
+      # How long to wait before declaring that nothing validated this pull request at all.
+      NO_CHECKS_GRACE_SECONDS: 300
+      POLL_SECONDS: 20
+      # Workflows register within seconds, but a second one can start a moment after the first one
+      # finishes; never merge before the set of runs has been stable for this long.
+      SETTLE_SECONDS: 45
+    steps:
+      - name: Wait for checks and merge
+        run: |
+          set -euo pipefail
+          pr="$PR_NUMBER"
+
+          pr_view() { gh pr view "$pr" --json "$1" --jq "$2"; }
+
+          # Only robots get merged automatically. A manual dispatch of a human's pull request still
+          # ends here.
+          author=$(pr_view author '.author.login')
+          case "$author" in
+            dependabot\[bot\]|app/dependabot) ;;
+            *)
+              echo "PR #$pr is authored by $author, not Dependabot; leaving it alone"
+              exit 0
+              ;;
+          esac
+
+          if [ "$(pr_view isDraft .isDraft)" = "true" ]; then
+            echo "PR #$pr is a draft; it will be merged once it is marked ready for review"
+            exit 0
+          fi
+
+          files=$(gh pr view "$pr" --json files --jq '.files[].path')
+          if [ -z "$files" ]; then
+            echo "PR #$pr has no changed files; leaving it alone"
+            exit 0
+          fi
+
+          # GITHUB_TOKEN cannot merge pull requests that change workflow files (there is no "workflows"
+          # scope for GITHUB_TOKEN), so those need the optional GH_PAT.
+          if [ "$HAS_PAT" != "true" ] && printf '%s\n' "$files" | grep -q '^\.github/workflows/'; then
+            echo "PR #$pr changes workflow files, leaving it for manual merge"
+            exit 0
+          fi
+
+          head=$(pr_view headRefOid .headRefOid)
+          start=$SECONDS
+
+          while true; do
+            elapsed=$((SECONDS - start))
+            if [ "$elapsed" -ge "$TIMEOUT_SECONDS" ]; then
+              echo "Gave up after ${elapsed}s waiting for checks; leaving PR #$pr open"
+              exit 0
+            fi
+
+            # One authoritative run per workflow: a re-run, or a run superseded by the concurrency
+            # group, leaves older runs for the same workflow on this commit.
+            runs=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&event=pull_request&per_page=100")
+            latest=$(jq -c \
+              '[.workflow_runs[]] | group_by(.workflow_id) | map(max_by(.created_at))' <<<"$runs")
+
+            if [ "$(jq 'length' <<<"$latest")" -eq 0 ]; then
+              # Nothing matched the changed paths (or GitHub has not registered the runs yet). A commit
+              # no workflow vouched for must not be merged automatically.
+              if [ "$elapsed" -ge "$NO_CHECKS_GRACE_SECONDS" ]; then
+                echo "No pull_request checks were started for $head; leaving PR #$pr open"
+                exit 0
+              fi
+              echo "No checks registered yet; waiting"
+              sleep "$POLL_SECONDS"
+              continue
+            fi
+
+            failed=$(jq -r \
+              '.[] | select(.status == "completed")
+                  | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")
+                  | "\(.name) (\(.conclusion))"' <<<"$latest")
+            if [ -n "$failed" ]; then
+              # A failed check never turns into SUCCESS, so stop instead of waiting for the timeout.
+              echo "PR #$pr has failing checks, leaving it open:"
+              printf '%s\n' "$failed"
+              exit 0
+            fi
+
+            pending=$(jq -r '.[] | select(.status != "completed") | .name' <<<"$latest")
+            if [ -n "$pending" ]; then
+              echo "waiting for: $(printf '%s\n' "$pending" | tr '\n' ' ')"
+              sleep "$POLL_SECONDS"
+              continue
+            fi
+
+            signature=$(jq -r '[.[] | "\(.id)"] | sort | join(",")' <<<"$latest")
+            sleep "$SETTLE_SECONDS"
+            runs=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&event=pull_request&per_page=100")
+            latest=$(jq -c \
+              '[.workflow_runs[]] | group_by(.workflow_id) | map(max_by(.created_at))' <<<"$runs")
+            if [ "$(jq -r '[.[] | "\(.id)"] | sort | join(",")' <<<"$latest")" != "$signature" ]; then
+              echo "The set of checks changed during the settle window; continuing to wait"
+              continue
+            fi
+            break
+          done
+
+          # A push during the wait starts a fresh set of checks; the synchronize event has already
+          # scheduled a new run of this workflow, so this one stops here.
+          if [ "$(pr_view headRefOid .headRefOid)" != "$head" ]; then
+            echo "PR #$pr head moved while waiting; the newer run will handle it"
+            exit 0
+          fi
+
+          if [ "$(pr_view state .state)" != "OPEN" ]; then
+            echo "PR #$pr is no longer open; nothing to merge"
+            exit 0
+          fi
+
+          # GitHub computes mergeability asynchronously, so it can still be UNKNOWN right after the
+          # checks finish.
+          mergeable=""
+          for _ in $(seq 1 10); do
+            mergeable=$(pr_view mergeable .mergeable)
+            [ "$mergeable" = "MERGEABLE" ] && break
+            echo "PR #$pr mergeable=$mergeable, retrying"
+            sleep 15
+          done
+          if [ "$mergeable" != "MERGEABLE" ]; then
+            echo "PR #$pr is not mergeable yet ($mergeable); leaving it open"
+            exit 0
+          fi
+
+          # --match-head-commit refuses to merge a commit other than the one whose checks were just
+          # verified. GH_TOKEN is overridden only here: merging is the one call that needs the PAT
+          # when the pull request touches workflow files.
+          for attempt in 1 2 3; do
+            if GH_TOKEN="$MERGE_TOKEN" gh pr merge "$pr" --squash --delete-branch --match-head-commit "$head"; then
+              echo "merged PR #$pr"
+              exit 0
+            fi
+            echo "merge attempt $attempt failed; retrying"
+            sleep 10
+          done
+          exit 1

@@ -351,6 +351,22 @@ duckdb -unsigned -c "LOAD './<扩展名>.duckdb_extension';"
 注册进社区仓之后另有更省事的一条：`INSTALL <扩展名> FROM community;` 再 `LOAD <扩展名>;` —— 那份是签过名
 的，文件名本来就对。
 
+## CI 与 Dependabot 自动合并
+
+- `.github/dependabot.yml` 每周一检查 cargo / npm / github-actions 三个生态；依赖按 minor + patch
+  分组，大版本单独开 PR，仍要人工看一眼。
+- `.github/workflows/dependabot-auto-merge.yml` 在 Dependabot PR 的检查全部通过后 squash 合并并删除
+  分支。需要补跑时用 `gh workflow run dependabot-auto-merge.yml -f pr=<编号>`。
+  - 它等的是**实际被 `paths` 命中、真的跑起来的**那些工作流：查 head commit 上 `pull_request` 事件的
+    Actions 运行，而不是一份写死的检查名单。只改 npm 时只等 npm 检查，只改 Cargo 时只等 Rust 流水线，
+    不会被没触发的工作流卡死。
+  - 有检查明确失败、或者 5 分钟内没有任何检查被触发，就直接退出并把 PR 留在 open，不会傻等到超时。
+  - 用 `pull_request_target` 触发（Dependabot 触发的 `pull_request` 工作流只有只读 GITHUB_TOKEN）；
+    作业**不** checkout PR 代码，只通过 API 读状态、合并。
+  - 改动 `.github/workflows/**` 的 PR（例如 actions 升级）需要细粒度 PAT 密钥 `GH_PAT`（contents +
+    pull requests write）才能自动合并，否则留给人工：GITHUB_TOKEN 没有 `workflows` 权限。
+- 新增测试工作流只要挂在 `pull_request` 上就自动纳入等待范围，不用改自动合并的配置。
+
 ## 相关文档
 
 - [`README.md`](README.md) / [`README.zh-CN.md`](README.zh-CN.md)：`duckfn` 的 crate README（根 README，同时在 GitHub 首页与 crates.io 上展示）。
