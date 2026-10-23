@@ -26,8 +26,7 @@ on:
   pull_request:
     # Same reasoning as in MainDistributionPipeline.yml: this builds the extension and runs DuckDB
     # three times, so a pull request that only touches the docs site or the npm workspace (a
-    # Dependabot bump, say) has nothing for it to check. `paths` is on the pull_request event only —
-    # pushes to main and tags still run unconditionally.
+    # Dependabot bump, say) has nothing for it to check. `paths` only filters the pull_request event.
     paths:
       - 'src/**'
       - 'test/**'
@@ -42,12 +41,14 @@ on:
       - 'scripts/**'
       - 'extension-ci-tools'
       - '.github/workflows/StableApiPipeline.yml'
+  # 推 main 不跑：main 上的提交已经以 PR 形式跑过同一套，而 docs-kit 发版之类只改 npm / 文档的提交也会
+  # 推 main，那些跑三个引擎纯属白等。真正要发出去的产物由版本 tag 决定，所以这里只跟 tag；需要时手动触发。
+  #
+  # No `push: branches: [main]`: commits on main already ran this suite as a pull request, and pushes
+  # that only bump the docs-kit or the npm workspace would run the whole matrix again for nothing. The
+  # artifacts that ship are the tag builds, so only version tags are followed; `workflow_dispatch`
+  # still covers manual runs.
   push:
-    # Pushes to main as well as tags: this repository pushes straight to main, so those runs are the
-    # ones that actually ship, and without this branch filter the commit that adds this file could not
-    # be observed here. Drop the two lines below if the three legs per main push cost more than the
-    # signal is worth; `workflow_dispatch` still covers manual runs.
-    branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
 
