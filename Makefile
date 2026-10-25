@@ -51,64 +51,78 @@ EXTENSION_NAME=duckfn
 # callback but every call it makes stays in the stable region, so it belongs to this side) that every
 # engine from 1.3 to 2.0 loads, which is what runs a subset of the suite against an older engine
 # (`just test_stable 1.4.0`; CI runs the same thing on every pull request).
-# Default: stable C API only. DuckDB 2.0's unstable ABI requires the v2 entrypoint
-# (`<name>_init_c_api_v2`), which quack-rs 0.18.0 does not emit, so the 2.0 distribution
-# must stay in the stable region. For a local full-featured DuckDB 1.5.6 build:
-#   make USE_UNSTABLE_C_API=1 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=1.5.6 \
+# Default: stable C API only; the distribution keeps it that way so one artifact covers 1.3–2.0.
+# The unstable region (duckdb-1-5 / duck_vfs) is opt-in and, since quack-rs 0.19, is shipped as
+# `C_STRUCT` with a v1.5.6 C API floor rather than `C_STRUCT_UNSTABLE` — DuckDB 2.0 keeps the 1.5.6
+# v1 layout and only appends two slots, which quack-rs' ABI check accepts. `C_STRUCT_UNSTABLE` is out:
+# 2.0 would demand the v2 entrypoint (`<name>_init_c_api_v2`), which quack-rs still does not emit.
+# For a local full-featured build against the 2.0 headers this Cargo.lock resolves (2.0-only, because
+# those headers carry the 548-slot layout):
+#   make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=2.0.0 \
 #        EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal debug
+# To get one artifact for 1.5.6 *and* 2.0.0, pin libduckdb-sys to 1.10506.0 first (that is the
+# build quack-rs 0.19 recommends; the layout table maps 546 slots onto 2.0's 548).
 EXTENSION_FEATURES ?= quack,sql,chrono,uuid,rust_decimal
 
 # Set to 1 to enable Unstable API (binaries will only work on TARGET_DUCKDB_VERSION, forwards compatibility will be broken)
 # Note: currently extension-template-rs requires this, as duckdb-rs relies on unstable C API functionality
 #
-# 只有 EXTENSION_FEATURES 里出现不稳定区的能力（duckdb-1-5 / duck_vfs）时才需要置 1；稳定区组合配 0。
+# 这不是「开不开不稳定区能力」的开关 —— 那是 EXTENSION_FEATURES 里列不列 duckdb-1-5 / duck_vfs。它只
+# 决定元数据声明哪种 ABI：置 1 得到 `C_STRUCT_UNSTABLE`（把产物钉死在 TARGET_DUCKDB_VERSION 这一版），
+# 而 quack-rs 0.19 起不稳定区构建应改用 `C_STRUCT` + v1.5.6 下限（见上面的 EXTENSION_FEATURES 注释），
+# 所以本仓库两种产物都保持 0。
 #
-# Set to 1 only when EXTENSION_FEATURES contains an unstable-region capability (duckdb-1-5 /
-# duck_vfs); a stable-region combination goes with 0.
+# This is not the "unstable capabilities" switch — that is whether EXTENSION_FEATURES lists
+# duckdb-1-5 / duck_vfs. It only picks the metadata ABI: 1 stamps `C_STRUCT_UNSTABLE`, pinning the
+# artifact to TARGET_DUCKDB_VERSION exactly. Since quack-rs 0.19 an unstable-region build should use
+# `C_STRUCT` with a v1.5.6 floor instead (see the EXTENSION_FEATURES note above), so both artifacts
+# here keep it at 0.
 USE_UNSTABLE_C_API ?= 0
 
 # Target DuckDB version
 #
 # 在 USE_UNSTABLE_C_API=1 下它是**发行版**（产物只在这一版引擎上加载）；在 =0 下它是**C API 下限**
-# （产物在任何 C API 不低于它的引擎上加载），所以稳定区构建一般写 v1.2.0。
+# （产物在任何 C API 不低于它的引擎上加载）。稳定区构建写 v1.2.0；不稳定区构建写 v1.5.6 —— 那是
+# DuckDB 2.0 仍在沿用的 v1 布局起点，1.5.6 与 2.0.0 都收。
 #
 # With USE_UNSTABLE_C_API=1 this is a **release** (the artifact only loads on that engine); with =0 it
-# is a **C API floor** (the artifact loads on any engine whose C API is at or above it), which is why a
-# stable-region build normally writes v1.2.0.
+# is a **C API floor** (the artifact loads on any engine whose C API is at or above it). A stable build
+# writes v1.2.0; an unstable-region build writes v1.5.6, the v1 layout DuckDB 2.0 still keeps, which
+# both 1.5.6 and 2.0.0 accept.
 # The distribution build is stable (USE_UNSTABLE_C_API=0), so this is a C API floor, not a release:
-# v1.2.0 is accepted by DuckDB 1.3 through 2.0. An unstable opt-in build must set it to the exact
-# engine release instead (v1.5.6 under quack-rs 0.18.0).
+# v1.2.0 is accepted by DuckDB 1.3 through 2.0. An unstable-region build raises the floor to v1.5.6
+# instead of stamping C_STRUCT_UNSTABLE (quack-rs 0.19).
 TARGET_DUCKDB_VERSION ?= v1.2.0
 
-# quack-rs 只在不稳定路径上读这个变量（稳定区构建里 `abi::check()` 先返回 `StableOnly`），所以只在
-# 需要时导出：稳定区构建带上它会声明一个与编译进去的布局不符的版本。
+# quack-rs 只在不稳定路径上读这个变量（稳定区构建里 `abi::check()` 先返回 `StableOnly`），且它声明的是
+# 「头文件来自哪一版发行版」，必须与 libduckdb-sys 实际解析到的版本一致。只有遗留的
+# `C_STRUCT_UNSTABLE` 模式还把产物钉死在 TARGET_DUCKDB_VERSION 上，所以只在那里导出；`C_STRUCT` +
+# v1.5.6 下限的构建不导出 —— 若解析到的是 2.0 头文件（548 槽），声明 v1.5.6（546 槽）反而会被 quack-rs
+# 判成 DeclaredVersionMismatch。
 #
 # quack-rs reads this variable only on the unstable path (a stable build's `abi::check()` returns
-# `StableOnly` first), so it is exported only when it means something: on a stable build it would
-# declare a release that contradicts the layout compiled in.
+# `StableOnly` first), and it declares *which release the headers came from*, so it has to agree with
+# what libduckdb-sys actually resolved. Only the legacy `C_STRUCT_UNSTABLE` mode pins the artifact to
+# TARGET_DUCKDB_VERSION, hence the export only there. A `C_STRUCT` + v1.5.6-floor build does not export
+# it: if the resolved bindings are the 2.0 headers (548 slots), declaring v1.5.6 (546 slots) would be a
+# DeclaredVersionMismatch.
 ifeq ($(USE_UNSTABLE_C_API),1)
 export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
 endif
 
-# 测试用的 DuckDB 版本必须与构建目标一致：扩展在 USE_UNSTABLE_C_API=1 下构建，产物被钉死在精确版本上
-# （加载时校验），而 base.Makefile 里 DUCKDB_TEST_VERSION 默认留空 = 从 PyPI 装 latest —— 上游一发新的
-# 补丁版，测试引擎就比产物新，`make test_release` 直接以版本不符失败（2026-09-29 v1.5.6 发布当天，
-# macos_arm64 与 windows_amd64 这两个真正跑测试的平台就是这么挂的）。这里由 TARGET_DUCKDB_VERSION 推出
-# （去掉前缀 v，pip 的写法），保持版本号只有一个来源。
-#
-# 稳定区构建不受这条约束（任何不低于下限的引擎都收），所以那时按需要显式给一个引擎版本：
+# 测试用的 DuckDB 版本：`C_STRUCT_UNSTABLE` 的产物被钉死在精确版本上（加载时校验），所以那时它必须与
+# TARGET_DUCKDB_VERSION 一致；`C_STRUCT` 产物（稳定区，以及 v1.5.6 下限的不稳定区）不受这条约束，任何
+# 不低于下限的引擎都收。这里默认用当前发行版引擎 —— 它既是分发流水线构建的那版，也是 quack-rs 0.19
+# 声称能跑不稳定区构建的那版。要验证更老的引擎就显式给一个：
 #   make DUCKDB_TEST_VERSION=1.4.0 test_debug
+#   make DUCKDB_TEST_VERSION=1.5.6 TARGET_DUCKDB_VERSION=v1.5.6 ... test_debug   # 需 1.5.6 头文件
 #
-# The DuckDB version the test runner uses has to match the build target: with USE_UNSTABLE_C_API=1 the
-# artifact is pinned to an exact version (verified at load time), while base.Makefile leaves
-# DUCKDB_TEST_VERSION empty, which means "latest from PyPI" — one patch release upstream and the test
-# engine is newer than the artifact, so `make test_release` fails on the version check. Derived from
-# TARGET_DUCKDB_VERSION (minus the `v` prefix, the way pip spells it) to keep one source of truth.
-#
-# A stable-region build is not bound by that (every engine at or above the floor accepts it), so pass
-# the engine explicitly there: `make DUCKDB_TEST_VERSION=1.4.0 test_debug`.
-# The engine the test runner uses. A stable build is not pinned to it, so this is the newest engine
-# the 2.0 pipeline ships against, not a copy of TARGET_DUCKDB_VERSION (which is the C API floor).
+# The engine the test runner uses. A `C_STRUCT_UNSTABLE` artifact is pinned to an exact release
+# (verified at load time), so there it has to match TARGET_DUCKDB_VERSION. A `C_STRUCT` artifact — the
+# stable build and the v1.5.6-floor unstable one — is not bound to it: any engine at or above the
+# floor accepts it. This defaults to the current release engine, which is both what the distribution
+# pipeline builds for and the engine quack-rs 0.19 claims for unstable-region builds. Pass an older one
+# explicitly to check a range: `make DUCKDB_TEST_VERSION=1.4.0 test_debug`.
 DUCKDB_TEST_VERSION ?= 2.0.0
 
 all: configure debug
@@ -219,10 +233,20 @@ endif
 EXTRA_TEST_ARGS ?=
 TEST_RUNNER_BASE := $(TEST_RUNNER) --test-dir test/sql $(EXTRA_EXTENSIONS_PARAM) $(EXTRA_TEST_ARGS)
 
-# A stable build cannot carry the unstable-region demo functions, so the default test run uses the
-# stable subset of the suite. `scripts/test-stable.sh` passes its own list via EXTRA_TEST_ARGS and
-# therefore bypasses this override; an unstable opt-in build keeps the whole tree.
-ifeq ($(USE_UNSTABLE_C_API),0)
+# 只有不含不稳定区能力的产物才跑稳定子集：判据是 EXTENSION_FEATURES 里有没有 duckdb-1-5* / duck_vfs，
+# 而不是 USE_UNSTABLE_C_API —— quack-rs 0.19 起不稳定区构建也 stamp C_STRUCT（v1.5.6 下限），那个变量
+# 不再是它的标志。`scripts/test-stable.sh` 自己传 EXTRA_TEST_ARGS，因此绕过这段。
+#
+# filter 按空白分词，而 EXTENSION_FEATURES 是逗号分隔的一整个词，所以先把逗号换成空格再 filter。
+#
+# Only an artifact without unstable-region capabilities runs the stable subset. The test is whether
+# EXTENSION_FEATURES names duckdb-1-5* / duck_vfs, not USE_UNSTABLE_C_API: since quack-rs 0.19 an
+# unstable-region build is also stamped C_STRUCT (v1.5.6 floor), so that variable no longer marks it.
+# `scripts/test-stable.sh` passes its own EXTRA_TEST_ARGS and therefore bypasses this. filter splits on
+# whitespace while EXTENSION_FEATURES is one comma-separated word, hence the comma-to-space step.
+comma := ,
+EXTENSION_FEATURE_WORDS := $(subst $(comma), ,$(EXTENSION_FEATURES))
+ifeq ($(strip $(filter duckdb-1-5% duck_vfs,$(EXTENSION_FEATURE_WORDS))),)
 STABLE_TEST_LIST := target/stable-default-tests.txt
 
 .PHONY: stable_test_list

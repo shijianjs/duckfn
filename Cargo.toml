@@ -303,7 +303,7 @@ rust_decimal = ["dep:rust_decimal"]
 quack = []
 
 [dependencies]
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 
 # `cli` feature 用的命令行解析（derive 风格：一个结构体 + 一个枚举就是一个 CLI）。
 #

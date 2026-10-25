@@ -57,7 +57,7 @@ sqllogictest 用例，所以想读文档、看示例页、抄一份完整扩展�
 duckfn = "0.2.0"
 
 # duckfn 本身就建立在下面两个 crate 之上；需要直接使用它们的类型或 builder 时显式加上。
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 # loadable-extension：走 DuckDB 的 API 函数表分发，而不是链接 libduckdb，
 # 这也是「无需在本地编译 DuckDB」的原因。
 # （仅使用头文件，不链接库）

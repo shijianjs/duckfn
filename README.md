@@ -61,7 +61,7 @@ duckfn = "0.2.0"
 
 # duckfn itself is built on these two crates; add them explicitly when you use
 # their types or builders directly.
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 # `loadable-extension` dispatches through DuckDB's API table instead of linking
 # libduckdb, which is what keeps a local DuckDB build unnecessary.
 # (headers only — no linked library)

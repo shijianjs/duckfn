@@ -14,7 +14,7 @@ duckfn = "{{DUCKFN_VERSION}}"
 
 # duckfn 基于这两个 crate 构建。只要你直接书写它们的类型或 builder ——
 # 例如 SqlMacro、Connection、LogicalType、Value —— 就需要显式添加。
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 # `loadable-extension` 通过 DuckDB 的 API table 分发，而不是链接 libduckdb，
 # 这正是无需本地编译 DuckDB 的原因。只用到头文件。
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
@@ -37,7 +37,8 @@ libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 | `quack` | **本仓库**（以及模板）示例扩展与 CLI 的标记：它只决定那两个 target 编不编，不决定它们有什么能力 —— 那由构建时列的 feature 决定。下游永远用不到它。 | 示例自己的那份能力清单，由构建命令一并给出。 |
 
 每个 feature 都以它暴露的模块命名，并且**没有「全开」开关**：依赖里写清楚要用哪几项。这是刻意的
-——「全开」说不清代价（带连接的那两项有副作用；`duckdb-1-5` 把构建钉在某个引擎发行版上），也看不出
+——「全开」说不清代价（带连接的那两项有副作用；`duckdb-1-5` 把 C API 下限抬到 `v1.5.6`，也就是
+DuckDB 1.5.6 与 2.0.0 共用的那份布局），也看不出
 一份构建到底开了哪些能力。
 
 三个互转 feature 各自独立，用到哪个开哪个：
@@ -72,7 +73,8 @@ crate-type = ["cdylib"]
 2. DuckDB API 调用走一张函数指针表，宿主 DuckDB 在加载扩展并调用入口点时把这张表填好。
 
 带来的好处是构建快、无外部依赖（交叉编译也能工作），代价是扩展必须与加载它的 DuckDB 版本匹配。
-另外扩展被标记为使用 *unstable* C API，所以加载时必须加 `-unsigned`。
+稳定区构建声明的是 C API 下限，任何不低于它的引擎都收；用到不稳定区的构建声明 `v1.5.6`，DuckDB 1.5.6
+与 2.0.0 都收。本地构建的扩展加载时总是需要 `-unsigned` —— 文件本身没有签名。
 
 ## 环境要求
 

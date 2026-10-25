@@ -20,9 +20,9 @@ version it was built against — see [Architecture](./development/architecture.m
 
 ### Why do I have to load the extension with `-unsigned`?
 
-The extension is not signed by DuckDB, and it is marked as using DuckDB's unstable C API, so DuckDB
-refuses to load it unless unsigned extensions are allowed. Passing `-unsigned` on the command line
-does that.
+The extension is not signed by DuckDB, so DuckDB refuses to load it unless unsigned extensions are
+allowed. Passing `-unsigned` on the command line does that — the flag is about the missing signature,
+not about which C API region the extension uses.
 
 ### How is this different from `duckdb-rs`?
 
@@ -108,10 +108,12 @@ sets up the extension with `require duckfn`, then pairs statements with their ex
 
 ### The extension loads but calls fail with a version error
 
-The extension is compiled against a specific DuckDB version (`TARGET_DUCKDB_VERSION`, currently
-v2.0.0) and uses the unstable C API, so it only works with a compatible DuckDB. Load it into the
-matching version, or rebuild against the version you are running. What "compatible" means — and how
-the same error reads under the stable ABI — is in
+An extension declares the C API level it was built against in its metadata. A stable build declares
+a floor (`v1.2.0` for duckfn's release artifact) and every engine at or above it accepts the file; a
+build that uses the unstable region declares `v1.5.6`, which DuckDB 1.5.6 and 2.0.0 accept. A version
+error means the engine sits below that declaration (or, for a `C_STRUCT_UNSTABLE` build, is not the
+exact release it was pinned to). Load it into a compatible version, or rebuild against the version you
+are running. What "compatible" means — and how the same error reads under the stable ABI — is in
 [DuckDB version compatibility](./duckdb-versions/index.md).
 
 ### Where do tooling problems go?

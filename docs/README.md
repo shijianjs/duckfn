@@ -63,13 +63,14 @@ when the release asset's sha256 changes. Both `.cache/` and
 `static/duckdb-extensions/` are gitignored — a file placed there by hand needs
 `git add -f`.
 
-The extension is built by CI for DuckDB v2.0.0. The site pins
-`@duckdb/duckdb-wasm` to `1.33.1-dev65.0` (engine v1.5.6 — npm's `next` tag at the time the
-pin was taken; stable `1.32.0` bundles v1.4.3). **That engine is older than the build and its
-unstable C-API layout does not match**, so the live runnable blocks need a `duckdb-wasm` release
-whose engine is v2.0.0 (at the time of writing the `next` dev builds still carried a `v2.0.0-dev…`
-engine). Do not bump the pin to such a dev build — an unstable ABI matches the final release, not a
-commit in between. When either side moves, re-check the Docs kit pages: the live blocks there must
+The extension shipped in releases is the stable build: `USE_UNSTABLE_C_API=0` with
+`TARGET_DUCKDB_VERSION=v1.2.0` stamps `C_STRUCT` with a **v1.2.0 C API floor** (`duckdb_version:
+v2.0.0` in the pipeline names the engine the build and tests run against, not the metadata version).
+The site pins `@duckdb/duckdb-wasm` to `1.33.1-dev65.0` (engine v1.5.6 — npm's `next` tag at the time
+the pin was taken; stable `1.32.0` bundles v1.4.3), which is above that floor, so the live runnable
+blocks load the release artifact. An unstable-region build is also `C_STRUCT` (floor v1.5.6 under
+quack-rs 0.19) and loads on the same engine; only a legacy `C_STRUCT_UNSTABLE` artifact is tied to
+one exact release. When either side moves, re-check the Docs kit pages: the live blocks there must
 run.
 
 ## Commands

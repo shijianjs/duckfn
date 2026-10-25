@@ -38,12 +38,12 @@ EXTENSION_FEATURES=quack,sql,chrono,uuid,rust_decimal
 TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
 
-The default build is a **stable C API** build. DuckDB 2.0 changed the unstable entrypoint: an artifact
-declaring `C_STRUCT_UNSTABLE` must export `<name>_init_c_api_v2`, while quack-rs 0.18.0 — the Rust
-wrapper duckfn builds on — only emits the v1 `<name>_init_c_api`. The 2.0 distribution therefore stays
-in the stable region, and `TARGET_DUCKDB_VERSION=v1.2.0` is a **C API floor**, not a release: one
-artifact covers DuckDB 1.3.2 through 2.0.0. [DuckDB version compatibility](../duckdb-versions/index.md)
-covers both ABI types and the 2.0 entrypoint change.
+The default build is a **stable C API** build, and the distribution keeps it that way:
+`TARGET_DUCKDB_VERSION=v1.2.0` is a **C API floor**, not a release, so one artifact covers DuckDB
+1.3.2 through 2.0.0. quack-rs 0.19 supports the unstable region on 2.0 as well — by stamping
+`C_STRUCT` with a `v1.5.6` floor instead of `C_STRUCT_UNSTABLE` — but that is not what the shipped
+artifact needs. [DuckDB version compatibility](../duckdb-versions/index.md) covers both ABI types and
+the 2.0 entrypoint change.
 
 `EXTENSION_NAME` has to match `duckfn_entrypoint!` in `test/extension/entry.rs` and the `require` lines
 of the sqllogictest files. `TARGET_INFO` carries `--example $(EXTENSION_NAME)` plus
@@ -54,13 +54,20 @@ back a cdylib with no entry-point symbol.
 
 `quack` in that list is only a **marker** — it decides whether the example tree is compiled at all —
 and the rest is the capability list, because the tree splits itself by capability module. `duckdb-1-5`
-and `duck_vfs` live in the unstable region and are opt-in; until quack-rs supports C API v2 they can
-only be built for a local DuckDB 1.5.6 engine:
+and `duck_vfs` live in the unstable region and are opt-in. With quack-rs 0.19 they are stamped
+`C_STRUCT` with a `v1.5.6` C API floor (not `C_STRUCT_UNSTABLE`, which DuckDB 2.0 would send to a v2
+entrypoint quack-rs does not generate). Against the 2.0 headers this `Cargo.lock` resolves, that
+artifact runs on 2.0.0:
 
 ```bash
-make USE_UNSTABLE_C_API=1 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=1.5.6 \
+make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=2.0.0 \
      EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal debug
 ```
+
+To cover 1.5.6 *and* 2.0.0 with one artifact, pin `libduckdb-sys` to `1.10506.0` first: that is the
+546-slot 1.5.6 layout, which 2.0 accepts as a prefix. The 2.0 headers carry 548 slots, so a build
+against them is refused on 1.5.6 rather than dispatched into the wrong slots.
+[Version numbers and the ABI](../duckdb-versions/c-api-and-abi.md) has both complete configurations.
 
 The stable build runs the stable subset of the suite automatically (`scripts/stable_test_list.py`);
 `make test` therefore does not try to call the unstable demo functions. To run the same artifact against

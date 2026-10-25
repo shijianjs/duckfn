@@ -26,17 +26,18 @@ import "scripts/common.just"
 extension_name := "duckfn"
 
 # 示例树挂在默认关闭的标记式 feature `quack` 上，它要演示哪些能力由这份清单给出 —— 与根 Makefile 的
-# EXTENSION_FEATURES 默认值保持一致（改一处记得改另一处）。默认只含稳定区能力：DuckDB 2.0 的 unstable
-# ABI 要求 v2 入口（`<name>_init_c_api_v2`），quack-rs 0.18.0 还没有，所以 `duckdb-1-5` / `duck_vfs`
-# 只用于本地 1.5.6 全量构建（显式给出 feature 清单）。涉及 cargo 的命令都得显式带上它们，不带时
-# cargo 只是静默跳过目标，产物没有入口符号，LOAD 时才报错。
+# EXTENSION_FEATURES 默认值保持一致（改一处记得改另一处）。默认只含稳定区能力；`duckdb-1-5` / `duck_vfs`
+# 是 opt-in（涉及 cargo 的命令都得显式带上它们，不带时 cargo 只是静默跳过目标，产物没有入口符号，
+# LOAD 时才报错）。quack-rs 0.19 起，不稳定区构建按 `C_STRUCT` + C API 下限 v1.5.6 发布，1.5.6 与 2.0.0
+# 都能加载；具体命令见根 Makefile 顶部注释。
 #
 # The example tree sits behind the marker feature `quack`, and which capabilities it demonstrates comes
 # from this list — kept in sync with EXTENSION_FEATURES in the root Makefile. The default is stable-region
-# only: DuckDB 2.0's unstable ABI needs the v2 entrypoint (`<name>_init_c_api_v2`), which quack-rs 0.18.0
-# does not emit, so `duckdb-1-5` / `duck_vfs` are opt-in for a local full DuckDB 1.5.6 build. Every cargo
-# command that builds the extension passes the list explicitly: without it cargo silently skips the
-# targets and the artifact has no entry-point symbol, which only `LOAD` complains about.
+# only; `duckdb-1-5` / `duck_vfs` are opt-in (every cargo command that builds the extension passes the
+# list explicitly: without it cargo silently skips the targets and the artifact has no entry-point
+# symbol, which only `LOAD` complains about). Since quack-rs 0.19 an unstable-region build is stamped
+# `C_STRUCT` with a v1.5.6 C API floor, which both 1.5.6 and 2.0.0 load; see the root Makefile for the
+# exact command.
 _example_features := "quack,sql,chrono,uuid,rust_decimal"
 _example := "--features " + _example_features
 

@@ -14,7 +14,7 @@ duckfn = "{{DUCKFN_VERSION}}"
 
 # duckfn is built on these two crates. Add them explicitly as soon as you name
 # their types or builders yourself — SqlMacro, Connection, LogicalType, Value, …
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 # `loadable-extension` dispatches through DuckDB's API table instead of linking
 # libduckdb, which is what keeps a local DuckDB build unnecessary. Only the
 # headers are used.
@@ -40,8 +40,9 @@ macros without the runtime.
 
 Every feature is named after the module it exposes, and there is **no aggregate switch**: a
 dependency names exactly what it uses. That is deliberate — an "everything on" feature says nothing
-about what it costs (the two connection-carrying ones have side effects; `duckdb-1-5` pins the build
-to an engine release) and hides which capability a build actually ended up with.
+about what it costs (the two connection-carrying ones have side effects; `duckdb-1-5` raises the C
+API floor to `v1.5.6`, the layout DuckDB 1.5.6 and 2.0.0 share) and hides which capability a build
+actually ended up with.
 
 The three interop features are independent — enable only the crates you actually use:
 
@@ -79,8 +80,10 @@ Normally a DuckDB extension is compiled against, and linked to, DuckDB itself. `
    the extension and calls the entry point.
 
 The consequence is a fast, dependency-free build (and cross-compilation that works), with one
-trade-off: the extension must match the DuckDB version it is loaded into. The extension is also
-marked as using the *unstable* C API, which is why loading it requires `-unsigned`.
+trade-off: the extension must match the DuckDB version it is loaded into. A stable-region build
+declares a C API floor and is accepted by every engine at or above it; one that uses the unstable
+region declares `v1.5.6`, which DuckDB 1.5.6 and 2.0.0 accept. Loading a locally built extension
+always needs `-unsigned`, because the file carries no signature.
 
 ## Requirements
 

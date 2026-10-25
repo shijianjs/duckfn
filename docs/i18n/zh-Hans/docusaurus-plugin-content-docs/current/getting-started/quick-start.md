@@ -34,7 +34,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 duckfn = "{{DUCKFN_VERSION}}"
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
 
@@ -95,7 +95,7 @@ SELECT double_it(21);
 | `SELECT double_it(NULL);` | `NULL` |
 | `SELECT double_it(13);` | 报错：`unlucky input` |
 
-扩展基于 DuckDB 的 unstable C API 构建，因此必须加 `-unsigned`。
+本地构建的扩展没有 DuckDB 签名，因此必须加 `-unsigned`。
 
 ### 加载已发布的产物
 

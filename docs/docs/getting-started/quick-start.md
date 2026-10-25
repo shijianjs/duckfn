@@ -36,7 +36,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 duckfn = "{{DUCKFN_VERSION}}"
-quack-rs = "0.18.0"
+quack-rs = "0.19.0"
 libduckdb-sys = { version = ">=1.4.4, <2", features = ["loadable-extension"] }
 ```
 
@@ -101,7 +101,7 @@ SELECT double_it(21);
 | `SELECT double_it(NULL);` | `NULL` |
 | `SELECT double_it(13);` | error: `unlucky input` |
 
-`-unsigned` is required because the extension is built against DuckDB's unstable C API.
+`-unsigned` is required because a locally built extension carries no DuckDB signature.
 
 ### Loading a released build
 

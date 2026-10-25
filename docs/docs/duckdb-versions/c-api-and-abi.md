@@ -74,8 +74,8 @@ libduckdb-sys = { version = ">=1.10500, <2", features = ["loadable-extension"] }
 is DuckDB 1.5.6, `1.20000.0` is DuckDB 2.0.0, and the `>=1.10500` above means "DuckDB 1.5 headers or
 newer" — which includes 2.0. In the 2.0 generation the v1 bindings moved under `libduckdb_sys::v1`
 (re-exported at the crate root as well) behind the default `capi-v1` feature, so code that names
-those items should be checked when you move; quack-rs 0.18.0 has no 2.0 line yet, which is why the
-dependency range stays where it is. The checked-in `Cargo.lock` files of duckfn and the five
+those items should be checked when you move; quack-rs 0.19 added 2.0 to its layout table, so the
+wrapper no longer holds the range back. The checked-in `Cargo.lock` files of duckfn and the five
 extensions now resolve `1.20000.0` (2.0 headers) on the stable `capi-v1` surface; the range itself is
 unchanged so a downstream crate can still resolve older headers.
 
@@ -130,50 +130,56 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
 - `DUCKDB_TEST_VERSION` is absent for the same reason: the test runner may be any newer engine,
   because every engine at or above the floor accepts the artifact.
 
-### Unstable region — the complete set (DuckDB 1.5.x only)
+### Unstable region — the complete set (DuckDB 1.5.6 and 2.0.0)
 
-:::warning
-DuckDB 2.0 changed the unstable entrypoint. An artifact whose metadata says `C_STRUCT_UNSTABLE` must
-export `<name>_init_c_api_v2` from `duckdb_extension_v2.h`, while quack-rs 0.18.0 (including its `main`
-branch) only emits the v1 entrypoint `<name>_init_c_api`. Such an artifact is rejected at `LOAD` time on
-2.0 with *"did not contain function ..._init_c_api_v2"*. That is why duckfn's own 2.0 distribution is a
-stable build. Until quack-rs supports C API v2, keep the unstable opt-in on DuckDB **1.5.6**.
+:::note
+quack-rs 0.19 changed how an unstable-region build is stamped: use `C_STRUCT` with a **v1.5.6 C API
+floor**, not `C_STRUCT_UNSTABLE`. DuckDB 2.0 keeps the v1 C API at version v1.5.6 and only appends two
+slots to the 1.5.6 layout, so a build against the 1.5.6 headers is accepted by both 1.5.6 and 2.0.0,
+and quack-rs' runtime layout check accepts the appended layout. `C_STRUCT_UNSTABLE` is no longer the
+route for new builds: DuckDB 2.0 sends every such binary to the C API v2 entrypoint
+`<name>_init_c_api_v2`, which quack-rs does not generate, so it fails to `LOAD` there.
 :::
 
 ```make
 # Makefile
 EXTENSION_NAME=my_extension
-USE_UNSTABLE_C_API=1
+USE_UNSTABLE_C_API=0
 TARGET_DUCKDB_VERSION=v1.5.6
-export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
-DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
+DUCKDB_TEST_VERSION := 2.0.0
 ```
 
 ```toml
 # Cargo.toml
 duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "duck_vfs" for duckfn::duck_vfs (also in the unstable region)
+libduckdb-sys = { version = "=1.10506.0", features = ["loadable-extension"] }   # the 1.5.6 headers
 ```
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v1.5.6     # must equal TARGET_DUCKDB_VERSION; it is the engine `make test` loads into
+      duckdb_version: v2.0.0     # any engine at or above the floor; the newest is the safe pick
 ```
 
-- **The `export` keyword is part of the line, not decoration.** quack-rs' build script reads
-  `QUACK_RS_TARGET_DUCKDB_VERSION` from the *environment*, and `make` does not put a variable there
-  unless it is exported. Drop `export` and cargo sees nothing — no error, just an empty value, and
-  the layout check then falls back to quack-rs' own table, which is exactly what rejects the engine
-  when it is a release quack-rs has not catalogued yet.
-- `TARGET_DUCKDB_VERSION` is a **release** in this mode and the engine has to match it literally —
-  which is why the test-runner pin (`DUCKDB_TEST_VERSION`) and the CI pin move together with it.
-- Going back to the stable side means dropping all three version-flavoured lines at once: the
-  `export`, the `DUCKDB_TEST_VERSION` derivation, and the CI pin's "must equal" requirement.
+- **The header pin is what buys the range.** `C_STRUCT` here is a floor, not a release: `v1.5.6` is
+  the layout DuckDB 2.0 still runs, so one artifact covers 1.5.6 and 2.0.0 while 1.5.0 – 1.5.5 refuse
+  it at `LOAD` (their C API version is `v1.2.0`). Build against the 1.5.6 headers (`libduckdb-sys`
+  `1.10506.x`). A build against the 2.0 headers carries the 548-slot layout instead and is
+  **2.0-only** — quack-rs refuses the 546-slot engine rather than dispatch into the wrong slots.
+- `DUCKDB_TEST_VERSION` may be any engine at or above the floor, so the newest one is the useful
+  pick; the test-runner engine and the artifact no longer have to match literally.
+- `USE_UNSTABLE_C_API` is only the metadata-ABI switch, not the capability switch: the capabilities
+  come from the feature list. Leaving it at 0 is what makes the stamp `C_STRUCT`.
+- Do not export `QUACK_RS_TARGET_DUCKDB_VERSION` here. That variable declares *which release the
+  resolved headers came from*; set it only when it matches `libduckdb-sys`, or quack-rs' runtime check
+  reports a `DeclaredVersionMismatch`. With the pin above it is `v1.5.6` and harmless, but the 1.5.6
+  and 2.0.0 layouts are already in its table, so it adds nothing.
 
-The one trap that survives in either mode:
+The trap that survives: **the declared floor has to match the headers you built against.**
 
-- **Do not turn `duckdb-1-5` on while claiming `C_STRUCT`.** The loader only checks what you declared,
-  so the file would be accepted by engines whose unstable layout differs — and the mismatch would show
-  up as undefined behaviour instead of a load error. Pick one side and match the feature to it.
+- Declaring `v1.2.0` while turning `duckdb-1-5` on would be accepted by 1.5.0 – 1.5.5, whose unstable
+  layout differs. quack-rs' runtime layout check refuses those engines, but do not rely on that check
+  as the only gate — an unstable-region build declares `v1.5.6`, the version whose layout it compiled
+  against.
 
 ### What a stable build actually covers
 
@@ -203,12 +209,14 @@ feature, required by `loadable-extension`), and that v1 surface is exactly what 
 API v2 is different" is about the *new header*, not about v1 extensions losing compatibility. Mind the
 version encoding too: DuckDB 2.0.0 maps to a `libduckdb-sys` crate version `1.20000.x` (format
 `1.<major*10000 + minor*100 + patch>.x`) — still a `1.x`, so a `>=1.10500, <2` constraint selects it.
-The `<2` bound is not the blocker; moving your release line onto 2.0 is gated by the Rust wrapper
-catching up (quack-rs has no 2.0 line yet) and by the bindings' new `libduckdb_sys::v1` path, not by
-a crate version bound.
+The `<2` bound is not the blocker: quack-rs 0.19 added DuckDB 2.0 to its layout table (including the
+v1.5.6 build running on 2.0's appended layout), so what remains is the bindings' new
+`libduckdb_sys::v1` path and your own code — and, only if you still stamp `C_STRUCT_UNSTABLE`, the v2
+entrypoint, which quack-rs does not generate.
 
 Raise the floor only when you genuinely need newer headers. And raise it by the *C API version*, not
-by a release number: writing `v1.5.6` there leaves exactly that engine willing to take the file.
+by a release number: with `C_STRUCT`, `v1.5.6` leaves 1.5.6 and 2.0.0 willing to take the file (the
+layout they share), while `v1.6.0` would wait for an engine that declares it.
 
 ## Checking a build yourself
 

@@ -37,10 +37,10 @@ EXTENSION_FEATURES=quack,sql,chrono,uuid,rust_decimal
 TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 ```
 
-默认构建是**稳定版 C API** 构建。DuckDB 2.0 改了不稳定入口点：声明 `C_STRUCT_UNSTABLE` 的产物必须导出
-`<name>_init_c_api_v2`，而 duckfn 依赖的 Rust 封装 quack-rs 0.18.0 只会生成 v1 的 `<name>_init_c_api`。
-所以 2.0 发行版留在稳定区，`TARGET_DUCKDB_VERSION=v1.2.0` 是 **C API 下限**而不是发行版本号：一份产物
-覆盖 DuckDB 1.3.2 到 2.0.0。两种 ABI 类型与 2.0 入口点的变化见
+默认构建是**稳定版 C API** 构建，发行版也刻意保持这一档：`TARGET_DUCKDB_VERSION=v1.2.0` 是 **C API
+下限**而不是发行版本号，所以一份产物覆盖 DuckDB 1.3.2 到 2.0.0。quack-rs 0.19 也支持把不稳定区用在 2.0
+上 —— 办法是把产物 stamp 成 `C_STRUCT` + `v1.5.6` 下限，而不是 `C_STRUCT_UNSTABLE` —— 但发出去的产物
+不需要这一档。两种 ABI 类型与 2.0 入口点的变化见
 [DuckDB 版本兼容性](../duckdb-versions/index.md)。
 
 `EXTENSION_NAME` 必须与 `test/extension/entry.rs` 里的 `duckfn_entrypoint!`、以及 sqllogictest 文件里的
@@ -50,13 +50,18 @@ TARGET_INFO += --example $(EXTENSION_NAME) --features $(EXTENSION_FEATURES)
 入口符号的 cdylib。
 
 那份清单里的 `quack` 只是**标记**（决定示例树编不编），其余是能力清单 —— 因为示例树自己按能力分模块。
-`duckdb-1-5` 与 `duck_vfs` 在不稳定区，是显式 opt-in 的；在 quack-rs 支持 C API v2 之前，只能对本地
-DuckDB 1.5.6 构建：
+`duckdb-1-5` 与 `duck_vfs` 在不稳定区，是显式 opt-in 的。quack-rs 0.19 起它们按 `C_STRUCT` + `v1.5.6`
+的 C API 下限发布（不是 `C_STRUCT_UNSTABLE` —— 2.0 会把那种产物送去一个 quack-rs 不生成的 v2 入口）。
+对着当前 `Cargo.lock` 解析到的 2.0 头文件编，产物在 2.0.0 上可加载：
 
 ```bash
-make USE_UNSTABLE_C_API=1 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=1.5.6 \
+make USE_UNSTABLE_C_API=0 TARGET_DUCKDB_VERSION=v1.5.6 DUCKDB_TEST_VERSION=2.0.0 \
      EXTENSION_FEATURES=quack,duckdb-1-5,duck_vfs,sql,chrono,uuid,rust_decimal debug
 ```
+
+要用一份产物同时覆盖 1.5.6 与 2.0.0，先把 `libduckdb-sys` 钉到 `1.10506.0`：那是 546 槽的 1.5.6
+布局，2.0 接受它作为前缀；2.0 头文件带的是 548 槽，对着它编的产物在 1.5.6 上会被拒，而不是派发到错的
+槽位。两套完整配置见[版本数字与 ABI 兼容性](../duckdb-versions/c-api-and-abi.md)。
 
 稳定区构建会自动跑用例里的稳定子集（`scripts/stable_test_list.py`），所以 `make test` 不会去调用
 不稳定档的示例函数。要把同一份产物拿给更旧的引擎跑：

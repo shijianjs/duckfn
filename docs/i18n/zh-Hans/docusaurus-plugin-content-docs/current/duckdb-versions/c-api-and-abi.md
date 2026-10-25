@@ -66,8 +66,8 @@ libduckdb-sys = { version = ">=1.10500, <2", features = ["loadable-extension"] }
 `libduckdb-sys` 把 DuckDB 发行版编码成 `1.<major*10000 + minor*100 + patch>.0`，所以 `1.10506.0` 是
 DuckDB 1.5.6，`1.20000.0` 是 DuckDB 2.0.0，上面那个 `>=1.10500` 就是「DuckDB 1.5 头文件或更新」——
 2.0 也在这个范围里。2.0 这一代把 v1 绑定挪到了 `libduckdb_sys::v1` 下（crate 根仍有再导出），由默认的
-`capi-v1` feature 控制；迁过去时，凡是通过 crate 根路径引用这些条目的代码都要过一遍。quack-rs 0.18.0
-还没有 2.0 那一支，所以依赖范围暂时不动。duckfn 与五个扩展仓库里已提交的 `Cargo.lock` 现在解析到
+`capi-v1` feature 控制；迁过去时，凡是通过 crate 根路径引用这些条目的代码都要过一遍。quack-rs 0.19
+已经把 2.0 收进布局表，封装层不再是拦路虎。duckfn 与五个扩展仓库里已提交的 `Cargo.lock` 现在解析到
 `1.20000.0`（2.0 头文件），走的仍是稳定区 `capi-v1`；范围本身没改，下游依旧可以解析到更旧的标头。
 
 没有别的东西会改写 `Makefile` 那一行：ci-tools 的 `set_duckdb_version` 对 C API 扩展是 no-op，社区
@@ -114,48 +114,51 @@ duckfn = { version = "{{DUCKFN_VERSION}}", features = ["cli", "sql"] }
   `built_against_version()` 之前就返回 `StableOnly`。
 - 也没有 `DUCKDB_TEST_VERSION`，同理：测试 runner 可以是任意更新的引擎，因为每个不低于下限的引擎都收这份产物。
 
-### 不稳定区 —— 完整配置集（仅限 DuckDB 1.5.x）
+### 不稳定区 —— 完整配置集（DuckDB 1.5.6 与 2.0.0）
 
-:::warning
-DuckDB 2.0 改了不稳定入口点。元数据声明 `C_STRUCT_UNSTABLE` 的产物必须导出
-`duckdb_extension_v2.h` 里的 `<name>_init_c_api_v2`，而 quack-rs 0.18.0（包括它的 `main` 分支）只会生成
-v1 入口 `<name>_init_c_api`。这样的产物在 2.0 上 `LOAD` 时会被拒，报
-*"did not contain function ..._init_c_api_v2"* —— 这正是 duckfn 自己的 2.0 发行版走稳定区构建的原因。
-quack-rs 支持 C API v2 之前，不稳定档里的 `TARGET_DUCKDB_VERSION` 请钉在 **1.5.6**。
+:::note
+quack-rs 0.19 改掉了不稳定区构建的 stamp 方式：用 `C_STRUCT` + **v1.5.6 的 C API 下限**，不再用
+`C_STRUCT_UNSTABLE`。DuckDB 2.0 把 v1 C API 保持在 v1.5.6，只在 1.5.6 的布局后面追加两个槽位，所以对着
+1.5.6 头文件编出来的产物 1.5.6 与 2.0.0 都收，quack-rs 的运行时布局检查也接受这份「追加式」布局。
+`C_STRUCT_UNSTABLE` 不再是新构建的路子：2.0 会把这类产物一律送到 C API v2 入口
+`<name>_init_c_api_v2`，而 quack-rs 不生成它，于是 `LOAD` 直接失败。
 :::
 
 ```make
 # Makefile
 EXTENSION_NAME=my_extension
-USE_UNSTABLE_C_API=1
+USE_UNSTABLE_C_API=0
 TARGET_DUCKDB_VERSION=v1.5.6
-export QUACK_RS_TARGET_DUCKDB_VERSION=$(TARGET_DUCKDB_VERSION)
-DUCKDB_TEST_VERSION := $(patsubst v%,%,$(TARGET_DUCKDB_VERSION))
+DUCKDB_TEST_VERSION := 2.0.0
 ```
 
 ```toml
 # Cargo.toml
 duckfn = { version = "{{DUCKFN_VERSION}}", features = ["duckdb-1-5"] }   # + "duck_vfs" 用于 duckfn::duck_vfs（同样在不稳定区）
+libduckdb-sys = { version = "=1.10506.0", features = ["loadable-extension"] }   # 1.5.6 头文件
 ```
 
 ```yaml
 # .github/workflows/MainDistributionPipeline.yml
-      duckdb_version: v1.5.6     # 必须等于 TARGET_DUCKDB_VERSION；它是 `make test` 载入进去的那个引擎
+      duckdb_version: v2.0.0     # 任何不低于下限的引擎都行；选最新的更稳
 ```
 
-- **`export` 关键字是这一行的一部分，不是装饰。** quack-rs 的 build script 从*环境*里读
-  `QUACK_RS_TARGET_DUCKDB_VERSION`，而 `make` 除非标了 `export` 否则不会把变量放进环境。去掉 `export`，
-  cargo 什么也看不到 —— 不报错，只是个空值，于是那个布局检查回退到 quack-rs 自己的表，而那正是引擎是
-  quack-rs 还没收录的发行版时把它拒掉的东西。
-- 在这个模式下 `TARGET_DUCKDB_VERSION` 是一个**发行版**，引擎必须逐字匹配 —— 这就是为什么测试 runner 的
-  钉版（`DUCKDB_TEST_VERSION`）和 CI 的钉版要跟它一起动。
-- 要退回稳定侧，这三行带版本味的配置要一起删：`export`、`DUCKDB_TEST_VERSION` 的派生，以及 CI 那条
-  「必须相等」的要求。
+- **买到这份覆盖范围的是头文件钉版。** 这里的 `C_STRUCT` 是下限，不是发行版钉死：`v1.5.6` 是 DuckDB 2.0
+  仍在沿用的布局，所以一份产物覆盖 1.5.6 与 2.0.0，而 1.5.0 – 1.5.5 会在 `LOAD` 时拒绝（它们的 C API
+  版本是 `v1.2.0`）。要对着 1.5.6 的头文件编（`libduckdb-sys` `1.10506.x`）；对着 2.0 头文件编出来的产物
+  带的是 548 槽布局，只能跑 **2.0** —— quack-rs 会拒绝 546 槽的引擎，而不是往错的槽位里派发。
+- `DUCKDB_TEST_VERSION` 可以是任何不低于下限的引擎，所以选最新版最有用；测试引擎与产物不再需要逐字相等。
+- `USE_UNSTABLE_C_API` 只是元数据 ABI 的开关，不是能力开关 —— 能力来自 feature 清单。保持 0 才会 stamp
+  成 `C_STRUCT`。
+- 这里**不要**导出 `QUACK_RS_TARGET_DUCKDB_VERSION`。那个变量声明的是「解析到的头文件来自哪一版发行版」，
+  只有与 `libduckdb-sys` 一致时才能设，否则 quack-rs 的运行时检查会报 `DeclaredVersionMismatch`。按上面的
+  钉版它确实是 `v1.5.6`、设了也无害，但 1.5.6 与 2.0.0 的布局都已在它的表里，设了不增加任何东西。
 
-两种模式都躲不掉的一个坑：
+躲不掉的一个坑：**声明的下限必须与编译时用的头文件一致。**
 
-- **别在声明 `C_STRUCT` 的同时打开 `duckdb-1-5`。** 加载器只校验你声明了什么，于是不稳定区槽位对不上的
-  引擎照样会收下这个文件 —— 而对不上暴露出来的不是加载错误，是未定义行为。两边选一边，别跨着站。
+- 打开 `duckdb-1-5` 却仍声明 `v1.2.0`：1.5.0 – 1.5.5 会收下它，而它们的不稳定区布局不同。quack-rs 的
+  运行时布局检查会拒绝这些引擎，但别把那个检查当成唯一的闸门 —— 不稳定区构建声明 `v1.5.6`，也就是它
+  编译时对着的布局。
 
 ### 稳定区的一份产物到底覆盖到哪
 
@@ -180,11 +183,12 @@ DuckDB 2.0 已经发布，一份声明 `v1.2.0` 的稳定区产物在 2.0 上能
 （`libduckdb-sys` 默认的 `capi-v1` feature，`loadable-extension` 必需），而 2.0 照样加载的正是这套 v1。所以
 「v2 C API 不一样」讲的是**那个新头文件**，不是 v1 扩展失去兼容。版本编码也要留意：DuckDB 2.0.0 映射成
 `libduckdb-sys` 的 crate 版本 `1.20000.x`（格式 `1.<major*10000 + minor*100 + patch>.x`）—— 仍是 `1.x`，
-所以 `>=1.10500, <2` 的约束会选中它。`<2` 不是拦路虎；把发布线切到 2.0 的真正闸门是 Rust 封装层跟上来
-（quack-rs 还没有 2.0 那一支）以及绑定新的 `libduckdb_sys::v1` 路径，不是某个 crate 版本上限。
+所以 `>=1.10500, <2` 的约束会选中它。`<2` 不是拦路虎：quack-rs 0.19 已经把 DuckDB 2.0 收进布局表
+（包括「用 v1.5.6 构建、跑在 2.0 的追加布局上」这一条），剩下的闸门是绑定新的 `libduckdb_sys::v1` 路径
+与你自己的代码 —— 以及只有在你仍 stamp `C_STRUCT_UNSTABLE` 时才出现的 v2 入口，而 quack-rs 不生成它。
 
-只有确实需要更新的头文件时才抬高这个下限。抬的时候填的是 **C API 版本**、不是发行版本号：在那里写
-`v1.5.6` 就只剩那一个引擎肯收了。
+只有确实需要更新的头文件时才抬高这个下限。抬的时候填的是 **C API 版本**、不是发行版本号：在 `C_STRUCT`
+下写 `v1.5.6`，1.5.6 与 2.0.0 都肯收（它们共享这份布局）；写 `v1.6.0` 就得等一个声明它的引擎。
 
 ## 自己验证一个构建
 

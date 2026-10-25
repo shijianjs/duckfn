@@ -18,8 +18,8 @@ DuckDB 版本绑定，详见[架构](./development/architecture.md#4-分发)与
 
 ### 为什么加载扩展必须加 `-unsigned`？
 
-扩展没有经过 DuckDB 签名，并且被标记为使用 DuckDB 的 unstable C API，因此除非允许未签名扩展，DuckDB 会拒绝加载。
-命令行上加 `-unsigned` 即可。
+扩展没有经过 DuckDB 签名，因此除非允许未签名扩展，DuckDB 会拒绝加载。命令行上加 `-unsigned` 即可 ——
+这个旗标只关乎签名缺失，与扩展用的是 C API 的哪个区无关。
 
 ### 与 `duckdb-rs` 有什么区别？
 
@@ -98,9 +98,11 @@ duckfn 按位置注册标量函数，因此 DuckDB 按书写顺序绑定值、�
 
 ### 扩展能加载，但调用时报版本错误
 
-扩展针对特定的 DuckDB 版本编译（`TARGET_DUCKDB_VERSION`，当前为 v2.0.0），且使用 unstable C API，
-因此只能与兼容版本配合使用。请用匹配的版本加载，或针对你手上的版本重新构建。「兼容」具体指什么、同一条
-报错在稳定 ABI 下又是什么样子，见 [DuckDB 版本兼容性](./duckdb-versions/index.md)。
+扩展在元数据里声明它编译时对着的 C API 层级。稳定区构建声明的是一个下限（duckfn 的发行产物是
+`v1.2.0`），任何不低于它的引擎都收；用到不稳定区的构建声明 `v1.5.6`，DuckDB 1.5.6 与 2.0.0 都收。
+报版本错误说明引擎低于这个声明（或者对 `C_STRUCT_UNSTABLE` 构建来说，不是它钉死的那一版）。请用兼容
+的版本加载，或针对你手上的版本重新构建。「兼容」具体指什么、同一条报错在稳定 ABI 下又是什么样子，见
+[DuckDB 版本兼容性](./duckdb-versions/index.md)。
 
 ### 工具链层面的问题去哪看？
 
