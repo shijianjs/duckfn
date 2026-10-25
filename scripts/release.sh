@@ -45,7 +45,7 @@ die() {
     exit 1
 }
 
-# 读取 [workspace.package] 段的 version（注意不能匹配到 [package] 的 0.2.0）
+# 读取 [workspace.package] 段的 version（注意不能匹配到 [package] 的 0.3.0）
 workspace_version() {
     awk -F'"' '
         /^\[workspace\.package\]/ { in_section = 1; next }
@@ -74,7 +74,7 @@ sed_escape() {
 #
 # 不用 `sed s///`：那是子串替换，旧版本号是更长的版本号的前缀时会被改坏 ——
 # 0.0.3 会命中正文里的 duckfn 历史版本引用（0.0.31 / 0.0.38 这类），
-# 换成 0.2.0 就成了 0.1.01 / 0.1.08。这里要求前后都不是数字或点，
+# 换成 0.3.0 就成了 0.1.01 / 0.1.08。这里要求前后都不是数字或点，
 # 于是 0.0.31 不会被碰、10.0.3 也不会。
 #
 # Replaces standalone occurrences of version $2 with $3 in a file. A plain `sed s///` is a substring

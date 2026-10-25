@@ -924,7 +924,7 @@ npm token，CI 里也不需要 OTP。真正上线还差一步：维护者在 npm
 `scripts/release-docs-kit.sh`。它与 `scripts/release.sh`（两个 crate 的发版）分开：两条流程
 各打各的 tag，也互不触发对方的 CI。
 
-版本号形如 `X.Y.Z`（例如 `0.2.0`），tag 形如 `docs-kit-v0.2.0`。只有**正式版本**才打 tag、
+版本号形如 `X.Y.Z`（例如 `0.3.0`），tag 形如 `docs-kit-v0.3.0`。只有**正式版本**才打 tag、
 才送暂存；`0.2.1-dev.0` 这类开发版本留在分支上。
 
 | 步骤 | 命令 |

@@ -75,7 +75,7 @@ resolver = "3"
 members = ["duckfn-macro"]
 
 [workspace.package]
-version = "0.2.1-dev.0"
+version = "0.3.0"
 edition = "2024"
 # 硬下限 1.88：duckfn-macro 依赖 syn 3，它带 darling 2.4，需要 rustc 1.88。实际构建用
 # rust-toolchain.toml 钉的 1.97.1 —— 那个版本给 wasm 的 std 带上展开运行时，catch_unwind 在
@@ -355,7 +355,7 @@ indexmap = "2"
 #
 # The proc-macro crate is a sibling directory inside this workspace; the release script rewrites
 # this exact pin (=X.Y.Z) together with the crate version, hence the manifest-relative path.
-duckfn-macro = { version = "=0.2.1-dev.0", path = "duckfn-macro" }
+duckfn-macro = { version = "=0.3.0", path = "duckfn-macro" }
 
 inventory = "0.3"
 itertools = "0.15"
