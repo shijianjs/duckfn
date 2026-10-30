@@ -2,6 +2,12 @@ import type {ListTable, ListTableConstructorOptions} from '@visactor/vtable';
 import type {SearchComponent} from '@visactor/vtable-search';
 import type {QueryResult} from './runtime';
 import type {RunnableSqlConfig} from './remark';
+import {
+  colorCellLayout,
+  colorColumnsOf,
+  type ColorCellConstructors,
+  type ColorCellVisual,
+} from './colorCells';
 import {PreviewTabs, type PreviewTabItem} from './PreviewTabs';
 import {SvgViewer, parseSvgMarkup, type FigureLabels} from './SvgViewer';
 import {TerminalView} from './terminal';
@@ -301,6 +307,10 @@ class ResultTable {
   readonly #unfreezeBtn: IconButton;
   /** Fields whose column currently wraps (row height switches to `auto`). */
   readonly #wrapped = new Set<string>();
+  /** Fields the block's `colors` option draws as pills. */
+  readonly #colorColumns: Set<string>;
+  /** `Group` / `Tag` for those pills, loaded with VTable only when needed. */
+  readonly #colorConstructors: ColorCellConstructors | null;
   #frozen = 0;
   #frame = 0;
   /** The official theme currently applied, so a repaint happens only on change. */
@@ -318,12 +328,18 @@ class ResultTable {
     result: QueryResult,
     labels: Record<string, string>,
     actions: HTMLElement,
+    config: RunnableSqlConfig,
+    colorConstructors: ColorCellConstructors | null,
   ) {
     this.#record = record;
     this.#result = result;
     this.#labels = labels;
     this.#themes = vtable.themes;
     this.#actions = actions;
+    this.#colorColumns = new Set(
+      colorColumnsOf(config.colors).filter((field) => result.columns.includes(field)),
+    );
+    this.#colorConstructors = this.#colorColumns.size > 0 ? colorConstructors : null;
     this.#searchBtn = new IconButton('lucide:search', () => this.#toggleSearch());
     this.#searchInput = el('input', {
       class: 'dfk-sql-search-input',
@@ -518,7 +534,36 @@ class ResultTable {
       title: field,
       sort: compareValues,
       style: {autoWrapText: this.#wrapped.has(field)},
+      customLayout: this.#colorColumns.has(field)
+        ? (args) => colorCellLayout(this.#colorConstructors!, this.#colorVisual(), args)
+        : undefined,
     }));
+  }
+
+  /**
+   * The pill colours for the current theme. Translucent values are composited
+   * over the row background, and the neutral pill (a value that is not a
+   * colour) borrows the theme's body text colour, so both themes need a fresh
+   * set after a mode flip.
+   */
+  #colorVisual(): ColorCellVisual {
+    const theme = this.#theme();
+    const background = theme.defaultStyle?.bgColor ?? theme.underlayBackgroundColor;
+    const fontFamily = theme.bodyStyle?.fontFamily ?? theme.defaultStyle?.fontFamily;
+    const padding = theme.bodyStyle?.padding ?? theme.defaultStyle?.padding;
+    return {
+      background:
+        typeof background === 'string' && background !== 'transparent' ? background : '#ffffff',
+      textColor: this.#themeText(),
+      fontFamily: typeof fontFamily === 'string' ? fontFamily : 'sans-serif',
+      fontSize: this.#themeFontSize(),
+      padding:
+        typeof padding === 'number'
+          ? [padding, padding, padding, padding]
+          : Array.isArray(padding) && padding.length === 4
+            ? padding.map((value) => value ?? 0)
+            : [8, 12, 8, 12],
+    };
   }
 
   /**
@@ -569,6 +614,15 @@ class ResultTable {
     if (name !== this.#appliedTheme) {
       this.#appliedTheme = name;
       this.#table.updateTheme(this.#theme());
+      if (this.#colorColumns.size > 0) {
+        // Pills are drawn from the theme's ink and background; a theme switch
+        // only repaints the existing scene graph, so rebuild the columns to
+        // pick up the new colours.
+        this.#table.updateColumns(this.#columns(this.#displayOrder()), {
+          clearColWidthCache: false,
+          clearRowHeightCache: false,
+        });
+      }
     }
   }
 
@@ -877,6 +931,7 @@ async function mountTable(
   result: QueryResult,
   labels: Record<string, string>,
   actions: HTMLElement,
+  config: RunnableSqlConfig,
 ): Promise<PreviewTableHandle> {
   const document = parent.ownerDocument;
   const record = el('div', {class: 'dfk-sql-table'});
@@ -885,9 +940,38 @@ async function mountTable(
   record.appendChild(skeleton);
   parent.appendChild(record);
 
+  // A name in `colors` that the query does not return is a typo, not an empty
+  // column: say so instead of silently rendering an ordinary table.
+  const colorColumns = colorColumnsOf(config.colors);
+  const missing = colorColumns.filter((field) => !result.columns.includes(field));
+  if (missing.length > 0) {
+    skeleton.remove();
+    record.appendChild(
+      errorBlock(
+        document,
+        errorText(
+          labels,
+          `${labels.unknownColorColumn ?? 'no such column for `colors`'}: ${missing.join(', ')}`,
+        ),
+      ),
+    );
+    return {dispose: () => {}, csv: () => csvText(result)};
+  }
+
   try {
-    const vtable = await import('@visactor/vtable');
-    const table = new ResultTable(vtable, record, result, labels, actions);
+    const [vtable, vrender] = await Promise.all([
+      import('@visactor/vtable'),
+      colorColumns.length > 0 ? import('@visactor/vrender-components') : Promise.resolve(null),
+    ]);
+    const table = new ResultTable(
+      vtable,
+      record,
+      result,
+      labels,
+      actions,
+      config,
+      vrender ? {Group: vtable.Group, Tag: vrender.Tag} : null,
+    );
     // VTable draws into the same box; the ghost is one sibling too many. It is
     // dropped after construction (not by VTable) so a failed import can still
     // hand the box over to the error view.
@@ -913,6 +997,7 @@ function tableItem(
   result: QueryResult,
   labels: Record<string, string>,
   host: HTMLElement,
+  config: RunnableSqlConfig,
 ): PreviewTabItem {
   const actions = el('div', {class: 'dfk-sql-tab-actions'});
   let handle: PreviewTableHandle | null = null;
@@ -920,7 +1005,7 @@ function tableItem(
     label: labels.table ?? 'Table',
     actions,
     mount: async (panel) => {
-      handle = await mountTable(panel, result, labels, actions);
+      handle = await mountTable(panel, result, labels, actions, config);
       return () => {
         handle?.dispose();
         handle = null;
@@ -939,10 +1024,10 @@ function tableItem(
   };
 }
 
-const tableRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
+const tableRenderer: Renderer = async ({host, config, labels, fullscreenButton}, result) => {
   const tabs = new PreviewTabs(
     host,
-    [tableItem(result, labels, host)],
+    [tableItem(result, labels, host, config)],
     labels.download ?? 'Download',
     fullscreenButton,
   );
@@ -971,7 +1056,7 @@ function csvText(result: QueryResult): string {
  * Text results get the same chrome as every other result: a `Text` tab plus the
  * trailing `Table` tab, so a scalar can still be inspected as a table.
  */
-const textRenderer: Renderer = async ({host, labels, fullscreenButton}, result) => {
+const textRenderer: Renderer = async ({host, config, labels, fullscreenButton}, result) => {
   const text = rowsText(result);
   const tabs = new PreviewTabs(
     host,
@@ -987,7 +1072,7 @@ const textRenderer: Renderer = async ({host, labels, fullscreenButton}, result) 
           text,
         }),
       },
-      tableItem(result, labels, host),
+      tableItem(result, labels, host, config),
     ],
     labels.download ?? 'Download',
     fullscreenButton,
@@ -1164,7 +1249,7 @@ function previewRenderer(kind: PreviewKind): Renderer {
       const label = value === null || value === undefined ? `${labels.row ?? 'Row'} ${index + 1}` : stringify(value);
       return createFigure(kind, markupOf(row[field]), label, config, host, figureLabels);
     });
-    items.push(tableItem(result, labels, host));
+    items.push(tableItem(result, labels, host, config));
 
     const tabs = new PreviewTabs(host, items, labels.download ?? 'Download', fullscreenButton);
     // Only the kinds that *zoom inside* the result area care about its fullscreen

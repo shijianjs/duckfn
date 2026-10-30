@@ -61,6 +61,7 @@ is compiled.
 | `extensions` | Extra extension names to `LOAD` before this block runs, on top of the site's preloads. |
 | `repository` | Where those extensions come from: `community`, `core`, or a repository URL. |
 | `allowUnsignedExtensions` | Accept an unverifiable signature. Site-wide via the preload config, or per block; the first block to initialise the engine settles it. |
+| `colors` | Column name or list of names whose values the table draws as **colour pills** instead of plain text. See *Colour cells*. |
 | `expect` | `ok` (default) or `error`. `error` declares "this block must fail" — see *Testing*. |
 
 ### Behaviour you have to design around
@@ -127,6 +128,36 @@ Two facts worth knowing before you pick one:
   `unicode-range` subsets mean the browser downloads only the ones a frame uses — latin, `symbols2`
   (box drawing and blocks) and `braille` for a plot, nothing at all on a page without one. A site
   that would rather use its own face sets `--duckfn-terminal-font`.
+
+### Colour cells
+
+`"colors": "hex"` (or a list, `"colors": ["fill", "stroke"]`) makes the table draw that column's
+values as **pills** — a rounded tag filled with the colour, labelled with the value itself. It works
+in `show: "table"` (the default for a multi-row or multi-column result); the other renderers ignore
+the option.
+
+```sql {"type":"duckfn","show":"table","colors":"hex"}
+SELECT '#ff8000' AS hex, 'orange' AS name;
+```
+
+- **`LIST` values give one pill per entry** — the natural shape for a palette:
+  `SELECT ['#440154', '#21918c', '#fde725'] AS palette;` draws three pills. `NULL` and `''`
+  entries are skipped; an empty list keeps the ordinary text.
+- **Accepted syntax is CSS**: `#rgb` / `#rrggbb` (and the 4/8-digit alpha forms), `rgb()`/`rgba()`,
+  `hsl()`/`hsla()`, and — because the author marked the column — **CSS colour names** (`tomato`,
+  `rebeccapurple`). Nothing else: `oklch()` and friends are not parsed; convert them to hex in SQL.
+- **A value that does not parse keeps the column honest**: it is drawn in a neutral grey pill with
+  its text, not silently as plain text. A `plt_color` STRUCT has no text to show and falls back to
+  the default rendering — the caveat from the config comment, and why the docs convert colours to
+  hex in SQL.
+- **Translucent values are composited over the row background** (light or dark), so the pill has a
+  definite fill and the label ink can be chosen from it by WCAG contrast (black or white).
+- **A misspelt column is an error**, not an empty result: a name in `colors` that the query does not
+  return renders the error block naming the missing column. The column list is checked before the
+  table is mounted.
+- The pills are drawn by VTable's `customLayout` with VisActor's `Tag`, not by painting
+  `style.bgColor`: a background fill would colour the whole row height, and could not show several
+  colours in one cell.
 
 ### The strip at the right of the tabs
 

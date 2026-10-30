@@ -85,6 +85,7 @@ type SqlLabels = {
   text: string;
   row: string;
   noField: string;
+  unknownColorColumn: string;
 };
 
 const LABELS: Record<string, SqlLabels> = {
@@ -126,6 +127,7 @@ const LABELS: Record<string, SqlLabels> = {
     text: 'Text',
     row: 'Row',
     noField: 'this result has no markup column; set `field`',
+    unknownColorColumn: '`colors` names a column the result does not return',
   },
   'zh-hans': {
     run: '执行',
@@ -165,6 +167,7 @@ const LABELS: Record<string, SqlLabels> = {
     text: '文本',
     row: '行',
     noField: '该结果没有可展示的标记列，请设置 `field`',
+    unknownColorColumn: '`colors` 指向了结果里不存在的列',
   },
 };
 

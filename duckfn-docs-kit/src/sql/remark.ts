@@ -65,6 +65,20 @@ export interface RunnableSqlConfig {
   field?: string;
   /** The column to label each preview tab with; falls back to `Row N`. */
   tab_name?: string;
+  /**
+   * Columns whose values are colours, drawn in the table as pills instead of
+   * plain text. One column name or a list of them.
+   *
+   * A value is a CSS colour (`#rgb`, `#rrggbb`, `rgb()`, `hsl()`, or a CSS
+   * colour name); a `LIST` of them becomes one pill per entry. Translucent
+   * colours are composited over the row background, and the text is black or
+   * white by WCAG contrast. A value that does not parse is shown in a neutral
+   * pill, so a wrong value is visible rather than silently plain. `NULL` and
+   * empty entries inside a list are skipped; a cell left with nothing to draw
+   * keeps its ordinary text (a `plt_color` STRUCT lands here — it is not a CSS
+   * colour, convert it to hex in SQL).
+   */
+  colors?: string | string[];
   /** Presentation knobs for the renderers; see `option.width` etc. */
   option?: {
     /** CSS length for the preview box (e.g. `'100%'`, `'640px'`). */

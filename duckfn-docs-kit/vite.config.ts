@@ -47,6 +47,11 @@ export default defineConfig({
         // to lean on, and the sanitising it does (escape sequences and control
         // characters must never reach the DOM) is exactly what a test should hold.
         'sql/ansi': src('sql/ansi.ts'),
+        // The colour-cell value rules behind the table's `colors` option:
+        // parsing, compositing and the pill's ink are pure functions, pinned by
+        // `test/color-cells.test.mjs`. The layout itself needs VisActor's
+        // constructors and is exercised in the browser.
+        'sql/colorCells': src('sql/colorCells.ts'),
         'mermaid/remark': src('mermaid/remark.ts'),
         'sql/client': src('sql/client.ts'),
         'sql/extensions': src('sql/extensions.ts'),
@@ -96,6 +101,10 @@ export default defineConfig({
         // versioned in lockstep with it. Also loaded through a dynamic
         // `import()` (only a reader who searches pays for it).
         '@visactor/vtable-search',
+        // The `Tag` behind a colour cell's pill, from the component package
+        // VTable itself draws with. In lockstep with VTable, and loaded through
+        // a dynamic `import()` only when a block marks `colors` columns.
+        '@visactor/vrender-components',
         // Mermaid and the pan/zoom controller behind `<dfk-mermaid>`: both are
         // reached only through dynamic `import()`s, and staying external is what
         // lets the site's bundler code-split them into their own chunks.

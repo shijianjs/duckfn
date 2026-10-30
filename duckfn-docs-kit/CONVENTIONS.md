@@ -477,6 +477,28 @@ src/
 - **下游项目是 CJS 时，Playwright 的 config 与 spec 用 `.mts` 扩展名**：kit 的 dist 是 ESM，若被
   Playwright 转译成 CJS 就会在 `import.meta` 上炸（`Cannot use 'import.meta' outside a module`）。
 
+#### 表格颜色列（`sql/colorCells.ts` + `renderers.ts`）
+
+`colors` 让表格把某几列的值画成颜色胶囊块，实现是 VTable 的 `customLayout`（不是
+`style.bgColor`），胶囊本身用 VisActor 的 `Tag`。三条与 VTable 有关的硬事实：
+
+- **`LIST` 单元格不是 JS 数组**：DuckDB-Wasm 交来的是 Arrow `Vector`，`Array.isArray` 为假。
+  取条目走 `toArray()`（`colorCells.ts` 的 `listItems`）；STRUCT 行代理没有 `toArray`，自然落到
+  「画不出来」的分支，由 `renderDefault: true` 交给 VTable 画普通文字。
+- **`Tag` 的尺寸要有 stage 才算得出来**。没有 stage 时 `AABBBounds` 是空的（宽度 0），而
+  `computeCustomRenderWidth` 是在调完 `customLayout` **之后**才把 stage 设到 `rootContainer` 上——
+  对「用宽度决定列宽」来说已经晚了。所以布局里先 `group.setStage(table.scenegraph.stage)`
+  （VTable 自己在同一处也这么做），再 `appendChild`（子节点继承 stage）后量宽度。
+- **`enableCellPadding` 保持关闭**，左右内边距与垂直居中都由布局自己做：列宽来自
+  `rootContainer.attribute.width`，VTable 打开 padding 时会再把内容框整体挪一次，两套偏移会叠。
+  主题切换后列定义要把新的 `customLayout` 换上去（`renderers.ts` 的 `#applyTheme`），否则胶囊
+  的合成底色和文字颜色还留在旧主题上。
+
+`colors` 里的列名在挂载前就和结果列对照过，拼错时渲染错误块而不是一张普通表格（用户可见文案
+在 `SqlLabels.unknownColorColumn`）。`@visactor/vrender-components` 只在真的有色块列时才动态
+`import()`，普通表格不多付一份下载。值规则（解析、合成、墨色）是纯函数，钉在
+`test/color-cells.test.mjs`；布局本身只能在浏览器里看。
+
 ### Mermaid 图（`mermaid/`）
 
 `mermaid/` 是 **`@docusaurus/theme-mermaid` 的替代品**，不是它的补充：站点既不装那个主题、也不开
