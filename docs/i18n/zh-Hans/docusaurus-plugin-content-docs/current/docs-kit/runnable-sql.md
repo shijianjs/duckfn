@@ -232,33 +232,12 @@ FROM range(20) t(i);
 
 ## 颜色列
 
-一表颜色就该看起来是颜色。`colors` 指定哪一列（或哪几列）的值是颜色，表格会把每个值画成
-填了该颜色的胶囊块，文字就是值本身。直接给单元格铺背景色会把整行高度都染上，而且一个格子
-里放不下多种颜色。
+`colors` 指定哪一列（或哪几列）的值由表格画成胶囊块，每个值一个，`LIST` 每项一个。接受的写法、
+半透明与列表规则等细节见 [颜色单元格](./color-cells.md)。
 
 ```sql {"type":"duckfn","show":"table","colors":"hex"}
-SELECT '#ff8000' AS hex, 'orange' AS name
-UNION ALL SELECT '#440154', 'viridis, dark end'
-UNION ALL SELECT 'tomato', 'a CSS colour name'
-UNION ALL SELECT 'not a colour', 'still shown, in grey';
+SELECT '#ff8000' AS hex, 'orange' AS name;
 ```
-
-- **`LIST` 的每一项各是一个胶囊块**——色板天然就是这个形状。`NULL` 与空字符串会被跳过；
-  空列表保持空白单元格。
-
-```sql {"type":"duckfn","show":"table","colors":"palette"}
-SELECT ['#440154', '#21918c', '#fde725'] AS palette, 'viridis' AS name;
-```
-
-- 值按 **CSS 颜色**读取：十六进制（`#rgb`、`#rrggbb` 以及带 alpha 的形式）、`rgb()` /
-  `rgba()`、`hsl()` / `hsla()`，以及颜色名（`tomato`）。`oklch()`、`lab()` 这类不认——
-  先在 SQL 里转成十六进制。
-- **认不出的值**会放进中性灰胶囊块里继续显示。整个值是 `STRUCT`（例如某种不是字符串的
-  颜色类型）时没有文字可放，退回普通单元格，所以要在 SQL 里转成十六进制。
-- **半透明的值会合成到行背景上**（浅色或深色主题各自的行背景），文字的黑白按对比度选，
-  浅色块上不会出现白字。
-- `colors` 里的列名如果结果里没有，说明是**拼写错误**：结果区会报错并点出这个列名，而不是
-  悄悄当成普通表格。
 
 ## 配置参考
 
@@ -274,7 +253,7 @@ SELECT ['#440154', '#21918c', '#fde725'] AS palette, 'viridis' AS name;
 | `option.sandbox` | iframe 的 sandbox tokens，替换默认的 `allow-scripts`。 |
 | `extensions` | 执行前要 `LOAD` 的扩展名，在站点级预加载之外追加。 |
 | `repository` | 这些扩展的来源：`community`、`core` 或仓库 URL。 |
-| `colors` | 列名或列名列表：表格把这些列的值画成颜色胶囊块，见「颜色列」。 |
+| `colors` | 列名或列名列表：表格把这些列的值画成颜色胶囊块，见 [颜色单元格](./color-cells.md)。 |
 | `allowUnsignedExtensions` | 接受无法验证的签名（站点级经预加载配置，或块级；最先初始化的块定调）。 |
 
 ## 普通代码块不受影响

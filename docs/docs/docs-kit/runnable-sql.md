@@ -282,36 +282,14 @@ FROM range(20) t(i);
 
 ## Colour columns
 
-A table of colours should read as colour. `colors` names the column — or a list
-of columns — whose values are colours; each value is then drawn as a pill filled
-with that colour, labelled with the value itself. A background fill would colour
-the whole row height and could not show more than one colour per cell.
+`colors` names the column — or a list of columns — whose values the table draws
+as pills, one per value and one per `LIST` entry. The accepted syntax, the
+translucency and list rules, and the rest are on
+[Colour cells](./color-cells.md).
 
 ```sql {"type":"duckfn","show":"table","colors":"hex"}
-SELECT '#ff8000' AS hex, 'orange' AS name
-UNION ALL SELECT '#440154', 'viridis, dark end'
-UNION ALL SELECT 'tomato', 'a CSS colour name'
-UNION ALL SELECT 'not a colour', 'still shown, in grey';
+SELECT '#ff8000' AS hex, 'orange' AS name;
 ```
-
-- **A `LIST` is one pill per entry** — the natural shape for a palette. `NULL`
-  and empty entries are skipped; an empty list keeps the empty cell.
-
-```sql {"type":"duckfn","show":"table","colors":"palette"}
-SELECT ['#440154', '#21918c', '#fde725'] AS palette, 'viridis' AS name;
-```
-
-- Values are read as **CSS colours**: hex (`#rgb`, `#rrggbb`, and the alpha
-  forms), `rgb()` / `rgba()`, `hsl()` / `hsla()`, and colour names (`tomato`).
-  Others — `oklch()`, `lab()` — are not; convert them to hex in SQL first.
-- A value that is **not** a colour stays visible in a neutral grey pill. A whole
-  `STRUCT` value (such as a colour type that is not a string) has no text to show
-  and falls back to the ordinary cell, so convert it to hex in SQL.
-- **Translucent values are composited over the row background**, light or dark,
-  and the label's ink is black or white by contrast — so a pale swatch never
-  gets white text.
-- A column name that the query does not return is a **typo**: the result shows an
-  error naming it, instead of silently rendering a plain table.
 
 ## Config reference
 
@@ -327,7 +305,7 @@ SELECT ['#440154', '#21918c', '#fde725'] AS palette, 'viridis' AS name;
 | `option.sandbox` | Sandbox tokens for the iframe, replacing `allow-scripts`. |
 | `extensions` | Extension names to `LOAD` before running, on top of the site-wide preloads. |
 | `repository` | Where those extensions come from: `community`, `core` or a repository URL. |
-| `colors` | Column name, or list of names, whose values the table draws as colour pills — see *Colour columns*. |
+| `colors` | Column name, or list of names, whose values the table draws as colour pills — see [Colour cells](./color-cells.md). |
 | `allowUnsignedExtensions` | Accept an unverifiable signature (site-wide via the preload config, or per block; the first block to initialise settles it). |
 
 ## Ordinary code blocks are untouched

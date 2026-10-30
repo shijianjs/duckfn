@@ -31,6 +31,8 @@ these pages matches the code you are reading.
 | TOC collapse control | `duckfn-docs-kit/toc-toggle/plugin` | [TOC toggle](./toc-toggle.md) |
 | Home-page components | `duckfn-docs-kit` (the barrel) | [Home components](./home-components.md) |
 | Version placeholder | `duckfn-docs-kit/remark` | [Version placeholder](./version-placeholder.md) |
+| Colour swatches | `duckfn-docs-kit/color-swatch/rehype` | [Colour swatches](./color-swatch.md) |
+| Colour cells | a block's `colors` option | [Colour cells](./color-cells.md) |
 
 ## Wiring it up
 

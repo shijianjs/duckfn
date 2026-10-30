@@ -26,6 +26,8 @@ TOC 折叠控件、首页 Web 组件与版本占位符——凡是可以从 duck
 | TOC 折叠控件 | `duckfn-docs-kit/toc-toggle/plugin` | [TOC 折叠](./toc-toggle.md) |
 | 首页组件 | `duckfn-docs-kit`（桶文件） | [首页组件](./home-components.md) |
 | 版本占位符 | `duckfn-docs-kit/remark` | [版本占位符](./version-placeholder.md) |
+| 色块 | `duckfn-docs-kit/color-swatch/rehype` | [色块](./color-swatch.md) |
+| 颜色单元格 | 可运行块的 `colors` 选项 | [颜色单元格](./color-cells.md) |
 
 ## 接入方式
 
