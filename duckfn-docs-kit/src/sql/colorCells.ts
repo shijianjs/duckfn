@@ -206,8 +206,7 @@ export function colorCellLayout(
       panel: {
         visible: true,
         fill: spec.fill,
-        stroke: TAG_STROKE,
-        lineWidth: 1,
+        stroke: false,
         cornerRadius: TAG_RADIUS,
       },
       shape: {visible: false},
@@ -242,8 +241,6 @@ const TAG_GAP = 6;
 const TAG_RADIUS = 9;
 const TAG_PAD_X = 9;
 const TAG_PAD_Y = 3;
-/** A hairline that keeps a white or black swatch visible on either theme. */
-const TAG_STROKE = 'rgba(128, 128, 128, 0.45)';
 
 /** Black or white, whichever is more readable on `fill`. */
 function inkOn(fill: string): string {
