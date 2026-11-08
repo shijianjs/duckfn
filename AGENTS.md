@@ -109,10 +109,13 @@ DuckDB 扩展名 `duckfn` 必须四处一致：`test/extension/entry.rs` 的 `du
 import 同一份（`Justfile` 里写明 `set allow-duplicate-recipes := true`，再覆盖几条）。
 
 - **改命令只改这里**（`build` / `sql` / `repl` / `lint` / `test` / `docs_*` / `ci-*` /
-  `build_wasm*` / `test_wasm` / `release_*` …），然后在各项目跑 `just sync-common` 拉回副本：
-  `raw.githubusercontent.com/shijianjs/duckfn/<ref>/scripts/common.just`，默认 ref 是 `main`，
-  `DUCKFN_JUST_REF=vX.Y.Z just sync-common` 可钉到某个已发布版本。`just check-common` 只比对不写回，
-  不一致时非零退出（下游可以挂进自己的 CI）。
+  `build_wasm*` / `test_wasm` / `release_*` …），然后在各项目跑 `just sync-common` 拉回副本。
+  默认 ref 是 `main`，`DUCKFN_JUST_REF=vX.Y.Z just sync-common` 可钉到某个已发布版本。
+  `just check-common` 只比对不写回，不一致时非零退出（下游可以挂进自己的 CI）。
+- **拉取不走 `raw.githubusercontent.com`（国内直连经常超时）**：`sync-common` / `check-common` 都调
+  `just _fetch_common <dest>`，先 `gh api`（要 `gh auth login` 或 `GH_TOKEN`，ref 精确、无 CDN 缓存），
+  失败再退回 jsDelivr CDN（`cdn.jsdelivr.net/gh/shijianjs/duckfn@<ref>/scripts/common.just`，无需登录，
+  但 `@branch` 有最长约 12 小时缓存，要精确内容就钉 tag）。
 - 各项目根 `Justfile` 只留三类东西：机器相关的 `set windows-shell`、项目相关的 `extension_name`、
   以及本项目特有的 recipe（模板的 `rename`、本仓库的 `publish_*` / `release_kit_*` / `doc`）。
 - **覆盖共享 recipe 必须显式开 `set allow-duplicate-recipes := true`**：不开这个开关，重名 recipe 会让

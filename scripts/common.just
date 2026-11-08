@@ -31,9 +31,17 @@
 # ==== 共享内容的来源与同步 ====
 
 # duckfn 仓库 + git ref；换 ref 即可钉住某个已发布版本。
+#
+# 拉取顺序：gh api（要 `gh auth login` 或 `GH_TOKEN`；无 CDN 缓存，ref 精确）
+#         → jsDelivr CDN（无需登录；`@branch` 有最长约 12 小时的缓存，钉 tag 时不受影响）。
+# 两条都不走 raw.githubusercontent.com —— 国内直连经常超时。
+#
+# The shared file is fetched with gh api first and jsDelivr second, never through
+# raw.githubusercontent.com, which times out from mainland China.
 duckfn_repo := "shijianjs/duckfn"
 duckfn_just_ref := env_var_or_default("DUCKFN_JUST_REF", "main")
-_common_url := "https://raw.githubusercontent.com/" + duckfn_repo + "/" + duckfn_just_ref + "/scripts/common.just"
+_common_path := "scripts/common.just"
+_common_cdn_url := "https://cdn.jsdelivr.net/gh/" + duckfn_repo + "@" + duckfn_just_ref + "/" + _common_path
 
 # duckdb 命令行。不在 PATH 里时用 `just DUCKDB=/path/to/duckdb repl` 覆盖。
 duckdb := env_var_or_default("DUCKDB", "duckdb")
@@ -62,13 +70,19 @@ ext_path := "./build/debug/" + extension_name + ".duckdb_extension"
 # validated with `just --list` after the swap and rolled back when it does not parse, because a broken
 # shared file would make every `just` invocation in this project fail.
 #
+# 把共享文件拉到 dest；gh 不可用时自动退回 jsDelivr。两条路都失败时非零退出，不留空文件。
+# `_` 前缀让它成为私有 recipe，不出现在 `just --list` 的主列表里。
+#
+# Fetch the shared file into `dest`: gh api first, jsDelivr as fallback.
+_fetch_common dest:
+    bash -c 'set -euo pipefail; dest="{{dest}}"; rm -f "$dest"; if command -v gh >/dev/null 2>&1 && gh api -H "Accept: application/vnd.github.raw" "repos/{{duckfn_repo}}/contents/{{_common_path}}?ref={{duckfn_just_ref}}" >"$dest" 2>/dev/null && [ -s "$dest" ]; then echo "scripts/common.just <- gh api ({{duckfn_repo}}@{{duckfn_just_ref}})"; else echo "scripts/common.just: gh api 不可用，退回 jsDelivr CDN / falling back to jsDelivr" >&2; curl -fsSL "{{_common_cdn_url}}" -o "$dest"; fi; [ -s "$dest" ]'
+
 # 把 scripts/common.just 同步成 duckfn 仓库里的那份（默认 main）
 sync-common:
-    curl -fsSL "{{_common_url}}" -o scripts/common.just.new || { rm -f scripts/common.just.new; echo "error: 拉取失败，本地文件未改动 / download failed, local copy untouched"; exit 1; }
+    @just _fetch_common scripts/common.just.new || { rm -f scripts/common.just.new; echo "error: 拉取失败，本地文件未改动 / download failed, local copy untouched"; exit 1; }
     mv scripts/common.just scripts/common.just.bak
     mv scripts/common.just.new scripts/common.just
     if just --list >/dev/null 2>&1; then rm -f scripts/common.just.bak; else mv scripts/common.just.bak scripts/common.just; echo "error: 同步后的 scripts/common.just 解析失败，已回滚 / rolled back"; exit 1; fi
-    @echo "scripts/common.just <- {{_common_url}}"
     @git --no-pager diff --stat -- scripts/common.just
 
 # Compare only: fails when the local copy differs from {{duckfn_just_ref}}. Run it before a release,
@@ -76,7 +90,7 @@ sync-common:
 #
 # 只比对不写回：本地副本与共享源（默认 main）不一致时报错
 check-common:
-    bash -c 'set -euo pipefail; tmp="$(mktemp)"; trap "rm -f $tmp" EXIT; curl -fsSL "{{_common_url}}" -o "$tmp"; if diff -u scripts/common.just "$tmp"; then echo "scripts/common.just 与 {{duckfn_just_ref}} 一致 / in sync"; else echo "scripts/common.just 与 {{duckfn_just_ref}} 不同步，跑 just sync-common / out of sync, run just sync-common"; exit 1; fi'
+    bash -c 'set -euo pipefail; tmp="$(mktemp)"; trap "rm -f $tmp" EXIT; just _fetch_common "$tmp"; if diff -u scripts/common.just "$tmp"; then echo "scripts/common.just 与 {{duckfn_just_ref}} 一致 / in sync"; else echo "scripts/common.just 与 {{duckfn_just_ref}} 不同步，跑 just sync-common / out of sync, run just sync-common"; exit 1; fi'
 
 # ==== 日常 ====
 
