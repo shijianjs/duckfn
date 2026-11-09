@@ -1,0 +1,28 @@
+/**
+ * The landing page is an MDX page, so Docusaurus renders it through `MDXPage`:
+ * a `<main class="container">` holding the docs-style `row` / `col` grid, plus
+ * a table-of-contents column. That shell suits prose, not a landing page — the
+ * hero has to start at the top of the viewport and the tinted band has to run
+ * edge to edge.
+ *
+ * The page's front matter sets `wrapperClassName: dfk-home`, which
+ * `HtmlClassNameProvider` puts on `<html>`, so every rule here is scoped to
+ * that one page and no docs page can pick it up.
+ */
+
+html.dfk-home main.container {
+  max-width: none;
+  /* Infima's `margin-vert--lg` utility is `!important`, hence the override. */
+  margin: 0 !important;
+  padding: 0;
+}
+
+html.dfk-home main > .row {
+  display: block;
+  margin: 0;
+}
+
+html.dfk-home main .col {
+  max-width: none;
+  padding: 0;
+}

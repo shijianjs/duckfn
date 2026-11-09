@@ -462,10 +462,19 @@ file instead of every page. It only touches that exact placeholder — anything 
 
 `<dfk-hero>`, `<dfk-features>`, `<dfk-next-steps>` (along with `<dfk-sql>` and `<dfk-mermaid>`,
 which the plugins generate) are registered by the barrel import (`duckfn-docs-kit`). The home
-components are **setter-driven and do not reflect attributes**:
-give them named setters (`setTitle`, `setTagline`, `setFeatures`, …), not markup content. They
-render into shadow roots, inherit `--duckfn-*` / `--ifm-*` CSS variables from the page, and are
-safe to call before the element is connected.
+components take their content from **markup**, in two equivalent spellings:
+
+- **attributes** — scalars as text, structures as JSON: `logo-src`, `title`, `tagline`,
+  `primary`, `secondary`, `badges`, `section-title`, `features`, `steps`. Parsed in
+  `attributeChangedCallback`, so a framework that diffs attributes drives them without a ref.
+- **child tags** — `<dfk-action>`, `<dfk-badge>`, `<dfk-feature>`, `<dfk-step>`, read once on
+  connect. The spelling for hand-written HTML/MDX, where JSON in an attribute is unreadable.
+
+Both funnel into the named setters (`setTitle`, `setBadges`, …), which remain the only code
+that touches the shadow tree — an attribute change never rebuilds the structure. `kit.css`
+hides the child tags; do not remove them, React owns those nodes. The components render into
+shadow roots, inherit `--duckfn-*` / `--ifm-*` CSS variables from the page, and the setters
+are safe to call before the element is connected.
 
 ## Troubleshooting
 

@@ -10,6 +10,8 @@
    files live in the kit so other extension docs sites get the same look
    without copying code. */
 @import 'duckfn-docs-kit/src/kit.css';
+/* The landing page's shell override; scoped to `html.dfk-home`. */
+@import './home.css';
 
 /* Brand colours.
    The palette comes from `static/img/duckfn-logo.svg`, which is drawn with a deep

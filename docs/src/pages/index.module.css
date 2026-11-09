@@ -29,14 +29,17 @@
   padding: 0 1.5rem;
 }
 
-.sectionTitle {
+/* The section's copy is plain Markdown (`##` plus a paragraph), so the styles
+   hook onto the structure: a class would have to be repeated in every locale's
+   page. */
+.sectionInner > h2 {
   margin-bottom: 0;
   text-align: center;
   font-size: clamp(1.5rem, 3vw, 2rem);
   letter-spacing: -0.01em;
 }
 
-.sectionLead {
+.sectionInner > p {
   max-width: 46rem;
   margin: 1rem auto 0;
   text-align: center;
@@ -68,7 +71,8 @@
   flex-direction: column;
 }
 
-.codeCaption {
+/* The note under the SQL block, written as a plain Markdown paragraph. */
+.codeColumn p {
   margin-bottom: 0;
   font-size: 0.875rem;
   line-height: 1.6;

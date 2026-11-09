@@ -1,0 +1,139 @@
+---
+title: duckfn
+description: duckfn 文档：用纯 Rust 编写 DuckDB 扩展的框架。
+hide_table_of_contents: true
+wrapperClassName: dfk-home
+---
+
+import Link from '@docusaurus/Link';
+import {registerDfkElements} from 'duckfn-docs-kit';
+
+import styles from '@site/src/pages/index.module.css';
+
+{registerDfkElements()}
+
+{/* `MDXPage` 自带 `<Layout>` 与页面栅格；`dfk-home` 这个包裹类给
+    `src/css/home.css` 一个作用域，把首页放成全宽。 */}
+
+<dfk-hero
+  logo-src="/img/duckfn-logo.svg"
+  title="duckfn"
+  tagline="用纯 Rust 编写 DuckDB 扩展">
+
+<dfk-action kind="primary" href="/docs/intro">开始使用</dfk-action>
+
+<dfk-action kind="secondary" href="https://github.com/shijianjs/duckfn" icon="simple-icons:github">GitHub</dfk-action>
+
+<dfk-badge href="https://crates.io/crates/duckfn" src="https://img.shields.io/crates/v/duckfn.svg?style=flat" alt="duckfn on crates.io" />
+
+<dfk-badge href="https://docs.rs/duckfn" src="https://docs.rs/duckfn/badge.svg" alt="API documentation on docs.rs" />
+
+<dfk-badge href="https://github.com/shijianjs/duckfn/blob/main/LICENSE" src="https://img.shields.io/badge/license-MIT-14459b.svg?style=flat" alt="MIT license" />
+
+<dfk-badge href="https://github.com/shijianjs/duckfn" src="https://img.shields.io/badge/Rust-1.86%2B-14459b.svg?style=flat" alt="Rust 1.86 or newer" />
+
+</dfk-hero>
+
+<dfk-features section-title="为什么选择 duckfn">
+
+<dfk-feature icon="lucide:sparkles" title="无需 C/C++ 胶水代码">
+DuckDB 的 C 类型不会出现在你的代码里。你写的是普通 Rust —— Option、Vec、派生结构体与枚举 —— 其余交给属性宏。
+</dfk-feature>
+
+<dfk-feature icon="lucide:package" title="无需本地编译 DuckDB">
+只依赖头文件、不链接库：扩展在加载时通过 DuckDB 的 API 表完成分发，因此无需本地编译，交叉编译也能正常工作。
+</dfk-feature>
+
+<dfk-feature icon="lucide:shield-check" title="默认安全">
+函数体内没有 unsafe 函数、也没有裸指针；仅显式手动注册处还保留着 unsafe。
+</dfk-feature>
+
+<dfk-feature icon="lucide:hash" title="属性驱动注册">
+给函数加个注解就够了：注册项会被自动收集，并在 DuckDB 加载扩展时应用。
+</dfk-feature>
+
+<dfk-feature icon="lucide:life-buoy" title="panic 安全">
+函数体内的 panic 会被捕获并作为 DuckDB 错误上报，而不是展开着穿过 FFI 边界。
+</dfk-feature>
+
+<dfk-feature icon="lucide:braces" title="支持嵌套类型">
+Vec、IndexMap、定长数组、STRUCT 以及它们的任意嵌套，都对应到 DuckDB 的 LIST、MAP、ARRAY 与 STRUCT。
+</dfk-feature>
+
+</dfk-features>
+
+<section className={styles.sectionTint}>
+<div className={styles.sectionInner}>
+
+## 一个 Rust 函数 = 一个 SQL 函数
+
+属性宏会生成 FFI 包装层、列的读写与注册代码。左边这段是安全的 Rust，和写普通库时没有区别。
+
+<div className={styles.codeGrid}>
+
+```rust title="src/lib.rs"
+use duckfn::{
+    duck_error, duck_scalar_function, duckfn_entrypoint, DuckOptionResult,
+};
+
+/// The SQL below is what this function becomes, doc comment and all.
+#[duck_scalar_function]
+pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
+    if v == Some(13) {
+        return Err(duck_error("unlucky input"));
+    }
+    Ok(v.map(|x| x * 2))
+}
+
+// The symbol DuckDB looks for when it loads the extension.
+duckfn_entrypoint!("my_ext");
+```
+
+<div className={styles.codeColumn}>
+
+```sql title="duckdb -unsigned"
+-- the extension loads like any other
+LOAD './my_ext.duckdb_extension';
+
+SELECT double_it(21);    -- 42
+SELECT double_it(NULL);  -- NULL
+SELECT double_it(13);    -- error: unlucky input
+```
+
+注释就是每次调用的返回值。加载时要加 `-unsigned`，因为扩展调用的是 DuckDB 的 C API。
+
+</div>
+</div>
+
+<div className={styles.showcaseLinkRow}>
+<Link className={styles.showcaseLink} to="/docs/examples/side-by-side">
+
+同样的函数，两种写法：四个函数各自写两遍
+
+<iconify-icon icon="lucide:arrow-right" className={styles.showcaseLinkArrow} aria-hidden="true" />
+
+</Link>
+</div>
+
+</div>
+</section>
+
+<dfk-next-steps section-title="接下来去哪">
+
+<dfk-step href="/docs/getting-started/quick-start" title="快速开始">
+编写、构建并加载你的第一个扩展。
+</dfk-step>
+
+<dfk-step href="/docs/guide/attributes" title="属性参考">
+全部属性、参数与注册方式，附示例。
+</dfk-step>
+
+<dfk-step href="/docs/examples/duckfn" title="示例扩展">
+一个用到了 duckfn 全部能力的扩展。
+</dfk-step>
+
+<dfk-step href="/docs/internals/architecture" title="实现原理">
+从 DuckDB 加载这个动态库，到你的函数回答一条查询。
+</dfk-step>
+
+</dfk-next-steps>

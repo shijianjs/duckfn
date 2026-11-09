@@ -1,12 +1,15 @@
 /**
  * Value types the home-page web components accept.
  *
- * Every string is already resolved for the *current* locale: a custom element
- * cannot render Docusaurus' React `<Translate>`, so the docs site resolves the
- * copy with the imperative `translate()` API and hands plain strings to the
- * components' `set*` methods. Internal `href`s are baseUrl-resolved by the
- * caller (`useBaseUrl`), because a raw `<a href>` inside a custom element gets
- * no Docusaurus prefixing.
+ * These are the shapes the `set*` methods take and the shapes the JSON
+ * attributes parse into (`badges`, `features`, `steps`, `primary`,
+ * `secondary`). Markup written as child tags produces the same shapes.
+ *
+ * Text is whatever the caller resolved: a raw tag in Markdown carries the
+ * page's own copy, while a React page hands in strings it resolved for the
+ * current locale. Internal `href`s stay baseUrl-resolved by the caller
+ * (`useBaseUrl`), because a raw `<a href>` inside a custom element gets no
+ * Docusaurus prefixing.
  *
  * Icon fields are Iconify icon *names* (e.g. `lucide:arrow-right`), rendered by
  * the official `<iconify-icon>` web component, which fetches the glyph from the
@@ -19,10 +22,10 @@ export interface HeroLink {
   href: string;
 }
 
-/** The secondary hero action (the GitHub button), which also carries a glyph. */
+/** The secondary hero action (the GitHub button), optionally with a glyph. */
 export interface HeroAction extends HeroLink {
   /** Iconify icon name, e.g. `simple-icons:github`. */
-  icon: string;
+  icon?: string;
 }
 
 /** A shields.io-style badge in the hero row. Always an external link. */

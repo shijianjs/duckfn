@@ -1,0 +1,140 @@
+---
+title: duckfn
+description: Documentation for duckfn, a Rust framework for building DuckDB extensions.
+hide_table_of_contents: true
+wrapperClassName: dfk-home
+---
+
+import Link from '@docusaurus/Link';
+import {registerDfkElements} from 'duckfn-docs-kit';
+
+import styles from '@site/src/pages/index.module.css';
+
+{registerDfkElements()}
+
+{/* `MDXPage` already supplies the `<Layout>` and the page grid; the
+    `dfk-home` wrapper class is what lets `src/css/home.css` hand the page the
+    full width it needs. */}
+
+<dfk-hero
+  logo-src="/img/duckfn-logo.svg"
+  title="duckfn"
+  tagline="Write DuckDB extensions in plain Rust">
+
+<dfk-action kind="primary" href="/docs/intro">Get started</dfk-action>
+
+<dfk-action kind="secondary" href="https://github.com/shijianjs/duckfn" icon="simple-icons:github">GitHub</dfk-action>
+
+<dfk-badge href="https://crates.io/crates/duckfn" src="https://img.shields.io/crates/v/duckfn.svg?style=flat" alt="duckfn on crates.io" />
+
+<dfk-badge href="https://docs.rs/duckfn" src="https://docs.rs/duckfn/badge.svg" alt="API documentation on docs.rs" />
+
+<dfk-badge href="https://github.com/shijianjs/duckfn/blob/main/LICENSE" src="https://img.shields.io/badge/license-MIT-14459b.svg?style=flat" alt="MIT license" />
+
+<dfk-badge href="https://github.com/shijianjs/duckfn" src="https://img.shields.io/badge/Rust-1.86%2B-14459b.svg?style=flat" alt="Rust 1.86 or newer" />
+
+</dfk-hero>
+
+<dfk-features section-title="Why duckfn">
+
+<dfk-feature icon="lucide:sparkles" title="No C/C++ glue code">
+DuckDB's C types never appear in your code. You write ordinary Rust — Option, Vec, derived structs and enums — and the attribute writes the rest.
+</dfk-feature>
+
+<dfk-feature icon="lucide:package" title="No local DuckDB build">
+Depend on the headers, not on the library: the extension dispatches through DuckDB's API table at load time, so nothing is linked and cross-compilation works.
+</dfk-feature>
+
+<dfk-feature icon="lucide:shield-check" title="Safe by default">
+No unsafe functions and no raw pointers inside your function bodies. The only unsafe left is in explicit manual registration.
+</dfk-feature>
+
+<dfk-feature icon="lucide:hash" title="Attribute-driven registration">
+Annotating a function is enough. The registration items are collected for you and applied when DuckDB loads the extension.
+</dfk-feature>
+
+<dfk-feature icon="lucide:life-buoy" title="Panic-safe">
+A panic inside a function body is caught and reported as a DuckDB error instead of unwinding across the FFI boundary.
+</dfk-feature>
+
+<dfk-feature icon="lucide:braces" title="Nested types included">
+Vec, IndexMap, fixed-size arrays, STRUCTs and any nesting of them map to DuckDB's LIST, MAP, ARRAY and STRUCT.
+</dfk-feature>
+
+</dfk-features>
+
+<section className={styles.sectionTint}>
+<div className={styles.sectionInner}>
+
+## One Rust function = one SQL function
+
+The attribute generates the FFI wrapper, the column readers and writers, and the registration code. Everything on the left is safe Rust that you could have written for a plain library.
+
+<div className={styles.codeGrid}>
+
+```rust title="src/lib.rs"
+use duckfn::{
+    duck_error, duck_scalar_function, duckfn_entrypoint, DuckOptionResult,
+};
+
+/// The SQL below is what this function becomes, doc comment and all.
+#[duck_scalar_function]
+pub fn double_it(v: Option<i64>) -> DuckOptionResult<i64> {
+    if v == Some(13) {
+        return Err(duck_error("unlucky input"));
+    }
+    Ok(v.map(|x| x * 2))
+}
+
+// The symbol DuckDB looks for when it loads the extension.
+duckfn_entrypoint!("my_ext");
+```
+
+<div className={styles.codeColumn}>
+
+```sql title="duckdb -unsigned"
+-- the extension loads like any other
+LOAD './my_ext.duckdb_extension';
+
+SELECT double_it(21);    -- 42
+SELECT double_it(NULL);  -- NULL
+SELECT double_it(13);    -- error: unlucky input
+```
+
+The comments are what each call returns. Loading needs `-unsigned`, because the extension talks to DuckDB's C API.
+
+</div>
+</div>
+
+<div className={styles.showcaseLinkRow}>
+<Link className={styles.showcaseLink} to="/docs/examples/side-by-side">
+
+Same functions, two ways: four of them written both ways
+
+<iconify-icon icon="lucide:arrow-right" className={styles.showcaseLinkArrow} aria-hidden="true" />
+
+</Link>
+</div>
+
+</div>
+</section>
+
+<dfk-next-steps section-title="Where to go next">
+
+<dfk-step href="/docs/getting-started/quick-start" title="Quick start">
+Write, build and load your first extension.
+</dfk-step>
+
+<dfk-step href="/docs/guide/attributes" title="Attributes">
+Every attribute, argument and registration kind, with examples.
+</dfk-step>
+
+<dfk-step href="/docs/examples/duckfn" title="The example extension">
+One extension that uses every feature duckfn offers.
+</dfk-step>
+
+<dfk-step href="/docs/internals/architecture" title="How it works">
+From DuckDB loading the library to your function answering a query.
+</dfk-step>
+
+</dfk-next-steps>

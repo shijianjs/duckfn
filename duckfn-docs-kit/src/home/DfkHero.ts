@@ -1,7 +1,11 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
 import {el, HTMLElementBase} from '../dom';
+import {childTags, jsonAttr, textOf} from './attrs';
+import {resolveHref} from './base';
 import {homeStyles} from './styles';
 import type {HeroAction, HeroBadge, HeroLink} from '../types';
+
+const TAG = 'dfk-hero';
 
 /**
  * `<dfk-hero>` — the landing hero: logo, title, tagline, the two call-to-action
@@ -10,11 +14,21 @@ import type {HeroAction, HeroBadge, HeroLink} from '../types';
  * Retained-mode: every node is held in a field, the structure is assembled once
  * in the constructor and the `set*` methods only mutate the nodes they own.
  *
+ * Content arrives declaratively (see `attrs.ts` for the two spellings):
+ * `logo-src` / `title` / `tagline` as text attributes, `primary` / `secondary`
+ * / `badges` as JSON, and `<dfk-action>` / `<dfk-badge>` child tags read once on
+ * connect. Whichever spelling is used, it ends in the setters below — no
+ * generic `apply()` / `render()` entry point.
+ *
  * The tree lives in a shadow root (adopting the shared `homeStyles()` sheet), so
  * the site's global CSS cannot reach it; theme colours cross the boundary
  * through the inherited `--duckfn-*` / `--ifm-*` custom properties.
  */
 export class DfkHero extends HTMLElementBase {
+  static get observedAttributes(): string[] {
+    return ['logo-src', 'title', 'tagline', 'primary', 'secondary', 'badges'];
+  }
+
   readonly #section = el('section', {class: 'dfk-hero'});
   readonly #inner = el('div', {class: 'dfk-hero-inner'});
   readonly #stage = el('span', {class: 'dfk-logo-stage'});
@@ -62,8 +76,67 @@ export class DfkHero extends HTMLElementBase {
     shadow.appendChild(this.#section);
   }
 
+  attributeChangedCallback(
+    name: string,
+    _old: string | null,
+    value: string | null,
+  ): void {
+    if (value === null) {
+      return;
+    }
+    switch (name) {
+      case 'logo-src':
+        this.setLogo(value);
+        break;
+      case 'title':
+        this.setTitle(value);
+        // `title` is also a global HTML attribute: the browser would show the
+        // same copy as a tooltip over the whole hero. The <h1> already says it,
+        // so the attribute is spent and removed. React records it as applied,
+        // so this cannot ping-pong.
+        this.removeAttribute('title');
+        break;
+      case 'tagline':
+        this.setTagline(value);
+        break;
+      case 'primary': {
+        const link = jsonAttr<HeroLink>(TAG, name, value);
+        if (link) {
+          this.setPrimaryAction(link);
+        }
+        break;
+      }
+      case 'secondary': {
+        const action = jsonAttr<HeroAction>(TAG, name, value);
+        if (action) {
+          this.setSecondaryAction(action);
+        }
+        break;
+      }
+      case 'badges': {
+        const badges = jsonAttr<readonly HeroBadge[]>(TAG, name, value);
+        if (badges) {
+          this.setBadges(badges);
+        }
+        break;
+      }
+    }
+  }
+
+  connectedCallback(): void {
+    // Read one task later: an element can be connected before its child tags are
+    // parsed (the parser hits the start tag first) or before a framework
+    // appends them (React connects the parent first). Nothing paints in
+    // between, so the shadow tree is in place for the first frame anyway.
+    queueMicrotask(() => {
+      if (this.isConnected) {
+        this.#seedFromChildren();
+      }
+    });
+  }
+
   setLogo(src: string): void {
-    this.#logo.src = src;
+    this.#logo.src = resolveHref(src);
   }
 
   setTitle(text: string): void {
@@ -79,10 +152,14 @@ export class DfkHero extends HTMLElementBase {
     this.#fillLink(this.#primary, this.#primaryLabel, link, false);
   }
 
-  /** The GitHub button: always external, always carries the glyph. */
+  /** The GitHub button: always external, optionally carrying a glyph. */
   setSecondaryAction(action: HeroAction): void {
     this.#fillLink(this.#secondary, this.#secondaryLabel, action, true);
-    this.#secondaryIcon.setAttribute('icon', action.icon);
+    if (action.icon) {
+      this.#secondaryIcon.setAttribute('icon', action.icon);
+    } else {
+      this.#secondaryIcon.removeAttribute('icon');
+    }
   }
 
   setBadges(badges: readonly HeroBadge[]): void {
@@ -109,13 +186,39 @@ export class DfkHero extends HTMLElementBase {
     });
   }
 
+  /** Child tags are the readable spelling of `primary` / `secondary` / `badges`. */
+  #seedFromChildren(): void {
+    for (const action of childTags(this, 'dfk-action')) {
+      const link: HeroLink = {
+        label: textOf(action),
+        href: action.getAttribute('href') ?? '#',
+      };
+      const icon = action.getAttribute('icon');
+      if (action.getAttribute('kind') === 'secondary') {
+        this.setSecondaryAction(icon ? {...link, icon} : link);
+      } else {
+        this.setPrimaryAction(link);
+      }
+    }
+    const badges = childTags(this, 'dfk-badge');
+    if (badges.length > 0) {
+      this.setBadges(
+        badges.map((badge) => ({
+          href: badge.getAttribute('href') ?? '#',
+          src: badge.getAttribute('src') ?? '',
+          alt: badge.getAttribute('alt') ?? '',
+        })),
+      );
+    }
+  }
+
   #fillLink(
     anchor: HTMLAnchorElement,
     label: HTMLElement,
     link: HeroLink,
     external: boolean,
   ): void {
-    anchor.href = link.href;
+    anchor.href = resolveHref(link.href);
     label.textContent = link.label;
     if (external) {
       anchor.target = '_blank';

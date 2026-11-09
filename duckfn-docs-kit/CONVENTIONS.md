@@ -735,7 +735,7 @@ rebuild() { this.replaceChildren(); this.build(); }           // 同上，换个
 变长列表能增量就增量：按数据长度**增删条目**、复用已有条目对象
 （`DfkHero.ts` 的 `setBadges()` 就是这么做的），只有条目语义整体失效时才整批替换。
 
-### 5. 内容入口：命名的领域 setter（本包已统一）
+### 5. 内容形态：标记输入 → 命名 setter（本包已统一）
 
 `dfk-*` 元素**不接受整份 data blob，也没有通用的 render/apply 入口**。每个组件
 暴露一组命名的领域 setter，一个方法只碰它负责的那部分节点：
@@ -750,27 +750,43 @@ features.setSectionTitle(text);
 features.setFeatures(items);
 ```
 
+**输入来自标记**，两种等价写法（解析都在 `src/home/attrs.ts`）：
+
+- **属性**：标量直接读（`title`、`tagline`、`section-title`、`logo-src`），
+  结构按 JSON 解析（`primary`、`secondary`、`badges`、`features`、`steps`）。
+  `attributeChangedCallback()` 解析后调用对应 setter，所以框架只要 diff 属性就能
+  驱动组件，不需要 ref 或挂载助手。
+- **子标签**：`<dfk-action>` / `<dfk-badge>` / `<dfk-feature>` / `<dfk-step>`，
+  在 `connectedCallback()` 里读一次；适合手写 HTML/MDX —— MDX 不接受单引号
+  属性值，JSON 里的引号只能写成 `&quot;` 实体。
+
+两条通道最后都只调用命名 setter，所以保留模式不变：setter 仍是唯一操作 shadow
+树的代码，属性变化也不会重建结构。
+
 - setter 只做 mutation；变长集合（badge 行、卡片网格）按新长度增删条目、复用
   已有条目对象，不整体重建。
 - setter 只写自己持有的节点，所以**在元素尚未连接、甚至尚未插入文档时调用也安全**。
   消费方因此不必关心 `connectedCallback()` 的时序，可以乱序批量喂数据。
-- **不做 attribute reflection**：组件不读属性、也不把 setter 的值镜像回 attribute
-  （内容不是可序列化的标记，唯一例外是自有节点上 `iconify-icon` 的 `icon` 属性）。
-  内容入口只有 setter。
+- **不做 attribute reflection**：setter 不把值镜像回 attribute，属性只读不写
+  （唯一例外是自有节点上 `iconify-icon` 的 `icon` 属性）。`title` 这类与全局
+  HTML 属性同名的输入在消费后会 `removeAttribute`，否则浏览器会把同一段文案
+  再显示成 tooltip。
+- 子标签**不注册为自定义元素**，只是数据载体；父元素读完后由 `kit.css` 的
+  `dfk-*:defined > * { display: none }` 隐藏。**不要删除它们**：React 管理这些
+  子节点，删掉会让 fiber 树与真实 DOM 失配。
+- 属性名一律 kebab-case（HTML 属性名大小写不敏感），新增属性同时补
+  `src/index.ts` 的 `DfkHeroProps` / `DfkFeaturesProps` / `DfkNextStepsProps`。
+- `href` / `src` 允许写站点根路径：`src/home/base.ts` 的 `resolveHref()` 会补当前
+  页面的 baseUrl（取自 `dfk-sql-runtime` 注入的配置，per-locale），所以 Markdown 里
+  写 `/docs/intro` 就够。绝对 URL、协议相对 URL、已带前缀的路径原样返回 —— 否则 React
+  页面传进来的 `useBaseUrl()` 结果会被拼两次。
 - 新增字段就加一个对应的 setter，**不要**回头引入 `setData()` / `update()` /
   `apply()` 这类通用入口。
-- 改 setter 签名属于公开 API 变更，需同步 `docs/src/pages/index.tsx` 的
-  `mount*()` 助手、`src/index.ts` 的类型导出，以及下游消费方。
-- **例外（attribute 种子）**：`<dfk-sql>` 由 `sql/remark` 插件从 Markdown 自动
-  生成为 `<dfk-sql config="…" sql="…">`（外加一份预渲染的加载占位，见「加载占位」），
-  没有 `mount*()` 助手、也挂不上 ref
-  去调 setter —— 内容只能来自 `config` / `sql` 两个字符串属性。因此它在
-  `connectedCallback()` 里 `getAttribute` **各读一次**作初始种子。这与「不做
-  attribute reflection」不冲突：读一次用于初始化，不是 attribute 变化再驱动
-  重渲染，仍是保留模式。`<dfk-mermaid>` 套用同一条例外（`source` / `config`
-  两个属性），而且它的两个产生方**都不是**手写 JSX：remark 插件，以及可运行 SQL
-  的 `mermaid` 渲染器。新增同类「由构建期插件生成、无 React 挂载点」的元素
-  才可套用此例外，手写 JSX 的元素仍走 setter。
+- 改 setter 签名属于公开 API 变更，需同步 `src/index.ts` 的类型导出、首页写法
+  以及下游消费方。
+- **构建期生成的元素**：`<dfk-sql>` / `<dfk-mermaid>` 由 remark 插件产生，没有
+  手写调用方，走的是同一条通道 —— 在 `connectedCallback()` 里读 `config` /
+  `sql` / `source` 作初始种子。
 
 ### 6. 生命周期：构造函数建树 + 挂 shadow root
 
@@ -914,25 +930,26 @@ Docusaurus 预渲染在 Node 里 import 本包。
 ### 11. React 19 自定义元素
 
 JSX 类型增强写在 `src/index.ts` 的
-`declare module 'react' { namespace JSX { … } }`，新增元素时同步补上。
-React 19 的 SSR/hydration 不会把对象 prop 设到自定义元素上（对象无法序列化进
-预渲染 HTML），docs 侧用 callback ref 显式喂内容，见
-`docs/src/pages/index.tsx`。
+`declare module 'react' { namespace JSX { … } }`，新增元素或属性时同步补上。
 
-三点因此而来的约定：
+内容走**标记**（属性 / 子标签），不走对象 prop：React 19 的 SSR 会把对象 prop
+字符串化成 `[object Object]`，hydration 阶段又只比对、不补写 property
+（`setPropOnCustomElement` 只在挂载和后续更新时调用），所以对象 prop 在 SSG 站点上
+会一直缺内容。页面因此写成
+`<dfk-hero title="…"><dfk-step href="…">…</dfk-step></dfk-hero>`，
+`docs/src/pages/index.mdx` 就是范例，中文页在
+`i18n/zh-Hans/docusaurus-plugin-content-pages/index.mdx`。
 
-- **`mount*()` 助手必须是纯 setter 调用（幂等）**。React 可能对同一节点多次调用
-  ref（StrictMode 双调用、元素移动后重挂载），重复喂同样的数据必须无副作用。
-- **预渲染 HTML 里 `<dfk-*>` 是空壳，这是已知取舍**：结构挂在 shadow root 里，
-  light DOM 始终为空，所以外壳有、内容没有，hydration 之前那几块是空的
-  （未定义的自定义元素默认 `display: inline`，高度为 0）。这个一次性高度跳变是刻意
-  接受的代价。不要为此把结构改回「预渲染时也能拼出来」的写法 —— 那必然退回拼字符串
-  或响应式 render。
-- **light DOM 恒为空顺带消除了 hydration mismatch**：以前 `connectedCallback()`
-  往 light DOM 挂子树，React hydration 比对子节点数量对不上，会报一次可恢复的
-  mismatch（minified #418）。现在服务端 HTML 与客户端元素的 light DOM 都是空的，
-  比对一致。若控制台再出现 #418 指向 `dfk-*`，说明有代码把节点挂回了 light DOM，
-  那是 bug，要修原因而不是用 `suppressHydrationWarning` 掩盖。
+由此而来的约定：
+
+- **属性与子标签都只汇入命名 setter**，见第 5 条；不要在组件里加 `render()` /
+  `apply()`。
+- **不要删 light DOM 的子标签**：`kit.css` 用 `dfk-*:defined > * { display: none }`
+  隐藏它们。删掉会让 React 的 fiber 树与真实 DOM 失配，后续更新会抛错。
+- **升级前的子标签是纯文本**：预渲染 HTML 里 `<dfk-*>` 带着子标签内容，未定义时按
+  inline 元素显示，元素一升级就被 shadow 树替换。这个一次性重绘是刻意接受的代价。
+- **`href` / `src` 写站点根路径**：`src/home/base.ts` 的 `resolveHref()` 补当前页面的
+  baseUrl（含 locale），React 页面传 `useBaseUrl()` 结果也不会被拼两次。
 
 ## 发版流程（npm）
 

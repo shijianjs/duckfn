@@ -17,3 +17,18 @@
 @import './theme/tokens.css';
 @import './toc-toggle/TocToggle.css';
 @import './sql/sql.css';
+
+/*
+ * The one light-DOM rule the shadow boundaries cannot carry: `<dfk-action>`,
+ * `<dfk-badge>`, `<dfk-feature>` and `<dfk-step>` are *input* to the home
+ * components — read once on connect and rendered into the parent's shadow
+ * tree. They are hidden only once the parent is `:defined`, so a page whose
+ * bundle never loads keeps readable markup instead of an empty box. They are
+ * not removed from the DOM because React owns those nodes and expects its
+ * fiber tree to match.
+ */
+dfk-hero:defined > *,
+dfk-features:defined > *,
+dfk-next-steps:defined > * {
+  display: none;
+}

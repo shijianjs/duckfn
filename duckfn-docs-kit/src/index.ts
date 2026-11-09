@@ -1,4 +1,4 @@
-import type {HTMLAttributes} from 'react';
+import type {DetailedHTMLProps, HTMLAttributes} from 'react';
 // Imported as well as re-exported: the `HTMLElementTagNameMap` augmentation below
 // names the classes, and a module augmentation can only refer to local bindings.
 import {DfkFeatures} from './home/DfkFeatures';
@@ -40,25 +40,88 @@ export type {
 } from './types';
 
 /**
- * Props accepted by the `dfk-*` tags when they are created from React.
+ * Props every `dfk-*` tag accepts from React: the plain HTML ones plus `ref`.
  *
- * The content is *not* passed as a prop — an object prop would never reach the
- * component through hydration (React only reconciles strings onto custom
- * elements). The caller mounts the element and drives it through its setters
- * from a callback ref, so all React needs to know about is `ref`.
- *
- * The alias is exported (rather than written inline) because the emitted `.d.ts`
- * for a module augmentation can only name types that are themselves reachable
- * from the declaration file.
+ * `DetailedHTMLProps` (rather than bare `HTMLAttributes`) is what puts `ref`
+ * into the props. The alias is exported (rather than written inline) because
+ * the emitted `.d.ts` for a module augmentation can only name types that are
+ * themselves reachable from the declaration file; `key` comes from React's own
+ * `IntrinsicAttributes` and needs no mention.
  */
-export type DfkElementProps = HTMLAttributes<HTMLElement>;
+export type DfkElementProps = DetailedHTMLProps<
+  HTMLAttributes<HTMLElement>,
+  HTMLElement
+>;
+
+/**
+ * Content the home components read from their attributes.
+ *
+ * Scalars are plain text; structures are JSON. Each element parses them in
+ * `attributeChangedCallback` and calls the matching setter, so React drives it
+ * by diffing attributes — no ref and no mount helper. The names are kebab-case
+ * because HTML lower-cases attribute names.
+ */
+export type DfkHeroProps = DfkElementProps & {
+  'logo-src'?: string;
+  title?: string;
+  tagline?: string;
+  /** JSON `HeroLink`. */
+  primary?: string;
+  /** JSON `HeroAction`. */
+  secondary?: string;
+  /** JSON `HeroBadge[]`. */
+  badges?: string;
+};
+
+export type DfkFeaturesProps = DfkElementProps & {
+  'section-title'?: string;
+  /** JSON `FeatureItem[]`. */
+  features?: string;
+};
+
+export type DfkNextStepsProps = DfkElementProps & {
+  'section-title'?: string;
+  /** JSON `NextStepItem[]`. */
+  steps?: string;
+};
+
+/**
+ * The child tags the home components read on connect.
+ *
+ * They are *not* registered custom elements — just data carriers that keep the
+ * markup readable where JSON inside an attribute would not be (hand-written
+ * HTML, MDX, which does not even accept single-quoted attribute values). Their
+ * parent reads them once and renders its shadow tree; `kit.css` hides them so
+ * the raw text never shows.
+ */
+export type DfkActionProps = DfkElementProps & {
+  kind?: 'primary' | 'secondary';
+  href?: string;
+  icon?: string;
+};
+
+export type DfkBadgeProps = DfkElementProps & {
+  href?: string;
+  src?: string;
+  alt?: string;
+};
+
+export type DfkFeatureProps = DfkElementProps & {
+  icon?: string;
+  title?: string;
+};
+
+export type DfkStepProps = DfkElementProps & {
+  href?: string;
+  title?: string;
+};
 
 /**
  * The kit's tags in the DOM's own tag map, so `document.createElement('dfk-sql')`
  * (and the kit's `el()` helper) is typed as the class it upgrades to. Without
  * this, every place that builds a `dfk-*` element from scratch — `sql/renderers.ts`
- * building a `<dfk-mermaid>` for a `mermaid` result, `docs/src/pages/index.tsx`
- * mounting the home elements — would have to cast the result.
+ * building a `<dfk-mermaid>` for a `mermaid` result, a site writing the home
+ * tags — would have to cast the result.
  */
 declare global {
   interface HTMLElementTagNameMap {
@@ -73,11 +136,15 @@ declare global {
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'dfk-hero': DfkElementProps;
-      'dfk-features': DfkElementProps;
-      'dfk-next-steps': DfkElementProps;
+      'dfk-hero': DfkHeroProps;
+      'dfk-features': DfkFeaturesProps;
+      'dfk-next-steps': DfkNextStepsProps;
       'dfk-sql': DfkElementProps;
       'dfk-mermaid': DfkElementProps;
+      'dfk-action': DfkActionProps;
+      'dfk-badge': DfkBadgeProps;
+      'dfk-feature': DfkFeatureProps;
+      'dfk-step': DfkStepProps;
     }
   }
 }
