@@ -1,0 +1,24 @@
+/**
+ * The two rules every `dfk-*` home element needs in its shadow tree, and the
+ * only ones they all adopt.
+ *
+ * Both are impossible to state per node:
+ *
+ * - A custom element is `display: inline` by default and the shadow content is a
+ *   full-width section, so the host has to be a block box. It cannot be set on
+ *   `this.style` from the constructor: adding an attribute to `this` there makes
+ *   `document.createElement('dfk-…')` throw.
+ * - The host page's universal selector (Infima's `* { box-sizing: border-box }`)
+ *   does not match into a shadow tree, and `box-sizing` is not inherited, so
+ *   without this every padded box silently switches to content-box — wide enough
+ *   to push the feature grid from three columns to four at the 72rem cap.
+ */
+:host {
+  display: block;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

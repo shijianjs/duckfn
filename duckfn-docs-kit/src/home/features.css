@@ -1,0 +1,75 @@
+/**
+ * What a feature card cannot say with inline styles: its surface (the `:hover`
+ * changes the border colour), the lift on hover, and the entrance motion.
+ *
+ * The grid, the chip, and every box/spacing/type declaration live on the nodes in
+ * `DfkFeatures.ts`.
+ */
+
+.dfk-feature-card {
+  border: 1px solid var(--duckfn-card-border);
+  background-color: var(--duckfn-card-bg);
+  transition:
+    border-color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-feature-card:hover {
+  border-color: var(--duckfn-blue);
+  box-shadow: var(--duckfn-shadow);
+}
+
+/* Entrance animation, `backwards` fill and the hover lift — see the motion notes
+   at the top of `hero.css`; the rules are repeated here because a shadow tree
+   cannot borrow another element's sheet. */
+@media (prefers-reduced-motion: no-preference) {
+  .dfk-feature-card {
+    animation: dfk-rise 0.5s var(--ifm-transition-timing-default) backwards;
+  }
+
+  /* Cards arrive in reading order. Filling backwards keeps them invisible during
+     their delay and hands the element back to `:hover` when the animation ends. */
+  .dfk-feature-card:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+
+  .dfk-feature-card:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+
+  .dfk-feature-card:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+
+  .dfk-feature-card:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+
+  .dfk-feature-card:nth-child(6) {
+    animation-delay: 0.3s;
+  }
+
+  .dfk-feature-card {
+    transition:
+      transform 0.2s var(--ifm-transition-timing-default),
+      border-color 0.2s var(--ifm-transition-timing-default),
+      box-shadow 0.2s var(--ifm-transition-timing-default),
+      color 0.2s var(--ifm-transition-timing-default);
+  }
+
+  .dfk-feature-card:hover {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes dfk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

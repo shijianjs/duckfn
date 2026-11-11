@@ -1,0 +1,32 @@
+/**
+ * The band `<dfk-features>` and `<dfk-next-steps>` share: a centred content
+ * column and the title above the grid.
+ *
+ * The two elements are the same band with different cards inside, and the band
+ * is one look that has to stay identical in both — that is why it is a sheet of
+ * its own instead of a copy in each element's file. Everything the band owns
+ * besides these paddings (max-width, margin, title type) is set inline where the
+ * band is built, in `DfkSection.ts`.
+ *
+ * The paddings stay here because the breakpoints below override them, and a
+ * media query cannot beat an inline declaration.
+ */
+.dfk-section {
+  padding: 4.5rem 0;
+}
+
+.dfk-section-inner {
+  padding: 0 1.5rem;
+}
+
+@media screen and (max-width: 996px) {
+  .dfk-section {
+    padding: 3.5rem 0;
+  }
+}
+
+@media screen and (max-width: 576px) {
+  .dfk-section-inner {
+    padding: 0 1rem;
+  }
+}

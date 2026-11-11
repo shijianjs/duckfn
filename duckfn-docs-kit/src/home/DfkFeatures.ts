@@ -1,7 +1,8 @@
 import type {IconifyIconHTMLElement} from 'iconify-icon';
 import {el, HTMLElementBase} from '../dom';
 import {childTags, jsonAttr, textOf} from './attrs';
-import {homeStyles} from './styles';
+import {DfkSection} from './DfkSection';
+import {baseStyles, featureStyles, sectionStyles} from './styles';
 import type {FeatureItem} from '../types';
 
 const TAG = 'dfk-features';
@@ -14,33 +15,43 @@ const TAG = 'dfk-features';
  * holds its own nodes. `setFeatures()` grows or shrinks the list to the new
  * length and mutates the cards in place — the grid is never cleared and rebuilt.
  *
+ * The grid's layout and the cards' boxes are inline; the card surface and its
+ * `:hover` lift live in `features.css`, adopted as one sheet by every instance.
+ * The band around them comes from {@link DfkSection}.
+ *
  * Content arrives declaratively: `section-title` as text, `features` as a JSON
  * array, or one `<dfk-feature icon="…" title="…">description</dfk-feature>`
  * child per card (read once on connect). All of them end in `setSectionTitle()`
  * / `setFeatures()`.
- *
- * The tree lives in a shadow root (adopting the shared `homeStyles()` sheet);
- * see `DfkHero` for why the theme crosses the boundary through custom
- * properties.
  */
 export class DfkFeatures extends HTMLElementBase {
   static get observedAttributes(): string[] {
     return ['section-title', 'features'];
   }
 
-  readonly #section = el('section', {class: 'dfk-section'});
-  readonly #inner = el('div', {class: 'dfk-section-inner'});
-  readonly #heading = el('h2', {class: 'dfk-section-title'});
-  readonly #grid = el('div', {class: 'dfk-feature-grid'});
+  readonly #section = new DfkSection();
+  readonly #grid: HTMLDivElement = el('div', {class: 'dfk-feature-grid'}, (grid) => {
+    grid.style.display = 'grid';
+    // `min(17rem, 100%)` rather than a bare 17rem: a track can then never be
+    // wider than the viewport, which is what keeps the narrowest phones from
+    // scrolling sideways.
+    grid.style.gridTemplateColumns =
+      'repeat(auto-fit, minmax(min(17rem, 100%), 1fr))';
+    grid.style.gap = '1.25rem';
+    grid.style.marginTop = '2.75rem';
+  });
   readonly #cards: DfkFeatureCard[] = [];
 
   constructor() {
     super();
-    this.#inner.append(this.#heading, this.#grid);
-    this.#section.appendChild(this.#inner);
+    this.#section.content.appendChild(this.#grid);
     const shadow = this.attachShadow({mode: 'open'});
-    shadow.adoptedStyleSheets = [homeStyles()];
-    shadow.appendChild(this.#section);
+    shadow.adoptedStyleSheets = [
+      baseStyles(),
+      sectionStyles(),
+      featureStyles(),
+    ];
+    shadow.appendChild(this.#section.root);
   }
 
   attributeChangedCallback(
@@ -75,7 +86,7 @@ export class DfkFeatures extends HTMLElementBase {
   }
 
   setSectionTitle(text: string): void {
-    this.#heading.textContent = text;
+    this.#section.heading.textContent = text;
   }
 
   setFeatures(items: readonly FeatureItem[]): void {
@@ -105,20 +116,51 @@ export class DfkFeatures extends HTMLElementBase {
 
 /** One feature card: an icon chip, a title and a description. Built once. */
 class DfkFeatureCard {
-  readonly root = el('article', {class: 'dfk-feature-card'});
-  readonly #icon: IconifyIconHTMLElement = el('iconify-icon', {
-    class: 'dfk-feature-icon',
-    attrs: {'aria-hidden': 'true'},
+  readonly root = el('article', {class: 'dfk-feature-card'}, (card) => {
+    // The border, the background and the `:hover` lift are in `features.css`.
+    card.style.display = 'flex';
+    card.style.flexDirection = 'column';
+    card.style.padding = '1.5rem';
+    card.style.borderRadius = '1rem';
   });
-  readonly #title = el('h3', {class: 'dfk-feature-title'});
-  readonly #details = el('p', {class: 'dfk-feature-details'});
+  readonly #icon: IconifyIconHTMLElement = el(
+    'iconify-icon',
+    {class: 'dfk-feature-icon', attrs: {'aria-hidden': 'true'}},
+    (icon) => {
+      icon.style.fontSize = '1.375rem';
+    },
+  );
+  readonly #title = el('h3', {class: 'dfk-feature-title'}, (title) => {
+    title.style.marginBottom = '0.5rem';
+    title.style.fontSize = '1.0625rem';
+    title.style.fontWeight = '600';
+  });
+  readonly #details = el('p', {class: 'dfk-feature-details'}, (details) => {
+    details.style.marginBottom = '0';
+    details.style.fontSize = '0.9375rem';
+    details.style.lineHeight = '1.7';
+    details.style.color = 'var(--ifm-color-emphasis-700)';
+  });
 
   constructor() {
     // The chip only wraps the icon and is never touched again, so it is
     // described in place instead of being held in a field.
     this.root.append(
-      el('span', {class: 'dfk-feature-icon-chip'}, (chip) =>
-        chip.appendChild(this.#icon),
+      el(
+        'span',
+        {class: 'dfk-feature-icon-chip'},
+        (chip) => {
+          chip.style.display = 'inline-flex';
+          chip.style.alignItems = 'center';
+          chip.style.justifyContent = 'center';
+          chip.style.width = '2.5rem';
+          chip.style.height = '2.5rem';
+          chip.style.marginBottom = '1rem';
+          chip.style.borderRadius = '0.75rem';
+          chip.style.backgroundColor = 'var(--duckfn-blue-soft)';
+          chip.style.color = 'var(--duckfn-blue)';
+          chip.appendChild(this.#icon);
+        },
       ),
       this.#title,
       this.#details,

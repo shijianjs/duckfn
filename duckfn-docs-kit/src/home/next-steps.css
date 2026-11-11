@@ -1,0 +1,79 @@
+/**
+ * What a next-step card cannot say with inline styles: its surface and the arrow
+ * colour (both change on `:hover` / `:focus-visible`), and the entrance motion.
+ *
+ * The grid, the card's box, and the copy live on the nodes in `DfkNextSteps.ts`.
+ */
+
+.dfk-next-card {
+  border: 1px solid var(--duckfn-card-border);
+  background-color: var(--duckfn-card-bg);
+  transition:
+    border-color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-next-card:hover,
+.dfk-next-card:focus-visible {
+  border-color: var(--duckfn-blue);
+  box-shadow: var(--duckfn-shadow);
+}
+
+/* The arrow's own colour, because the card's state changes it — an inline value
+   would win over the two rules below. */
+.dfk-next-card-arrow {
+  color: var(--ifm-color-emphasis-500);
+  transition: color 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-next-card:hover .dfk-next-card-arrow,
+.dfk-next-card:focus-visible .dfk-next-card-arrow {
+  color: var(--duckfn-blue);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dfk-next-card {
+    animation: dfk-rise 0.5s var(--ifm-transition-timing-default) backwards;
+  }
+
+  .dfk-next-card:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+
+  .dfk-next-card:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+
+  .dfk-next-card:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+
+  .dfk-next-card,
+  .dfk-next-card-arrow {
+    transition:
+      transform 0.2s var(--ifm-transition-timing-default),
+      border-color 0.2s var(--ifm-transition-timing-default),
+      box-shadow 0.2s var(--ifm-transition-timing-default),
+      color 0.2s var(--ifm-transition-timing-default);
+  }
+
+  .dfk-next-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .dfk-next-card:hover .dfk-next-card-arrow {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes dfk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

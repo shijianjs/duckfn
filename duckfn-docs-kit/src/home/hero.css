@@ -1,0 +1,201 @@
+/**
+ * What the hero cannot say with inline styles: two decorative pseudo-elements,
+ * the `@supports`-guarded gradient on the title, the button states, the entrance
+ * motion, and the one padding a breakpoint changes.
+ *
+ * Everything else about the hero — boxes, spacing, type sizes, flex rows — is set
+ * on the nodes themselves in `DfkHero.ts`.
+ *
+ * Theme colours cross the shadow boundary through inheritance: the `--duckfn-*`
+ * tokens from `theme/tokens.css` and the site's `--ifm-*` variables are custom
+ * properties declared on `:root` / `[data-theme]`, and custom properties inherit
+ * into shadow trees, so dark mode works without a single `[data-theme]` selector
+ * in this file.
+ *
+ * Motion rules, deliberately:
+ *
+ * - all animations live inside `@media (prefers-reduced-motion: no-preference)`
+ *   and no static declaration sets `opacity: 0`, so a reader who disabled
+ *   animation sees the page complete rather than blank;
+ * - entrance animations fill `backwards` instead of `forwards`. The delay then
+ *   holds the start frame, but once the animation ends the element goes back to
+ *   its normal styles — which is what lets the `:hover` transforms on the cards
+ *   work. With `forwards` the finished animation would keep overriding them.
+ */
+
+.dfk-hero {
+  /* The 996px breakpoint below re-sets this, and a media query cannot override an
+     inline declaration — so the padding lives here rather than on the node. */
+  padding: 4.5rem 1.5rem 4rem;
+}
+
+/* Two soft pools of light: brand blue from above, a hint of the logo's beak
+   yellow from the lower right. Purely decorative. */
+.dfk-hero::before,
+.dfk-hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.dfk-hero::before {
+  top: -18rem;
+  left: 50%;
+  width: 52rem;
+  height: 52rem;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--duckfn-glow), transparent 70%);
+}
+
+.dfk-hero::after {
+  right: -10rem;
+  bottom: -14rem;
+  width: 34rem;
+  height: 34rem;
+  background: radial-gradient(circle, var(--duckfn-glow-warm), transparent 70%);
+}
+
+/* The plain colour is the fallback for the gradient below: without
+   `background-clip: text` a `transparent` colour would hide the name. It cannot
+   be inline, because the guard has to be able to override it. */
+.dfk-title {
+  color: var(--duckfn-blue);
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .dfk-title {
+    background-image: linear-gradient(
+      120deg,
+      var(--duckfn-blue-deep),
+      var(--duckfn-blue-bright)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* Room for descenders, which the tight line box would otherwise clip. */
+    padding-bottom: 0.06em;
+  }
+}
+
+/* The only yellow on this page, and it carries no text: a short rule under the
+   name that echoes the beak. See the note on the token in theme/tokens.css. */
+.dfk-title::after {
+  content: '';
+  display: block;
+  width: 3rem;
+  height: 0.25rem;
+  margin: 1rem auto 0;
+  border-radius: 999px;
+  background-color: var(--duckfn-yellow);
+}
+
+/* The pill's box is inline on the anchor; the border and the colours are here
+   because `:hover` changes them, and an inline value would win. */
+.dfk-button-primary,
+.dfk-button-secondary {
+  border: 1px solid transparent;
+  transition:
+    background-color 0.2s var(--ifm-transition-timing-default),
+    border-color 0.2s var(--ifm-transition-timing-default),
+    color 0.2s var(--ifm-transition-timing-default),
+    box-shadow 0.2s var(--ifm-transition-timing-default);
+}
+
+.dfk-button-primary {
+  background-color: var(--duckfn-btn-bg);
+  border-color: var(--duckfn-btn-bg);
+  color: var(--duckfn-btn-fg);
+}
+
+.dfk-button-primary:hover,
+.dfk-button-primary:focus-visible {
+  background-color: var(--duckfn-btn-bg-hover);
+  border-color: var(--duckfn-btn-bg-hover);
+  color: var(--duckfn-btn-fg);
+  box-shadow: var(--duckfn-shadow);
+}
+
+.dfk-button-secondary {
+  background-color: transparent;
+  border-color: var(--duckfn-outline-border);
+  color: var(--duckfn-blue);
+}
+
+.dfk-button-secondary:hover,
+.dfk-button-secondary:focus-visible {
+  background-color: var(--duckfn-blue-soft);
+  border-color: var(--duckfn-blue);
+  color: var(--duckfn-blue);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dfk-logo-stage,
+  .dfk-title,
+  .dfk-tagline,
+  .dfk-actions,
+  .dfk-badges {
+    animation: dfk-rise 0.6s var(--ifm-transition-timing-default) backwards;
+  }
+
+  .dfk-title {
+    animation-delay: 0.06s;
+  }
+
+  .dfk-tagline {
+    animation-delay: 0.12s;
+  }
+
+  .dfk-actions {
+    animation-delay: 0.18s;
+  }
+
+  .dfk-badges {
+    animation-delay: 0.24s;
+  }
+
+  /* Two elements on purpose: `rise` plays once on the stage, `float` loops on
+     the image. One element cannot run two animations that both set transform. */
+  .dfk-logo {
+    animation: dfk-float 7s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
+@keyframes dfk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dfk-float {
+  0%,
+  100% {
+    transform: translateY(-4px);
+  }
+
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+@media screen and (max-width: 996px) {
+  .dfk-hero {
+    padding: 3rem 1.5rem;
+  }
+}
+
+@media screen and (max-width: 576px) {
+  /* Full-width buttons stack better than two pills on a phone. */
+  .dfk-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

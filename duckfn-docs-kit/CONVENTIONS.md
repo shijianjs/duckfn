@@ -37,7 +37,10 @@ Docusaurus）：构建系统、依赖管理、产物形态完全不同，强行�
 ```
 src/
 ├── home/            # 首页三件套：DfkHero.ts / DfkFeatures.ts / DfkNextSteps.ts
-│                    #   + home.css（三组件共享的样式）+ styles.ts（?inline 注入）
+│                    #   + DfkSection.ts（两个分区共用的外壳）
+│                    #   + base.css / section.css / hero.css / features.css /
+│                    #     next-steps.css（各组件自己的规则，见第 9 条）
+│                    #   + styles.ts（?inline + 惰性 sheet）
 ├── toc-toggle/      # TocToggle.ts + TocToggle.css（light-DOM 例外，见第 9 条）
 │                    #   + client.ts / plugin.ts（胶水：插件把 client 注入每个页面）
 ├── sql/             # 可运行 SQL：DfkSql.ts + DfkSql.css/styles.ts（shadow：编辑器
@@ -79,9 +82,10 @@ src/
 └── vite-env.d.ts    # `*.css?inline` 的模块声明
 ```
 
-- `home.css` 留在 `home/` 而非拆进各组件：`:host`/box-sizing 重置、`.dfk-section`
-  系列、`dfk-rise` keyframes、断点是三组件**真正共享**的规则，拆三份会引入重复
-  或额外的 base 文件。共享样式属于「home 这个业务」，就放 `home/` 里。
+- `home/` 的样式按「谁拥有」拆开，不是一个 `home.css`：`base.css`（`:host` +
+  box-sizing，三个元素都 adopt）、`section.css`（两个分区共用的外壳与它的断点）、
+  以及每个组件自己的 `hero.css` / `features.css` / `next-steps.css`。判据见第 9 条：
+  元素自己的规则跟元素走，只有必须一起变的才放共享文件。
 - `tokens.css` 是唯一没有业务归属的全局基础设施，`theme/` 是它的例外单独目录。
 
 ### 构建与导出
@@ -89,7 +93,7 @@ src/
 - 构建：Vite lib 模式产出 ESM（`dist/`），`tsc -p tsconfig.build.json` 产出
   `.d.ts`。`npm run build` 一步完成。全局 CSS（`theme/tokens.css`、
   `toc-toggle/TocToggle.css`）不经构建、作为源文件直接导出；组件自己的
-  `home/home.css` / `sql/DfkSql.css` / `mermaid/DfkMermaid.css` 由各自目录下的
+  `home/*.css` / `sql/DfkSql.css` / `mermaid/DfkMermaid.css` 由各自目录下的
   `styles.ts` 以 `?inline` 内联进 bundle（见第 9 条）。
 - **package.json 与业务解耦（硬性要求）**：`exports` 只有三条**永远不改**的规则
   —— `.`（主入口）、`./src/*`（源文件直出，CSS 走这里）、`./*`（通配，
@@ -119,8 +123,9 @@ src/
 - CSS 子路径：消费方直接按源文件路径引 —— `@import
   'duckfn-docs-kit/src/kit.css'`（聚合入口），或单独引
   `duckfn-docs-kit/src/theme/tokens.css` 等。不再维护 `css/kit.css` 这类
-  与源路径脱钩的别名。`home.css` **不作为**全局 CSS 导出 —— 它由
-  `home/styles.ts` 内联进 JS bundle，注入各组件的 shadow root。
+  与源路径脱钩的别名。`home/` 下的那几个 CSS **不作为**全局 CSS 导出 —— 它们由
+  `home/styles.ts` 以 `?inline` 内联进 JS bundle，作为构造好的 sheet 交给各组件的
+  shadow root。
 
 ### TOC 折叠控件（`toc-toggle/`）
 
@@ -806,7 +811,7 @@ constructor() {
   this.#section = document.createElement('section');
   this.#section.append(this.#title, this.#body); // 组装进自有节点
   const shadow = this.attachShadow({mode: 'open'}); // 构造函数里合法
-  shadow.adoptedStyleSheets = [homeStyles()];
+  shadow.adoptedStyleSheets = [baseStyles(), heroStyles()];
   shadow.appendChild(this.#section);
 }
 ```
@@ -843,30 +848,48 @@ npm 包 `iconify-icon`，`register.ts` 里 side-effect import 注册。
   助手）—— 官方的实现比自研封装好。
 - 数据契约里图标就是 Iconify 名字字符串（`'lucide:arrow-right'`），不引入
   `@iconify/types`、不装 `@iconify-icons/*` 本地图标集。
-- 尺寸/颜色用 CSS 作用在 `iconify-icon` 元素上（`home.css` 的
-  `.dfk-button-icon` 等），字形自带 `currentColor`。
+- 尺寸/颜色直接设在 `iconify-icon` 节点上（`icon.style.fontSize = '1.125rem'`，
+  颜色随主题时用 `var(--duckfn-*)`），字形自带 `currentColor`。
 - **尺寸只认 `font-size`**：组件内部渲染的是 `<svg width="1em" height="1em">`，
   字形大小跟随宿主的 font-size；给宿主设 CSS `width`/`height` 只会撑大空盒子，
   图标本身不变。
 
 ### 9. 默认用 Shadow DOM
 
-`dfk-*` 组件**默认渲染进 shadow root**（`mode: 'open'`），样式用
-`adoptedStyleSheets` 注入（`home/styles.ts` 把 `home.css` 以 `?inline` 内联进
-bundle，全局共享一个 `CSSStyleSheet`）。这样宿主页面的全局 CSS 进不来、组件的
-CSS 也漏不出去，组件边界干净，不依赖「人工命名空间」去避免污染。
+`dfk-*` 组件**默认渲染进 shadow root**（`mode: 'open'`）。这样宿主页面的全局
+CSS 进不来、组件的 CSS 也漏不出去，组件边界干净，不依赖「人工命名空间」去避免污染。
+
+**样式分三级，能内联就不升**：
+
+1. **内联**（`node.style.x = …`，就写在建节点的 `el(tag, opts, init)` 里）：盒模型、
+   间距、字号、颜色、网格。元素自己的普通样式就是它的私有属性，放在它自己旁边。
+2. **该组件自己的 sheet**（`home/hero.css` 等，`styles.ts` 以 `?inline` 收成字符串）：
+   内联表达不了的 —— `:hover` / `:focus-visible`、`::before` / `::after`、`@media`、
+   `@supports`、`@keyframes`。由该组件的**所有实例** adopt **同一份** `CSSStyleSheet`
+   （`shadow.adoptedStyleSheets = [baseStyles(), heroStyles()]`），也就是 Lit
+   `static styles` 的做法。**不要每个实例建 `<style>` 节点**：几十张卡片就是几十份
+   重复文本与解析开销，而这份 CSS 是静态的，本来只需要一份。
+3. **共享 sheet**：`base.css`（`:host` + box-sizing，三个元素都 adopt）与
+   `section.css`（两个分区共用的外壳及其断点）。只有必须一起变的规则才该在这里。
+
+两条由此而来的硬约束：
+
+- **被 `:hover` / `@media` 覆盖的属性不能内联**（内联优先级更高）：按钮的
+  `border` 与配色、卡片的 `border`/`background`/`transition`、`.dfk-section` 的
+  `padding` 都在 CSS 里；内联 `border` 简写还会连带写死 `border-color`，让 hover
+  规则失效。
+- **`display: block` 与 `box-sizing` 只能写在 sheet 里**：前者不能从构造函数设
+  （给 `this` 加属性会让 `document.createElement` 抛错），后者不是继承属性 ——
+  宿主 Infima 的 `* { box-sizing: border-box }` 选不进 shadow tree，组件内所有盒子
+  会退回 `content-box`，带 padding / max-width 的盒子尺寸随之变化 —— 足以把布局
+  阈值挪位（实测：feature grid 在 72rem 容器上限处从 3 列变 4 列）。两者都在
+  `base.css`。
 
 **主题照样跟随宿主**：CSS 自定义属性会**继承穿过 shadow 边界**，所以组件内部
 用 `var(--duckfn-*)` / `var(--ifm-*)` 即可拿到消费站的 Infima 变量与品牌色，
 `[data-theme]` 切换自动生效 —— 前提是这些变量声明在**文档的** `:root` /
 `[data-theme]` 上（这正是 `tokens.css` 必须留在全局、不能塞进 shadow 的原因）。
 组件内部**不要**写 `[data-theme]` 选择器，也不要依赖宿主的 class。
-
-**只有「继承属性」能穿过边界**：`box-sizing` 不是继承属性，宿主 Infima 的
-`* { box-sizing: border-box }` 选不进 shadow tree，组件内所有盒子会退回
-`content-box`，带 padding / max-width 的盒子尺寸随之变化 —— 足以把布局阈值挪位
-（实测：feature grid 在 72rem 容器上限处从 3 列变 4 列）。所以 `home.css` 顶部
-必须在 shadow 作用域里**重新声明一次** box-sizing 重置，别指望宿主的通用规则。
 
 **例外（万不得已才退回 light DOM）**：仅当组件必须直接复用消费站 light DOM 的
 CSS 时 —— 例如 `TocToggle` 注入并改写 Docusaurus 自己的 TOC、其规则必须落在
@@ -913,8 +936,8 @@ Docusaurus 预渲染在 Node 里 import 本包。
   浏览器侧由元素 upgrade（即 `constructor()`）触达。
 - 触碰 `window` / `document` / `customElements` 的入口（`registerDfkElements()`、
   `TocToggle.init()`）要么带守卫，要么由消费方在浏览器环境调用。
-- `styles.ts` 的 `CSSStyleSheet` 必须**惰性创建**（`homeStyles()` 在构造函数里
-  才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
+- `styles.ts` 的 `CSSStyleSheet` 必须**惰性创建**（`baseStyles()` / `heroStyles()`
+  在构造函数里才调用）：模块级 `new CSSStyleSheet()` 会在 Node 预渲染 import 时直接崩。
   `?inline` import 进来的只是字符串，模块级安全。
 - `iconify-icon` 在 Node 里 import 是安全的（官方包已处理）。
 - Node 侧模块只有 `src/remark.ts`、`src/color-swatch/rehype.ts`、`src/sql/remark.ts`、
