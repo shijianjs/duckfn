@@ -57,12 +57,24 @@ SELECT typeof(dfn_agg_sum(x)) FROM (VALUES (1)) t(x);     -- BIGINT
   }
   ```
 
-- An aggregate may take no argument at all:
+- An aggregate needs at least one input argument. Since quack-rs 0.20, registering a
+  zero-argument aggregate is refused: DuckDB 2.0 passes `update` a chunk with no columns, so
+  there is no row count, and a windowed call never reaches `update` at all. Register the
+  aggregate with one parameter, then create a zero-argument macro for the familiar spelling.
+  DuckDB binds a macro's body when the macro is created, so the aggregate has to be registered
+  first — one `#[duck_custom_register]` keeps that order independent of inventory's iteration
+  order:
 
   ```rust
-  #[duck_aggregate_function]
-  fn dfn_agg_row_count(state: &mut RowCountState) {
+  #[duck_aggregate_function(auto_register = false)]
+  fn dfn_agg_row_count_1(_input: i64, state: &mut RowCountState) {
       state.rows += 1;
+  }
+
+  #[duck_custom_register]
+  fn dfn_agg_row_count_register(c: &Connection) -> DuckResult<()> {
+      unsafe { c.register_aggregate(dfn_agg_row_count_1::aggregate_function_builder()) }?;
+      register_sql_macro_str(c, "CREATE MACRO dfn_agg_row_count() AS dfn_agg_row_count_1(1)")
   }
   ```
 

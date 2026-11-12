@@ -55,12 +55,22 @@ SELECT typeof(dfn_agg_sum(x)) FROM (VALUES (1)) t(x);     -- BIGINT
   }
   ```
 
-- 聚合函数也可以完全不接收参数：
+- 聚合函数至少要有一个输入参数。quack-rs 0.20 起会拒绝注册零参数聚合：DuckDB 2.0 传给
+  `update` 的 chunk 没有列，行数无法统计，而且窗口调用根本不会走到 `update`。做法是给聚合
+  留一个参数，再用零参数的宏包一层，保留原来的 SQL 写法。
+  DuckDB 在 `CREATE MACRO` 时就会绑定 body 里的函数，所以聚合必须先注册；用同一个
+  `#[duck_custom_register]` 串起两步，不依赖 inventory 的遍历顺序：
 
   ```rust
-  #[duck_aggregate_function]
-  fn dfn_agg_row_count(state: &mut RowCountState) {
+  #[duck_aggregate_function(auto_register = false)]
+  fn dfn_agg_row_count_1(_input: i64, state: &mut RowCountState) {
       state.rows += 1;
+  }
+
+  #[duck_custom_register]
+  fn dfn_agg_row_count_register(c: &Connection) -> DuckResult<()> {
+      unsafe { c.register_aggregate(dfn_agg_row_count_1::aggregate_function_builder()) }?;
+      register_sql_macro_str(c, "CREATE MACRO dfn_agg_row_count() AS dfn_agg_row_count_1(1)")
   }
   ```
 
