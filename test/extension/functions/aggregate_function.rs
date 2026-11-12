@@ -1,6 +1,6 @@
 use duckfn::{
-    duck_aggregate_function, duck_custom_register, duck_error, DuckAggregateState, DuckOptionResult,
-    DuckResult,
+    duck_aggregate_function, duck_custom_register, duck_error, register_sql_macro_str,
+    DuckAggregateState, DuckOptionResult, DuckResult,
 };
 use quack_rs::prelude::{
     AggregateFunctionSetBuilder, AggregateOverloadBuilder, Connection, LogicalType, Registrar,
@@ -79,13 +79,27 @@ fn dfn_agg_state_first(state: &mut SumState, input: i64) {
     state.rows += 1;
 }
 
-/// 零个输入参数：生成的参数结构体没有字段，注册成无参聚合
+/// quack-rs 0.20 起拒绝注册零参数聚合：DuckDB 2.0 给 `update` 的 chunk 没有列，行数无法统计，
+/// 窗口调用也不会走到 `update`。因此底层注册成带一个参数的聚合，再用零参数宏包一层，
+/// 保留 `dfn_agg_row_count()` 的拼写。
+///
+/// DuckDB 在 `CREATE MACRO` 时就会绑定 body 里的函数，宏必须晚于聚合注册；用同一个
+/// `#[duck_custom_register]` 串起两步，不依赖 inventory 的遍历顺序。
 /// ```sql
-/// SELECT dfn_agg_row_count() FROM (VALUES (1), (2), (3)) t(x);
+/// SELECT dfn_agg_row_count() FROM (VALUES (1), (2), (3)) t(x);  -- 3
 /// ```
-#[duck_aggregate_function]
-fn dfn_agg_row_count(state: &mut RowCountState) {
+#[duck_aggregate_function(auto_register = false)]
+fn dfn_agg_row_count_1(_input: i64, state: &mut RowCountState) {
     state.rows += 1;
+}
+
+#[duck_custom_register]
+fn dfn_agg_row_count_register(c: &Connection) -> DuckResult<()> {
+    unsafe { c.register_aggregate(dfn_agg_row_count_1::aggregate_function_builder()) }?;
+    register_sql_macro_str(
+        c,
+        "CREATE MACRO dfn_agg_row_count() AS dfn_agg_row_count_1(1)",
+    )
 }
 
 /// 计数状态：只统计行数

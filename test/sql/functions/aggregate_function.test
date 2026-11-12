@@ -68,12 +68,12 @@ SELECT dfn_agg_state_first(x) FROM (VALUES (1), (2)) t(x);
 ----
 3
 
-# 零个输入参数：注册成无参聚合（DuckDB 2.0 不再对零参聚合逐行调用 update，
-# 所以这里只断言注册与返回类型；逐行计数交给上面带参的聚合）
-query T
-SELECT typeof(dfn_agg_row_count()) FROM (VALUES (1), (2), (3)) t(x);
+# 零参数拼写：quack-rs 0.20 起拒绝注册零参数聚合，底层是带一个参数的聚合，
+# 由 SQL 宏把常量 1 传进去。这样每个引擎版本都能逐行数到 3 行（包括窗口调用）
+query I
+SELECT dfn_agg_row_count() FROM (VALUES (1), (2), (3)) t(x);
 ----
-BIGINT
+3
 
 # 多个输入参数按位置匹配
 query I
