@@ -21,17 +21,9 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/NpmChecks.yml'
-  # `paths` here too, so a push that only touches Rust does not queue a JS build. The Rust pipelines
-  # filter the pull_request event only; this one filters both, because a JS build costs minutes and
-  # pushes to main happen on Rust-only changes just as often.
-  push:
-    branches: [main]
-    paths:
-      - 'docs/**'
-      - 'duckfn-docs-kit/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/NpmChecks.yml'
+  # Pushing to main does not trigger CI: the docs build costs minutes and is run on demand
+  # (`gh workflow run NpmChecks.yml`). Pull requests stay path-filtered, so a Rust-only change queues
+  # nothing at all.
   workflow_dispatch:
 
 # `contents: read` is what the release-asset fetch in the Build step authenticates with; everything
