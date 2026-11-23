@@ -80,9 +80,11 @@ test('the label ink is black or white by contrast, not by a brightness guess', (
 });
 
 test('translucency is composited over the table background', () => {
-  assert.equal(colorTagSpecs('#ff000080', WHITE, INK)[0]?.fill, 'rgb(255, 128, 128)');
+  // `0x80` is 128/255, not 0.5: a fully saturated channel over white lands on 127, the
+  // floor of that blend, rather than the 128 a rounded-up 0.5 alpha would give.
+  assert.equal(colorTagSpecs('#ff000080', WHITE, INK)[0]?.fill, 'rgb(255, 127, 127)');
   // The dark theme's row background, so the same value reads differently there.
-  assert.equal(colorTagSpecs('#ff000080', DARK, '#e5e7ea')[0]?.fill, 'rgb(155, 30, 35)');
+  assert.equal(colorTagSpecs('#ff000080', DARK, '#e5e7ea')[0]?.fill, 'rgb(155, 29, 34)');
   // ...and the ink follows the composited colour, not the raw one.
   assert.equal(colorTagSpecs('#ff000080', DARK, '#e5e7ea')[0]?.color, '#ffffff');
 });
